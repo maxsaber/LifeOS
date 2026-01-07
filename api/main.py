@@ -7,12 +7,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
-from api.routes import search, ask
+from api.routes import search, ask, calendar
 
 app = FastAPI(
     title="LifeOS",
     description="Personal assistant system for semantic search and synthesis across Obsidian vault",
-    version="0.1.0"
+    version="0.2.0"
 )
 
 # CORS middleware for local development
@@ -27,6 +27,7 @@ app.add_middleware(
 # Include routers
 app.include_router(search.router)
 app.include_router(ask.router)
+app.include_router(calendar.router)
 
 
 @app.exception_handler(RequestValidationError)
