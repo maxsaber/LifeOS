@@ -33,7 +33,9 @@ chromadb/
 
 # Credentials
 credentials.json
+credentials-*.json
 token.json
+token-*.json
 *.pem
 *.key
 
