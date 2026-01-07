@@ -184,12 +184,13 @@ class TestPeopleAggregator:
     """Test PeopleAggregator service."""
 
     @pytest.fixture
-    def aggregator(self):
-        """Create aggregator with mock services."""
+    def aggregator(self, tmp_path):
+        """Create aggregator with mock services and temp storage."""
         return PeopleAggregator(
             linkedin_csv_path=None,
             gmail_service=None,
             calendar_service=None,
+            storage_path=str(tmp_path / "people_test.json"),
         )
 
     def test_aggregates_from_multiple_sources(self, aggregator):

@@ -68,6 +68,59 @@ class Synthesizer:
             logger.error(f"Synthesizer error: {e}")
             raise
 
+    async def stream_response(
+        self,
+        prompt: str,
+        max_tokens: int = 1024,
+        model: str = "claude-sonnet-4-20250514"
+    ):
+        """
+        Stream a response from Claude.
+
+        Args:
+            prompt: The full prompt including context and question
+            max_tokens: Maximum response length
+            model: Claude model to use
+
+        Yields:
+            Text chunks as they arrive
+        """
+        try:
+            with self.client.messages.stream(
+                model=model,
+                max_tokens=max_tokens,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            ) as stream:
+                for text in stream.text_stream:
+                    yield text
+        except anthropic.APIError as e:
+            logger.error(f"Claude API streaming error: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Synthesizer streaming error: {e}")
+            raise
+
+    async def get_response(
+        self,
+        prompt: str,
+        max_tokens: int = 2048,
+        model: str = "claude-sonnet-4-20250514"
+    ) -> str:
+        """
+        Get a complete response from Claude (async wrapper).
+
+        Args:
+            prompt: The full prompt
+            max_tokens: Maximum response length
+            model: Claude model to use
+
+        Returns:
+            Generated response text
+        """
+        return self.synthesize(prompt, max_tokens, model)
+
 
 # System prompt for RAG synthesis
 SYSTEM_CONTEXT = """You are LifeOS, a personal knowledge assistant for Nathan.

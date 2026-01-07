@@ -7,7 +7,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
-from api.routes import search, ask, calendar, gmail, drive, people
+from pathlib import Path
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+from api.routes import search, ask, calendar, gmail, drive, people, chat
 
 app = FastAPI(
     title="LifeOS",
@@ -31,6 +34,12 @@ app.include_router(calendar.router)
 app.include_router(gmail.router)
 app.include_router(drive.router)
 app.include_router(people.router)
+app.include_router(chat.router)
+
+# Serve static files
+web_dir = Path(__file__).parent.parent / "web"
+if web_dir.exists():
+    app.mount("/static", StaticFiles(directory=str(web_dir)), name="static")
 
 
 @app.exception_handler(RequestValidationError)
@@ -67,5 +76,8 @@ async def health_check():
 
 @app.get("/")
 async def root():
-    """Root endpoint."""
-    return {"message": "LifeOS API", "version": "0.1.0"}
+    """Serve the chat UI."""
+    index_path = Path(__file__).parent.parent / "web" / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    return {"message": "LifeOS API", "version": "0.3.0"}
