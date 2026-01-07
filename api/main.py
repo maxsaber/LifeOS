@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
-from api.routes import search
+from api.routes import search, ask
 
 app = FastAPI(
     title="LifeOS",
@@ -26,6 +26,7 @@ app.add_middleware(
 
 # Include routers
 app.include_router(search.router)
+app.include_router(ask.router)
 
 
 @app.exception_handler(RequestValidationError)

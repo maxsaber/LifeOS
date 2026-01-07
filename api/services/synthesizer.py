@@ -1,0 +1,145 @@
+"""
+Synthesizer service for LifeOS.
+
+Handles Claude API calls for RAG synthesis.
+"""
+import logging
+from typing import Optional
+import anthropic
+
+from config.settings import settings
+
+logger = logging.getLogger(__name__)
+
+
+class Synthesizer:
+    """Service for synthesizing answers using Claude."""
+
+    def __init__(self, api_key: Optional[str] = None):
+        """
+        Initialize synthesizer.
+
+        Args:
+            api_key: Anthropic API key (defaults to settings)
+        """
+        self.api_key = api_key or settings.anthropic_api_key
+        self._client: anthropic.Anthropic | None = None
+
+    @property
+    def client(self) -> anthropic.Anthropic:
+        """Lazy-load the Anthropic client."""
+        if self._client is None:
+            self._client = anthropic.Anthropic(api_key=self.api_key)
+        return self._client
+
+    def synthesize(
+        self,
+        prompt: str,
+        max_tokens: int = 1024,
+        model: str = "claude-sonnet-4-20250514"
+    ) -> str:
+        """
+        Generate a synthesized response using Claude.
+
+        Args:
+            prompt: The full prompt including context and question
+            max_tokens: Maximum response length
+            model: Claude model to use
+
+        Returns:
+            Generated response text
+
+        Raises:
+            Exception: If API call fails
+        """
+        try:
+            response = self.client.messages.create(
+                model=model,
+                max_tokens=max_tokens,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ]
+            )
+            return response.content[0].text
+        except anthropic.APIError as e:
+            logger.error(f"Claude API error: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Synthesizer error: {e}")
+            raise
+
+
+# System prompt for RAG synthesis
+SYSTEM_CONTEXT = """You are LifeOS, a personal knowledge assistant for Nathan.
+You have access to his Obsidian vault containing notes, meeting transcripts, and personal documents.
+
+Your responses should be:
+- Concise and direct (Paul Graham style - no fluff)
+- Grounded in the provided context
+- Citing sources when making claims
+
+When answering:
+1. Use only information from the provided context
+2. If the context doesn't contain enough information, say so
+3. Reference source files naturally (e.g., "According to the Budget Review notes...")
+4. Extract and highlight action items if relevant
+5. Be specific with dates, names, and numbers when available
+
+Format:
+- Keep answers focused and brief
+- Use bullet points for lists
+- Include relevant quotes when helpful
+- End with sources list if multiple files referenced"""
+
+
+def construct_prompt(question: str, chunks: list[dict]) -> str:
+    """
+    Construct the full prompt for Claude.
+
+    Args:
+        question: User's question
+        chunks: Retrieved context chunks with metadata
+
+    Returns:
+        Formatted prompt string
+    """
+    # Build context section
+    if chunks:
+        context_parts = []
+        for i, chunk in enumerate(chunks, 1):
+            file_name = chunk.get("file_name", "Unknown")
+            content = chunk.get("content", "")
+            context_parts.append(f"[Source {i}: {file_name}]\n{content}")
+
+        context = "\n\n---\n\n".join(context_parts)
+    else:
+        context = "(No relevant context found in the vault)"
+
+    # Construct full prompt
+    prompt = f"""{SYSTEM_CONTEXT}
+
+## Context from Vault
+
+{context}
+
+## Question
+
+{question}
+
+## Instructions
+
+Answer the question based on the context above. Cite your sources by referencing the file names. If the context doesn't contain enough information to fully answer, acknowledge what's missing."""
+
+    return prompt
+
+
+# Singleton instance
+_synthesizer: Synthesizer | None = None
+
+
+def get_synthesizer() -> Synthesizer:
+    """Get or create synthesizer singleton."""
+    global _synthesizer
+    if _synthesizer is None:
+        _synthesizer = Synthesizer()
+    return _synthesizer
