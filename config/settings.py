@@ -3,11 +3,17 @@ LifeOS Configuration Settings
 """
 import os
 from pathlib import Path
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
+
+    model_config = SettingsConfigDict(
+        env_prefix="LIFEOS_",
+        env_file=".env",
+        extra="ignore"
+    )
 
     # Paths
     vault_path: Path = Path(os.getenv("LIFEOS_VAULT_PATH", "/Users/nathanramia/Notes 2025"))
@@ -29,10 +35,6 @@ class Settings(BaseSettings):
 
     # Search
     default_top_k: int = 20
-
-    class Config:
-        env_prefix = "LIFEOS_"
-        env_file = ".env"
 
 
 settings = Settings()
