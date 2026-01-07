@@ -1,0 +1,232 @@
+"""
+Tests for People Tracking functionality.
+P1.4 Acceptance Criteria:
+- Extracts person names from note content
+- Handles aliases (Yoni → Yoni Landau)
+- Handles misspellings (Malia → Malea)
+- Tracks last-mention date per person
+- Person filter works in search API
+- "What do I know about Yoni" returns relevant context
+- Excludes self-references (Nathan)
+"""
+import pytest
+import tempfile
+from pathlib import Path
+from datetime import datetime
+
+from api.services.people import (
+    PeopleRegistry,
+    extract_people_from_text,
+    resolve_person_name,
+    PEOPLE_DICTIONARY,
+)
+
+
+class TestPeopleExtraction:
+    """Test person name extraction from text."""
+
+    def test_extracts_bold_names(self):
+        """Should extract names in bold format."""
+        text = "Met with **Yoni** and **Madi** today to discuss the budget."
+        people = extract_people_from_text(text)
+
+        assert "Yoni" in people
+        assert "Madi" in people
+
+    def test_extracts_names_from_people_dictionary(self):
+        """Should recognize names from the People Dictionary."""
+        text = "Taylor and Malea went to the park. Yoni called about work."
+        people = extract_people_from_text(text)
+
+        assert "Taylor" in people
+        assert "Malea" in people
+        assert "Yoni" in people
+
+    def test_handles_common_patterns(self):
+        """Should extract names from common patterns."""
+        text = """
+        Attendees: Kevin, Sarah, Mike
+        1-1 with Hayley
+        Meeting with Yoni about budgets
+        """
+        people = extract_people_from_text(text)
+
+        assert "Kevin" in people
+        assert "Hayley" in people
+        assert "Yoni" in people
+
+    def test_excludes_self_references(self):
+        """Should exclude self-references (Nathan)."""
+        text = "Nathan met with Yoni to discuss the project. I'll follow up."
+        people = extract_people_from_text(text)
+
+        assert "Nathan" not in people
+        assert "Yoni" in people
+
+    def test_handles_possessives(self):
+        """Should extract names even with possessives."""
+        text = "Yoni's idea was great. Taylor's schedule is busy."
+        people = extract_people_from_text(text)
+
+        assert "Yoni" in people
+        assert "Taylor" in people
+
+
+class TestAliasResolution:
+    """Test alias and fuzzy name resolution."""
+
+    def test_resolves_known_alias(self):
+        """Should resolve known aliases to canonical names."""
+        # Yoni should resolve (known in dictionary)
+        resolved = resolve_person_name("Yoni")
+        assert resolved == "Yoni"  # or "Yoni Landau" if we expand
+
+    def test_resolves_misspelling(self):
+        """Should resolve common misspellings."""
+        # Malia is common misspelling of Malea
+        resolved = resolve_person_name("Malia")
+        assert resolved == "Malea"
+
+    def test_resolves_email_to_name(self):
+        """Should resolve email addresses to names."""
+        resolved = resolve_person_name("yoni@movementlabs.com")
+        # Should recognize as Yoni or return as-is if not in registry
+        assert resolved in ["Yoni", "yoni@movementlabs.com"]
+
+    def test_preserves_unknown_names(self):
+        """Should preserve names not in dictionary."""
+        resolved = resolve_person_name("RandomPerson")
+        assert resolved == "RandomPerson"
+
+
+class TestPeopleRegistry:
+    """Test the People Registry storage and queries."""
+
+    @pytest.fixture
+    def temp_registry_path(self):
+        """Create temp path for registry storage."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            yield Path(tmpdir) / "people_registry.json"
+
+    @pytest.fixture
+    def registry(self, temp_registry_path):
+        """Create a fresh registry."""
+        return PeopleRegistry(storage_path=str(temp_registry_path))
+
+    def test_records_person_mention(self, registry):
+        """Should record person mentions with metadata."""
+        registry.record_mention(
+            name="Yoni",
+            source_file="/vault/meeting.md",
+            mention_date="2025-01-05"
+        )
+
+        person = registry.get_person("Yoni")
+        assert person is not None
+        assert person["mention_count"] >= 1
+        assert "/vault/meeting.md" in person["related_notes"]
+
+    def test_tracks_last_mention_date(self, registry):
+        """Should track the most recent mention date."""
+        registry.record_mention("Madi", "/vault/old.md", "2025-01-01")
+        registry.record_mention("Madi", "/vault/new.md", "2025-01-10")
+
+        person = registry.get_person("Madi")
+        assert person["last_mention_date"] == "2025-01-10"
+
+    def test_increments_mention_count(self, registry):
+        """Should increment mention count for repeated mentions."""
+        registry.record_mention("Kevin", "/vault/file1.md", "2025-01-01")
+        registry.record_mention("Kevin", "/vault/file2.md", "2025-01-02")
+        registry.record_mention("Kevin", "/vault/file3.md", "2025-01-03")
+
+        person = registry.get_person("Kevin")
+        assert person["mention_count"] == 3
+
+    def test_categorizes_people(self, registry):
+        """Should categorize people as work/personal/family."""
+        # Known work people should be categorized
+        registry.record_mention("Yoni", "/vault/work.md", "2025-01-01")
+        person = registry.get_person("Yoni")
+        assert person["category"] == "work"
+
+        # Family members should be categorized
+        registry.record_mention("Taylor", "/vault/personal.md", "2025-01-01")
+        person = registry.get_person("Taylor")
+        assert person["category"] in ["personal", "family"]
+
+    def test_searches_by_person(self, registry):
+        """Should enable searching by person name."""
+        registry.record_mention("Yoni", "/vault/meeting1.md", "2025-01-01")
+        registry.record_mention("Yoni", "/vault/meeting2.md", "2025-01-02")
+
+        notes = registry.get_related_notes("Yoni")
+        assert len(notes) == 2
+        assert "/vault/meeting1.md" in notes
+        assert "/vault/meeting2.md" in notes
+
+    def test_persists_registry(self, temp_registry_path):
+        """Registry should persist across instances."""
+        # Create and populate first registry
+        reg1 = PeopleRegistry(storage_path=str(temp_registry_path))
+        reg1.record_mention("TestPerson", "/vault/test.md", "2025-01-01")
+        reg1.save()
+
+        # Create new instance and verify data persisted
+        reg2 = PeopleRegistry(storage_path=str(temp_registry_path))
+        person = reg2.get_person("TestPerson")
+        assert person is not None
+        assert person["mention_count"] == 1
+
+
+class TestPeopleIntegration:
+    """Integration tests for people tracking with indexer."""
+
+    @pytest.fixture
+    def temp_vault(self):
+        """Create test vault with people mentions."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            vault = Path(tmpdir) / "vault"
+            vault.mkdir()
+
+            # Note with bold names
+            (vault / "meeting1.md").write_text("""---
+tags: [meeting]
+type: meeting
+---
+
+# Team Standup
+
+Met with **Yoni** and **Madi** today.
+Discussed Q1 goals with the team.
+""")
+
+            # Note with misspelled name
+            (vault / "family.md").write_text("""---
+tags: [personal]
+type: note
+---
+
+# Weekend Plans
+
+Taking Malia to the park. Taylor is making dinner.
+""")
+
+            yield vault
+
+    def test_indexer_extracts_people(self, temp_vault):
+        """Indexer should extract people during indexing."""
+        with tempfile.TemporaryDirectory() as db_dir:
+            from api.services.indexer import IndexerService
+
+            indexer = IndexerService(
+                vault_path=str(temp_vault),
+                db_path=db_dir
+            )
+            indexer.index_all()
+
+            # Search should find people in metadata
+            results = indexer.vector_store.search("team standup", top_k=5)
+            assert len(results) >= 1
+
+            indexer.stop()

@@ -14,6 +14,7 @@ from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
 from api.services.chunker import chunk_document, extract_frontmatter
 from api.services.vectorstore import VectorStore
+from api.services.people import extract_people_from_text
 
 logger = logging.getLogger(__name__)
 
@@ -147,13 +148,20 @@ class IndexerService:
         # Chunk the document
         chunks = chunk_document(content, is_granola=is_granola)
 
+        # Extract people from content (in addition to frontmatter)
+        extracted_people = extract_people_from_text(body)
+        frontmatter_people = frontmatter.get("people", [])
+
+        # Merge people lists (unique)
+        all_people = list(set(extracted_people + frontmatter_people))
+
         # Build metadata - use resolve() to get real path (handles symlinks like /var -> /private/var)
         metadata = {
             "file_path": str(path.resolve()),
             "file_name": path.name,
             "modified_date": datetime.fromtimestamp(path.stat().st_mtime).isoformat(),
             "note_type": self._infer_note_type(path),
-            "people": frontmatter.get("people", []),
+            "people": all_people,
             "tags": frontmatter.get("tags", [])
         }
 
