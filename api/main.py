@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 
-from api.routes import search, ask, calendar, gmail
+from api.routes import search, ask, calendar, gmail, drive
 
 app = FastAPI(
     title="LifeOS",
@@ -29,6 +29,7 @@ app.include_router(search.router)
 app.include_router(ask.router)
 app.include_router(calendar.router)
 app.include_router(gmail.router)
+app.include_router(drive.router)
 
 
 @app.exception_handler(RequestValidationError)
