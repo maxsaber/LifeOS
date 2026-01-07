@@ -24,6 +24,7 @@
         <string>/Users/nathanramia/Documents/Code/LifeOS/venv/bin:/usr/local/bin:/usr/bin:/bin</string>
         <key>LIFEOS_VAULT_PATH</key>
         <string>/Users/nathanramia/Notes 2025</string>
+        <!-- ANTHROPIC_API_KEY should be set in ~/.zshrc or launchctl setenv -->
     </dict>
 
     <!-- Auto-start on boot -->
