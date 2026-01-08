@@ -10,6 +10,9 @@ P3.4 Acceptance Criteria:
 - Results include file name, link, last modified
 """
 import pytest
+
+# All tests in this file use mocks (unit tests)
+pytestmark = pytest.mark.unit
 from datetime import datetime, timezone
 from unittest.mock import Mock, patch, MagicMock
 

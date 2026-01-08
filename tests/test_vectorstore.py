@@ -2,6 +2,9 @@
 Tests for ChromaDB vector store integration.
 """
 import pytest
+
+# These tests require ChromaDB initialization (slow)
+pytestmark = pytest.mark.slow
 import tempfile
 import os
 from pathlib import Path

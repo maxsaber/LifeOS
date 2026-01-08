@@ -9,6 +9,9 @@ P2.3 Acceptance Criteria:
 - Sources cited with links
 """
 import pytest
+
+# These tests use TestClient which initializes the app (slow)
+pytestmark = pytest.mark.slow
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, AsyncMock, patch
 from fastapi.testclient import TestClient

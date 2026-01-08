@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from api.services.ollama_client import OllamaClient, OllamaError
+from api.services.model_selector import classify_query_complexity
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +47,8 @@ class RoutingResult:
     reasoning: str
     confidence: float
     latency_ms: int
+    recommended_model: str = "sonnet"  # "haiku", "sonnet", or "opus"
+    complexity_score: float = 0.5  # 0.0-1.0
 
 
 class QueryRouter:
@@ -73,7 +76,7 @@ class QueryRouter:
             query: The user's query text
 
         Returns:
-            RoutingResult with sources and reasoning
+            RoutingResult with sources, reasoning, and recommended model
         """
         start_time = time.time()
 
@@ -82,18 +85,30 @@ class QueryRouter:
             logger.info("Ollama unavailable, using keyword fallback")
             result = self._keyword_fallback(query)
             result.latency_ms = int((time.time() - start_time) * 1000)
+            # Add model selection
+            complexity = classify_query_complexity(query, source_count=len(result.sources))
+            result.recommended_model = complexity.recommended_model
+            result.complexity_score = complexity.complexity_score
             return result
 
         # Try LLM routing
         try:
             result = await self._llm_route(query)
             result.latency_ms = int((time.time() - start_time) * 1000)
+            # Add model selection
+            complexity = classify_query_complexity(query, source_count=len(result.sources))
+            result.recommended_model = complexity.recommended_model
+            result.complexity_score = complexity.complexity_score
             return result
 
         except OllamaError as e:
             logger.warning(f"Ollama error, using fallback: {e}")
             result = self._keyword_fallback(query)
             result.latency_ms = int((time.time() - start_time) * 1000)
+            # Add model selection
+            complexity = classify_query_complexity(query, source_count=len(result.sources))
+            result.recommended_model = complexity.recommended_model
+            result.complexity_score = complexity.complexity_score
             return result
 
     async def _llm_route(self, query: str) -> RoutingResult:

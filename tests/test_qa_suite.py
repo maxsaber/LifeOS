@@ -3,8 +3,13 @@ QA Test Suite for LifeOS.
 
 Tests search quality, recency bias, and response correctness.
 Run with: pytest tests/test_qa_suite.py -v
+
+Requires: API server running at localhost:8000
 """
 import pytest
+
+# These tests require the API server to be running
+pytestmark = [pytest.mark.integration, pytest.mark.requires_server]
 import httpx
 from datetime import datetime
 

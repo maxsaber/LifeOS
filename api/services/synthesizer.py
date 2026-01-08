@@ -8,8 +8,12 @@ from typing import Optional
 import anthropic
 
 from config.settings import settings
+from api.services.model_selector import get_claude_model_name
 
 logger = logging.getLogger(__name__)
+
+# Default model tier
+DEFAULT_MODEL_TIER = "sonnet"
 
 
 class Synthesizer:
@@ -36,7 +40,8 @@ class Synthesizer:
         self,
         prompt: str,
         max_tokens: int = 1024,
-        model: str = "claude-sonnet-4-20250514"
+        model: str = None,
+        model_tier: str = None
     ) -> str:
         """
         Generate a synthesized response using Claude.
@@ -44,7 +49,8 @@ class Synthesizer:
         Args:
             prompt: The full prompt including context and question
             max_tokens: Maximum response length
-            model: Claude model to use
+            model: Full Claude model name (overrides model_tier)
+            model_tier: Model tier ("haiku", "sonnet", "opus")
 
         Returns:
             Generated response text
@@ -52,6 +58,13 @@ class Synthesizer:
         Raises:
             Exception: If API call fails
         """
+        # Resolve model name: explicit model > model_tier > default
+        if model is None:
+            tier = model_tier or DEFAULT_MODEL_TIER
+            model = get_claude_model_name(tier)
+
+        logger.debug(f"Using model: {model}")
+
         try:
             response = self.client.messages.create(
                 model=model,
@@ -72,7 +85,8 @@ class Synthesizer:
         self,
         prompt: str,
         max_tokens: int = 1024,
-        model: str = "claude-sonnet-4-20250514"
+        model: str = None,
+        model_tier: str = None
     ):
         """
         Stream a response from Claude.
@@ -80,11 +94,19 @@ class Synthesizer:
         Args:
             prompt: The full prompt including context and question
             max_tokens: Maximum response length
-            model: Claude model to use
+            model: Full Claude model name (overrides model_tier)
+            model_tier: Model tier ("haiku", "sonnet", "opus")
 
         Yields:
             Text chunks as they arrive
         """
+        # Resolve model name: explicit model > model_tier > default
+        if model is None:
+            tier = model_tier or DEFAULT_MODEL_TIER
+            model = get_claude_model_name(tier)
+
+        logger.debug(f"Streaming with model: {model}")
+
         try:
             with self.client.messages.stream(
                 model=model,
@@ -106,7 +128,8 @@ class Synthesizer:
         self,
         prompt: str,
         max_tokens: int = 2048,
-        model: str = "claude-sonnet-4-20250514"
+        model: str = None,
+        model_tier: str = None
     ) -> str:
         """
         Get a complete response from Claude (async wrapper).
@@ -114,12 +137,13 @@ class Synthesizer:
         Args:
             prompt: The full prompt
             max_tokens: Maximum response length
-            model: Claude model to use
+            model: Full Claude model name (overrides model_tier)
+            model_tier: Model tier ("haiku", "sonnet", "opus")
 
         Returns:
             Generated response text
         """
-        return self.synthesize(prompt, max_tokens, model)
+        return self.synthesize(prompt, max_tokens, model, model_tier)
 
 
 # System prompt for RAG synthesis

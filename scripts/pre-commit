@@ -2,19 +2,30 @@
 #
 # LifeOS Pre-commit Hook
 #
-# Runs the full test suite before allowing commits.
-# Tests must pass for the commit to proceed.
+# Runs fast unit tests before allowing commits.
+# Slow tests (ChromaDB, embeddings) are skipped for speed.
+#
+# Test markers:
+#   @pytest.mark.unit        - Fast unit tests (run on commit)
+#   @pytest.mark.slow        - Slow tests (ChromaDB, embeddings)
+#   @pytest.mark.integration - Integration tests (require running server)
 #
 # Installation:
 #   cp scripts/pre-commit .git/hooks/pre-commit
 #   chmod +x .git/hooks/pre-commit
+#
+# Run all tests manually:
+#   pytest tests/ -v             # All tests
+#   pytest -m unit               # Unit tests only
+#   pytest -m "not slow"         # Skip slow tests
+#   pytest -m "not integration"  # Skip integration tests
 #
 
 set -e
 
 echo "========================================"
 echo "  LifeOS Pre-commit Hook"
-echo "  Running test suite..."
+echo "  Running unit tests (fast)..."
 echo "========================================"
 echo ""
 
@@ -27,20 +38,22 @@ if [ -d "venv" ]; then
     source venv/bin/activate
 fi
 
-# Run pytest
-echo "Running: pytest tests/ -v --tb=short"
+# Run only unit tests (fast) - skip slow tests that require ChromaDB
+echo "Running: pytest -m unit tests/ -v --tb=short"
 echo ""
 
-if pytest tests/ -v --tb=short; then
+if pytest -m unit tests/ -v --tb=short; then
     echo ""
     echo "========================================"
-    echo "  All tests passed! Proceeding with commit."
+    echo "  Unit tests passed! Proceeding with commit."
+    echo ""
+    echo "  Run 'pytest' for full test suite."
     echo "========================================"
     exit 0
 else
     echo ""
     echo "========================================"
-    echo "  COMMIT BLOCKED: Tests failed!"
+    echo "  COMMIT BLOCKED: Unit tests failed!"
     echo ""
     echo "  Fix the failing tests before committing."
     echo "  To bypass (not recommended): git commit --no-verify"

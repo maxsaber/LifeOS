@@ -4,6 +4,9 @@ Tests for Conversation Threads (P5.1).
 Tests the ConversationStore service and conversation API endpoints.
 """
 import pytest
+
+# Most tests in this file are fast unit tests (SQLite-only)
+pytestmark = pytest.mark.unit
 import json
 import uuid
 from datetime import datetime, timedelta

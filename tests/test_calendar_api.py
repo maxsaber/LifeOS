@@ -2,6 +2,9 @@
 Tests for Calendar API endpoints.
 """
 import pytest
+
+# These tests use TestClient which initializes the app (slow)
+pytestmark = pytest.mark.slow
 from fastapi.testclient import TestClient
 from unittest.mock import patch, MagicMock
 from datetime import datetime, timezone

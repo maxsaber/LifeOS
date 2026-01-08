@@ -6,6 +6,9 @@ P1.1 Acceptance Criteria:
 - Short notes stored as single chunk
 """
 import pytest
+
+# All tests in this file are fast unit tests
+pytestmark = pytest.mark.unit
 from api.services.chunker import (
     parse_markdown,
     chunk_by_headers,

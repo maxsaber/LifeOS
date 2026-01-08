@@ -8,6 +8,9 @@ Acceptance Criteria:
 - Retry logic for 5xx errors (max 3 retries)
 """
 import pytest
+
+# These tests use TestClient which initializes the app (slow)
+pytestmark = pytest.mark.slow
 import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
 from fastapi.testclient import TestClient

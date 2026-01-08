@@ -3,6 +3,9 @@ Integration tests for LifeOS.
 Tests end-to-end workflows with real components.
 """
 import pytest
+
+# These are full integration tests requiring ChromaDB (slow)
+pytestmark = pytest.mark.slow
 import tempfile
 import time
 from pathlib import Path

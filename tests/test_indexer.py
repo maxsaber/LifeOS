@@ -8,6 +8,9 @@ P1.1 Acceptance Criteria:
 - Indexer recovers gracefully from restart (no duplicate chunks)
 """
 import pytest
+
+# These tests require ChromaDB and file watching (slow)
+pytestmark = pytest.mark.slow
 import tempfile
 import time
 import os

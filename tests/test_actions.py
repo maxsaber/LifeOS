@@ -12,6 +12,9 @@ P1.5 Acceptance Criteria:
 - Completed items tracked separately
 """
 import pytest
+
+# All tests in this file are fast unit tests
+pytestmark = pytest.mark.unit
 import tempfile
 from pathlib import Path
 from datetime import datetime

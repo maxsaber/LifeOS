@@ -4,6 +4,9 @@ Tests for Hybrid Retrieval (P5.2).
 Tests the BM25Index service and RRF fusion logic.
 """
 import pytest
+
+# Most tests in this file are fast unit tests (SQLite FTS5 + pure logic)
+pytestmark = pytest.mark.unit
 import tempfile
 import os
 from collections import defaultdict

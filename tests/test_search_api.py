@@ -10,6 +10,9 @@ P1.2 Acceptance Criteria:
 - Invalid filters return 400 with clear message
 """
 import pytest
+
+# These tests use TestClient which initializes the app (slow)
+pytestmark = pytest.mark.slow
 from datetime import datetime, timedelta
 from fastapi.testclient import TestClient
 

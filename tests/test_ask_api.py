@@ -10,6 +10,9 @@ P1.3 Acceptance Criteria:
 - Empty question returns 400 error
 """
 import pytest
+
+# These tests use TestClient which initializes the app (slow)
+pytestmark = pytest.mark.slow
 from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 

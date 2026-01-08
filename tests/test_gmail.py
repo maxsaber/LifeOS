@@ -11,6 +11,9 @@ P3.3 Acceptance Criteria:
 - Empty results return empty list, not error
 """
 import pytest
+
+# All tests in this file use mocks (unit tests)
+pytestmark = pytest.mark.unit
 from datetime import datetime, timezone
 from unittest.mock import Mock, patch, MagicMock
 import base64

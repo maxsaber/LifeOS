@@ -7,6 +7,9 @@ P2.1/P2.2 Acceptance Criteria:
 - Empty requests return 400 errors
 """
 import pytest
+
+# These tests use TestClient which initializes the app (slow)
+pytestmark = pytest.mark.slow
 import json
 import tempfile
 from pathlib import Path

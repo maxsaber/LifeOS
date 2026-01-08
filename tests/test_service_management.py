@@ -8,6 +8,9 @@ Acceptance Criteria:
 - Can check status via launchctl
 """
 import pytest
+
+# These tests use TestClient which initializes the app (slow)
+pytestmark = pytest.mark.slow
 import os
 from pathlib import Path
 from fastapi.testclient import TestClient

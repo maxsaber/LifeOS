@@ -2,6 +2,9 @@
 Tests for Admin API endpoints.
 """
 import pytest
+
+# These tests use TestClient which initializes the app (slow)
+pytestmark = pytest.mark.slow
 from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 

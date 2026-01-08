@@ -12,6 +12,9 @@ P3.2 Acceptance Criteria:
 - All-day events handled correctly
 """
 import pytest
+
+# All tests in this file use mocks (unit tests)
+pytestmark = pytest.mark.unit
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch, MagicMock
 

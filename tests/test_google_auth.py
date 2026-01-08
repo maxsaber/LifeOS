@@ -11,6 +11,9 @@ P3.1 Acceptance Criteria:
 - Re-auth flow works if tokens are revoked
 """
 import pytest
+
+# All tests in this file use mocks (unit tests)
+pytestmark = pytest.mark.unit
 import json
 import tempfile
 from pathlib import Path

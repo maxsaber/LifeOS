@@ -10,6 +10,9 @@ P1.4 Acceptance Criteria:
 - Excludes self-references (Nathan)
 """
 import pytest
+
+# Most tests in this file are fast unit tests
+pytestmark = pytest.mark.unit
 import tempfile
 from pathlib import Path
 from datetime import datetime
@@ -179,6 +182,7 @@ class TestPeopleRegistry:
         assert person["mention_count"] == 1
 
 
+@pytest.mark.slow
 class TestPeopleIntegration:
     """Integration tests for people tracking with indexer."""
 

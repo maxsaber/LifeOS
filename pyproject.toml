@@ -26,6 +26,13 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-v"
+markers = [
+    "unit: Fast unit tests with no external dependencies",
+    "slow: Tests that require ChromaDB, sentence-transformers, or heavy processing",
+    "integration: Tests that require running server or external APIs",
+    "requires_ollama: Tests that require Ollama to be running",
+    "requires_server: Tests that require the API server to be running",
+]
 
 [tool.setuptools.packages.find]
 where = ["."]

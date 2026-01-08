@@ -9,6 +9,9 @@ Sources:
 - Obsidian note mentions
 """
 import pytest
+
+# All tests in this file use mocks (unit tests)
+pytestmark = pytest.mark.unit
 import tempfile
 import csv
 from pathlib import Path

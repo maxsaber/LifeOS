@@ -4,6 +4,9 @@ Tests for Local LLM Query Router (P3.5).
 Tests the OllamaClient and QueryRouter services.
 """
 import pytest
+
+# Most tests in this file are fast unit tests (mocked Ollama)
+pytestmark = pytest.mark.unit
 import json
 from unittest.mock import patch, MagicMock, AsyncMock
 import httpx
@@ -360,6 +363,8 @@ class TestRouterAccuracy:
         assert accuracy >= 0.7, f"Keyword accuracy only {accuracy*100:.0f}% ({correct}/{total})"
 
 
+@pytest.mark.slow
+@pytest.mark.requires_ollama
 class TestRouterIntegration:
     """Integration tests with real Ollama (skip if not available)."""
 

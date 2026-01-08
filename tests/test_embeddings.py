@@ -2,6 +2,9 @@
 Tests for embedding generation using sentence-transformers.
 """
 import pytest
+
+# These tests require loading the sentence-transformers model (slow)
+pytestmark = pytest.mark.slow
 import numpy as np
 from api.services.embeddings import (
     EmbeddingService,
