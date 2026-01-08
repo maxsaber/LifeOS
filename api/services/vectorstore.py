@@ -6,7 +6,9 @@ Handles storage and retrieval of document embeddings.
 import chromadb
 from chromadb.config import Settings
 from typing import Optional
+from datetime import datetime
 import json
+import math
 
 from api.services.embeddings import get_embedding_service
 
@@ -97,19 +99,72 @@ class VectorStore:
             metadatas=metadatas
         )
 
+    def _calculate_recency_score(self, modified_date: str, note_type: str = "") -> float:
+        """
+        Calculate recency score with heavy bias toward recent documents.
+
+        Returns score between 0 and 1, where:
+        - Documents from last 30 days: 0.9-1.0
+        - Documents from last 90 days: 0.7-0.9
+        - Documents from last year: 0.4-0.7
+        - Documents older than 1 year: 0.0-0.4 (exponential decay)
+        - ML folder content: Always boosted (current job)
+        - Undated files: Neutral score (0.5)
+        """
+        # ML folder = current job, always highly relevant
+        if note_type == "ML":
+            return 0.95
+
+        # No date in filename = undated, give neutral score
+        if not modified_date:
+            return 0.5
+
+        try:
+            # Parse date (supports various formats)
+            date = None
+            for fmt in ["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y%m%d"]:
+                try:
+                    date = datetime.strptime(modified_date[:10], fmt)
+                    break
+                except ValueError:
+                    continue
+
+            if not date:
+                return 0.5  # Couldn't parse date, neutral score
+
+            days_old = (datetime.now() - date).days
+
+            if days_old <= 0:
+                return 1.0
+            elif days_old <= 30:
+                return 0.9 + (0.1 * (1 - days_old / 30))
+            elif days_old <= 90:
+                return 0.7 + (0.2 * (1 - (days_old - 30) / 60))
+            elif days_old <= 365:
+                return 0.4 + (0.3 * (1 - (days_old - 90) / 275))
+            else:
+                # Exponential decay for older documents
+                years_old = days_old / 365
+                return max(0.05, 0.4 * math.exp(-0.5 * (years_old - 1)))
+
+        except Exception:
+            return 0.5
+
     def search(
         self,
         query: str,
         top_k: int = 20,
-        filters: Optional[dict] = None
+        filters: Optional[dict] = None,
+        recency_weight: float = 0.6
     ) -> list[dict]:
         """
-        Search for similar chunks.
+        Search for similar chunks with heavy recency bias.
 
         Args:
             query: Search query text
             top_k: Number of results to return
             filters: Optional metadata filters
+            recency_weight: Weight for recency vs semantic similarity (0.6 = 60% recency)
 
         Returns:
             List of result dicts with content, metadata, and score
@@ -125,22 +180,42 @@ class VectorStore:
                 if value is not None:
                     where[key] = value
 
+        # Fetch more results to re-rank with recency bias
+        fetch_count = min(top_k * 5, 100)
+
         # Query collection
         results = self._collection.query(
             query_embeddings=[query_embedding],
-            n_results=top_k,
+            n_results=fetch_count,
             where=where if where else None,
             include=["documents", "metadatas", "distances"]
         )
 
-        # Format results
+        # Format and score results
         formatted = []
         if results["ids"] and results["ids"][0]:
             for i, doc_id in enumerate(results["ids"][0]):
+                metadata = results["metadatas"][0][i]
+                semantic_score = 1 - results["distances"][0][i]
+
+                # Calculate recency score
+                recency_score = self._calculate_recency_score(
+                    metadata.get("modified_date", ""),
+                    metadata.get("note_type", "")
+                )
+
+                # Combined score: heavily weighted toward recency
+                combined_score = (
+                    (1 - recency_weight) * semantic_score +
+                    recency_weight * recency_score
+                )
+
                 result = {
                     "content": results["documents"][0][i],
-                    "score": 1 - results["distances"][0][i],  # Convert distance to similarity
-                    **results["metadatas"][0][i]
+                    "score": combined_score,
+                    "semantic_score": semantic_score,
+                    "recency_score": recency_score,
+                    **metadata
                 }
                 # Parse JSON fields
                 if "people" in result and isinstance(result["people"], str):
@@ -155,7 +230,10 @@ class VectorStore:
                         result["tags"] = []
                 formatted.append(result)
 
-        return formatted
+        # Re-rank by combined score
+        formatted.sort(key=lambda x: x["score"], reverse=True)
+
+        return formatted[:top_k]
 
     def delete_document(self, file_path: str) -> None:
         """

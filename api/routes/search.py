@@ -58,6 +58,8 @@ class SearchResult(BaseModel):
     people: Optional[list[str]] = None
     tags: Optional[list[str]] = None
     score: float
+    semantic_score: Optional[float] = None
+    recency_score: Optional[float] = None
 
 
 class SearchResponse(BaseModel):
@@ -161,7 +163,9 @@ async def search(request: SearchRequest) -> SearchResponse:
             modified_date=r.get("modified_date"),
             people=people,
             tags=tags,
-            score=r.get("score", 0.0)
+            score=r.get("score", 0.0),
+            semantic_score=r.get("semantic_score"),
+            recency_score=r.get("recency_score")
         ))
 
     elapsed_ms = int((time.time() - start_time) * 1000)

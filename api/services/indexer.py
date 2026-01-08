@@ -4,6 +4,7 @@ Indexer service for LifeOS.
 Watches the Obsidian vault for file changes and indexes content to ChromaDB.
 """
 import os
+import re
 import time
 import threading
 import logging
@@ -159,7 +160,7 @@ class IndexerService:
         metadata = {
             "file_path": str(path.resolve()),
             "file_name": path.name,
-            "modified_date": datetime.fromtimestamp(path.stat().st_mtime).isoformat(),
+            "modified_date": self._extract_note_date(path, frontmatter),
             "note_type": self._infer_note_type(path),
             "people": all_people,
             "tags": frontmatter.get("tags", [])
@@ -182,6 +183,42 @@ class IndexerService:
         self.vector_store.delete_document(real_path)
         logger.debug(f"Deleted {file_path} from index (resolved: {real_path})")
 
+    def _extract_note_date(self, path: Path, frontmatter: dict) -> str:
+        """
+        Extract the actual date of the note from filename.
+
+        Only trusts date stamps in filenames since file modification times
+        are unreliable due to copy/move operations.
+
+        Priority:
+        1. Date patterns in filename (YYYY-MM-DD, YYYYMMDD)
+        2. Return empty string for undated files
+
+        Args:
+            path: Path to the file
+            frontmatter: Parsed frontmatter dict
+
+        Returns:
+            ISO format date string or empty string if no date found
+        """
+        filename = path.stem  # filename without extension
+
+        # 1. Look for YYYY-MM-DD pattern in filename
+        match = re.search(r"(\d{4})-(\d{2})-(\d{2})", filename)
+        if match:
+            return f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
+
+        # 2. Look for YYYYMMDD pattern in filename (e.g., "Meeting 20250925.md")
+        match = re.search(r"(\d{4})(\d{2})(\d{2})", filename)
+        if match:
+            year, month, day = int(match.group(1)), int(match.group(2)), int(match.group(3))
+            if 2000 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
+                return f"{year:04d}-{month:02d}-{day:02d}"
+
+        # 3. No reliable date found - return empty string
+        # The vector store will give these a neutral recency score
+        return ""
+
     def _infer_note_type(self, path: Path) -> str:
         """
         Infer note type from folder path.
@@ -193,8 +230,13 @@ class IndexerService:
             Note type string
         """
         path_str = str(path).lower()
+        # Also check case-sensitive for ML
+        path_str_orig = str(path)
 
-        if "granola" in path_str:
+        # ML folder = current job (high priority)
+        if "/ML/" in path_str_orig or "\\ML\\" in path_str_orig:
+            return "ML"
+        elif "granola" in path_str:
             return "Granola"
         elif "personal" in path_str:
             return "Personal"

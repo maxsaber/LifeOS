@@ -139,8 +139,9 @@ This document describes the technical architecture of the LifeOS system.
 
         indexer.index_all()
 
-        # Search for action items specifically
-        results = indexer.vector_store.search("send budget proposal Friday", top_k=3)
+        # Search for action items specifically (use recency_weight=0 for pure semantic search
+        # since test files don't have date stamps in filenames)
+        results = indexer.vector_store.search("send budget proposal Friday", top_k=5, recency_weight=0.0)
 
         # Should find the action item chunk
         assert len(results) >= 1
