@@ -117,6 +117,20 @@ The web UI will be available at `http://localhost:8000`.
 
 ## Development
 
+### IMPORTANT: Always Use the Deploy Script
+
+**After ANY code changes, you MUST run the deploy script to restart the server:**
+
+```bash
+./scripts/deploy.sh "Your commit message"
+```
+
+The server does NOT auto-reload. Direct `git commit` will NOT restart the server. The deploy script:
+1. Runs tests
+2. Restarts the server (required for changes to take effect)
+3. Verifies health
+4. Commits and pushes
+
 ### Scripts
 
 LifeOS uses shell scripts for testing and deployment:
