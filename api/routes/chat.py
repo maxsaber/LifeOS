@@ -166,7 +166,7 @@ async def ask_stream(request: AskStreamRequest):
                     if events:
                         event_text = "Calendar Events:\n"
                         for e in events:
-                            start = e.start.strftime("%Y-%m-%d %H:%M") if e.start else "TBD"
+                            start = e.start_time.strftime("%Y-%m-%d %H:%M") if e.start_time else "TBD"
                             event_text += f"- {e.title} ({start})"
                             if e.attendees:
                                 event_text += f" with {', '.join(e.attendees[:3])}"
