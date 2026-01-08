@@ -38,11 +38,11 @@ if [ -d "venv" ]; then
     source venv/bin/activate
 fi
 
-# Run only unit tests (fast) - skip slow tests that require ChromaDB
-echo "Running: pytest -m unit tests/ -v --tb=short"
+# Run only unit tests (fast) - skip slow tests that require ChromaDB or Ollama
+echo "Running: pytest -m 'unit and not slow' tests/ -v --tb=short"
 echo ""
 
-if pytest -m unit tests/ -v --tb=short; then
+if pytest -m "unit and not slow" tests/ -v --tb=short; then
     echo ""
     echo "========================================"
     echo "  Unit tests passed! Proceeding with commit."

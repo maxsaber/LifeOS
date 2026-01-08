@@ -2,6 +2,9 @@
 LifeOS - Personal RAG System for Obsidian Vault
 FastAPI Application Entry Point
 """
+import logging
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -11,11 +14,41 @@ from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from api.routes import search, ask, calendar, gmail, drive, people, chat, briefings, admin, conversations
+from config.settings import settings
+
+logger = logging.getLogger(__name__)
+
+# Granola processor instance (initialized on startup)
+_granola_processor = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan - startup and shutdown."""
+    global _granola_processor
+
+    # Startup: Initialize and start Granola processor
+    try:
+        from api.services.granola_processor import GranolaProcessor
+        _granola_processor = GranolaProcessor(settings.vault_path)
+        _granola_processor.start_watching()
+        logger.info("Granola processor started successfully")
+    except Exception as e:
+        logger.error(f"Failed to start Granola processor: {e}")
+
+    yield  # Application runs here
+
+    # Shutdown: Stop Granola processor
+    if _granola_processor:
+        _granola_processor.stop()
+        logger.info("Granola processor stopped")
+
 
 app = FastAPI(
     title="LifeOS",
     description="Personal assistant system for semantic search and synthesis across Obsidian vault",
-    version="0.2.0"
+    version="0.2.0",
+    lifespan=lifespan
 )
 
 # CORS middleware for local development

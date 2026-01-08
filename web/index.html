@@ -996,7 +996,8 @@
                     html += `<div class="sources">`;
                     sources.forEach(src => {
                         const fileName = src.file_name || src;
-                        const obsidianUrl = `obsidian://open?vault=Notes%202025&file=${encodeURIComponent(fileName)}`;
+                        const obsidianPath = src.obsidian_path || fileName;
+                        const obsidianUrl = `obsidian://open?vault=Notes%202025&file=${encodeURIComponent(obsidianPath)}`;
                         html += `<a href="${obsidianUrl}" class="source-link">📄 ${fileName}</a>`;
                     });
                     html += `</div>`;
@@ -1126,7 +1127,8 @@
                                             metaHtml += '<div class="sources">';
                                             sources.forEach(src => {
                                                 const fileName = src.file_name || src;
-                                                const obsidianUrl = `obsidian://open?vault=Notes%202025&file=${encodeURIComponent(fileName)}`;
+                                                const obsidianPath = src.obsidian_path || fileName;
+                                                const obsidianUrl = `obsidian://open?vault=Notes%202025&file=${encodeURIComponent(obsidianPath)}`;
                                                 metaHtml += `<a href="${obsidianUrl}" class="source-link">📄 ${fileName}</a>`;
                                             });
                                             metaHtml += '</div>';

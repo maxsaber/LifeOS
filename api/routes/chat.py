@@ -19,6 +19,7 @@ from api.services.conversation_store import get_store, generate_title
 from api.services.calendar import CalendarService
 from api.services.drive import DriveService
 from api.services.gmail import GmailService
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -247,16 +248,24 @@ async def ask_stream(request: AskStreamRequest):
 
             # Collect sources
             sources = []
+            vault_prefix = str(settings.vault_path) + "/"
             if chunks:
                 seen_files = set()
                 for chunk in chunks:
                     # Metadata is spread directly on chunk, not nested
                     file_name = chunk.get('file_name', '')
+                    file_path = chunk.get('file_path', '')
                     if file_name and file_name not in seen_files:
                         seen_files.add(file_name)
+                        # Compute relative path from vault for Obsidian links
+                        if file_path.startswith(vault_prefix):
+                            obsidian_path = file_path[len(vault_prefix):]
+                        else:
+                            obsidian_path = file_name  # Fallback to filename
                         sources.append({
                             'file_name': file_name,
-                            'file_path': chunk.get('file_path', ''),
+                            'file_path': file_path,
+                            'obsidian_path': obsidian_path,
                         })
 
             # Send sources to client
