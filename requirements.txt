@@ -28,6 +28,8 @@ google-api-python-client>=2.116.0
 pytest>=7.4.0
 pytest-asyncio>=0.23.0
 pytest-xdist>=3.5.0  # Parallel test execution
+pytest-playwright>=0.7.0  # Browser-based UI tests
+playwright>=1.40.0
 httpx>=0.26.0
 
 # Utilities
