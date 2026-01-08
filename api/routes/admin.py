@@ -257,3 +257,46 @@ async def stop_granola_processor():
     except Exception as e:
         logger.error(f"Failed to stop Granola processor: {e}")
         return {"status": "error", "message": str(e)}
+
+
+class ReclassifyRequest(BaseModel):
+    """Request to reclassify files in a folder."""
+    folder: str = "Work/ML/People/Hiring"
+
+
+@router.post("/granola/reclassify", response_model=GranolaProcessResponse)
+async def reclassify_granola_files(request: ReclassifyRequest) -> GranolaProcessResponse:
+    """
+    Reclassify Granola files that may have been incorrectly categorized.
+
+    Scans the specified folder and moves any Granola files to their correct
+    destination based on the updated classification rules.
+
+    Default folder: Work/ML/People/Hiring (where files were incorrectly placed)
+    """
+    try:
+        from api.services.granola_processor import GranolaProcessor
+        from pathlib import Path
+
+        processor = GranolaProcessor(settings.vault_path)
+        folder_path = Path(settings.vault_path) / request.folder
+
+        results = processor.reclassify_folder(str(folder_path))
+
+        return GranolaProcessResponse(
+            status="success",
+            message=f"Reclassified {results['reclassified']} files from {request.folder}",
+            processed=results["reclassified"],
+            failed=results["failed"],
+            skipped=results["skipped"],
+            moves=results["moves"]
+        )
+    except Exception as e:
+        logger.error(f"Reclassification failed: {e}")
+        return GranolaProcessResponse(
+            status="error",
+            message=f"Reclassification failed: {str(e)}",
+            processed=0,
+            failed=0,
+            skipped=0
+        )

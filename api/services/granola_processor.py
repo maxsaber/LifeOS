@@ -24,11 +24,34 @@ logger = logging.getLogger(__name__)
 
 
 # Classification patterns from PRD P0.1
+# FILENAME_RULES are checked first against filename only - higher priority
+FILENAME_RULES = [
+    {
+        "name": "finance_filename",
+        "patterns": [
+            r"\bmoney\s*meeting\b", r"\bbudget\b", r"\bfinance\b",
+            r"\bfinancial\b", r"\brevenue\b"
+        ],
+        "destination": "Work/ML/Finance",
+        "tags": ["meeting", "work", "ml", "finance"]
+    },
+    {
+        "name": "therapy_filename",
+        "patterns": [
+            r"\btherapy\b", r"\bAmy\s*Morgan\b",
+            r"\bErica\s*Turner\b", r"\bErika\s*Turner\b"
+        ],
+        "destination": "Personal/Self-Improvement/Therapy and coaching",
+        "tags": ["meeting", "therapy", "personal"]
+    },
+]
+
+# CONTENT_RULES are checked against content - lower priority, more specific
 CLASSIFICATION_RULES = [
     {
         "name": "therapy",
         "patterns": [
-            r"\btherapy\b", r"\btherapist\b",
+            r"\btherapy\s*session\b", r"\btherapist\b",
             r"\bAmy\s*Morgan\b", r"\bErica\s*Turner\b", r"\bErika\s*Turner\b",
             r"\bcouples\s*therapy\b", r"\bindividual\s*therapy\b"
         ],
@@ -36,28 +59,33 @@ CLASSIFICATION_RULES = [
         "tags": ["meeting", "therapy", "personal"]
     },
     {
-        "name": "hiring",
-        "patterns": [
-            r"\binterview\b", r"\bhiring\b", r"\bjob\s*description\b",
-            r"\bcandidate\b", r"\brecruit", r"\bresume\b", r"\bJD\b"
-        ],
-        "destination": "Work/ML/People/Hiring",
-        "tags": ["meeting", "work", "ml", "hiring"]
-    },
-    {
         "name": "finance",
         "patterns": [
-            r"\bbudget\b", r"\brevenue\b", r"\bfinance\b", r"\bfinancial\b",
-            r"\bexpense", r"\bspending\b", r"\bmoney\s*meeting\b"
+            r"\bbudget\s*review\b", r"\bbudget\s*planning\b",
+            r"\bfinancial\s*review\b", r"\bfinancial\s*planning\b",
+            r"\bexpense\s*report\b", r"\bspending\s*review\b",
+            r"\bmoney\s*meeting\b", r"\bquarterly\s*budget\b"
         ],
         "destination": "Work/ML/Finance",
         "tags": ["meeting", "work", "ml", "finance"]
     },
     {
+        "name": "hiring",
+        "patterns": [
+            r"\bjob\s*interview\b", r"\bhiring\s*decision\b",
+            r"\bjob\s*description\b", r"\bcandidate\s*interview\b",
+            r"\brecruitment\s*for\s*(?:position|role)\b", r"\bresume\s*review\b",
+            r"\binterview\s*panel\b", r"\binterview\s*feedback\b"
+        ],
+        "destination": "Work/ML/People/Hiring",
+        "tags": ["meeting", "work", "ml", "hiring"]
+    },
+    {
         "name": "strategy",
         "patterns": [
-            r"\bstrategy\b", r"\bplanning\b", r"\bgoals?\b", r"\bOKRs?\b",
-            r"\broadmap\b", r"\bquarterly\s*planning\b"
+            r"\bstrategy\s*meeting\b", r"\bstrategic\s*planning\b",
+            r"\bquarterly\s*planning\b", r"\bgoal\s*setting\b",
+            r"\bOKR\s*review\b", r"\broadmap\s*planning\b"
         ],
         "destination": "Work/ML/Strategy and planning",
         "tags": ["meeting", "work", "ml", "strategy"]
@@ -65,8 +93,8 @@ CLASSIFICATION_RULES = [
     {
         "name": "union",
         "patterns": [
-            r"\bunion\b", r"\bsteward\b", r"\bcollective\s*bargaining\b",
-            r"\bgrievance\b"
+            r"\bunion\s*meeting\b", r"\bunion\s*steward\b",
+            r"\bcollective\s*bargaining\b", r"\bgrievance\b"
         ],
         "destination": "Work/ML/People/Union",
         "tags": ["meeting", "work", "ml"]
@@ -74,8 +102,7 @@ CLASSIFICATION_RULES = [
     {
         "name": "personal_relationship",
         "patterns": [
-            r"\bTaylor\b", r"\bMalea\b", r"\bMalia\b",
-            r"\bfamily\b", r"\bpersonal\b", r"\brelationship\b"
+            r"\bTaylor\b", r"\bMalea\b", r"\bMalia\b"
         ],
         "destination": "Personal/Relationship",
         "tags": ["meeting", "personal", "relationship"]
@@ -115,7 +142,13 @@ class GranolaProcessor:
 
     def classify_note(self, content: str, filename: str) -> tuple[str, list[str], str]:
         """
-        Classify a note based on content patterns.
+        Classify a note based on filename and content patterns.
+
+        Priority order:
+        1. Filename-based rules (highest priority)
+        2. 1-1 meetings with known ML people
+        3. Content-based rules
+        4. Default (Work/ML/Meetings)
 
         Args:
             content: Full note content
@@ -124,40 +157,44 @@ class GranolaProcessor:
         Returns:
             Tuple of (destination_folder, tags, classification_rationale)
         """
-        content_lower = content.lower()
         filename_lower = filename.lower()
-        combined = content_lower + " " + filename_lower
+        content_lower = content.lower()
 
-        # Check each classification rule
-        for rule in CLASSIFICATION_RULES:
+        # 1. Check filename-based rules first (highest priority)
+        for rule in FILENAME_RULES:
             for pattern in rule["patterns"]:
-                if re.search(pattern, combined, re.IGNORECASE):
-                    rationale = f"Matched pattern '{pattern}' for category '{rule['name']}'"
+                if re.search(pattern, filename_lower, re.IGNORECASE):
+                    rationale = f"Filename matched '{pattern}' for category '{rule['name']}'"
                     return rule["destination"], rule["tags"], rationale
 
-        # Check for 1-1 meetings with ML people
+        # 2. Check for 1-1 meetings with ML people (based on filename)
         for person in ML_PEOPLE:
             person_lower = person.lower()
             patterns = [
-                rf"\b{person_lower}\b",
-                rf"nathan.*{person_lower}",
                 rf"{person_lower}.*nathan",
+                rf"nathan.*{person_lower}",
                 rf"{person_lower}\s*x\s*nathan",
                 rf"nathan\s*x\s*{person_lower}",
                 rf"{person_lower}[-/]nathan",
-                rf"nathan[-/]{person_lower}"
+                rf"nathan[-/]{person_lower}",
+                rf"^{person_lower}\b",  # Starts with person name
             ]
             for pattern in patterns:
                 if re.search(pattern, filename_lower):
-                    if "weekly" in filename_lower or "check" in filename_lower or \
-                       re.search(rf"^{person_lower}.*nathan|nathan.*{person_lower}", filename_lower):
-                        return (
-                            "Work/ML/Meetings",
-                            ["meeting", "work", "ml", "1-1"],
-                            f"1-1 meeting with {person}"
-                        )
+                    return (
+                        "Work/ML/Meetings",
+                        ["meeting", "work", "ml", "1-1"],
+                        f"1-1 meeting with {person}"
+                    )
 
-        # Default: Work/ML/Meetings for any other meeting notes
+        # 3. Check content-based classification rules
+        for rule in CLASSIFICATION_RULES:
+            for pattern in rule["patterns"]:
+                if re.search(pattern, content_lower, re.IGNORECASE):
+                    rationale = f"Content matched '{pattern}' for category '{rule['name']}'"
+                    return rule["destination"], rule["tags"], rationale
+
+        # 4. Default: Work/ML/Meetings for any other meeting notes
         return (
             "Work/ML/Meetings",
             ["meeting", "work", "ml"],
@@ -297,6 +334,139 @@ class GranolaProcessor:
 
         logger.info(f"Processed: {path.name} -> {destination} ({rationale})")
         return str(dest_path)
+
+    def reclassify_file(self, file_path: str) -> Optional[str]:
+        """
+        Reclassify and move a file that may have been incorrectly categorized.
+
+        Unlike process_file (which only processes files in Granola/), this can
+        process files anywhere in the vault and move them to the correct location.
+
+        Args:
+            file_path: Path to the file
+
+        Returns:
+            New path if moved, None if file should stay where it is
+        """
+        path = Path(file_path)
+
+        if not path.exists():
+            logger.warning(f"File no longer exists: {file_path}")
+            return None
+
+        if not path.suffix == ".md":
+            return None
+
+        try:
+            content = path.read_text(encoding="utf-8")
+        except Exception as e:
+            logger.error(f"Failed to read {file_path}: {e}")
+            return None
+
+        # Check if this is a Granola file (has granola_id in frontmatter)
+        try:
+            post = frontmatter.loads(content)
+            if "granola_id" not in post.metadata:
+                logger.debug(f"Not a Granola file, skipping: {file_path}")
+                return None
+        except Exception:
+            return None
+
+        # Classify the note
+        destination, tags, rationale = self.classify_note(content, path.name)
+
+        # Determine correct destination path
+        dest_folder = self.vault_path / destination
+        dest_path = dest_folder / path.name
+
+        # Check if already in correct location
+        try:
+            current_dest = path.parent.relative_to(self.vault_path)
+            if str(current_dest) == destination:
+                logger.debug(f"File already in correct location: {file_path}")
+                return None
+        except ValueError:
+            pass
+
+        # Extract people
+        people = self.extract_people(content)
+
+        # Update frontmatter
+        updated_content = self.update_frontmatter(content, tags, people)
+
+        # Create destination folder if needed
+        dest_folder.mkdir(parents=True, exist_ok=True)
+
+        # Handle filename conflicts
+        if dest_path.exists() and dest_path != path:
+            base = dest_path.stem
+            suffix = dest_path.suffix
+            counter = 1
+            while dest_path.exists():
+                dest_path = dest_folder / f"{base}_{counter}{suffix}"
+                counter += 1
+
+        # Write updated content to destination
+        try:
+            dest_path.write_text(updated_content, encoding="utf-8")
+            logger.info(f"Wrote reclassified file to: {dest_path}")
+        except Exception as e:
+            logger.error(f"Failed to write to {dest_path}: {e}")
+            return None
+
+        # Remove original file
+        if path != dest_path:
+            try:
+                path.unlink()
+                logger.info(f"Removed original file: {path}")
+            except Exception as e:
+                logger.error(f"Failed to remove original {path}: {e}")
+
+        logger.info(f"Reclassified: {path.name} -> {destination} ({rationale})")
+        return str(dest_path)
+
+    def reclassify_folder(self, folder_path: str) -> dict:
+        """
+        Scan a folder and reclassify any Granola files that are in the wrong location.
+
+        Args:
+            folder_path: Path to folder to scan
+
+        Returns:
+            Dict with 'reclassified', 'failed', 'skipped' counts and 'moves' list
+        """
+        results = {
+            "reclassified": 0,
+            "failed": 0,
+            "skipped": 0,
+            "moves": []
+        }
+
+        folder = Path(folder_path)
+        if not folder.exists():
+            logger.warning(f"Folder does not exist: {folder_path}")
+            return results
+
+        for md_file in folder.rglob("*.md"):
+            try:
+                new_path = self.reclassify_file(str(md_file))
+                if new_path:
+                    results["reclassified"] += 1
+                    results["moves"].append({
+                        "original": str(md_file),
+                        "destination": new_path
+                    })
+                else:
+                    results["skipped"] += 1
+            except Exception as e:
+                logger.error(f"Failed to reclassify {md_file}: {e}")
+                results["failed"] += 1
+
+        logger.info(
+            f"Reclassification complete: {results['reclassified']} moved, "
+            f"{results['skipped']} skipped, {results['failed']} failed"
+        )
+        return results
 
     def process_backlog(self) -> dict:
         """
