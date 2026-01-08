@@ -300,3 +300,115 @@ async def reclassify_granola_files(request: ReclassifyRequest) -> GranolaProcess
             failed=0,
             skipped=0
         )
+
+
+# ============ Calendar Indexer Endpoints ============
+
+
+class CalendarSyncStatus(BaseModel):
+    """Status of the calendar indexer."""
+    status: str
+    scheduler_running: bool
+    last_sync: Optional[str] = None
+    message: Optional[str] = None
+
+
+class CalendarSyncResponse(BaseModel):
+    """Response from calendar sync operation."""
+    status: str
+    events_indexed: int
+    errors: list[str] = []
+    elapsed_seconds: float
+    last_sync: str
+
+
+@router.get("/calendar/status", response_model=CalendarSyncStatus)
+async def get_calendar_sync_status() -> CalendarSyncStatus:
+    """
+    Get status of the calendar indexer scheduler.
+
+    Returns whether the scheduler is running and when the last sync occurred.
+    """
+    try:
+        from api.services.calendar_indexer import get_calendar_indexer
+        indexer = get_calendar_indexer()
+        status = indexer.get_status()
+
+        return CalendarSyncStatus(
+            status="ok",
+            scheduler_running=status["running"],
+            last_sync=status["last_sync"],
+            message="Calendar sync scheduler is running" if status["running"] else "Scheduler not running"
+        )
+    except Exception as e:
+        logger.error(f"Failed to get calendar status: {e}")
+        return CalendarSyncStatus(
+            status="error",
+            scheduler_running=False,
+            message=str(e)
+        )
+
+
+@router.post("/calendar/sync", response_model=CalendarSyncResponse)
+async def trigger_calendar_sync(days_past: int = 30, days_future: int = 30) -> CalendarSyncResponse:
+    """
+    Trigger an immediate calendar sync.
+
+    Fetches events from the specified date range and indexes them into ChromaDB.
+
+    Args:
+        days_past: Number of days in the past to fetch (default: 30)
+        days_future: Number of days in the future to fetch (default: 30)
+    """
+    try:
+        from api.services.calendar_indexer import get_calendar_indexer
+        indexer = get_calendar_indexer()
+        result = indexer.sync(days_past=days_past, days_future=days_future)
+
+        return CalendarSyncResponse(
+            status=result["status"],
+            events_indexed=result["events_indexed"],
+            errors=result.get("errors", []),
+            elapsed_seconds=result["elapsed_seconds"],
+            last_sync=result["last_sync"]
+        )
+    except Exception as e:
+        logger.error(f"Calendar sync failed: {e}")
+        return CalendarSyncResponse(
+            status="error",
+            events_indexed=0,
+            errors=[str(e)],
+            elapsed_seconds=0,
+            last_sync=""
+        )
+
+
+@router.post("/calendar/start")
+async def start_calendar_scheduler(interval_hours: float = 24.0):
+    """
+    Start the calendar sync scheduler.
+
+    Args:
+        interval_hours: Hours between syncs (default: 24)
+    """
+    try:
+        from api.services.calendar_indexer import get_calendar_indexer
+        indexer = get_calendar_indexer()
+        indexer.start_scheduler(interval_hours=interval_hours)
+        return {"status": "started", "message": f"Calendar scheduler started ({interval_hours}h interval)"}
+    except Exception as e:
+        logger.error(f"Failed to start calendar scheduler: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/calendar/stop")
+async def stop_calendar_scheduler():
+    """Stop the calendar sync scheduler."""
+    try:
+        from api.services.calendar_indexer import get_calendar_indexer
+        indexer = get_calendar_indexer()
+        indexer.stop_scheduler()
+        return {"status": "stopped", "message": "Calendar scheduler stopped"}
+    except Exception as e:
+        logger.error(f"Failed to stop calendar scheduler: {e}")
+        return {"status": "error", "message": str(e)}

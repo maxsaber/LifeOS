@@ -51,3 +51,80 @@ def server_available():
         return response.status_code == 200
     except Exception:
         return False
+
+
+@pytest.fixture(scope="session")
+def test_vault_path(tmp_path_factory):
+    """
+    Create a temporary vault directory for tests.
+
+    Session-scoped to avoid recreating for every test.
+    """
+    vault = tmp_path_factory.mktemp("test_vault")
+    # Create standard folders
+    (vault / "Granola").mkdir()
+    (vault / "Work").mkdir()
+    (vault / "Personal").mkdir()
+    return vault
+
+
+@pytest.fixture(scope="session")
+def test_data_path(tmp_path_factory):
+    """
+    Create a temporary data directory for ChromaDB and SQLite.
+
+    Session-scoped to share across tests that need persistence.
+    """
+    return tmp_path_factory.mktemp("test_data")
+
+
+@pytest.fixture(scope="function")
+def mock_settings(test_vault_path, test_data_path, monkeypatch):
+    """
+    Mock settings for testing.
+
+    Uses temporary paths to avoid affecting real data.
+    """
+    from config.settings import Settings
+
+    mock = Settings(
+        vault_path=test_vault_path,
+        chroma_path=test_data_path / "chromadb",
+        anthropic_api_key="test-key-for-testing",
+    )
+
+    # Patch the global settings
+    monkeypatch.setattr("config.settings.settings", mock)
+    return mock
+
+
+@pytest.fixture(scope="session")
+def embedding_service():
+    """
+    Session-scoped embedding service to avoid repeated model loading.
+
+    Loading sentence-transformers is slow (~2s), so we share one instance.
+    """
+    try:
+        from api.services.embeddings import EmbeddingService
+        return EmbeddingService()
+    except Exception:
+        pytest.skip("Embedding service not available")
+
+
+# Parallel execution configuration
+def pytest_collection_modifyitems(config, items):
+    """
+    Auto-mark tests based on location/name for better organization.
+
+    Tests in test_*_api.py get the 'unit' marker by default.
+    Tests with 'browser' in name get the 'browser' marker.
+    """
+    for item in items:
+        # Browser tests
+        if "browser" in item.name or "playwright" in str(item.fspath):
+            item.add_marker(pytest.mark.browser)
+
+        # Integration tests (those that hit real servers)
+        if "integration" in item.name or "real_" in item.name:
+            item.add_marker(pytest.mark.integration)

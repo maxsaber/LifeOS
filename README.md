@@ -278,10 +278,31 @@ LifeOS/
 - `GET /api/people/{name}` - Person information
 - `GET /api/people/{name}/briefing` - Stakeholder briefing
 
+### Memories
+
+- `POST /api/memories` - Create a new memory (with optional Claude synthesis)
+- `GET /api/memories` - List all memories (filter by category)
+- `GET /api/memories/{id}` - Get a specific memory
+- `DELETE /api/memories/{id}` - Delete a memory
+- `GET /api/memories/search/{query}` - Search memories by keyword
+
+### Conversations
+
+- `GET /api/conversations` - List all conversations
+- `POST /api/conversations` - Create new conversation
+- `GET /api/conversations/{id}` - Get conversation with messages
+- `DELETE /api/conversations/{id}` - Delete conversation
+
 ### Admin
 
 - `GET /api/admin/health` - Health check
-- `POST /api/admin/reindex` - Trigger reindex
+- `POST /api/admin/reindex` - Trigger vault reindex
+- `GET /api/admin/calendar/status` - Calendar indexer status
+- `POST /api/admin/calendar/sync` - Trigger calendar sync
+- `POST /api/admin/calendar/start` - Start calendar scheduler
+- `POST /api/admin/calendar/stop` - Stop calendar scheduler
+- `GET /api/admin/granola/status` - Granola processor status
+- `POST /api/admin/granola/process` - Process Granola inbox
 
 ## Query Routing
 
@@ -308,6 +329,12 @@ The router prompt is editable at `config/prompts/query_router.txt`.
 
 ## Version History
 
+- **v0.8.0** - PRD Completion Release
+  - Persistent memories with Claude synthesis (P6.3)
+  - Calendar event indexing with daily sync (P3.2)
+  - Remember button in UI for quick memory entry
+  - Save to vault button improvements (hide after save, better errors)
+  - Session-scoped test fixtures for faster tests
 - **v0.7.0** - Local LLM Query Router (P3.5)
 - **v0.6.2** - Recency bias and QA test suite
 - **v0.6.1** - Admin endpoints and setup utilities

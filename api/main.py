@@ -13,19 +13,20 @@ from fastapi.exceptions import RequestValidationError
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from api.routes import search, ask, calendar, gmail, drive, people, chat, briefings, admin, conversations
+from api.routes import search, ask, calendar, gmail, drive, people, chat, briefings, admin, conversations, memories
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-# Granola processor instance (initialized on startup)
+# Background services (initialized on startup)
 _granola_processor = None
+_calendar_indexer = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan - startup and shutdown."""
-    global _granola_processor
+    global _granola_processor, _calendar_indexer
 
     # Startup: Initialize and start Granola processor
     try:
@@ -36,12 +37,25 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to start Granola processor: {e}")
 
+    # Startup: Initialize and start Calendar indexer with daily sync
+    try:
+        from api.services.calendar_indexer import get_calendar_indexer
+        _calendar_indexer = get_calendar_indexer()
+        _calendar_indexer.start_scheduler(interval_hours=24.0)
+        logger.info("Calendar indexer scheduler started (24h interval)")
+    except Exception as e:
+        logger.error(f"Failed to start Calendar indexer: {e}")
+
     yield  # Application runs here
 
-    # Shutdown: Stop Granola processor
+    # Shutdown: Stop services
     if _granola_processor:
         _granola_processor.stop()
         logger.info("Granola processor stopped")
+
+    if _calendar_indexer:
+        _calendar_indexer.stop_scheduler()
+        logger.info("Calendar indexer stopped")
 
 
 app = FastAPI(
@@ -71,6 +85,7 @@ app.include_router(chat.router)
 app.include_router(briefings.router)
 app.include_router(admin.router)
 app.include_router(conversations.router)
+app.include_router(memories.router)
 
 # Serve static files
 web_dir = Path(__file__).parent.parent / "web"
