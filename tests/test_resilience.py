@@ -273,10 +273,10 @@ class TestAPIErrorHandling:
         # Send malformed request
         client.post("/api/search", json={"query": ""})
 
-        # Service should still be healthy
+        # Service should still be responding (healthy or degraded based on config)
         response = client.get("/health")
         assert response.status_code == 200
-        assert response.json()["status"] == "healthy"
+        assert response.json()["status"] in ["healthy", "degraded"]
 
 
 class TestPartialResults:

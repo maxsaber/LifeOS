@@ -73,8 +73,20 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint."""
-    return {"status": "healthy", "service": "lifeos"}
+    """Health check endpoint that verifies critical dependencies."""
+    from config.settings import settings
+
+    checks = {
+        "api_key_configured": bool(settings.anthropic_api_key and settings.anthropic_api_key.strip()),
+    }
+
+    all_healthy = all(checks.values())
+
+    return {
+        "status": "healthy" if all_healthy else "degraded",
+        "service": "lifeos",
+        "checks": checks,
+    }
 
 
 @app.get("/")

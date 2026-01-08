@@ -5,6 +5,7 @@ Test Categories:
 - unit: Fast tests with no external dependencies (< 100ms each)
 - slow: Tests requiring ChromaDB, sentence-transformers, or file watchers
 - integration: Tests requiring running server or external APIs
+- browser: Playwright browser tests
 - requires_ollama: Tests requiring Ollama LLM to be running
 - requires_server: Tests requiring API server to be running
 
@@ -12,6 +13,7 @@ Run categories:
 - pytest -m unit              # Fast unit tests only (~60s)
 - pytest -m "not slow"        # Skip slow tests
 - pytest -m "not integration" # Skip integration tests
+- pytest -m browser           # Browser tests only
 - pytest                      # All tests
 - pytest -n auto              # Parallel execution (requires pytest-xdist)
 """
@@ -24,6 +26,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "unit: Fast unit tests")
     config.addinivalue_line("markers", "slow: Slow tests (ChromaDB, embeddings)")
     config.addinivalue_line("markers", "integration: Integration tests (server required)")
+    config.addinivalue_line("markers", "browser: Browser tests using Playwright")
     config.addinivalue_line("markers", "requires_ollama: Requires Ollama running")
     config.addinivalue_line("markers", "requires_server: Requires API server running")
 

@@ -117,7 +117,40 @@ The web UI will be available at `http://localhost:8000`.
 
 ## Development
 
-### Running Tests
+### Scripts
+
+LifeOS uses shell scripts for testing and deployment:
+
+```bash
+# Run tests (default: unit tests only)
+./scripts/test.sh
+
+# Run specific test levels
+./scripts/test.sh unit         # Fast unit tests (~30s)
+./scripts/test.sh integration  # Tests requiring server
+./scripts/test.sh browser      # Playwright browser tests
+./scripts/test.sh all          # Run all tests
+./scripts/test.sh health       # Quick health check
+
+# Deploy (runs tests, restarts server, commits, pushes)
+./scripts/deploy.sh
+
+# Deploy with custom message
+./scripts/deploy.sh "Add new feature"
+
+# Deploy without pushing
+./scripts/deploy.sh --no-push "WIP changes"
+
+# Skip tests (use with caution)
+./scripts/deploy.sh --skip-tests
+
+# Manage the service
+./scripts/service.sh status    # Check service status
+./scripts/service.sh restart   # Restart the server
+./scripts/service.sh logs      # Tail logs
+```
+
+### Running Tests Manually
 
 Tests must pass before any commit. The pre-commit hook enforces this automatically.
 
@@ -130,6 +163,10 @@ pytest tests/test_query_router.py -v
 
 # Run with coverage
 pytest tests/ -v --cov=api --cov-report=term-missing
+
+# Run browser tests with Playwright
+pytest tests/test_ui_browser.py -v --browser chromium
+pytest tests/test_e2e_flow.py::TestRealUserFlow -v --browser chromium
 ```
 
 ### Test Suite Structure
@@ -157,8 +194,10 @@ pytest tests/ -v --cov=api --cov-report=term-missing
 | `test_service_management.py` | launchd integration | 7 |
 | `test_admin.py` | Admin endpoints | 4 |
 | `test_integration.py` | End-to-end tests | 8 |
+| `test_e2e_flow.py` | E2E flow & error handling | 12 |
+| `test_ui_browser.py` | Playwright UI tests | 25 |
 
-**Total: 275 tests**
+**Total: 371+ tests**
 
 ### Pre-commit Hook
 
@@ -205,8 +244,11 @@ LifeOS/
 │       └── query_router.txt # Router prompt (editable)
 ├── web/
 │   └── index.html           # Chat UI
-├── tests/                   # Test suite (275 tests)
+├── tests/                   # Test suite (371+ tests)
 ├── scripts/
+│   ├── deploy.sh            # Deployment script (test, restart, commit, push)
+│   ├── test.sh              # Test runner (unit, integration, browser)
+│   ├── service.sh           # Service management (start, stop, status)
 │   └── pre-commit           # Git pre-commit hook
 ├── requirements.txt
 ├── pyproject.toml

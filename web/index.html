@@ -1146,6 +1146,27 @@
                                     }
 
                                     loadConversations();
+                                } else if (data.type === 'error') {
+                                    // Handle error from server
+                                    const errorMsg = data.message || 'An error occurred';
+                                    let userMessage = 'Sorry, something went wrong.';
+
+                                    // Provide helpful messages for common errors
+                                    if (errorMsg.toLowerCase().includes('api') ||
+                                        errorMsg.toLowerCase().includes('auth') ||
+                                        errorMsg.toLowerCase().includes('key') ||
+                                        errorMsg.toLowerCase().includes('token')) {
+                                        userMessage = 'API configuration error. Please check that your API key is set correctly.';
+                                    } else if (errorMsg.toLowerCase().includes('timeout')) {
+                                        userMessage = 'The request timed out. Please try again.';
+                                    } else if (errorMsg.toLowerCase().includes('rate')) {
+                                        userMessage = 'Rate limit exceeded. Please wait a moment and try again.';
+                                    }
+
+                                    console.error('Stream error:', errorMsg);
+                                    updateMessage(msgId, userMessage);
+                                    setStatus('error', 'Error');
+                                    return; // Stop processing
                                 }
                             } catch (e) {
                                 // Skip malformed JSON

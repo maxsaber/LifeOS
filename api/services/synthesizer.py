@@ -29,6 +29,14 @@ class Synthesizer:
         self.api_key = api_key or settings.anthropic_api_key
         self._client: anthropic.Anthropic | None = None
 
+    def _validate_api_key(self):
+        """Validate that API key is configured."""
+        if not self.api_key or not self.api_key.strip():
+            raise ValueError(
+                "Anthropic API key not configured. "
+                "Please set ANTHROPIC_API_KEY in your .env file."
+            )
+
     @property
     def client(self) -> anthropic.Anthropic:
         """Lazy-load the Anthropic client."""
@@ -58,6 +66,9 @@ class Synthesizer:
         Raises:
             Exception: If API call fails
         """
+        # Validate API key before making request
+        self._validate_api_key()
+
         # Resolve model name: explicit model > model_tier > default
         if model is None:
             tier = model_tier or DEFAULT_MODEL_TIER
@@ -100,6 +111,9 @@ class Synthesizer:
         Yields:
             Text chunks as they arrive
         """
+        # Validate API key before making request
+        self._validate_api_key()
+
         # Resolve model name: explicit model > model_tier > default
         if model is None:
             tier = model_tier or DEFAULT_MODEL_TIER
