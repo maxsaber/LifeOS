@@ -145,13 +145,18 @@ Format:
 - End with sources list if multiple files referenced"""
 
 
-def construct_prompt(question: str, chunks: list[dict]) -> str:
+def construct_prompt(
+    question: str,
+    chunks: list[dict],
+    conversation_history: list = None
+) -> str:
     """
     Construct the full prompt for Claude.
 
     Args:
         question: User's question
         chunks: Retrieved context chunks with metadata
+        conversation_history: Optional list of previous messages for context
 
     Returns:
         Formatted prompt string
@@ -168,6 +173,20 @@ def construct_prompt(question: str, chunks: list[dict]) -> str:
     else:
         context = "(No relevant context found in the vault)"
 
+    # Build conversation history section
+    history_section = ""
+    if conversation_history:
+        from api.services.conversation_store import format_conversation_history
+        formatted_history = format_conversation_history(conversation_history)
+        if formatted_history:
+            history_section = f"""## Conversation History
+
+{formatted_history}
+
+---
+
+"""
+
     # Construct full prompt
     prompt = f"""{SYSTEM_CONTEXT}
 
@@ -175,13 +194,13 @@ def construct_prompt(question: str, chunks: list[dict]) -> str:
 
 {context}
 
-## Question
+{history_section}## Question
 
 {question}
 
 ## Instructions
 
-Answer the question based on the context above. Cite your sources by referencing the file names. If the context doesn't contain enough information to fully answer, acknowledge what's missing."""
+Answer the question based on the context above. Cite your sources by referencing the file names. If the context doesn't contain enough information to fully answer, acknowledge what's missing. If this is a follow-up question, consider the conversation history for context."""
 
     return prompt
 

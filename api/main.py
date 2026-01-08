@@ -10,7 +10,7 @@ from fastapi.exceptions import RequestValidationError
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from api.routes import search, ask, calendar, gmail, drive, people, chat, briefings, admin
+from api.routes import search, ask, calendar, gmail, drive, people, chat, briefings, admin, conversations
 
 app = FastAPI(
     title="LifeOS",
@@ -37,6 +37,7 @@ app.include_router(people.router)
 app.include_router(chat.router)
 app.include_router(briefings.router)
 app.include_router(admin.router)
+app.include_router(conversations.router)
 
 # Serve static files
 web_dir = Path(__file__).parent.parent / "web"
