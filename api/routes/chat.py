@@ -3,6 +3,7 @@ Chat API endpoints with streaming support.
 """
 import json
 import asyncio
+import logging
 from typing import Optional
 from datetime import datetime
 
@@ -12,6 +13,9 @@ from pydantic import BaseModel
 
 from api.services.vectorstore import VectorStore
 from api.services.synthesizer import construct_prompt, get_synthesizer
+from api.services.query_router import QueryRouter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -43,11 +47,27 @@ async def ask_stream(request: AskStreamRequest):
 
     async def generate():
         try:
-            # Get relevant chunks
-            vector_store = VectorStore()
-            chunks = vector_store.search(query=request.question, top_k=10)
+            # Route query to determine sources
+            query_router = QueryRouter()
+            routing_result = await query_router.route(request.question)
 
-            # Send sources first
+            logger.info(
+                f"Query routed to: {routing_result.sources} "
+                f"(latency: {routing_result.latency_ms}ms, "
+                f"confidence: {routing_result.confidence})"
+            )
+
+            # Send routing info first
+            yield f"data: {json.dumps({'type': 'routing', 'sources': routing_result.sources, 'reasoning': routing_result.reasoning, 'latency_ms': routing_result.latency_ms})}\n\n"
+
+            # Get relevant chunks based on routing
+            # Currently only vault is implemented, but routing prepares for multi-source
+            chunks = []
+            if "vault" in routing_result.sources or not routing_result.sources:
+                vector_store = VectorStore()
+                chunks = vector_store.search(query=request.question, top_k=10)
+
+            # Send sources
             if request.include_sources and chunks:
                 sources = []
                 seen_files = set()

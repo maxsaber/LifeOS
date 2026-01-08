@@ -1,0 +1,49 @@
+#!/bin/bash
+#
+# LifeOS Pre-commit Hook
+#
+# Runs the full test suite before allowing commits.
+# Tests must pass for the commit to proceed.
+#
+# Installation:
+#   cp scripts/pre-commit .git/hooks/pre-commit
+#   chmod +x .git/hooks/pre-commit
+#
+
+set -e
+
+echo "========================================"
+echo "  LifeOS Pre-commit Hook"
+echo "  Running test suite..."
+echo "========================================"
+echo ""
+
+# Get the project root directory
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+cd "$PROJECT_ROOT"
+
+# Activate virtual environment if it exists
+if [ -d "venv" ]; then
+    source venv/bin/activate
+fi
+
+# Run pytest
+echo "Running: pytest tests/ -v --tb=short"
+echo ""
+
+if pytest tests/ -v --tb=short; then
+    echo ""
+    echo "========================================"
+    echo "  All tests passed! Proceeding with commit."
+    echo "========================================"
+    exit 0
+else
+    echo ""
+    echo "========================================"
+    echo "  COMMIT BLOCKED: Tests failed!"
+    echo ""
+    echo "  Fix the failing tests before committing."
+    echo "  To bypass (not recommended): git commit --no-verify"
+    echo "========================================"
+    exit 1
+fi

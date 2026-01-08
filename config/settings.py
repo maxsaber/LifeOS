@@ -36,5 +36,10 @@ class Settings(BaseSettings):
     # Search
     default_top_k: int = 20
 
+    # Local LLM Router (Ollama)
+    ollama_host: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+    ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+    ollama_timeout: int = int(os.getenv("OLLAMA_TIMEOUT", "10"))
+
 
 settings = Settings()
