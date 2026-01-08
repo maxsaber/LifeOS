@@ -1,30 +1,36 @@
 """
 LifeOS Configuration Settings
 """
-import os
 from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import Field
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
     model_config = SettingsConfigDict(
-        env_prefix="LIFEOS_",
         env_file=".env",
+        env_file_encoding="utf-8",
         extra="ignore"
     )
 
-    # Paths
-    vault_path: Path = Path(os.getenv("LIFEOS_VAULT_PATH", "/Users/nathanramia/Notes 2025"))
-    chroma_path: Path = Path(os.getenv("LIFEOS_CHROMA_PATH", "./data/chromadb"))
+    # Paths (use LIFEOS_ prefix)
+    vault_path: Path = Field(
+        default=Path("/Users/nathanramia/Notes 2025"),
+        alias="LIFEOS_VAULT_PATH"
+    )
+    chroma_path: Path = Field(
+        default=Path("./data/chromadb"),
+        alias="LIFEOS_CHROMA_PATH"
+    )
 
     # Server
-    port: int = int(os.getenv("LIFEOS_PORT", "8080"))
-    host: str = os.getenv("LIFEOS_HOST", "0.0.0.0")
+    port: int = Field(default=8080, alias="LIFEOS_PORT")
+    host: str = Field(default="0.0.0.0", alias="LIFEOS_HOST")
 
-    # API Keys
-    anthropic_api_key: str = os.getenv("ANTHROPIC_API_KEY", "")
+    # API Keys (no prefix - standard env var names)
+    anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
 
     # Embedding Model
     embedding_model: str = "all-MiniLM-L6-v2"
@@ -37,9 +43,9 @@ class Settings(BaseSettings):
     default_top_k: int = 20
 
     # Local LLM Router (Ollama)
-    ollama_host: str = os.getenv("OLLAMA_HOST", "http://localhost:11434")
-    ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
-    ollama_timeout: int = int(os.getenv("OLLAMA_TIMEOUT", "10"))
+    ollama_host: str = Field(default="http://localhost:11434", alias="OLLAMA_HOST")
+    ollama_model: str = Field(default="llama3.2:3b", alias="OLLAMA_MODEL")
+    ollama_timeout: int = Field(default=10, alias="OLLAMA_TIMEOUT")
 
 
 settings = Settings()
