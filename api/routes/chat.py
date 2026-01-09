@@ -367,10 +367,17 @@ async def ask_stream(request: AskStreamRequest):
                 all_files = name_matched_files + content_matched_files
                 print(f"  Prioritizing {len(name_matched_files)} name-matched files")
 
+                # Adaptive retrieval settings
+                INITIAL_MAX_FILES = 2  # Read content from 2 files initially
+                INITIAL_CHAR_LIMIT = 1000  # 1000 chars per file initially
+                EXPANDED_CHAR_LIMIT = 4000  # Can expand to 4000 chars on request
+
                 if all_files:
                     drive_text = "Google Drive Files:\n"
                     files_with_content = 0
-                    max_content_files = 3  # Limit how many files we read content from
+
+                    # Track all available files for potential follow-up reads
+                    available_for_deeper_read = []
 
                     for f in all_files:
                         name = f.name if hasattr(f, 'name') else f.get('name', 'Unknown')
@@ -378,28 +385,45 @@ async def ask_stream(request: AskStreamRequest):
                         account = f.source_account if hasattr(f, 'source_account') else ''
                         file_id = f.file_id if hasattr(f, 'file_id') else f.get('id', '')
 
+                        # Track file for potential deeper reading
+                        available_for_deeper_read.append({
+                            "name": name,
+                            "file_id": file_id,
+                            "mime_type": mime,
+                            "account": account
+                        })
+
                         drive_text += f"\n### {name} [{account}]\n"
 
-                        # For Google Docs/Sheets, fetch actual content (up to max_content_files)
-                        if files_with_content < max_content_files and file_id:
+                        # For Google Docs/Sheets, fetch actual content (limited initially)
+                        if files_with_content < INITIAL_MAX_FILES and file_id:
                             try:
-                                # Get the drive service for this account
                                 account_type = GoogleAccount.WORK if account == 'work' else GoogleAccount.PERSONAL
                                 drive_for_content = DriveService(account_type)
                                 content = drive_for_content.get_file_content(file_id, mime)
                                 if content:
-                                    # Truncate very long content
-                                    if len(content) > 3000:
-                                        content = content[:3000] + "\n... [truncated]"
+                                    # Initial read is limited to INITIAL_CHAR_LIMIT
+                                    if len(content) > INITIAL_CHAR_LIMIT:
+                                        content = content[:INITIAL_CHAR_LIMIT] + f"\n... [truncated - {len(content)} total chars available, use [EXPAND:{name}] to read more]"
                                     drive_text += f"{content}\n"
                                     files_with_content += 1
-                                    print(f"    Read content from: {name}")
+                                    print(f"    Read {min(len(content), INITIAL_CHAR_LIMIT)} chars from: {name}")
                             except Exception as e:
                                 print(f"    Could not read {name}: {e}")
                                 drive_text += f"(Could not read content)\n"
+                        else:
+                            drive_text += f"(Preview not loaded - use [READ_MORE:{name}] to read this document)\n"
+
+                    # Add instructions for adaptive retrieval
+                    if len(all_files) > INITIAL_MAX_FILES:
+                        unread_files = [f["name"] for f in available_for_deeper_read[INITIAL_MAX_FILES:]]
+                        drive_text += f"\n---\nAdditional documents available (not yet read): {', '.join(unread_files)}\n"
+                        drive_text += "Use [READ_MORE:filename] to read any unread document, or [EXPAND:filename] to get more content from a truncated document.\n"
 
                     extra_context.append({"source": "drive", "content": drive_text})
-                    print(f"  Total: {len(all_files)} drive files, {files_with_content} with content")
+                    # Store available files for follow-up (will be used by adaptive retrieval)
+                    extra_context.append({"source": "_drive_files_available", "files": available_for_deeper_read})
+                    print(f"  Total: {len(all_files)} drive files, {files_with_content} with initial content")
 
             # Handle gmail queries - query both personal and work accounts
             if "gmail" in routing_result.sources:
@@ -500,7 +524,10 @@ async def ask_stream(request: AskStreamRequest):
 
             # Construct prompt with all context
             # Add extra context (calendar/drive/gmail) to chunks
+            # Skip internal metadata entries (prefixed with _)
             for ctx in extra_context:
+                if ctx.get("source", "").startswith("_"):
+                    continue  # Skip internal metadata like _drive_files_available
                 chunks.insert(0, {
                     "content": ctx["content"],
                     "file_name": f"[{ctx['source'].upper()}]",
@@ -522,19 +549,81 @@ async def ask_stream(request: AskStreamRequest):
                     for att in request.attachments
                 ]
 
-            # Stream from Claude
+            # Stream from Claude with adaptive retrieval support
             synthesizer = get_synthesizer()
             full_response = ""
 
+            # Get available files for adaptive retrieval (if any)
+            available_files = {}
+            for ctx in extra_context:
+                if ctx.get("source") == "_drive_files_available":
+                    for f in ctx.get("files", []):
+                        available_files[f["name"]] = f
+
             async for chunk in synthesizer.stream_response(prompt, attachments=attachments_for_api):
                 if isinstance(chunk, dict) and chunk.get("type") == "usage":
-                    # This is usage data, send it to client
                     yield f"data: {json.dumps(chunk)}\n\n"
                 else:
-                    # This is text content
                     full_response += chunk
                     yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
-                await asyncio.sleep(0)  # Allow other tasks to run
+                await asyncio.sleep(0)
+
+            # Check for adaptive retrieval requests in the response
+            read_more_pattern = r'\[READ_MORE:([^\]]+)\]'
+            expand_pattern = r'\[EXPAND:([^\]]+)\]'
+
+            read_more_matches = re.findall(read_more_pattern, full_response)
+            expand_matches = re.findall(expand_pattern, full_response)
+
+            if (read_more_matches or expand_matches) and available_files:
+                print(f"ADAPTIVE RETRIEVAL: Detected requests - READ_MORE: {read_more_matches}, EXPAND: {expand_matches}")
+                yield f"data: {json.dumps({'type': 'status', 'message': 'Fetching additional document content...'})}\n\n"
+
+                # Fetch additional content
+                additional_content = []
+                files_fetched = 0
+                MAX_FOLLOW_UP_FILES = 2
+
+                for filename in (read_more_matches + expand_matches)[:MAX_FOLLOW_UP_FILES]:
+                    # Find the file in available files (fuzzy match)
+                    matched_file = None
+                    for name, file_info in available_files.items():
+                        if filename.lower() in name.lower() or name.lower() in filename.lower():
+                            matched_file = file_info
+                            break
+
+                    if matched_file and files_fetched < MAX_FOLLOW_UP_FILES:
+                        try:
+                            account_type = GoogleAccount.WORK if matched_file["account"] == 'work' else GoogleAccount.PERSONAL
+                            drive = DriveService(account_type)
+                            content = drive.get_file_content(matched_file["file_id"], matched_file["mime_type"])
+                            if content:
+                                # Expanded read gets up to 4000 chars
+                                if len(content) > 4000:
+                                    content = content[:4000] + "\n... [truncated at 4000 chars]"
+                                additional_content.append(f"\n### Expanded: {matched_file['name']}\n{content}")
+                                files_fetched += 1
+                                print(f"  Fetched expanded content for: {matched_file['name']} ({len(content)} chars)")
+                        except Exception as e:
+                            print(f"  Failed to fetch {filename}: {e}")
+
+                if additional_content:
+                    # Make a follow-up call with the additional content
+                    follow_up_prompt = f"""Based on your previous response, here is the additional document content you requested:
+
+{chr(10).join(additional_content)}
+
+Please continue your response, incorporating this additional information. Do NOT repeat your previous response - just provide the additional insights from this new content."""
+
+                    yield f"data: {json.dumps({'type': 'content', 'content': '\\n\\n---\\n*Additional content retrieved:*\\n\\n'})}\n\n"
+
+                    async for chunk in synthesizer.stream_response(follow_up_prompt, attachments=None):
+                        if isinstance(chunk, dict) and chunk.get("type") == "usage":
+                            yield f"data: {json.dumps(chunk)}\n\n"
+                        else:
+                            full_response += chunk
+                            yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
+                        await asyncio.sleep(0)
 
             # Save assistant response
             store.add_message(
@@ -543,7 +632,7 @@ async def ask_stream(request: AskStreamRequest):
                 full_response,
                 sources=sources,
                 routing={
-                    "sources": effective_sources,  # Include "attachment" if applicable
+                    "sources": effective_sources,
                     "reasoning": routing_result.reasoning
                 }
             )

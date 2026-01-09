@@ -13,6 +13,8 @@ LifeOS is a self-hosted RAG (Retrieval-Augmented Generation) system that provide
 - Streaming chat interface with Claude synthesis
 - Recency-biased search results
 - Stakeholder briefings and people context
+- Adaptive retrieval for Google Drive (reads more content on demand)
+- Multi-account support (personal + work Google accounts)
 
 ## Architecture
 
