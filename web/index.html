@@ -1759,9 +1759,17 @@
                     html += `<div class="sources">`;
                     sources.forEach(src => {
                         const fileName = src.file_name || src;
-                        const obsidianPath = src.obsidian_path || fileName;
-                        const obsidianUrl = `obsidian://open?vault=Notes%202025&file=${encodeURIComponent(obsidianPath)}`;
-                        html += `<a href="${obsidianUrl}" class="source-link">📄 ${fileName}</a>`;
+                        const sourceType = src.source_type || 'vault';
+
+                        if (sourceType === 'calendar' && src.url) {
+                            // Calendar sources use Google Calendar URL
+                            html += `<a href="${src.url}" target="_blank" class="source-link">${fileName}</a>`;
+                        } else {
+                            // Vault sources use Obsidian URL
+                            const obsidianPath = src.obsidian_path || fileName;
+                            const obsidianUrl = `obsidian://open?vault=Notes%202025&file=${encodeURIComponent(obsidianPath)}`;
+                            html += `<a href="${obsidianUrl}" class="source-link">📄 ${fileName}</a>`;
+                        }
                     });
                     html += `</div>`;
                 }
@@ -1934,9 +1942,17 @@
                                             metaHtml += '<div class="sources">';
                                             sources.forEach(src => {
                                                 const fileName = src.file_name || src;
-                                                const obsidianPath = src.obsidian_path || fileName;
-                                                const obsidianUrl = `obsidian://open?vault=Notes%202025&file=${encodeURIComponent(obsidianPath)}`;
-                                                metaHtml += `<a href="${obsidianUrl}" class="source-link">📄 ${fileName}</a>`;
+                                                const sourceType = src.source_type || 'vault';
+
+                                                if (sourceType === 'calendar' && src.url) {
+                                                    // Calendar sources use Google Calendar URL
+                                                    metaHtml += `<a href="${src.url}" target="_blank" class="source-link">${fileName}</a>`;
+                                                } else {
+                                                    // Vault sources use Obsidian URL
+                                                    const obsidianPath = src.obsidian_path || fileName;
+                                                    const obsidianUrl = `obsidian://open?vault=Notes%202025&file=${encodeURIComponent(obsidianPath)}`;
+                                                    metaHtml += `<a href="${obsidianUrl}" class="source-link">📄 ${fileName}</a>`;
+                                                }
                                             });
                                             metaHtml += '</div>';
                                         }

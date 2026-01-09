@@ -313,6 +313,7 @@ async def ask_stream(request: AskStreamRequest):
 
                 if all_events:
                     event_text = "Calendar Events (Personal + Work):\n"
+                    calendar_sources = []  # Track individual events for source links
                     for e in all_events:
                         start = e.start_time.strftime("%Y-%m-%d %H:%M") if e.start_time else "TBD"
                         account_label = f"[{e.source_account}]" if e.source_account else ""
@@ -320,7 +321,18 @@ async def ask_stream(request: AskStreamRequest):
                         if e.attendees:
                             event_text += f" with {', '.join(e.attendees[:3])}"
                         event_text += "\n"
-                    extra_context.append({"source": "calendar", "content": event_text})
+                        # Store event for source linking
+                        calendar_sources.append({
+                            "title": e.title,
+                            "start_time": start,
+                            "html_link": e.html_link,
+                            "source_account": e.source_account
+                        })
+                    extra_context.append({
+                        "source": "calendar",
+                        "content": event_text,
+                        "events": calendar_sources  # Include event links
+                    })
                     print(f"  Total: {len(all_events)} calendar events from both accounts")
 
             # Handle drive queries - query both personal and work accounts
@@ -516,6 +528,18 @@ async def ask_stream(request: AskStreamRequest):
                             'file_name': file_name,
                             'file_path': file_path,
                             'obsidian_path': obsidian_path,
+                            'source_type': 'vault',
+                        })
+
+            # Add calendar event sources with Google Calendar links
+            for ctx in extra_context:
+                if ctx.get("source") == "calendar" and ctx.get("events"):
+                    for event in ctx["events"]:
+                        sources.append({
+                            'file_name': f"📅 {event['title']} ({event['start_time']})",
+                            'source_type': 'calendar',
+                            'url': event.get('html_link'),
+                            'source_account': event.get('source_account'),
                         })
 
             # Send sources to client

@@ -32,6 +32,7 @@ class CalendarEvent:
     location: Optional[str] = None
     is_all_day: bool = False
     calendar_id: str = "primary"
+    html_link: Optional[str] = None  # Google Calendar URL for this event
 
     def to_dict(self) -> dict:
         """Convert to dict for indexing."""
@@ -46,6 +47,7 @@ class CalendarEvent:
             "is_all_day": self.is_all_day,
             "source": "google_calendar",
             "source_account": self.source_account,
+            "html_link": self.html_link or "",
         }
 
     def to_text(self) -> str:
@@ -331,6 +333,7 @@ class CalendarService:
                 location=item.get("location"),
                 is_all_day=is_all_day,
                 source_account=self.account_type.value,
+                html_link=item.get("htmlLink"),
             )
 
         except Exception as e:
