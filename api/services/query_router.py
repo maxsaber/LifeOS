@@ -126,19 +126,28 @@ class QueryRouter:
 
         # Try to parse JSON from response
         try:
-            # Find JSON in response (may have surrounding text)
-            json_match = re.search(r'\{[^{}]*\}', response)
-            if not json_match:
+            # Find JSON in response - handle nested braces by finding balanced braces
+            json_str = self._extract_json(response)
+            if not json_str:
                 raise json.JSONDecodeError("No JSON found", response, 0)
 
-            data = json.loads(json_match.group())
+            data = json.loads(json_str)
             sources = data.get("sources", [])
             reasoning = data.get("reasoning", "LLM routing")
+
+            # Handle case where sources is list of strings OR list of objects
+            if sources and isinstance(sources[0], dict):
+                # Extract source names from objects like {"type": "Calendar"}
+                sources = [s.get("type", "").lower() for s in sources if isinstance(s, dict)]
+            elif sources and isinstance(sources[0], str):
+                sources = [s.lower() for s in sources]
 
             # Validate sources
             valid_sources = [s for s in sources if s in VALID_SOURCES]
             if not valid_sources:
-                valid_sources = ["vault"]  # Default to vault
+                # LLM returned invalid sources, use keyword fallback
+                logger.warning(f"LLM returned no valid sources, using keyword fallback")
+                return self._keyword_fallback(query)
 
             return RoutingResult(
                 sources=valid_sources,
@@ -149,12 +158,35 @@ class QueryRouter:
 
         except (json.JSONDecodeError, KeyError) as e:
             logger.warning(f"Failed to parse LLM response: {e}")
-            return RoutingResult(
-                sources=["vault"],
-                reasoning=f"Fallback - invalid LLM response",
-                confidence=0.5,
-                latency_ms=0
-            )
+            # Use keyword fallback instead of defaulting to vault
+            return self._keyword_fallback(query)
+
+    def _extract_json(self, text: str) -> Optional[str]:
+        """
+        Extract JSON object from text, handling nested braces.
+
+        Args:
+            text: Text that may contain JSON
+
+        Returns:
+            Extracted JSON string or None
+        """
+        # Find the first opening brace
+        start = text.find('{')
+        if start == -1:
+            return None
+
+        # Count braces to find matching closing brace
+        depth = 0
+        for i, char in enumerate(text[start:], start):
+            if char == '{':
+                depth += 1
+            elif char == '}':
+                depth -= 1
+                if depth == 0:
+                    return text[start:i+1]
+
+        return None
 
     def _keyword_fallback(self, query: str) -> RoutingResult:
         """
