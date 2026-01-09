@@ -124,12 +124,12 @@ start_server() {
     # First, ensure no existing processes
     kill_server
 
-    # Start the server
+    # Start the server using Python's uvicorn.run() - more reliable than shell command
     log_info "Launching uvicorn on $HOST:$PORT..."
-    nohup "$PROJECT_DIR/venv/bin/uvicorn" api.main:app \
-        --host "$HOST" \
-        --port "$PORT" \
-        >> "$LOG_FILE" 2>&1 &
+    nohup "$PROJECT_DIR/venv/bin/python" -c "
+import uvicorn
+uvicorn.run('api.main:app', host='$HOST', port=$PORT, log_level='info')
+" >> "$LOG_FILE" 2>&1 &
 
     local pid=$!
     log_info "Server process started with PID: $pid"

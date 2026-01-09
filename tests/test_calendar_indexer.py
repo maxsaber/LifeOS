@@ -170,7 +170,7 @@ class TestCalendarAdminEndpoints:
     @pytest.fixture
     def mock_indexer(self):
         """Mock the calendar indexer."""
-        with patch("api.routes.admin.get_calendar_indexer") as mock:
+        with patch("api.services.calendar_indexer.get_calendar_indexer") as mock:
             indexer = mock.return_value
             indexer.get_status.return_value = {
                 "running": True,
