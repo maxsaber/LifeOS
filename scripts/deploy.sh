@@ -8,7 +8,7 @@
 # Usage: ./scripts/deploy.sh [--skip-tests] [--no-push] [message]
 #
 # This script:
-# 1. Runs the full test suite (via test.sh)
+# 1. Runs smoke tests (unit + critical browser test via test.sh)
 # 2. Restarts the server (via server.sh) - takes 30-60 seconds for ML model loading
 # 3. Verifies health check
 # 4. Commits and pushes changes (if any)
@@ -88,7 +88,7 @@ check_server() {
 
 # Run tests
 run_tests() {
-    log_step "Step 1/5: Running tests"
+    log_step "Step 1/5: Running smoke tests (unit + critical browser test)"
     echo ""
 
     if [ "$SKIP_TESTS" = true ]; then
@@ -96,13 +96,13 @@ run_tests() {
         return 0
     fi
 
-    # Run the test script
-    if ! "$SCRIPT_DIR/test.sh" unit; then
-        log_error "Unit tests failed! Fix tests before deploying."
+    # Run smoke tests: unit tests + critical browser test for deployment verification
+    if ! "$SCRIPT_DIR/test.sh" smoke; then
+        log_error "Smoke tests failed! Fix tests before deploying."
         exit 1
     fi
 
-    log_info "All tests passed"
+    log_info "All smoke tests passed"
 }
 
 # Restart server using server.sh (handles cleanup, lock files, proper timeouts)

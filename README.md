@@ -147,6 +147,7 @@ LifeOS uses shell scripts for testing, deployment, and server management:
 ./scripts/test.sh unit         # Fast unit tests (~30s)
 ./scripts/test.sh integration  # Tests requiring server
 ./scripts/test.sh browser      # Playwright browser tests
+./scripts/test.sh smoke        # Unit + critical browser test (used by deploy)
 ./scripts/test.sh all          # Run all tests
 ./scripts/test.sh health       # Quick health check
 

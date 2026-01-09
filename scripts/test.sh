@@ -2,16 +2,17 @@
 # LifeOS Test Runner
 # ==================
 #
-# Usage: ./scripts/test.sh [unit|integration|browser|all|health]
+# Usage: ./scripts/test.sh [unit|integration|browser|smoke|all|health]
 #
 # Test levels:
 #   unit        - Fast tests, no external dependencies (~30s)
 #   integration - Tests requiring server to be running
 #   browser     - Playwright browser tests (requires server)
+#   smoke       - Unit + critical browser test (used by deploy.sh)
 #   all         - Run all tests in sequence
 #   health      - Quick server health check
 #
-# Note: Integration and browser tests require the server to be running.
+# Note: Integration, browser, and smoke tests require the server to be running.
 # If not running, this script will start it automatically (takes 30-60s for ML model loading).
 #
 # Related Scripts:
@@ -105,6 +106,43 @@ run_browser_tests() {
         --browser chromium
 }
 
+# Run smoke tests (unit + critical browser test for deployment verification)
+run_smoke_tests() {
+    local start_time=$(date +%s)
+
+    log_step "Running smoke tests (unit + critical browser test)..."
+    echo ""
+
+    # Unit tests first (fast feedback)
+    run_unit_tests
+    echo ""
+
+    # Critical browser test - verifies the full user flow works
+    log_step "Running critical browser smoke test..."
+
+    if ! check_server; then
+        log_warn "Server not running. Starting server for smoke test..."
+        start_server_background
+        sleep 3
+    fi
+
+    # Check if playwright is installed
+    if ! python -c "import playwright" 2>/dev/null; then
+        log_error "Playwright not installed. Run: pip install playwright && playwright install"
+        exit 1
+    fi
+
+    # Run only the critical e2e test that verifies the full user flow
+    python -m pytest tests/test_e2e_flow.py::TestRealUserFlow::test_user_sends_query_gets_response -v \
+        --tb=short \
+        --browser chromium
+
+    local end_time=$(date +%s)
+    local duration=$((end_time - start_time))
+
+    log_info "Smoke tests passed in ${duration}s"
+}
+
 # Start server in background for tests using server.sh
 start_server_background() {
     log_info "Starting server for tests (takes 30-60s for ML model loading)..."
@@ -189,6 +227,9 @@ case "${1:-unit}" in
     browser)
         run_browser_tests
         ;;
+    smoke)
+        run_smoke_tests
+        ;;
     all)
         run_all_tests
         ;;
@@ -198,12 +239,13 @@ case "${1:-unit}" in
     *)
         echo "LifeOS Test Runner"
         echo ""
-        echo "Usage: $0 [unit|integration|browser|all|health]"
+        echo "Usage: $0 [unit|integration|browser|smoke|all|health]"
         echo ""
         echo "Test levels:"
         echo "  unit         Fast tests, no external dependencies (default)"
         echo "  integration  Tests requiring server to be running"
         echo "  browser      Playwright browser tests"
+        echo "  smoke        Unit tests + critical browser test (for deployment)"
         echo "  all          Run all tests in sequence"
         echo "  health       Quick server health check"
         exit 1
