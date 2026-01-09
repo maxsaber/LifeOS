@@ -25,6 +25,58 @@ from config.settings import settings
 logger = logging.getLogger(__name__)
 
 
+def extract_search_keywords(query: str) -> list[str]:
+    """
+    Extract meaningful search keywords from a natural language query.
+
+    Removes common words and extracts proper nouns and key terms.
+    """
+    # Common words to filter out
+    stop_words = {
+        'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
+        'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
+        'should', 'may', 'might', 'must', 'shall', 'can', 'need', 'dare',
+        'ought', 'used', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by',
+        'from', 'up', 'about', 'into', 'over', 'after', 'beneath', 'under',
+        'above', 'and', 'but', 'or', 'nor', 'so', 'yet', 'both', 'either',
+        'neither', 'not', 'only', 'own', 'same', 'than', 'too', 'very',
+        'just', 'also', 'now', 'here', 'there', 'when', 'where', 'why',
+        'how', 'all', 'each', 'every', 'both', 'few', 'more', 'most',
+        'other', 'some', 'such', 'no', 'any', 'i', 'me', 'my', 'myself',
+        'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours', 'yourself',
+        'he', 'him', 'his', 'himself', 'she', 'her', 'hers', 'herself',
+        'it', 'its', 'itself', 'they', 'them', 'their', 'theirs', 'themselves',
+        'what', 'which', 'who', 'whom', 'this', 'that', 'these', 'those',
+        'am', 'been', 'being', 'if', 'then', 'else', 'review', 'tell',
+        'show', 'find', 'get', 'give', 'look', 'help', 'please', 'thanks',
+        'summarize', 'summary', 'reference', 'notes', 'note', 'recent',
+        'previous', 'likely', 'talk', 'meeting', 'meetings', 'agenda',
+        'agendas', 'doc', 'document', 'google', 'file', 'files'
+    }
+
+    # Extract words, keeping proper nouns (capitalized words)
+    words = re.findall(r'\b[A-Za-z]+\b', query)
+    keywords = []
+
+    for word in words:
+        # Keep capitalized words (likely names) regardless of stop words
+        if word[0].isupper() and len(word) > 1:
+            keywords.append(word)
+        # Keep non-stop words that are at least 3 chars
+        elif word.lower() not in stop_words and len(word) >= 3:
+            keywords.append(word)
+
+    # Deduplicate while preserving order
+    seen = set()
+    unique_keywords = []
+    for kw in keywords:
+        if kw.lower() not in seen:
+            seen.add(kw.lower())
+            unique_keywords.append(kw)
+
+    return unique_keywords[:5]  # Limit to top 5 keywords
+
+
 def extract_date_context(query: str) -> Optional[str]:
     """
     Extract date references from query and convert to YYYY-MM-DD format.
@@ -270,40 +322,76 @@ async def ask_stream(request: AskStreamRequest):
                     extra_context.append({"source": "calendar", "content": event_text})
                     print(f"  Total: {len(all_events)} calendar events from both accounts")
 
-            # Handle drive queries
+            # Handle drive queries - query both personal and work accounts
             if "drive" in routing_result.sources:
-                print("FETCHING DRIVE DATA...")
-                try:
-                    drive = DriveService()
-                    files = drive.search(request.question, max_results=5)
-                    if files:
-                        drive_text = "Google Drive Files:\n"
-                        for f in files:
-                            drive_text += f"- {f.get('name', 'Unknown')} ({f.get('mimeType', 'file')})\n"
-                            if f.get('snippet'):
-                                drive_text += f"  Preview: {f.get('snippet')[:200]}...\n"
-                        extra_context.append({"source": "drive", "content": drive_text})
-                        print(f"  Found {len(files)} drive files")
-                except Exception as e:
-                    print(f"  Drive error: {e}")
+                print("FETCHING DRIVE DATA (both personal and work)...")
+                from api.services.google_auth import GoogleAccount
 
-            # Handle gmail queries
+                # Extract keywords for search
+                keywords = extract_search_keywords(request.question)
+                search_term = " ".join(keywords) if keywords else None
+                print(f"  Search keywords: {keywords}")
+
+                all_files = []
+                for account_type in [GoogleAccount.PERSONAL, GoogleAccount.WORK]:
+                    try:
+                        drive = DriveService(account_type)
+                        # Use full_text search for content, not name search
+                        if search_term:
+                            files = drive.search(full_text=search_term, max_results=5)
+                        else:
+                            files = []
+                        all_files.extend(files)
+                        print(f"  Found {len(files)} files from {account_type.value} drive")
+                    except Exception as e:
+                        print(f"  {account_type.value} drive error: {e}")
+
+                if all_files:
+                    drive_text = "Google Drive Files:\n"
+                    for f in all_files:
+                        name = f.name if hasattr(f, 'name') else f.get('name', 'Unknown')
+                        mime = f.mime_type if hasattr(f, 'mime_type') else f.get('mimeType', 'file')
+                        account = f.source_account if hasattr(f, 'source_account') else ''
+                        drive_text += f"- {name} ({mime}) [{account}]\n"
+                    extra_context.append({"source": "drive", "content": drive_text})
+                    print(f"  Total: {len(all_files)} drive files from both accounts")
+
+            # Handle gmail queries - query both personal and work accounts
             if "gmail" in routing_result.sources:
-                print("FETCHING GMAIL DATA...")
-                try:
-                    gmail = GmailService()
-                    messages = gmail.search(request.question, max_results=5)
-                    if messages:
-                        email_text = "Recent Emails:\n"
-                        for m in messages:
-                            email_text += f"- From: {m.get('from', 'Unknown')}\n"
-                            email_text += f"  Subject: {m.get('subject', 'No subject')}\n"
-                            if m.get('snippet'):
-                                email_text += f"  Preview: {m.get('snippet')[:150]}...\n"
-                        extra_context.append({"source": "gmail", "content": email_text})
-                        print(f"  Found {len(messages)} emails")
-                except Exception as e:
-                    print(f"  Gmail error: {e}")
+                print("FETCHING GMAIL DATA (both personal and work)...")
+                from api.services.google_auth import GoogleAccount
+
+                # Extract keywords for search
+                keywords = extract_search_keywords(request.question)
+                search_term = " ".join(keywords) if keywords else None
+                print(f"  Search keywords: {keywords}")
+
+                all_messages = []
+                for account_type in [GoogleAccount.PERSONAL, GoogleAccount.WORK]:
+                    try:
+                        gmail = GmailService(account_type)
+                        if search_term:
+                            messages = gmail.search(keywords=search_term, max_results=5)
+                        else:
+                            messages = gmail.search(max_results=5)  # Recent emails
+                        all_messages.extend(messages)
+                        print(f"  Found {len(messages)} emails from {account_type.value} gmail")
+                    except Exception as e:
+                        print(f"  {account_type.value} gmail error: {e}")
+
+                if all_messages:
+                    email_text = "Recent Emails:\n"
+                    for m in all_messages:
+                        sender = m.sender if hasattr(m, 'sender') else m.get('from', 'Unknown')
+                        subject = m.subject if hasattr(m, 'subject') else m.get('subject', 'No subject')
+                        snippet = m.snippet if hasattr(m, 'snippet') else m.get('snippet', '')
+                        account = m.source_account if hasattr(m, 'source_account') else ''
+                        email_text += f"- From: {sender} [{account}]\n"
+                        email_text += f"  Subject: {subject}\n"
+                        if snippet:
+                            email_text += f"  Preview: {snippet[:150]}...\n"
+                    extra_context.append({"source": "gmail", "content": email_text})
+                    print(f"  Total: {len(all_messages)} emails from both accounts")
 
             # Handle vault queries (always include as fallback)
             if "vault" in routing_result.sources or not routing_result.sources or not extra_context:
