@@ -20,6 +20,7 @@ from api.services.conversation_store import get_store, generate_title
 from api.services.calendar import CalendarService
 from api.services.drive import DriveService
 from api.services.gmail import GmailService
+from api.services.usage_store import get_usage_store
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -586,6 +587,15 @@ async def ask_stream(request: AskStreamRequest):
 
             async for chunk in synthesizer.stream_response(prompt, attachments=attachments_for_api):
                 if isinstance(chunk, dict) and chunk.get("type") == "usage":
+                    # Record usage to database for historical tracking
+                    usage_store = get_usage_store()
+                    usage_store.record_usage(
+                        model=chunk.get("model", "sonnet"),
+                        input_tokens=chunk.get("input_tokens", 0),
+                        output_tokens=chunk.get("output_tokens", 0),
+                        cost_usd=chunk.get("cost_usd", 0.0),
+                        conversation_id=conversation_id
+                    )
                     yield f"data: {json.dumps(chunk)}\n\n"
                 else:
                     full_response += chunk
@@ -643,6 +653,15 @@ Please continue your response, incorporating this additional information. Do NOT
 
                     async for chunk in synthesizer.stream_response(follow_up_prompt, attachments=None):
                         if isinstance(chunk, dict) and chunk.get("type") == "usage":
+                            # Record usage to database for historical tracking
+                            usage_store = get_usage_store()
+                            usage_store.record_usage(
+                                model=chunk.get("model", "sonnet"),
+                                input_tokens=chunk.get("input_tokens", 0),
+                                output_tokens=chunk.get("output_tokens", 0),
+                                cost_usd=chunk.get("cost_usd", 0.0),
+                                conversation_id=conversation_id
+                            )
                             yield f"data: {json.dumps(chunk)}\n\n"
                         else:
                             full_response += chunk
