@@ -345,4 +345,108 @@ Replaces `people_aggregated.json`. Same location (`data/`), new structure.
 
 ---
 
+---
+
+## Implementation Plan
+
+Based on comprehensive code audit (see audit notes below), here's the safe implementation order:
+
+### Phase A: Foundation (New Files Only)
+
+**Step A1: Configuration** - `config/people_config.py`
+- Domain → vault context map
+- Company normalization map
+- No existing code modified
+
+**Step A2: PersonEntity Model** - `api/services/person_entity.py`
+- New dataclass alongside existing PersonRecord
+- JSON serialization/deserialization
+- Migration helper: `PersonRecord` → `PersonEntity`
+- Tests: `tests/test_person_entity.py`
+
+**Step A3: Interaction Store** - `api/services/interaction_store.py`
+- SQLite table creation
+- CRUD operations
+- Tests: `tests/test_interaction_store.py`
+
+**Step A4: Entity Resolver** - `api/services/entity_resolver.py`
+- Email-anchored resolution
+- Fuzzy matching with context boost
+- Disambiguation logic
+- Tests: `tests/test_entity_resolver.py`
+
+### Phase B: Integration (Modify Existing)
+
+**Step B1: Update PeopleAggregator**
+- Add `PersonEntity` support (keep `PersonRecord` for backward compat)
+- Call entity resolver for name matching
+- Wire up interaction logging
+- Fix existing gap: call `add_from_obsidian_note()` from indexer
+
+**Step B2: Update Indexer**
+- After `extract_people_from_text()`, also update aggregator
+- Log interactions for vault notes
+
+**Step B3: Update Gmail/Calendar Sync**
+- Log interactions during sync
+- Use entity resolver for matching
+
+**Step B4: Update BriefingsService**
+- Include interaction history section
+- Remove PEOPLE_DICTIONARY filter restriction (use entity resolver instead)
+
+**Step B5: Update API Routes**
+- Return new PersonEntity fields
+- Add interaction history endpoint
+- Maintain backward compatibility
+
+### Phase C: Migration & Cleanup
+
+**Step C1: Data Migration**
+- Convert `people_aggregated.json` to new format
+- Backfill interactions from existing data
+
+**Step C2: Run Full Test Suite**
+- All existing tests must pass
+- New tests must pass
+
+**Step C3: Deprecate Old Code**
+- Mark PersonRecord as deprecated (don't remove yet)
+- Remove PeopleRegistry (unused)
+
+---
+
+## Audit Findings (Critical Integration Points)
+
+### Files That Import PersonRecord
+- `api/services/people_aggregator.py` - definition and all usage
+- `api/routes/people.py` - converts to PersonResponse
+- `api/services/briefings.py` - extracts fields for context
+
+### Files That Import from people.py
+- `api/services/people_aggregator.py` - PEOPLE_DICTIONARY, ALIAS_MAP, resolve_person_name, extract_people_from_text
+- `api/services/briefings.py` - resolve_person_name, PEOPLE_DICTIONARY
+- `api/services/indexer.py` - extract_people_from_text
+- `api/services/granola_processor.py` - ML_PEOPLE (separate list)
+
+### Critical Gaps Found
+1. **Indexer doesn't update aggregator** - `add_from_obsidian_note()` exists but never called (MUST FIX)
+2. **Briefings filter only for dictionary people** - line 183 checks `if resolved in PEOPLE_DICTIONARY`
+3. **Singleton init issues** - aggregator may not have services if called without params first
+4. **PeopleRegistry unused** - can be removed
+
+### API Contracts (Must Not Break)
+- `GET /api/people/search?q=` → `SearchResponse`
+- `GET /api/people/person/{name}` → `PersonResponse` or 404
+- `GET /api/people/list` → `SearchResponse`
+- `POST /api/people/sync` → `SyncResponse`
+- `GET /api/people/statistics` → `StatisticsResponse`
+
+### Data Format (Must Preserve)
+- `people_aggregated.json` - list of PersonRecord dicts
+- VectorStore metadata - `people` as JSON string array
+- All datetime fields as ISO strings or null
+
+---
+
 *Last updated: 2026-01-09*

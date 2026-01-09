@@ -51,7 +51,8 @@ def extract_search_keywords(query: str) -> list[str]:
         'show', 'find', 'get', 'give', 'look', 'help', 'please', 'thanks',
         'summarize', 'summary', 'reference', 'notes', 'note', 'recent',
         'previous', 'likely', 'talk', 'meeting', 'meetings', 'agenda',
-        'agendas', 'doc', 'document', 'google', 'file', 'files'
+        'agendas', 'doc', 'document', 'google', 'file', 'files',
+        'later', 'today', 'tomorrow', 'week', 'month', 'year'
     }
 
     # Extract words, keeping proper nouns (capitalized words)
@@ -332,19 +333,39 @@ async def ask_stream(request: AskStreamRequest):
                 search_term = " ".join(keywords) if keywords else None
                 print(f"  Search keywords: {keywords}")
 
-                all_files = []
+                name_matched_files = []  # Files matching by name (higher priority)
+                content_matched_files = []  # Files matching by content
+                seen_file_ids = set()
+
                 for account_type in [GoogleAccount.PERSONAL, GoogleAccount.WORK]:
                     try:
                         drive = DriveService(account_type)
-                        # Use full_text search for content, not name search
                         if search_term:
-                            files = drive.search(full_text=search_term, max_results=5)
+                            # Search by BOTH name and full_text to catch more results
+                            # Name search finds "Nathan/Kevin 1:1 notes" when searching "Kevin"
+                            name_files = drive.search(name=search_term, max_results=5)
+                            content_files = drive.search(full_text=search_term, max_results=5)
+
+                            # Track name matches separately (higher priority for reading content)
+                            for f in name_files:
+                                if f.file_id not in seen_file_ids:
+                                    seen_file_ids.add(f.file_id)
+                                    name_matched_files.append(f)
+
+                            for f in content_files:
+                                if f.file_id not in seen_file_ids:
+                                    seen_file_ids.add(f.file_id)
+                                    content_matched_files.append(f)
+
+                            print(f"  Found {len(name_files)} by name, {len(content_files)} by content from {account_type.value} drive")
                         else:
-                            files = []
-                        all_files.extend(files)
-                        print(f"  Found {len(files)} files from {account_type.value} drive")
+                            pass
                     except Exception as e:
                         print(f"  {account_type.value} drive error: {e}")
+
+                # Prioritize name matches first, then content matches
+                all_files = name_matched_files + content_matched_files
+                print(f"  Prioritizing {len(name_matched_files)} name-matched files")
 
                 if all_files:
                     drive_text = "Google Drive Files:\n"
