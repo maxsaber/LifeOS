@@ -71,8 +71,13 @@ class QueryRouter:
 
     def _extract_person_name(self, query: str) -> Optional[str]:
         """Extract person name from a people-related query."""
+        # Common words that should NOT be captured as part of a name
+        stop_words = {'on', 'at', 'today', 'tomorrow', 'this', 'next', 'monday',
+                      'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
+                      'sunday', 'morning', 'afternoon', 'evening', 'week', 'about'}
+
         patterns = [
-            r"prep(?:are)?\s+(?:me\s+)?for\s+(?:meeting|call|1[:\-]1)\s+with\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+            r"prep(?:are)?\s+(?:me\s+)?for\s+(?:my\s+)?(?:meeting|call|1[:\-]1)\s+with\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
             r"tell\s+me\s+about\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
             r"who\s+is\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
             r"background\s+on\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
@@ -82,7 +87,13 @@ class QueryRouter:
         for pattern in patterns:
             match = re.search(pattern, query, re.IGNORECASE)
             if match:
-                return match.group(1).strip()
+                name = match.group(1).strip()
+                # Remove trailing stop words (captured due to IGNORECASE)
+                words = name.split()
+                while words and words[-1].lower() in stop_words:
+                    words.pop()
+                if words:
+                    return ' '.join(words)
         return None
 
     async def route(self, query: str) -> RoutingResult:
