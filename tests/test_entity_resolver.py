@@ -1,0 +1,336 @@
+"""
+Tests for EntityResolver.
+"""
+import pytest
+import tempfile
+from datetime import datetime, timedelta
+from pathlib import Path
+
+from api.services.person_entity import PersonEntity, PersonEntityStore
+from api.services.entity_resolver import (
+    EntityResolver,
+    ResolutionCandidate,
+    ResolutionResult,
+    get_entity_resolver,
+)
+
+
+# Module-level fixtures available to all test classes
+@pytest.fixture
+def temp_store():
+    """Create a temporary entity store for testing."""
+    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
+        store = PersonEntityStore(f.name)
+        yield store
+        Path(f.name).unlink(missing_ok=True)
+
+
+@pytest.fixture
+def resolver(temp_store):
+    """Create a resolver with temp store."""
+    return EntityResolver(temp_store)
+
+
+@pytest.fixture
+def populated_resolver(temp_store):
+    """Create a resolver with some existing entities."""
+    # Add some test entities
+    entities = [
+        PersonEntity(
+            canonical_name="Yoni Landau",
+            emails=["yoni@movementlabs.xyz"],
+            company="Movement Labs",
+            category="work",
+            vault_contexts=["Work/ML/"],
+            aliases=["Yoni"],
+            last_seen=datetime.now() - timedelta(days=5),
+        ),
+        PersonEntity(
+            canonical_name="Sarah Chen",
+            emails=["sarah@movementlabs.xyz"],
+            company="Movement Labs",
+            category="work",
+            vault_contexts=["Work/ML/"],
+            last_seen=datetime.now() - timedelta(days=10),
+        ),
+        PersonEntity(
+            canonical_name="Sarah Miller",
+            emails=["sarah@murmuration.org"],
+            company="Murmuration",
+            category="work",
+            vault_contexts=["Personal/zArchive/Murm/"],
+            last_seen=datetime.now() - timedelta(days=100),
+        ),
+        PersonEntity(
+            canonical_name="Taylor",
+            emails=["taylor@gmail.com"],
+            category="family",
+            vault_contexts=["Personal/"],
+            last_seen=datetime.now(),
+        ),
+    ]
+
+    for entity in entities:
+        temp_store.add(entity)
+
+    return EntityResolver(temp_store)
+
+
+class TestResolveByEmail:
+    """Tests for Pass 1: Email anchoring."""
+
+    def test_exact_email_match(self, populated_resolver):
+        """Test exact email match returns entity."""
+        entity = populated_resolver.resolve_by_email("yoni@movementlabs.xyz")
+        assert entity is not None
+        assert entity.canonical_name == "Yoni Landau"
+
+    def test_email_match_case_insensitive(self, populated_resolver):
+        """Test email matching is case-insensitive."""
+        entity = populated_resolver.resolve_by_email("YONI@MOVEMENTLABS.XYZ")
+        assert entity is not None
+        assert entity.canonical_name == "Yoni Landau"
+
+    def test_unknown_email_returns_none(self, populated_resolver):
+        """Test unknown email returns None."""
+        entity = populated_resolver.resolve_by_email("unknown@example.com")
+        assert entity is None
+
+    def test_empty_email_returns_none(self, populated_resolver):
+        """Test empty/null email returns None."""
+        assert populated_resolver.resolve_by_email("") is None
+        assert populated_resolver.resolve_by_email(None) is None
+
+
+class TestResolveByName:
+    """Tests for Pass 2 & 3: Fuzzy name matching."""
+
+    def test_exact_name_match(self, populated_resolver):
+        """Test exact name match."""
+        result = populated_resolver.resolve_by_name("Yoni Landau")
+        assert result is not None
+        assert result.entity.canonical_name == "Yoni Landau"
+        assert result.confidence >= 0.9
+
+    def test_alias_match(self, populated_resolver):
+        """Test matching by alias."""
+        result = populated_resolver.resolve_by_name("Yoni")
+        assert result is not None
+        assert result.entity.canonical_name == "Yoni Landau"
+
+    def test_fuzzy_match(self, populated_resolver):
+        """Test fuzzy name matching."""
+        # Slight variation
+        result = populated_resolver.resolve_by_name("Yoni L")
+        assert result is not None
+        assert result.entity.canonical_name == "Yoni Landau"
+
+    def test_context_boost_same_context(self, populated_resolver):
+        """Test context boost helps disambiguation."""
+        # "Sarah" appears in two contexts
+        # With ML context, should prefer Sarah Chen
+        result = populated_resolver.resolve_by_name(
+            "Sarah", context_path="/vault/Work/ML/meeting.md"
+        )
+        assert result is not None
+        assert result.entity.canonical_name == "Sarah Chen"
+
+    def test_context_boost_murm_context(self, populated_resolver):
+        """Test context boost for Murmuration context."""
+        # With Murm context, should prefer Sarah Miller
+        result = populated_resolver.resolve_by_name(
+            "Sarah", context_path="/vault/Personal/zArchive/Murm/notes.md"
+        )
+        assert result is not None
+        assert result.entity.canonical_name == "Sarah Miller"
+
+    def test_unknown_name_no_create(self, populated_resolver):
+        """Test unknown name returns None when create_if_missing=False."""
+        result = populated_resolver.resolve_by_name("Unknown Person")
+        assert result is None
+
+    def test_unknown_name_with_create(self, populated_resolver):
+        """Test unknown name creates entity when create_if_missing=True."""
+        result = populated_resolver.resolve_by_name(
+            "New Person", create_if_missing=True
+        )
+        assert result is not None
+        assert result.is_new is True
+        assert result.entity.canonical_name == "New Person"
+
+    def test_create_with_context_inference(self, populated_resolver):
+        """Test new entity gets context from path."""
+        result = populated_resolver.resolve_by_name(
+            "New Colleague",
+            context_path="/vault/Work/ML/standup.md",
+            create_if_missing=True,
+        )
+        assert result is not None
+        assert result.is_new is True
+        assert "Work/ML/" in result.entity.vault_contexts
+        assert result.entity.category == "work"
+
+
+class TestResolveMain:
+    """Tests for main resolve() method."""
+
+    def test_resolve_with_email_priority(self, populated_resolver):
+        """Test email takes priority over name."""
+        result = populated_resolver.resolve(
+            name="Wrong Name",
+            email="yoni@movementlabs.xyz",
+        )
+        assert result is not None
+        assert result.entity.canonical_name == "Yoni Landau"
+        assert result.match_type == "email_exact"
+
+    def test_resolve_by_name_only(self, populated_resolver):
+        """Test resolving by name only."""
+        result = populated_resolver.resolve(name="Taylor")
+        assert result is not None
+        assert result.entity.canonical_name == "Taylor"
+
+    def test_resolve_create_from_email(self, populated_resolver):
+        """Test creating entity from unknown email."""
+        result = populated_resolver.resolve(
+            email="john.doe@newcompany.com",
+            create_if_missing=True,
+        )
+        assert result is not None
+        assert result.is_new is True
+        assert "john.doe@newcompany.com" in result.entity.emails
+        # Name should be extracted from email
+        assert "John" in result.entity.canonical_name
+
+    def test_resolve_nothing_found(self, populated_resolver):
+        """Test resolve returns None when nothing found."""
+        result = populated_resolver.resolve(
+            name="Nobody",
+            email="nobody@nowhere.com",
+            create_if_missing=False,
+        )
+        assert result is None
+
+
+class TestResolveFromLinkedIn:
+    """Tests for LinkedIn-specific resolution."""
+
+    def test_linkedin_email_match(self, populated_resolver):
+        """Test LinkedIn resolution with known email."""
+        result = populated_resolver.resolve_from_linkedin(
+            first_name="Yoni",
+            last_name="Landau",
+            email="yoni@movementlabs.xyz",
+            company="Movement Labs",
+            position="CEO",
+            linkedin_url="https://linkedin.com/in/yoni",
+        )
+
+        assert result is not None
+        assert result.is_new is False
+        assert result.entity.linkedin_url == "https://linkedin.com/in/yoni"
+        assert result.entity.position == "CEO"
+        assert "linkedin" in result.entity.sources
+
+    def test_linkedin_new_person(self, populated_resolver):
+        """Test LinkedIn resolution creates new entity."""
+        result = populated_resolver.resolve_from_linkedin(
+            first_name="John",
+            last_name="Smith",
+            email="jsmith@movementlabs.xyz",
+            company="Movement Labs",
+            position="Engineer",
+            linkedin_url="https://linkedin.com/in/jsmith",
+        )
+
+        assert result is not None
+        assert result.is_new is True
+        assert result.entity.canonical_name == "John Smith"
+        assert result.entity.company == "Movement Labs"
+        assert "linkedin" in result.entity.sources
+
+    def test_linkedin_company_context_inference(self, populated_resolver):
+        """Test LinkedIn uses company for context inference."""
+        result = populated_resolver.resolve_from_linkedin(
+            first_name="Jane",
+            last_name="Doe",
+            email=None,  # No email
+            company="Movement Labs",
+            position="Designer",
+            linkedin_url="https://linkedin.com/in/janedoe",
+        )
+
+        assert result is not None
+        assert result.is_new is True
+        # Should infer vault context from company
+        assert "Work/ML/" in result.entity.vault_contexts
+
+
+class TestEdgeCases:
+    """Tests for edge cases and special scenarios."""
+
+    def test_empty_name(self, resolver):
+        """Test empty name handling."""
+        result = resolver.resolve_by_name("")
+        assert result is None
+
+        result = resolver.resolve_by_name("   ")
+        assert result is None
+
+    def test_name_normalization(self, populated_resolver):
+        """Test that names go through normalization."""
+        # "yoni" should resolve to "Yoni Landau" via resolve_person_name
+        result = populated_resolver.resolve_by_name("yoni")
+        assert result is not None
+        assert result.entity.canonical_name == "Yoni Landau"
+
+    def test_multiple_add_same_entity(self, resolver):
+        """Test that same entity isn't duplicated."""
+        # Add entity
+        resolver.resolve(
+            name="Test Person",
+            email="test@example.com",
+            create_if_missing=True,
+        )
+
+        # Try to add again with same email
+        result = resolver.resolve(
+            email="test@example.com",
+            create_if_missing=True,
+        )
+
+        assert result is not None
+        assert result.is_new is False
+
+    def test_disambiguation_creates_separate_entities(self, populated_resolver):
+        """Test that ambiguous names can create separate entities."""
+        # First, resolve Sarah in one context
+        result1 = populated_resolver.resolve_by_name(
+            "Sarah",
+            context_path="/vault/Work/ML/meeting.md",
+        )
+        assert result1 is not None
+
+        # Then create a new Sarah in a completely different context
+        # This should potentially create a disambiguated entity
+        result2 = populated_resolver.resolve_by_name(
+            "Sarah",
+            context_path="/vault/Personal/notes.md",
+            create_if_missing=True,
+        )
+        assert result2 is not None
+
+    def test_extract_name_from_email(self, resolver):
+        """Test name extraction from email."""
+        result = resolver.resolve(
+            email="john.doe@example.com",
+            create_if_missing=True,
+        )
+        assert "John" in result.entity.canonical_name
+        assert "Doe" in result.entity.canonical_name
+
+        result = resolver.resolve(
+            email="jdoe@example.com",
+            create_if_missing=True,
+        )
+        assert result.entity.canonical_name == "Jdoe"

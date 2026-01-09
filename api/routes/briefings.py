@@ -13,6 +13,7 @@ router = APIRouter(prefix="/api", tags=["briefings"])
 class BriefingRequest(BaseModel):
     """Request for stakeholder briefing."""
     person_name: str
+    email: Optional[str] = None  # v2: Optional email for better resolution
 
 
 class BriefingResponse(BaseModel):
@@ -36,12 +37,13 @@ async def get_briefing(request: BriefingRequest) -> BriefingResponse:
     - People metadata (LinkedIn, Gmail, Calendar)
     - Vault notes mentioning them
     - Action items involving them
+    - Interaction history (v2)
     """
     if not request.person_name.strip():
         raise HTTPException(status_code=400, detail="Person name cannot be empty")
 
     service = get_briefings_service()
-    result = await service.generate_briefing(request.person_name)
+    result = await service.generate_briefing(request.person_name, email=request.email)
 
     if result.get("status") == "error":
         raise HTTPException(status_code=500, detail=result.get("message"))
@@ -50,7 +52,10 @@ async def get_briefing(request: BriefingRequest) -> BriefingResponse:
 
 
 @router.get("/briefing/{person_name}", response_model=BriefingResponse)
-async def get_briefing_by_name(person_name: str) -> BriefingResponse:
+async def get_briefing_by_name(
+    person_name: str,
+    email: Optional[str] = Query(default=None, description="Optional email for better resolution")
+) -> BriefingResponse:
     """
     Generate a stakeholder briefing by person name (URL path).
 
@@ -60,7 +65,7 @@ async def get_briefing_by_name(person_name: str) -> BriefingResponse:
         raise HTTPException(status_code=400, detail="Person name cannot be empty")
 
     service = get_briefings_service()
-    result = await service.generate_briefing(person_name)
+    result = await service.generate_briefing(person_name, email=email)
 
     if result.get("status") == "error":
         raise HTTPException(status_code=500, detail=result.get("message"))

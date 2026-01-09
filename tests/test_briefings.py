@@ -80,12 +80,29 @@ class TestBriefingsService:
         return registry
 
     @pytest.fixture
-    def service(self, mock_aggregator, mock_vector_store, mock_action_registry):
+    def mock_entity_resolver(self):
+        """Create mock entity resolver for v2."""
+        resolver = MagicMock()
+        resolver.resolve.return_value = None  # Default to not found, tests can override
+        return resolver
+
+    @pytest.fixture
+    def mock_interaction_store(self):
+        """Create mock interaction store for v2."""
+        store = MagicMock()
+        store.get_for_person.return_value = []
+        store.format_interaction_history.return_value = ""
+        return store
+
+    @pytest.fixture
+    def service(self, mock_aggregator, mock_vector_store, mock_action_registry, mock_entity_resolver, mock_interaction_store):
         """Create briefings service with mocks."""
         return BriefingsService(
             people_aggregator=mock_aggregator,
             vector_store=mock_vector_store,
             action_registry=mock_action_registry,
+            entity_resolver=mock_entity_resolver,
+            interaction_store=mock_interaction_store,
         )
 
     def test_gather_context_resolves_name(self, service, mock_aggregator):

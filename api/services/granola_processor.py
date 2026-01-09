@@ -58,17 +58,10 @@ CLASSIFICATION_RULES = [
         "destination": "Personal/Self-Improvement/Therapy and coaching",
         "tags": ["meeting", "therapy", "personal"]
     },
-    {
-        "name": "finance",
-        "patterns": [
-            r"\bbudget\s*review\b", r"\bbudget\s*planning\b",
-            r"\bfinancial\s*review\b", r"\bfinancial\s*planning\b",
-            r"\bexpense\s*report\b", r"\bspending\s*review\b",
-            r"\bmoney\s*meeting\b", r"\bquarterly\s*budget\b"
-        ],
-        "destination": "Work/ML/Finance",
-        "tags": ["meeting", "work", "ml", "finance"]
-    },
+    # NOTE: Finance classification removed from content rules - was too aggressive.
+    # Meetings that merely mentioned "budget planning" in a section were being
+    # miscategorized. Finance is now detected via FILENAME_RULES only (if the
+    # meeting filename contains "budget", "finance", etc., it's about finance).
     {
         "name": "hiring",
         "patterns": [
@@ -111,9 +104,9 @@ CLASSIFICATION_RULES = [
 
 # Known ML people for 1-1 detection
 ML_PEOPLE = [
-    "Yoni", "Madi", "Madeline", "Hayley", "Kevin", "Brandon", "Tamara",
-    "Peter", "Zoe", "Kellie", "Kelly", "Jay", "Josh", "Mike", "Tonya",
-    "James", "Oscar", "Dane"
+    "Yoni", "Madi", "Madeline", "Maddie", "Haley", "Hayley", "Kevin", "Brandon", "Tamara",
+    "Peter", "Zoe", "Zoë", "Kellie", "Kelly", "Kelli", "Jay", "Josh", "Mike", "Tonya",
+    "James", "Oscar", "Dayne", "Dane"
 ]
 
 

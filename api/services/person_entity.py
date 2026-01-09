@@ -332,11 +332,13 @@ class PersonEntityStore:
             entity: PersonEntity to add
 
         Returns:
-            The added entity
+            The added entity (a copy is stored internally)
         """
-        self._entities[entity.id] = entity
-        self._index_entity(entity)
-        return entity
+        # Store a copy to avoid reference issues
+        stored = PersonEntity.from_dict(entity.to_dict())
+        self._entities[stored.id] = stored
+        self._index_entity(stored)
+        return stored
 
     def update(self, entity: PersonEntity) -> PersonEntity:
         """
@@ -346,15 +348,18 @@ class PersonEntityStore:
             entity: PersonEntity with updated data
 
         Returns:
-            The updated entity
+            The updated entity (a copy is stored internally)
         """
+        # Get the OLD stored entity (not the passed-in one which may have been modified)
         old_entity = self._entities.get(entity.id)
         if old_entity:
             self._remove_from_indices(old_entity)
 
-        self._entities[entity.id] = entity
-        self._index_entity(entity)
-        return entity
+        # Store a copy to avoid reference issues
+        stored = PersonEntity.from_dict(entity.to_dict())
+        self._entities[stored.id] = stored
+        self._index_entity(stored)
+        return stored
 
     def delete(self, entity_id: str) -> bool:
         """

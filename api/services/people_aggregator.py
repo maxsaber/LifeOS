@@ -23,8 +23,500 @@ from api.services.people import (
     resolve_person_name,
     extract_people_from_text,
 )
+from api.services.entity_resolver import get_entity_resolver, EntityResolver
+from api.services.interaction_store import (
+    get_interaction_store,
+    InteractionStore,
+    create_gmail_interaction,
+    create_calendar_interaction,
+)
+from api.services.google_auth import GoogleAccount
 
 logger = logging.getLogger(__name__)
+
+
+def _make_aware(dt: datetime) -> datetime:
+    """Ensure datetime is timezone-aware (UTC if naive)."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def _is_newer(new_dt: datetime, old_dt: datetime) -> bool:
+    """Safely compare datetimes, handling mixed timezone awareness."""
+    if old_dt is None:
+        return True
+    if new_dt is None:
+        return False
+    return _make_aware(new_dt) > _make_aware(old_dt)
+
+
+# Patterns for filtering out commercial/automated emails
+EXCLUDED_EMAIL_PATTERNS = [
+    r".*noreply.*",
+    r".*no-reply.*",
+    r".*notifications?@.*",
+    r".*marketing@.*",
+    r".*support@.*",
+    r".*@mailchimp\.com",
+    r".*@sendgrid\..*",
+    r".*@intercom\..*",
+    r".*@zendesk\..*",
+]
+
+# Compiled patterns for efficiency
+_EXCLUDED_EMAIL_REGEX = [re.compile(p, re.IGNORECASE) for p in EXCLUDED_EMAIL_PATTERNS]
+
+
+def is_excluded_email(email: str) -> bool:
+    """
+    Check if an email should be excluded from sync (commercial/automated).
+
+    Args:
+        email: Email address to check
+
+    Returns:
+        True if email matches exclusion patterns
+    """
+    if not email:
+        return True
+
+    email_lower = email.lower()
+
+    for pattern in _EXCLUDED_EMAIL_REGEX:
+        if pattern.match(email_lower):
+            return True
+
+    return False
+
+
+def parse_email_recipient(recipient: str) -> tuple[str, str]:
+    """
+    Parse a recipient string into name and email.
+
+    Args:
+        recipient: Raw recipient string like "Name <email@example.com>" or just "email@example.com"
+
+    Returns:
+        Tuple of (name, email)
+    """
+    recipient = recipient.strip()
+
+    # Pattern: "Name <email@example.com>" or just "email@example.com"
+    match = re.match(r'^"?([^"<]+)"?\s*<([^>]+)>$', recipient)
+    if match:
+        return match.group(1).strip(), match.group(2).strip()
+
+    # Just email address
+    if "@" in recipient:
+        # Extract name from email prefix
+        prefix = recipient.split("@")[0]
+        name = re.sub(r"[._-]", " ", prefix).title()
+        return name, recipient.strip()
+
+    return recipient, ""
+
+
+def sync_gmail_to_v2(
+    gmail_service,
+    days_back: int = 90,
+    max_results: int = 500,
+    entity_resolver: EntityResolver = None,
+    interaction_store: InteractionStore = None,
+) -> dict:
+    """
+    Sync sent emails to v2 people system (entities + interactions).
+
+    Only processes SENT emails to track who the user actively communicates with.
+    Filters out commercial/automated email addresses.
+
+    Args:
+        gmail_service: GmailService instance
+        days_back: How many days to look back
+        max_results: Maximum emails to process
+        entity_resolver: EntityResolver instance (default singleton)
+        interaction_store: InteractionStore instance (default singleton)
+
+    Returns:
+        Stats dict with counts of entities/interactions created
+    """
+    if gmail_service is None:
+        logger.warning("Gmail service not available for v2 sync")
+        return {"entities_created": 0, "entities_updated": 0, "interactions_created": 0, "emails_processed": 0, "emails_excluded": 0}
+
+    resolver = entity_resolver or get_entity_resolver()
+    store = interaction_store or get_interaction_store()
+
+    stats = {
+        "entities_created": 0,
+        "entities_updated": 0,
+        "interactions_created": 0,
+        "emails_processed": 0,
+        "emails_excluded": 0,
+    }
+
+    after_date = datetime.now(timezone.utc) - timedelta(days=days_back)
+
+    try:
+        # Query SENT emails only
+        messages = gmail_service.search(
+            keywords="in:sent",
+            after=after_date,
+            max_results=max_results,
+        )
+
+        logger.info(f"Gmail v2 sync: found {len(messages)} sent emails to process")
+
+        for msg in messages:
+            stats["emails_processed"] += 1
+
+            # Skip if no recipients
+            if not hasattr(msg, 'to') or not msg.to:
+                continue
+
+            # Parse recipients
+            recipients = msg.to.split(',')
+
+            for recipient in recipients:
+                name, email = parse_email_recipient(recipient)
+
+                if not email or '@' not in email:
+                    continue
+
+                # Filter out commercial/automated emails
+                if is_excluded_email(email):
+                    stats["emails_excluded"] += 1
+                    continue
+
+                # Resolve entity (create if missing)
+                result = resolver.resolve(
+                    name=name,
+                    email=email,
+                    create_if_missing=True,
+                )
+
+                if not result:
+                    continue
+
+                entity = result.entity
+
+                if result.is_new:
+                    stats["entities_created"] += 1
+
+                # Create interaction
+                interaction = create_gmail_interaction(
+                    person_id=entity.id,
+                    message_id=msg.message_id,
+                    subject=msg.subject or "(no subject)",
+                    timestamp=msg.date,
+                    snippet=msg.snippet,
+                )
+
+                # Add if not duplicate
+                _, was_added = store.add_if_not_exists(interaction)
+
+                if was_added:
+                    stats["interactions_created"] += 1
+
+                    # Update entity stats
+                    entity.email_count = (entity.email_count or 0) + 1
+                    if _is_newer(msg.date, entity.last_seen):
+                        entity.last_seen = _make_aware(msg.date)
+                    if "gmail" not in entity.sources:
+                        entity.sources.append("gmail")
+
+                    resolver.store.update(entity)
+                    stats["entities_updated"] += 1
+
+    except Exception as e:
+        logger.error(f"Failed to sync Gmail to v2: {e}")
+
+    logger.info(f"Gmail v2 sync complete: {stats}")
+    return stats
+
+
+def sync_calendar_to_v2(
+    calendar_services: list = None,
+    days_back: int = 90,
+    max_results: int = 500,
+    entity_resolver: EntityResolver = None,
+    interaction_store: InteractionStore = None,
+) -> dict:
+    """
+    Sync calendar events to v2 people system (entities + interactions).
+
+    Processes events from both PERSONAL and WORK calendars.
+    Skips all-day events without attendees and declined events.
+
+    Args:
+        calendar_services: List of CalendarService instances (default: personal + work)
+        days_back: How many days to look back
+        max_results: Maximum events to process per calendar
+        entity_resolver: EntityResolver instance (default singleton)
+        interaction_store: InteractionStore instance (default singleton)
+
+    Returns:
+        Stats dict with counts of entities/interactions created
+    """
+    from api.services.calendar import get_calendar_service
+
+    resolver = entity_resolver or get_entity_resolver()
+    store = interaction_store or get_interaction_store()
+
+    stats = {
+        "entities_created": 0,
+        "entities_updated": 0,
+        "interactions_created": 0,
+        "events_processed": 0,
+        "events_skipped": 0,
+    }
+
+    # Default to both personal and work calendars
+    if calendar_services is None:
+        try:
+            calendar_services = [
+                get_calendar_service(GoogleAccount.PERSONAL),
+                get_calendar_service(GoogleAccount.WORK),
+            ]
+        except Exception as e:
+            logger.warning(f"Failed to get calendar services: {e}")
+            return stats
+
+    start_date = datetime.now(timezone.utc) - timedelta(days=days_back)
+    end_date = datetime.now(timezone.utc)
+
+    for cal_service in calendar_services:
+        if cal_service is None:
+            continue
+
+        try:
+            events = cal_service.get_events_in_range(
+                start_date=start_date,
+                end_date=end_date,
+                max_results=max_results,
+            )
+
+            logger.info(f"Calendar v2 sync ({cal_service.account_type.value}): found {len(events)} events to process")
+
+            for event in events:
+                stats["events_processed"] += 1
+
+                # Skip all-day events without attendees
+                if event.is_all_day and not event.attendees:
+                    stats["events_skipped"] += 1
+                    continue
+
+                # Skip events without attendees
+                if not event.attendees:
+                    stats["events_skipped"] += 1
+                    continue
+
+                # Process each attendee
+                for attendee_str in event.attendees:
+                    # Parse attendee (could be email or "Name" format)
+                    if '@' in attendee_str:
+                        # It's an email
+                        email = attendee_str
+                        name = attendee_str.split('@')[0]
+                        name = re.sub(r"[._-]", " ", name).title()
+                    else:
+                        # Just a name
+                        name = attendee_str
+                        email = None
+
+                    # Resolve entity
+                    result = resolver.resolve(
+                        name=name,
+                        email=email,
+                        create_if_missing=True,
+                    )
+
+                    if not result:
+                        continue
+
+                    entity = result.entity
+
+                    if result.is_new:
+                        stats["entities_created"] += 1
+
+                    # Create interaction
+                    interaction = create_calendar_interaction(
+                        person_id=entity.id,
+                        event_id=event.event_id,
+                        title=event.title,
+                        timestamp=event.start_time,
+                        snippet=event.description[:200] if event.description else None,
+                    )
+
+                    # Add if not duplicate
+                    _, was_added = store.add_if_not_exists(interaction)
+
+                    if was_added:
+                        stats["interactions_created"] += 1
+
+                        # Update entity stats
+                        entity.meeting_count = (entity.meeting_count or 0) + 1
+                        if _is_newer(event.start_time, entity.last_seen):
+                            entity.last_seen = _make_aware(event.start_time)
+                        if "calendar" not in entity.sources:
+                            entity.sources.append("calendar")
+
+                        resolver.store.update(entity)
+                        stats["entities_updated"] += 1
+
+        except Exception as e:
+            logger.error(f"Failed to sync calendar ({cal_service.account_type.value}) to v2: {e}")
+
+    logger.info(f"Calendar v2 sync complete: {stats}")
+    return stats
+
+
+def sync_linkedin_to_v2(
+    csv_path: str,
+    entity_resolver: EntityResolver = None,
+) -> dict:
+    """
+    Sync LinkedIn connections from CSV to v2 people system.
+
+    Processes the LinkedIn connections CSV export and creates/updates
+    PersonEntity records for each connection.
+
+    Args:
+        csv_path: Path to LinkedIn connections CSV file
+        entity_resolver: EntityResolver instance (default singleton)
+
+    Returns:
+        Stats dict with counts of entities created/updated
+    """
+    from pathlib import Path
+
+    resolver = entity_resolver or get_entity_resolver()
+
+    stats = {
+        "entities_created": 0,
+        "entities_updated": 0,
+        "connections_processed": 0,
+        "connections_skipped": 0,
+    }
+
+    csv_file = Path(csv_path)
+    if not csv_file.exists():
+        logger.warning(f"LinkedIn CSV not found: {csv_path}")
+        return stats
+
+    try:
+        connections = load_linkedin_connections(csv_path)
+        logger.info(f"LinkedIn v2 sync: found {len(connections)} connections to process")
+
+        for conn in connections:
+            stats["connections_processed"] += 1
+
+            first_name = conn.get("first_name", "").strip()
+            last_name = conn.get("last_name", "").strip()
+
+            if not first_name and not last_name:
+                stats["connections_skipped"] += 1
+                continue
+
+            # Use resolve_from_linkedin for proper entity resolution
+            result = resolver.resolve_from_linkedin(
+                first_name=first_name,
+                last_name=last_name,
+                email=conn.get("email") or None,
+                company=conn.get("company") or None,
+                position=conn.get("position") or None,
+                linkedin_url=conn.get("linkedin_url") or None,
+            )
+
+            if result:
+                if result.is_new:
+                    stats["entities_created"] += 1
+                else:
+                    stats["entities_updated"] += 1
+
+    except Exception as e:
+        logger.error(f"Failed to sync LinkedIn to v2: {e}")
+
+    logger.info(f"LinkedIn v2 sync complete: {stats}")
+    return stats
+
+
+def sync_people_v2(
+    gmail_service=None,
+    calendar_services: list = None,
+    linkedin_csv_path: str = None,
+    days_back: int = 90,
+    max_results: int = 500,
+) -> dict:
+    """
+    Orchestrate v2 sync for all sources (LinkedIn, Gmail, Calendar).
+
+    This is the main entry point for syncing to the v2 people system
+    which uses EntityResolver and InteractionStore.
+
+    Args:
+        gmail_service: GmailService instance for email sync
+        calendar_services: List of CalendarService instances (default: personal + work)
+        linkedin_csv_path: Path to LinkedIn connections CSV (optional)
+        days_back: How many days to look back
+        max_results: Maximum items to process per source
+
+    Returns:
+        Combined stats dict from all syncs
+    """
+    logger.info(f"Starting v2 people sync (days_back={days_back}, max_results={max_results})")
+
+    # Get shared resolver and store for consistency
+    resolver = get_entity_resolver()
+    store = get_interaction_store()
+
+    combined_stats = {
+        "linkedin": {},
+        "gmail": {},
+        "calendar": {},
+        "total_entities_created": 0,
+        "total_interactions_created": 0,
+    }
+
+    # Sync LinkedIn (first, as it provides company/position context)
+    if linkedin_csv_path:
+        linkedin_stats = sync_linkedin_to_v2(
+            csv_path=linkedin_csv_path,
+            entity_resolver=resolver,
+        )
+        combined_stats["linkedin"] = linkedin_stats
+        combined_stats["total_entities_created"] += linkedin_stats.get("entities_created", 0)
+
+    # Sync Gmail
+    if gmail_service:
+        gmail_stats = sync_gmail_to_v2(
+            gmail_service=gmail_service,
+            days_back=days_back,
+            max_results=max_results,
+            entity_resolver=resolver,
+            interaction_store=store,
+        )
+        combined_stats["gmail"] = gmail_stats
+        combined_stats["total_entities_created"] += gmail_stats.get("entities_created", 0)
+        combined_stats["total_interactions_created"] += gmail_stats.get("interactions_created", 0)
+
+    # Sync Calendar
+    calendar_stats = sync_calendar_to_v2(
+        calendar_services=calendar_services,
+        days_back=days_back,
+        max_results=max_results,
+        entity_resolver=resolver,
+        interaction_store=store,
+    )
+    combined_stats["calendar"] = calendar_stats
+    combined_stats["total_entities_created"] += calendar_stats.get("entities_created", 0)
+    combined_stats["total_interactions_created"] += calendar_stats.get("interactions_created", 0)
+
+    logger.info(f"v2 people sync complete: {combined_stats['total_entities_created']} entities, {combined_stats['total_interactions_created']} interactions created")
+
+    return combined_stats
 
 
 @dataclass

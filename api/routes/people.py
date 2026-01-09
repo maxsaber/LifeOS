@@ -2,8 +2,10 @@
 People API endpoints for LifeOS.
 
 Provides access to aggregated people from all sources.
+Supports both v1 (PeopleAggregator) and v2 (EntityResolver) systems.
 """
 from typing import Optional
+import logging
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
@@ -12,6 +14,17 @@ from api.services.people_aggregator import get_people_aggregator, PersonRecord
 from api.services.gmail import get_gmail_service
 from api.services.calendar import get_calendar_service
 from api.services.google_auth import GoogleAccount
+
+# v2 imports
+try:
+    from api.services.entity_resolver import get_entity_resolver
+    from api.services.person_entity import get_person_entity_store
+    from api.services.interaction_store import get_interaction_store
+    HAS_V2_PEOPLE = True
+except ImportError:
+    HAS_V2_PEOPLE = False
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/people", tags=["people"])
 
@@ -28,6 +41,11 @@ class PersonResponse(BaseModel):
     mention_count: int = 0
     last_seen: Optional[str] = None
     category: str = "unknown"
+    # v2 fields
+    entity_id: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    display_name: Optional[str] = None
+    aliases: Optional[list[str]] = None
 
 
 class SearchResponse(BaseModel):
@@ -180,3 +198,212 @@ async def list_people(
 
 # Import at bottom to avoid circular import
 from datetime import datetime, timezone
+
+
+# ============================================================================
+# v2 Entity Endpoints (requires People System v2)
+# ============================================================================
+
+class EntityResolveRequest(BaseModel):
+    """Request for entity resolution."""
+    name: Optional[str] = None
+    email: Optional[str] = None
+    context_path: Optional[str] = None
+    create_if_missing: bool = False
+
+
+class EntityResolveResponse(BaseModel):
+    """Response from entity resolution."""
+    found: bool
+    is_new: bool = False
+    confidence: float = 0.0
+    match_type: str = ""
+    entity: Optional[PersonResponse] = None
+
+
+class InteractionResponse(BaseModel):
+    """Response model for an interaction."""
+    id: str
+    person_id: str
+    timestamp: str
+    source_type: str
+    title: str
+    snippet: Optional[str] = None
+    source_link: str = ""
+    source_badge: str = ""
+
+
+class InteractionsResponse(BaseModel):
+    """Response for interactions list."""
+    interactions: list[InteractionResponse]
+    count: int
+    formatted_history: str = ""
+
+
+def _entity_to_response(entity) -> PersonResponse:
+    """Convert PersonEntity to API response."""
+    return PersonResponse(
+        canonical_name=entity.canonical_name,
+        email=entity.emails[0] if entity.emails else None,
+        company=entity.company,
+        position=entity.position,
+        sources=entity.sources,
+        meeting_count=entity.meeting_count,
+        email_count=entity.email_count,
+        mention_count=entity.mention_count,
+        last_seen=entity.last_seen.isoformat() if entity.last_seen else None,
+        category=entity.category,
+        entity_id=entity.id,
+        linkedin_url=entity.linkedin_url,
+        display_name=entity.display_name,
+        aliases=entity.aliases,
+    )
+
+
+@router.post("/v2/resolve", response_model=EntityResolveResponse)
+async def resolve_entity(request: EntityResolveRequest) -> EntityResolveResponse:
+    """
+    Resolve a person to an entity using the v2 entity resolution algorithm.
+
+    Uses email anchoring, fuzzy name matching with context boost, and
+    disambiguation for ambiguous names.
+    """
+    if not HAS_V2_PEOPLE:
+        raise HTTPException(status_code=501, detail="People System v2 not available")
+
+    if not request.name and not request.email:
+        raise HTTPException(status_code=400, detail="Must provide name or email")
+
+    resolver = get_entity_resolver()
+    result = resolver.resolve(
+        name=request.name,
+        email=request.email,
+        context_path=request.context_path,
+        create_if_missing=request.create_if_missing,
+    )
+
+    if not result:
+        return EntityResolveResponse(found=False)
+
+    return EntityResolveResponse(
+        found=True,
+        is_new=result.is_new,
+        confidence=result.confidence,
+        match_type=result.match_type,
+        entity=_entity_to_response(result.entity),
+    )
+
+
+@router.get("/v2/entities", response_model=SearchResponse)
+async def list_entities(
+    limit: int = Query(default=50, ge=1, le=500, description="Max results"),
+    category: Optional[str] = Query(default=None, description="Filter by category"),
+):
+    """
+    List all entities from the v2 entity store.
+
+    This uses the new PersonEntity system instead of PeopleAggregator.
+    """
+    if not HAS_V2_PEOPLE:
+        raise HTTPException(status_code=501, detail="People System v2 not available")
+
+    store = get_person_entity_store()
+    all_entities = store.get_all()
+
+    # Filter by category if specified
+    if category:
+        all_entities = [e for e in all_entities if e.category == category]
+
+    # Sort by last_seen (most recent first)
+    all_entities.sort(
+        key=lambda e: e.last_seen or datetime.min,
+        reverse=True
+    )
+
+    # Limit results
+    all_entities = all_entities[:limit]
+
+    return SearchResponse(
+        people=[_entity_to_response(e) for e in all_entities],
+        count=len(all_entities),
+        query="*",
+    )
+
+
+@router.get("/v2/entity/{entity_id}", response_model=PersonResponse)
+async def get_entity(entity_id: str):
+    """Get a specific entity by ID."""
+    if not HAS_V2_PEOPLE:
+        raise HTTPException(status_code=501, detail="People System v2 not available")
+
+    store = get_person_entity_store()
+    entity = store.get_by_id(entity_id)
+
+    if not entity:
+        raise HTTPException(status_code=404, detail=f"Entity '{entity_id}' not found")
+
+    return _entity_to_response(entity)
+
+
+@router.get("/v2/entity/{entity_id}/interactions", response_model=InteractionsResponse)
+async def get_entity_interactions(
+    entity_id: str,
+    days_back: int = Query(default=90, ge=1, le=365, description="Days to look back"),
+    limit: int = Query(default=50, ge=1, le=200, description="Max interactions"),
+):
+    """
+    Get interaction history for a specific entity.
+
+    Returns a list of interactions (emails, meetings, note mentions) with
+    links to the original sources.
+    """
+    if not HAS_V2_PEOPLE:
+        raise HTTPException(status_code=501, detail="People System v2 not available")
+
+    # Verify entity exists
+    store = get_person_entity_store()
+    entity = store.get_by_id(entity_id)
+    if not entity:
+        raise HTTPException(status_code=404, detail=f"Entity '{entity_id}' not found")
+
+    # Get interactions
+    interaction_store = get_interaction_store()
+    interactions = interaction_store.get_for_person(entity_id, days_back=days_back, limit=limit)
+    formatted = interaction_store.format_interaction_history(entity_id, days_back=days_back, limit=limit)
+
+    return InteractionsResponse(
+        interactions=[
+            InteractionResponse(
+                id=i.id,
+                person_id=i.person_id,
+                timestamp=i.timestamp.isoformat(),
+                source_type=i.source_type,
+                title=i.title,
+                snippet=i.snippet,
+                source_link=i.source_link,
+                source_badge=i.source_badge,
+            )
+            for i in interactions
+        ],
+        count=len(interactions),
+        formatted_history=formatted,
+    )
+
+
+@router.get("/v2/statistics")
+async def get_v2_statistics():
+    """Get statistics from the v2 people system."""
+    if not HAS_V2_PEOPLE:
+        raise HTTPException(status_code=501, detail="People System v2 not available")
+
+    entity_store = get_person_entity_store()
+    interaction_store = get_interaction_store()
+
+    entity_stats = entity_store.get_statistics()
+    interaction_stats = interaction_store.get_statistics()
+
+    return {
+        "entities": entity_stats,
+        "interactions": interaction_stats,
+        "v2_enabled": True,
+    }

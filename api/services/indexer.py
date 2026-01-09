@@ -17,6 +17,19 @@ from api.services.chunker import chunk_document, extract_frontmatter
 from api.services.vectorstore import VectorStore
 from api.services.people import extract_people_from_text
 
+# V2 People System integration
+try:
+    from api.services.entity_resolver import EntityResolver, get_entity_resolver
+    from api.services.interaction_store import (
+        InteractionStore,
+        get_interaction_store,
+        create_vault_interaction,
+        build_obsidian_link,
+    )
+    HAS_V2_PEOPLE = True
+except ImportError:
+    HAS_V2_PEOPLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -156,6 +169,19 @@ class IndexerService:
         # Merge people lists (unique)
         all_people = list(set(extracted_people + frontmatter_people))
 
+        # Sync to v2 people system if available
+        if HAS_V2_PEOPLE and all_people:
+            try:
+                note_date_str = self._extract_note_date(path, frontmatter)
+                if note_date_str:
+                    note_date = datetime.strptime(note_date_str, "%Y-%m-%d")
+                else:
+                    # Use file mtime as fallback for undated notes
+                    note_date = datetime.fromtimestamp(path.stat().st_mtime)
+                self._sync_people_to_v2(path, all_people, note_date, is_granola)
+            except Exception as e:
+                logger.warning(f"Failed to sync people to v2 for {file_path}: {e}")
+
         # Build metadata - use resolve() to get real path (handles symlinks like /var -> /private/var)
         metadata = {
             "file_path": str(path.resolve()),
@@ -246,6 +272,98 @@ class IndexerService:
             return "LifeOS"
         else:
             return "Other"
+
+    def _sync_people_to_v2(
+        self,
+        path: Path,
+        people: list[str],
+        note_date: datetime,
+        is_granola: bool = False,
+    ) -> None:
+        """
+        Resolve extracted people and create vault mention interactions.
+
+        Hooks into the v2 people system to:
+        1. Resolve each person name to a PersonEntity (creating if needed)
+        2. Create an interaction record for the vault mention
+        3. Update entity stats (mention_count, related_notes)
+
+        Args:
+            path: Path to the note file
+            people: List of extracted person names
+            note_date: Date of the note (for interaction timestamp)
+            is_granola: Whether this is a Granola meeting note
+        """
+        if not HAS_V2_PEOPLE:
+            return
+
+        resolver = get_entity_resolver()
+        interaction_store = get_interaction_store()
+        file_path_str = str(path.resolve())
+        note_title = path.stem  # filename without .md
+
+        logger.debug(
+            f"Syncing {len(people)} people to v2 from {path.name}"
+        )
+
+        for person_name in people:
+            try:
+                # Resolve person with context path for domain boosting
+                # e.g., file in Work/ML/ will boost @movementlabs.xyz matches
+                result = resolver.resolve(
+                    name=person_name,
+                    context_path=file_path_str,
+                    create_if_missing=True,
+                )
+
+                if not result:
+                    logger.debug(f"Could not resolve person: {person_name}")
+                    continue
+
+                entity = result.entity
+
+                # Create vault interaction
+                interaction = create_vault_interaction(
+                    person_id=entity.id,
+                    file_path=file_path_str,
+                    title=note_title,
+                    timestamp=note_date,
+                    snippet=None,  # Could extract first N chars if desired
+                    is_granola=is_granola,
+                )
+
+                # Add interaction (avoiding duplicates on re-index)
+                _, was_added = interaction_store.add_if_not_exists(interaction)
+
+                if was_added:
+                    # Update entity stats
+                    entity.mention_count += 1
+
+                    # Add to related_notes if not already present
+                    if file_path_str not in entity.related_notes:
+                        entity.related_notes.append(file_path_str)
+
+                    # Update last_seen
+                    if entity.last_seen is None or note_date > entity.last_seen:
+                        entity.last_seen = note_date
+
+                    # Add vault/granola to sources if not present
+                    source_type = "granola" if is_granola else "vault"
+                    if source_type not in entity.sources:
+                        entity.sources.append(source_type)
+
+                    # Persist entity changes
+                    resolver.store.update(entity)
+
+                    logger.debug(
+                        f"Created interaction for {entity.display_name} "
+                        f"({result.match_type}, conf={result.confidence:.2f})"
+                    )
+
+            except Exception as e:
+                logger.warning(
+                    f"Failed to sync person '{person_name}' to v2: {e}"
+                )
 
     def start_watching(self) -> None:
         """Start watching the vault for changes."""

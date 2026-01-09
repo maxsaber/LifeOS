@@ -2,10 +2,11 @@
 Briefings service for LifeOS.
 
 Generates stakeholder briefings by aggregating:
-- People metadata from PeopleAggregator
+- People metadata from PeopleAggregator (v1) or EntityResolver (v2)
 - Vault notes mentioning the person
 - Action items involving the person
 - Calendar meetings with the person
+- Interaction history (v2)
 """
 import logging
 from datetime import datetime, timedelta
@@ -17,6 +18,14 @@ from api.services.people_aggregator import PeopleAggregator, get_people_aggregat
 from api.services.vectorstore import VectorStore
 from api.services.actions import ActionRegistry, get_action_registry
 from api.services.synthesizer import get_synthesizer
+
+# v2 imports - these may not be populated yet
+try:
+    from api.services.entity_resolver import EntityResolver, get_entity_resolver
+    from api.services.interaction_store import InteractionStore, get_interaction_store
+    HAS_V2_PEOPLE = True
+except ImportError:
+    HAS_V2_PEOPLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +39,7 @@ class BriefingContext:
     company: Optional[str] = None
     position: Optional[str] = None
     category: str = "unknown"  # work, personal, family
+    linkedin_url: Optional[str] = None  # v2: LinkedIn profile
 
     # Interaction metrics
     meeting_count: int = 0
@@ -42,8 +52,14 @@ class BriefingContext:
     action_items: list[dict] = field(default_factory=list)
     recent_context: list[str] = field(default_factory=list)
 
+    # v2: Interaction history (formatted markdown)
+    interaction_history: str = ""
+
     # Sources
     sources: list[str] = field(default_factory=list)
+
+    # v2: Entity ID for linking
+    entity_id: Optional[str] = None
 
 
 BRIEFING_PROMPT = """You are LifeOS, preparing a stakeholder briefing for Nathan.
@@ -56,10 +72,14 @@ Generate a concise, actionable briefing about {person_name} based on the context
 - Company: {company}
 - Position: {position}
 - Category: {category}
+- LinkedIn: {linkedin_url}
 - Meetings (90 days): {meeting_count}
 - Emails (90 days): {email_count}
 - Note mentions: {mention_count}
 - Last interaction: {last_interaction}
+
+## Interaction History
+{interaction_history}
 
 ## Related Notes
 {related_notes_text}
@@ -76,6 +96,11 @@ Generate a briefing in this exact format:
 **Role/Relationship:** [Infer from notes and metadata - be specific]
 **Last Interaction:** [Date and brief context if available]
 **Interaction Frequency:** {meeting_count} meetings in past 90 days
+{linkedin_line}
+
+### Interaction Timeline
+[If interaction history is available, summarize recent touchpoints: emails, meetings, note mentions]
+[If not available, omit this section]
 
 ### Recent Context
 - [2-4 bullet points of key recent information from notes]
@@ -106,11 +131,15 @@ class BriefingsService:
         people_aggregator: Optional[PeopleAggregator] = None,
         vector_store: Optional[VectorStore] = None,
         action_registry: Optional[ActionRegistry] = None,
+        entity_resolver: Optional["EntityResolver"] = None,
+        interaction_store: Optional["InteractionStore"] = None,
     ):
         """Initialize briefings service."""
         self._people_aggregator = people_aggregator
         self._vector_store = vector_store
         self._action_registry = action_registry
+        self._entity_resolver = entity_resolver
+        self._interaction_store = interaction_store
 
     @property
     def people_aggregator(self) -> PeopleAggregator:
@@ -133,29 +162,41 @@ class BriefingsService:
             self._action_registry = get_action_registry()
         return self._action_registry
 
-    def gather_context(self, person_name: str) -> Optional[BriefingContext]:
+    @property
+    def entity_resolver(self) -> Optional["EntityResolver"]:
+        """Lazy-load entity resolver (v2)."""
+        if self._entity_resolver is None and HAS_V2_PEOPLE:
+            try:
+                self._entity_resolver = get_entity_resolver()
+            except Exception as e:
+                logger.debug(f"EntityResolver not available: {e}")
+        return self._entity_resolver
+
+    @property
+    def interaction_store(self) -> Optional["InteractionStore"]:
+        """Lazy-load interaction store (v2)."""
+        if self._interaction_store is None and HAS_V2_PEOPLE:
+            try:
+                self._interaction_store = get_interaction_store()
+            except Exception as e:
+                logger.debug(f"InteractionStore not available: {e}")
+        return self._interaction_store
+
+    def gather_context(self, person_name: str, email: Optional[str] = None) -> Optional[BriefingContext]:
         """
         Gather all context about a person.
 
         Args:
             person_name: Name to look up (will be resolved)
+            email: Optional email for better resolution (v2)
 
         Returns:
             BriefingContext with all gathered data, or None if person unknown
         """
-        # Resolve the person name
+        # Resolve the person name using v1 system
         resolved = resolve_person_name(person_name)
         if not resolved:
             resolved = person_name.title()
-
-        # Try to find in people aggregator
-        person_record = None
-        try:
-            results = self.people_aggregator.search(resolved)
-            if results:
-                person_record = results[0]
-        except Exception as e:
-            logger.warning(f"Could not search people aggregator: {e}")
 
         # Initialize context
         context = BriefingContext(
@@ -163,25 +204,79 @@ class BriefingsService:
             resolved_name=resolved,
         )
 
-        # Fill from person record if found
-        if person_record:
-            context.email = person_record.email
-            context.company = person_record.company
-            context.position = person_record.position
-            context.category = person_record.category
-            context.meeting_count = person_record.meeting_count
-            context.email_count = person_record.email_count
-            context.mention_count = person_record.mention_count
-            context.last_interaction = person_record.last_seen
-            context.sources.extend(person_record.sources)
+        # Try v2 EntityResolver first (if available)
+        entity = None
+        if self.entity_resolver:
+            try:
+                result = self.entity_resolver.resolve(name=resolved, email=email)
+                if result:
+                    entity = result.entity
+                    context.entity_id = entity.id
+                    context.resolved_name = entity.display_name or entity.canonical_name
+                    context.email = entity.emails[0] if entity.emails else None
+                    context.company = entity.company
+                    context.position = entity.position
+                    context.category = entity.category
+                    context.linkedin_url = entity.linkedin_url
+                    context.meeting_count = entity.meeting_count
+                    context.email_count = entity.email_count
+                    context.mention_count = entity.mention_count
+                    context.last_interaction = entity.last_seen
+                    context.sources.extend(entity.sources)
+                    logger.debug(f"Resolved {person_name} via EntityResolver: {entity.canonical_name}")
+            except Exception as e:
+                logger.warning(f"Could not use EntityResolver: {e}")
+
+        # Fall back to v1 PeopleAggregator if no entity found
+        if not entity:
+            try:
+                results = self.people_aggregator.search(resolved)
+                if results:
+                    person_record = results[0]
+                    context.email = person_record.email
+                    context.company = person_record.company
+                    context.position = person_record.position
+                    context.category = person_record.category
+                    context.meeting_count = person_record.meeting_count
+                    context.email_count = person_record.email_count
+                    context.mention_count = person_record.mention_count
+                    context.last_interaction = person_record.last_seen
+                    context.sources.extend(person_record.sources)
+                    logger.debug(f"Resolved {person_name} via PeopleAggregator")
+            except Exception as e:
+                logger.warning(f"Could not search people aggregator: {e}")
+
+        # Get interaction history from v2 InteractionStore (if available and entity found)
+        if self.interaction_store and context.entity_id:
+            try:
+                context.interaction_history = self.interaction_store.format_interaction_history(
+                    context.entity_id, days_back=90, limit=20
+                )
+            except Exception as e:
+                logger.warning(f"Could not get interaction history: {e}")
 
         # Search vault for mentions
+        # v2: Always search, removing the PEOPLE_DICTIONARY restriction
         try:
+            # Try with people filter first if name is known
+            filters = None
+            if resolved in PEOPLE_DICTIONARY:
+                filters = {"people": [resolved]}
+
             chunks = self.vector_store.search(
                 query=resolved,
                 top_k=15,
-                filters={"people": [resolved]} if resolved in PEOPLE_DICTIONARY else None
+                filters=filters
             )
+
+            # If no results with filter, try without filter
+            if not chunks and filters:
+                chunks = self.vector_store.search(
+                    query=resolved,
+                    top_k=15,
+                    filters=None
+                )
+
             for chunk in chunks:
                 context.related_notes.append({
                     "file_name": chunk.get("metadata", {}).get("file_name", "Unknown"),
@@ -211,18 +306,19 @@ class BriefingsService:
 
         return context
 
-    async def generate_briefing(self, person_name: str) -> dict:
+    async def generate_briefing(self, person_name: str, email: Optional[str] = None) -> dict:
         """
         Generate a stakeholder briefing.
 
         Args:
             person_name: Name of person to brief on
+            email: Optional email for better resolution (v2)
 
         Returns:
             Dict with briefing content and metadata
         """
         # Gather context
-        context = self.gather_context(person_name)
+        context = self.gather_context(person_name, email=email)
 
         if not context:
             return {
@@ -252,6 +348,14 @@ class BriefingsService:
             for item in context.action_items
         ]) or "No action items found."
 
+        # Format interaction history
+        interaction_history = context.interaction_history or "_No interaction history available._"
+
+        # Format LinkedIn line for output
+        linkedin_line = ""
+        if context.linkedin_url:
+            linkedin_line = f"**LinkedIn:** [{context.resolved_name}]({context.linkedin_url})"
+
         # Build prompt
         prompt = BRIEFING_PROMPT.format(
             person_name=context.person_name,
@@ -260,12 +364,15 @@ class BriefingsService:
             company=context.company or "Unknown",
             position=context.position or "Unknown",
             category=context.category,
+            linkedin_url=context.linkedin_url or "N/A",
             meeting_count=context.meeting_count,
             email_count=context.email_count,
             mention_count=context.mention_count,
             last_interaction=context.last_interaction.strftime("%Y-%m-%d") if context.last_interaction else "Unknown",
+            interaction_history=interaction_history,
             related_notes_text=related_notes_text,
             action_items_text=action_items_text,
+            linkedin_line=linkedin_line,
         )
 
         # Generate briefing with Claude
@@ -281,10 +388,12 @@ class BriefingsService:
                     "email": context.email,
                     "company": context.company,
                     "position": context.position,
+                    "linkedin_url": context.linkedin_url,
                     "meeting_count": context.meeting_count,
                     "email_count": context.email_count,
                     "mention_count": context.mention_count,
                     "last_interaction": context.last_interaction.isoformat() if context.last_interaction else None,
+                    "entity_id": context.entity_id,
                 },
                 "sources": context.sources,
                 "action_items_count": len(context.action_items),
