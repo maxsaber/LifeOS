@@ -348,13 +348,37 @@ async def ask_stream(request: AskStreamRequest):
 
                 if all_files:
                     drive_text = "Google Drive Files:\n"
+                    files_with_content = 0
+                    max_content_files = 3  # Limit how many files we read content from
+
                     for f in all_files:
                         name = f.name if hasattr(f, 'name') else f.get('name', 'Unknown')
                         mime = f.mime_type if hasattr(f, 'mime_type') else f.get('mimeType', 'file')
                         account = f.source_account if hasattr(f, 'source_account') else ''
-                        drive_text += f"- {name} ({mime}) [{account}]\n"
+                        file_id = f.file_id if hasattr(f, 'file_id') else f.get('id', '')
+
+                        drive_text += f"\n### {name} [{account}]\n"
+
+                        # For Google Docs/Sheets, fetch actual content (up to max_content_files)
+                        if files_with_content < max_content_files and file_id:
+                            try:
+                                # Get the drive service for this account
+                                account_type = GoogleAccount.WORK if account == 'work' else GoogleAccount.PERSONAL
+                                drive_for_content = DriveService(account_type)
+                                content = drive_for_content.get_file_content(file_id, mime)
+                                if content:
+                                    # Truncate very long content
+                                    if len(content) > 3000:
+                                        content = content[:3000] + "\n... [truncated]"
+                                    drive_text += f"{content}\n"
+                                    files_with_content += 1
+                                    print(f"    Read content from: {name}")
+                            except Exception as e:
+                                print(f"    Could not read {name}: {e}")
+                                drive_text += f"(Could not read content)\n"
+
                     extra_context.append({"source": "drive", "content": drive_text})
-                    print(f"  Total: {len(all_files)} drive files from both accounts")
+                    print(f"  Total: {len(all_files)} drive files, {files_with_content} with content")
 
             # Handle gmail queries - query both personal and work accounts
             if "gmail" in routing_result.sources:
