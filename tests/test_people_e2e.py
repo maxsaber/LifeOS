@@ -1,5 +1,9 @@
 """End-to-end tests for the People Query Orchestrator."""
 import pytest
+
+# Mark all tests as unit tests
+pytestmark = pytest.mark.unit
+
 from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock, AsyncMock, patch
 
