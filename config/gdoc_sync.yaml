@@ -1,0 +1,29 @@
+# Google Docs to Obsidian Sync Configuration
+#
+# This file defines which Google Docs should be synced to your Obsidian vault.
+# Sync runs nightly at 3 AM Eastern as part of the regular sync.
+#
+# Each document needs:
+#   - doc_id: The Google Doc ID (from the URL)
+#   - vault_path: Path relative to your vault root
+#   - account: "personal" or "work" (which Google account has access)
+#
+# To get the doc_id from a Google Docs URL:
+#   https://docs.google.com/document/d/[DOC_ID_HERE]/edit
+#
+# Synced files will have:
+#   - Frontmatter with sync metadata
+#   - Warning callout with link to edit in Google Docs
+#   - Converted Markdown content
+
+sync_enabled: true
+
+documents: []
+  # Example entries:
+  # - doc_id: "1ABC123xyz..."
+  #   vault_path: "Work/ML/Team Charter.md"
+  #   account: "work"
+  #
+  # - doc_id: "1DEF456abc..."
+  #   vault_path: "Personal/Goals/2026 Goals.md"
+  #   account: "personal"

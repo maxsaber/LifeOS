@@ -242,6 +242,27 @@ class DriveService:
             logger.error(f"Failed to get file content {file_id}: {e}")
             return None
 
+    def export_doc_as_html(self, file_id: str) -> str:
+        """
+        Export a Google Doc as HTML.
+
+        Preserves formatting including headings, bold, lists, links, etc.
+
+        Args:
+            file_id: Google Doc file ID
+
+        Returns:
+            HTML content as string
+
+        Raises:
+            Exception: If export fails
+        """
+        result = self.service.files().export(
+            fileId=file_id,
+            mimeType="text/html"
+        ).execute()
+        return result.decode("utf-8") if isinstance(result, bytes) else result
+
     def _parse_file(self, file_data: dict) -> DriveFile:
         """
         Parse raw API file data into DriveFile.

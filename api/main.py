@@ -34,9 +34,8 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
 
     Operations performed (in order):
     1. Vault reindex - indexes all vault notes, triggering v2 people extraction
-    2. LinkedIn sync - processes LinkedIn CSV for new/updated connections
-    3. Gmail sync - processes sent emails from last 24h
-    4. Calendar sync - processes meetings from last 24h
+    2. People v2 sync - LinkedIn CSV, Gmail sent emails, Calendar attendees
+    3. Google Docs sync - syncs configured docs to vault as Markdown
 
     Args:
         stop_event: Event to signal thread shutdown
@@ -88,6 +87,16 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
             logger.info(f"Nightly sync: People v2 sync completed: {stats}")
         except Exception as e:
             logger.error(f"Nightly sync: People v2 sync failed: {e}")
+
+        # === Step 3: Google Docs Sync ===
+        # Syncs configured Google Docs to Obsidian vault as Markdown
+        try:
+            logger.info("Nightly sync: Starting Google Docs sync...")
+            from api.services.gdoc_sync import sync_gdocs
+            gdoc_stats = sync_gdocs()
+            logger.info(f"Nightly sync: Google Docs sync completed: {gdoc_stats}")
+        except Exception as e:
+            logger.error(f"Nightly sync: Google Docs sync failed: {e}")
 
 
 @asynccontextmanager
