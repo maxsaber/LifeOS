@@ -18,12 +18,10 @@
 
 sync_enabled: true
 
-documents: []
-  # Example entries:
-  # - doc_id: "1ABC123xyz..."
-  #   vault_path: "Work/ML/Team Charter.md"
-  #   account: "work"
-  #
-  # - doc_id: "1DEF456abc..."
-  #   vault_path: "Personal/Goals/2026 Goals.md"
-  #   account: "personal"
+documents:
+  - doc_id: "18xvPzJws3FUwbJ9q4Nd1153cJbDmXhjlFeTSwLcV9ac"
+    vault_path: "Work/ML/Meetings/1-1s/Madi syncs.md"
+    account: "work"
+  - doc_id: "1sOvriVosqAj9No88F6OezO1_XiKBFd1tJ4U3GS_kESw"
+    vault_path: "Work/Job Search/Current Resume.md"
+    account: "personal"

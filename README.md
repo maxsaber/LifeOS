@@ -15,6 +15,7 @@ LifeOS is a self-hosted RAG (Retrieval-Augmented Generation) system that provide
 - Stakeholder briefings and people context
 - Adaptive retrieval for Google Drive (reads more content on demand)
 - Multi-account support (personal + work Google accounts)
+- Google Docs to Obsidian sync (one-way, nightly)
 
 ## Architecture
 
@@ -225,8 +226,9 @@ pytest tests/test_e2e_flow.py::TestRealUserFlow -v --browser chromium
 | `test_integration.py` | End-to-end tests | 8 |
 | `test_e2e_flow.py` | E2E flow & error handling | 12 |
 | `test_ui_browser.py` | Playwright UI tests | 25 |
+| `test_gdoc_sync.py` | Google Docs sync | 17 |
 
-**Total: 371+ tests**
+**Total: 388+ tests**
 
 ### Pre-commit Hook
 
@@ -269,6 +271,7 @@ LifeOS/
 │       └── ...
 ├── config/
 │   ├── settings.py          # Application settings
+│   ├── gdoc_sync.yaml       # Google Docs sync mappings
 │   └── prompts/
 │       └── query_router.txt # Router prompt (editable)
 ├── web/
@@ -349,6 +352,51 @@ The local LLM (Llama 3.2 3B via Ollama) routes queries to appropriate data sourc
 The router prompt is editable at `config/prompts/query_router.txt`.
 
 **Fallback:** If Ollama is unavailable, keyword-based routing kicks in automatically.
+
+## Google Docs Sync
+
+LifeOS can sync specific Google Docs to your Obsidian vault as Markdown files. This is a one-way sync that runs nightly at 3 AM Eastern (alongside other nightly sync operations).
+
+### Configuration
+
+Edit `config/gdoc_sync.yaml` to add documents:
+
+```yaml
+sync_enabled: true
+
+documents:
+  - doc_id: "1ABC123..."
+    vault_path: "Work/Meeting Notes.md"
+    account: "work"
+
+  - doc_id: "1DEF456..."
+    vault_path: "Personal/Goals.md"
+    account: "personal"
+```
+
+To get the `doc_id` from a Google Docs URL:
+```
+https://docs.google.com/document/d/[DOC_ID_HERE]/edit
+```
+
+### How It Works
+
+1. Exports each Google Doc as HTML
+2. Converts HTML to Markdown (preserving headings, lists, links, bold/italic)
+3. Adds frontmatter with sync metadata (`gdoc_sync: true`, `gdoc_id`, `last_synced`)
+4. Adds warning callout with link to edit in Google Docs
+5. Writes to the specified vault path (creates directories if needed)
+
+**Important:** Local edits will be overwritten on next sync. Edit in Google Docs.
+
+### Manual Sync
+
+To run sync manually (without waiting for nightly):
+
+```bash
+source .venv/bin/activate
+python -c "from api.services.gdoc_sync import sync_gdocs; print(sync_gdocs())"
+```
 
 ## Documentation
 

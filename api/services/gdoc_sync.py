@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Optional
 from dataclasses import dataclass
 
+from bs4 import BeautifulSoup
 from markdownify import markdownify as md
 
 from api.services.drive import get_drive_service, GoogleAccount
@@ -172,15 +173,24 @@ class GDocSyncService:
         Returns:
             Markdown content
         """
+        # Pre-process HTML with BeautifulSoup to remove style/script tags
+        # Google Docs exports include extensive CSS that markdownify doesn't fully strip
+        soup = BeautifulSoup(html, "html.parser")
+
+        # Remove style, script, head, and meta tags
+        for tag in soup.find_all(["style", "script", "head", "meta"]):
+            tag.decompose()
+
+        # Convert back to string for markdownify
+        clean_html = str(soup)
+
         # markdownify handles the conversion
         # - heading_style="ATX" uses # style headings
         # - bullets="-" uses - for unordered lists
-        # - strip removes unwanted HTML elements
         markdown = md(
-            html,
+            clean_html,
             heading_style="ATX",
             bullets="-",
-            strip=["style", "script", "meta", "head"],
         )
 
         # Clean up excessive whitespace
