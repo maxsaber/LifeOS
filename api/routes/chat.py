@@ -228,36 +228,47 @@ async def ask_stream(request: AskStreamRequest):
             chunks = []
             extra_context = []  # For calendar/drive/gmail results
 
-            # Handle calendar queries
+            # Handle calendar queries - ALWAYS query both personal and work calendars
             if "calendar" in routing_result.sources:
-                print("FETCHING CALENDAR DATA...")
-                try:
-                    calendar = CalendarService()
-                    # Parse date from query
-                    date_ref = extract_date_context(request.question)
-                    if date_ref:
-                        from datetime import datetime
-                        target_date = datetime.strptime(date_ref, "%Y-%m-%d")
-                        events = calendar.get_events_in_range(
-                            target_date,
-                            target_date + timedelta(days=1)
-                        )
-                    else:
-                        # Default to upcoming events
-                        events = calendar.get_upcoming_events(max_results=10)
+                print("FETCHING CALENDAR DATA (both personal and work)...")
+                from api.services.google_auth import GoogleAccount
+                all_events = []
 
-                    if events:
-                        event_text = "Calendar Events:\n"
-                        for e in events:
-                            start = e.start_time.strftime("%Y-%m-%d %H:%M") if e.start_time else "TBD"
-                            event_text += f"- {e.title} ({start})"
-                            if e.attendees:
-                                event_text += f" with {', '.join(e.attendees[:3])}"
-                            event_text += "\n"
-                        extra_context.append({"source": "calendar", "content": event_text})
-                        print(f"  Found {len(events)} calendar events")
-                except Exception as e:
-                    print(f"  Calendar error: {e}")
+                for account_type in [GoogleAccount.PERSONAL, GoogleAccount.WORK]:
+                    try:
+                        calendar = CalendarService(account_type)
+                        # Parse date from query
+                        date_ref = extract_date_context(request.question)
+                        if date_ref:
+                            from datetime import datetime
+                            target_date = datetime.strptime(date_ref, "%Y-%m-%d")
+                            events = calendar.get_events_in_range(
+                                target_date,
+                                target_date + timedelta(days=1)
+                            )
+                        else:
+                            # Default to upcoming events
+                            events = calendar.get_upcoming_events(max_results=10)
+
+                        all_events.extend(events)
+                        print(f"  Found {len(events)} events from {account_type.value} calendar")
+                    except Exception as e:
+                        print(f"  {account_type.value} calendar error: {e}")
+
+                # Sort all events by start time
+                all_events.sort(key=lambda e: e.start_time)
+
+                if all_events:
+                    event_text = "Calendar Events (Personal + Work):\n"
+                    for e in all_events:
+                        start = e.start_time.strftime("%Y-%m-%d %H:%M") if e.start_time else "TBD"
+                        account_label = f"[{e.source_account}]" if e.source_account else ""
+                        event_text += f"- {e.title} ({start}) {account_label}"
+                        if e.attendees:
+                            event_text += f" with {', '.join(e.attendees[:3])}"
+                        event_text += "\n"
+                    extra_context.append({"source": "calendar", "content": event_text})
+                    print(f"  Total: {len(all_events)} calendar events from both accounts")
 
             # Handle drive queries
             if "drive" in routing_result.sources:

@@ -26,7 +26,7 @@ PEOPLE_DICTIONARY = {
     # Family/Personal
     "Taylor": {
         "canonical": "Taylor",
-        "aliases": ["taylor"],
+        "aliases": ["taylor", "Anne Taylor Walker", "Taylor Walker"],
         "category": "family"
     },
     "Malea": {
@@ -35,15 +35,20 @@ PEOPLE_DICTIONARY = {
         "category": "family"
     },
 
+    "Thy": {
+        "canonical": "Thy",
+        "aliases": ["thy", "Thy Ramia", "Thy Nguyen", "T"],  # Common mis-trancription
+        "category": "family"
+    },
     # Work - Movement Labs
     "Yoni": {
         "canonical": "Yoni",
-        "aliases": ["yoni", "yoni@movementlabs.com", "Yoni Landau"],
+        "aliases": ["yoni", "Yoni Landau", "Yonatan"],
         "category": "work"
     },
     "Madi": {
         "canonical": "Madi",
-        "aliases": ["madi", "Madison"],
+        "aliases": ["madi", "Maddie"], # Common misspelling
         "category": "work"
     },
     "Hayley": {
