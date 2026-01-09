@@ -73,13 +73,14 @@ class TestMemoriesAPI:
         mock_synthesizer.get_response.assert_called_once()
 
     def test_create_memory_empty_content_rejected(self, client):
-        """Empty content should be rejected with 422."""
+        """Empty content should be rejected with 400 validation error."""
         response = client.post(
             "/api/memories",
             json={"content": ""}
         )
 
-        assert response.status_code == 422
+        # FastAPI returns 422 by default, but LifeOS validation error handler returns 400
+        assert response.status_code == 400
 
     def test_list_memories(self, client, mock_memory_store):
         """Should return list of memories."""

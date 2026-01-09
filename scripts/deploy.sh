@@ -1,10 +1,15 @@
 #!/bin/bash
 # LifeOS Deployment Script
+# ========================
+#
+# IMPORTANT: Always use this script after code changes to deploy new versions.
+# The server does NOT auto-reload - you must restart it for changes to take effect.
+#
 # Usage: ./scripts/deploy.sh [--skip-tests] [--no-push] [message]
 #
 # This script:
-# 1. Runs the full test suite
-# 2. Restarts the server
+# 1. Runs the full test suite (via test.sh)
+# 2. Restarts the server (via server.sh) - takes 30-60 seconds for ML model loading
 # 3. Verifies health check
 # 4. Commits and pushes changes (if any)
 #
@@ -12,6 +17,13 @@
 #   --skip-tests  Skip running tests (use with caution)
 #   --no-push     Commit but don't push to remote
 #   message       Custom commit message (optional)
+#
+# Related Scripts:
+#   ./scripts/server.sh   - Server management (start/stop/restart/status)
+#   ./scripts/test.sh     - Test runner (unit/integration/browser)
+#   ./scripts/service.sh  - launchd service management (auto-start on boot)
+#
+# See README.md for full documentation.
 
 set -e
 
@@ -93,31 +105,16 @@ run_tests() {
     log_info "All tests passed"
 }
 
-# Restart server
+# Restart server using server.sh (handles cleanup, lock files, proper timeouts)
 restart_server() {
     log_step "Step 2/5: Restarting server"
     echo ""
 
-    # Kill existing server
-    pkill -f "uvicorn api.main:app" 2>/dev/null || true
-    sleep 2
-
-    # Start server
-    log_info "Starting server..."
-    uvicorn api.main:app --host 0.0.0.0 --port 8000 &
-    disown
-
-    # Wait for server to be ready
-    for i in {1..30}; do
-        if check_server; then
-            log_info "Server started successfully"
-            return 0
-        fi
-        sleep 1
-    done
-
-    log_error "Server failed to start within 30 seconds"
-    exit 1
+    # Use server.sh for robust restart (cleans up processes, lock files, waits for health)
+    if ! "$SCRIPT_DIR/server.sh" restart; then
+        log_error "Server failed to start. Check logs: $PROJECT_DIR/logs/server.log"
+        exit 1
+    fi
 }
 
 # Verify deployment

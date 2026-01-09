@@ -140,6 +140,52 @@ class GranolaProcessor:
         self._running = False
         self._lock = threading.Lock()
 
+    def find_files_by_granola_id(self, granola_id: str, exclude_path: Optional[Path] = None) -> list[Path]:
+        """
+        Find all files in the vault with the given granola_id.
+
+        Args:
+            granola_id: The Granola ID to search for
+            exclude_path: Path to exclude from results (typically the source file)
+
+        Returns:
+            List of paths to files with matching granola_id
+        """
+        matches = []
+        for md_file in self.vault_path.rglob("*.md"):
+            if exclude_path and md_file == exclude_path:
+                continue
+            try:
+                content = md_file.read_text(encoding="utf-8")
+                post = frontmatter.loads(content)
+                if post.metadata.get("granola_id") == granola_id:
+                    matches.append(md_file)
+            except Exception:
+                continue
+        return matches
+
+    def delete_duplicates_by_granola_id(self, granola_id: str, keep_path: Optional[Path] = None) -> int:
+        """
+        Delete all duplicate files with the given granola_id except the one to keep.
+
+        Args:
+            granola_id: The Granola ID to search for
+            keep_path: Path to keep (don't delete this one)
+
+        Returns:
+            Number of duplicates deleted
+        """
+        duplicates = self.find_files_by_granola_id(granola_id, exclude_path=keep_path)
+        deleted = 0
+        for dup_path in duplicates:
+            try:
+                dup_path.unlink()
+                logger.info(f"Deleted duplicate granola file: {dup_path}")
+                deleted += 1
+            except Exception as e:
+                logger.error(f"Failed to delete duplicate {dup_path}: {e}")
+        return deleted
+
     def classify_note(self, content: str, filename: str) -> tuple[str, list[str], str]:
         """
         Classify a note based on filename and content patterns.
@@ -293,6 +339,20 @@ class GranolaProcessor:
             logger.error(f"Failed to read {file_path}: {e}")
             return None
 
+        # Extract granola_id for duplicate detection
+        granola_id = None
+        try:
+            post = frontmatter.loads(content)
+            granola_id = post.metadata.get("granola_id")
+        except Exception:
+            pass
+
+        # If this granola_id already exists elsewhere, delete the duplicates first
+        if granola_id:
+            deleted = self.delete_duplicates_by_granola_id(granola_id, keep_path=path)
+            if deleted > 0:
+                logger.info(f"Deleted {deleted} existing duplicate(s) for granola_id {granola_id}")
+
         # Classify the note
         destination, tags, rationale = self.classify_note(content, path.name)
 
@@ -307,14 +367,33 @@ class GranolaProcessor:
         dest_folder.mkdir(parents=True, exist_ok=True)
         dest_path = dest_folder / path.name
 
-        # Handle filename conflicts
+        # Handle filename conflicts (only if different granola_id or no granola_id)
         if dest_path.exists() and dest_path != path:
-            base = dest_path.stem
-            suffix = dest_path.suffix
-            counter = 1
-            while dest_path.exists():
-                dest_path = dest_folder / f"{base}_{counter}{suffix}"
-                counter += 1
+            # Check if the existing file has the same granola_id
+            try:
+                existing_content = dest_path.read_text(encoding="utf-8")
+                existing_post = frontmatter.loads(existing_content)
+                existing_granola_id = existing_post.metadata.get("granola_id")
+                if existing_granola_id == granola_id and granola_id is not None:
+                    # Same granola_id - this is a duplicate, delete it
+                    dest_path.unlink()
+                    logger.info(f"Removed existing duplicate at destination: {dest_path}")
+                else:
+                    # Different file, need to rename
+                    base = dest_path.stem
+                    suffix = dest_path.suffix
+                    counter = 1
+                    while dest_path.exists():
+                        dest_path = dest_folder / f"{base}_{counter}{suffix}"
+                        counter += 1
+            except Exception:
+                # Can't read existing file, just rename
+                base = dest_path.stem
+                suffix = dest_path.suffix
+                counter = 1
+                while dest_path.exists():
+                    dest_path = dest_folder / f"{base}_{counter}{suffix}"
+                    counter += 1
 
         # Write updated content to destination
         try:
@@ -331,6 +410,13 @@ class GranolaProcessor:
                 logger.info(f"Removed original file: {path}")
             except Exception as e:
                 logger.error(f"Failed to remove original {path}: {e}")
+                # If deletion fails, we have a duplicate - delete the new file to maintain consistency
+                logger.error(f"Rolling back: deleting newly written file {dest_path}")
+                try:
+                    dest_path.unlink()
+                except Exception:
+                    pass
+                return None
 
         logger.info(f"Processed: {path.name} -> {destination} ({rationale})")
         return str(dest_path)
@@ -364,9 +450,11 @@ class GranolaProcessor:
             return None
 
         # Check if this is a Granola file (has granola_id in frontmatter)
+        granola_id = None
         try:
             post = frontmatter.loads(content)
-            if "granola_id" not in post.metadata:
+            granola_id = post.metadata.get("granola_id")
+            if not granola_id:
                 logger.debug(f"Not a Granola file, skipping: {file_path}")
                 return None
         except Exception:
@@ -383,10 +471,20 @@ class GranolaProcessor:
         try:
             current_dest = path.parent.relative_to(self.vault_path)
             if str(current_dest) == destination:
+                # Already in correct location - but still check for duplicates elsewhere
+                deleted = self.delete_duplicates_by_granola_id(granola_id, keep_path=path)
+                if deleted > 0:
+                    logger.info(f"Deleted {deleted} duplicate(s) for granola_id {granola_id}, kept {path}")
+                    return str(path)  # Return path to indicate we did something
                 logger.debug(f"File already in correct location: {file_path}")
                 return None
         except ValueError:
             pass
+
+        # Delete any existing duplicates with the same granola_id (except current file)
+        deleted = self.delete_duplicates_by_granola_id(granola_id, keep_path=path)
+        if deleted > 0:
+            logger.info(f"Deleted {deleted} existing duplicate(s) for granola_id {granola_id}")
 
         # Extract people
         people = self.extract_people(content)
@@ -397,14 +495,33 @@ class GranolaProcessor:
         # Create destination folder if needed
         dest_folder.mkdir(parents=True, exist_ok=True)
 
-        # Handle filename conflicts
+        # Handle filename conflicts (only for different granola_ids)
         if dest_path.exists() and dest_path != path:
-            base = dest_path.stem
-            suffix = dest_path.suffix
-            counter = 1
-            while dest_path.exists():
-                dest_path = dest_folder / f"{base}_{counter}{suffix}"
-                counter += 1
+            # Check if the existing file has the same granola_id
+            try:
+                existing_content = dest_path.read_text(encoding="utf-8")
+                existing_post = frontmatter.loads(existing_content)
+                existing_granola_id = existing_post.metadata.get("granola_id")
+                if existing_granola_id == granola_id:
+                    # Same granola_id - this is a duplicate, delete it
+                    dest_path.unlink()
+                    logger.info(f"Removed existing duplicate at destination: {dest_path}")
+                else:
+                    # Different file, need to rename
+                    base = dest_path.stem
+                    suffix = dest_path.suffix
+                    counter = 1
+                    while dest_path.exists():
+                        dest_path = dest_folder / f"{base}_{counter}{suffix}"
+                        counter += 1
+            except Exception:
+                # Can't read existing file, just rename
+                base = dest_path.stem
+                suffix = dest_path.suffix
+                counter = 1
+                while dest_path.exists():
+                    dest_path = dest_folder / f"{base}_{counter}{suffix}"
+                    counter += 1
 
         # Write updated content to destination
         try:
@@ -421,6 +538,13 @@ class GranolaProcessor:
                 logger.info(f"Removed original file: {path}")
             except Exception as e:
                 logger.error(f"Failed to remove original {path}: {e}")
+                # If deletion fails, we have a duplicate - delete the new file to maintain consistency
+                logger.error(f"Rolling back: deleting newly written file {dest_path}")
+                try:
+                    dest_path.unlink()
+                except Exception:
+                    pass
+                return None
 
         logger.info(f"Reclassified: {path.name} -> {destination} ({rationale})")
         return str(dest_path)
@@ -465,6 +589,113 @@ class GranolaProcessor:
         logger.info(
             f"Reclassification complete: {results['reclassified']} moved, "
             f"{results['skipped']} skipped, {results['failed']} failed"
+        )
+        return results
+
+    def find_all_duplicates(self) -> dict[str, list[Path]]:
+        """
+        Find all duplicate Granola files in the vault (files with the same granola_id).
+
+        Returns:
+            Dict mapping granola_id to list of file paths (only for IDs with 2+ files)
+        """
+        granola_files: dict[str, list[Path]] = {}
+
+        for md_file in self.vault_path.rglob("*.md"):
+            try:
+                content = md_file.read_text(encoding="utf-8")
+                post = frontmatter.loads(content)
+                granola_id = post.metadata.get("granola_id")
+                if granola_id:
+                    if granola_id not in granola_files:
+                        granola_files[granola_id] = []
+                    granola_files[granola_id].append(md_file)
+            except Exception:
+                continue
+
+        # Return only duplicates (2+ files with same granola_id)
+        return {gid: paths for gid, paths in granola_files.items() if len(paths) > 1}
+
+    def deduplicate_all(self) -> dict:
+        """
+        Find and remove all duplicate Granola files in the vault.
+
+        For each set of duplicates, keeps the file in the best location
+        (based on classification) and deletes the rest.
+
+        Returns:
+            Dict with 'duplicates_found', 'files_deleted', 'files_kept' and 'details' list
+        """
+        results = {
+            "duplicates_found": 0,
+            "files_deleted": 0,
+            "files_kept": 0,
+            "details": []
+        }
+
+        duplicates = self.find_all_duplicates()
+        results["duplicates_found"] = len(duplicates)
+
+        for granola_id, paths in duplicates.items():
+            # Classify each file to find the best location
+            best_path = None
+            best_score = -1
+
+            for path in paths:
+                try:
+                    content = path.read_text(encoding="utf-8")
+                    destination, _, rationale = self.classify_note(content, path.name)
+
+                    # Calculate score: higher is better
+                    # Score 2: file is in the correct destination folder
+                    # Score 1: file is in a subfolder of the correct destination
+                    # Score 0: file is in wrong location
+                    try:
+                        current_folder = str(path.parent.relative_to(self.vault_path))
+                        if current_folder == destination:
+                            score = 2
+                        elif current_folder.startswith(destination):
+                            score = 1
+                        else:
+                            score = 0
+                    except ValueError:
+                        score = 0
+
+                    if score > best_score:
+                        best_score = score
+                        best_path = path
+
+                except Exception as e:
+                    logger.error(f"Error evaluating {path}: {e}")
+                    continue
+
+            # If no best path determined, keep the first one
+            if best_path is None:
+                best_path = paths[0]
+
+            # Delete all duplicates except the best one
+            detail = {
+                "granola_id": granola_id,
+                "kept": str(best_path),
+                "deleted": []
+            }
+
+            for path in paths:
+                if path != best_path:
+                    try:
+                        path.unlink()
+                        detail["deleted"].append(str(path))
+                        results["files_deleted"] += 1
+                        logger.info(f"Deleted duplicate: {path}")
+                    except Exception as e:
+                        logger.error(f"Failed to delete duplicate {path}: {e}")
+
+            results["files_kept"] += 1
+            results["details"].append(detail)
+
+        logger.info(
+            f"Deduplication complete: {results['duplicates_found']} duplicate sets found, "
+            f"{results['files_deleted']} files deleted, {results['files_kept']} files kept"
         )
         return results
 

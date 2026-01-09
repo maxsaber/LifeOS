@@ -1,6 +1,29 @@
 #!/bin/bash
-# LifeOS Service Management Script
+# LifeOS Service Management Script (launchd)
+# ===========================================
+#
 # Usage: ./scripts/service.sh [install|uninstall|start|stop|restart|status|logs]
+#
+# This script manages LifeOS as a macOS launchd service for auto-start on boot.
+# For day-to-day server management (without launchd), use server.sh instead.
+#
+# Commands:
+#   install    - Install and start the service (auto-start on boot)
+#   uninstall  - Stop and remove the service
+#   start      - Start the service
+#   stop       - Stop the service
+#   restart    - Restart the service
+#   status     - Check service status and health
+#   logs       - Tail the service logs
+#
+# Note: Server startup takes 30-60 seconds for ML model loading.
+#
+# Related Scripts:
+#   ./scripts/server.sh   - Day-to-day server management (recommended for Claude)
+#   ./scripts/deploy.sh   - Full deployment (test, restart, commit, push)
+#   ./scripts/test.sh     - Test runner (unit/integration/browser)
+#
+# See README.md for full documentation.
 
 set -e
 

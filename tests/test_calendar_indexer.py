@@ -203,11 +203,12 @@ class TestCalendarAdminEndpoints:
         assert data["events_indexed"] == 50
 
     def test_start_calendar_scheduler(self, client, mock_indexer):
-        """Should start the calendar scheduler."""
+        """Should start the calendar scheduler with time-based schedule by default."""
         response = client.post("/api/admin/calendar/start")
 
         assert response.status_code == 200
-        mock_indexer.start_scheduler.assert_called_once()
+        # Default uses time-based scheduler at 8 AM, noon, 3 PM Eastern
+        mock_indexer.start_time_scheduler.assert_called_once()
 
     def test_stop_calendar_scheduler(self, client, mock_indexer):
         """Should stop the calendar scheduler."""

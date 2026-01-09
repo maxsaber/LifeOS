@@ -1,12 +1,25 @@
 #!/bin/bash
 # LifeOS Test Runner
-# Usage: ./scripts/test.sh [unit|integration|browser|all]
+# ==================
+#
+# Usage: ./scripts/test.sh [unit|integration|browser|all|health]
 #
 # Test levels:
 #   unit        - Fast tests, no external dependencies (~30s)
 #   integration - Tests requiring server to be running
 #   browser     - Playwright browser tests (requires server)
 #   all         - Run all tests in sequence
+#   health      - Quick server health check
+#
+# Note: Integration and browser tests require the server to be running.
+# If not running, this script will start it automatically (takes 30-60s for ML model loading).
+#
+# Related Scripts:
+#   ./scripts/deploy.sh   - Full deployment (test, restart, commit, push)
+#   ./scripts/server.sh   - Server management (start/stop/restart/status)
+#   ./scripts/service.sh  - launchd service management (auto-start on boot)
+#
+# See README.md for full documentation.
 
 set -e
 
@@ -92,26 +105,15 @@ run_browser_tests() {
         --browser chromium
 }
 
-# Start server in background for tests
+# Start server in background for tests using server.sh
 start_server_background() {
-    log_info "Starting server in background..."
-    pkill -f "uvicorn api.main:app" 2>/dev/null || true
-    sleep 1
-    uvicorn api.main:app --host 0.0.0.0 --port 8000 &
-    SERVER_PID=$!
-    echo $SERVER_PID > /tmp/lifeos_test_server.pid
+    log_info "Starting server for tests (takes 30-60s for ML model loading)..."
 
-    # Wait for server to be ready
-    for i in {1..30}; do
-        if check_server; then
-            log_info "Server ready"
-            return 0
-        fi
-        sleep 1
-    done
-
-    log_error "Server failed to start"
-    exit 1
+    # Use server.sh for robust startup (handles cleanup, lock files, proper timeouts)
+    if ! "$SCRIPT_DIR/server.sh" start; then
+        log_error "Server failed to start. Check logs: $PROJECT_DIR/logs/server.log"
+        exit 1
+    fi
 }
 
 # Stop background test server

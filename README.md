@@ -133,36 +133,48 @@ The server does NOT auto-reload. Direct `git commit` will NOT restart the server
 
 ### Scripts
 
-LifeOS uses shell scripts for testing and deployment:
+LifeOS uses shell scripts for testing, deployment, and server management:
 
 ```bash
-# Run tests (default: unit tests only)
-./scripts/test.sh
+# === Server Management (use this for day-to-day operations) ===
+./scripts/server.sh start      # Kill existing, start server, wait for healthy
+./scripts/server.sh stop       # Stop the server
+./scripts/server.sh restart    # Full restart (recommended after code changes)
+./scripts/server.sh status     # Check server status and health
 
-# Run specific test levels
+# === Testing ===
+./scripts/test.sh              # Run unit tests (default)
 ./scripts/test.sh unit         # Fast unit tests (~30s)
 ./scripts/test.sh integration  # Tests requiring server
 ./scripts/test.sh browser      # Playwright browser tests
 ./scripts/test.sh all          # Run all tests
 ./scripts/test.sh health       # Quick health check
 
-# Deploy (runs tests, restarts server, commits, pushes)
-./scripts/deploy.sh
+# === Deployment (use for commits/releases) ===
+./scripts/deploy.sh                      # Test, restart, commit, push
+./scripts/deploy.sh "Add new feature"    # With custom commit message
+./scripts/deploy.sh --no-push "WIP"      # Commit without pushing
+./scripts/deploy.sh --skip-tests         # Skip tests (use with caution)
 
-# Deploy with custom message
-./scripts/deploy.sh "Add new feature"
-
-# Deploy without pushing
-./scripts/deploy.sh --no-push "WIP changes"
-
-# Skip tests (use with caution)
-./scripts/deploy.sh --skip-tests
-
-# Manage the service
-./scripts/service.sh status    # Check service status
-./scripts/service.sh restart   # Restart the server
-./scripts/service.sh logs      # Tail logs
+# === Service Management (launchd - for auto-start on boot) ===
+./scripts/service.sh install   # Install as launchd service
+./scripts/service.sh status    # Check launchd service status
+./scripts/service.sh logs      # Tail service logs
 ```
+
+### Server Startup Details
+
+**Expected startup time: 30-60 seconds**
+
+The server takes 30-60 seconds to start because it loads the sentence-transformers ML model (`all-MiniLM-L6-v2`) at startup. The `server.sh` script handles this automatically:
+
+1. Kills any existing server processes
+2. Cleans up stale HuggingFace lock files (prevents hangs)
+3. Starts uvicorn with `--host 0.0.0.0` (allows network/Tailscale access)
+4. Waits up to 90 seconds for health check to pass
+5. Shows Tailscale URL if available
+
+**Important**: Always use `./scripts/server.sh restart` after code changes. The server does NOT auto-reload.
 
 ### Running Tests Manually
 

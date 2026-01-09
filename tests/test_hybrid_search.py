@@ -224,7 +224,6 @@ class TestRRFFusion:
         assert "doc2" in doc_ids
 
 
-@pytest.mark.skip(reason="Requires VectorStore/ChromaDB - slow initialization")
 class TestHybridSearch:
     """Test the hybrid search integration."""
 
@@ -239,7 +238,7 @@ class TestHybridSearch:
         """Hybrid search should combine vector and BM25 results."""
         from api.services.hybrid_search import HybridSearch
         from api.services.bm25_index import BM25Index
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
 
         # Create BM25 index with test data
         bm25 = BM25Index(db_path=temp_db)
@@ -254,9 +253,9 @@ class TestHybridSearch:
             {"id": "chunk1", "content": "Q4 budget planning meeting", "metadata": {}},
         ]
 
-        with patch('api.services.hybrid_search.VectorStore', return_value=mock_vector_store):
-            hybrid = HybridSearch(bm25_index=bm25)
-            results = hybrid.search("budget", top_k=5)
+        # Pass mock directly to constructor
+        hybrid = HybridSearch(vector_store=mock_vector_store, bm25_index=bm25)
+        results = hybrid.search("budget", top_k=5)
 
         # Should return fused results
         assert len(results) > 0
@@ -268,7 +267,7 @@ class TestHybridSearch:
         """Hybrid search should apply recency boost."""
         from api.services.hybrid_search import HybridSearch
         from api.services.bm25_index import BM25Index
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
         from datetime import datetime, timedelta
 
         bm25 = BM25Index(db_path=temp_db)
@@ -290,9 +289,9 @@ class TestHybridSearch:
             },
         ]
 
-        with patch('api.services.hybrid_search.VectorStore', return_value=mock_vector_store):
-            hybrid = HybridSearch(bm25_index=bm25)
-            results = hybrid.search("budget", top_k=5)
+        # Pass mock directly to constructor
+        hybrid = HybridSearch(vector_store=mock_vector_store, bm25_index=bm25)
+        results = hybrid.search("budget", top_k=5)
 
         # Newer doc should rank higher after recency boost
         if len(results) >= 2:
@@ -302,16 +301,16 @@ class TestHybridSearch:
     def test_fallback_to_vector_only(self, temp_db):
         """Should fallback to vector search if BM25 unavailable."""
         from api.services.hybrid_search import HybridSearch
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import MagicMock
 
         mock_vector_store = MagicMock()
         mock_vector_store.search.return_value = [
             {"id": "chunk1", "content": "Test content", "metadata": {}},
         ]
 
-        with patch('api.services.hybrid_search.VectorStore', return_value=mock_vector_store):
-            hybrid = HybridSearch(bm25_index=None)  # No BM25
-            results = hybrid.search("test", top_k=5)
+        # Pass mock directly to constructor with no BM25
+        hybrid = HybridSearch(vector_store=mock_vector_store, bm25_index=None)
+        results = hybrid.search("test", top_k=5)
 
         assert len(results) == 1
         assert results[0]["id"] == "chunk1"

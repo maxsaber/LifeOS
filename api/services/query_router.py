@@ -30,7 +30,7 @@ def _load_router_prompt() -> str:
         return PROMPT_FILE.read_text()
     except FileNotFoundError:
         logger.warning(f"Router prompt file not found at {PROMPT_FILE}, using fallback")
-        return """You are a query router. Classify the query into data sources.
+        return """You are a query router. Classify the query by the data source(s) needed to answer the query.
 Sources: vault (notes), calendar (events), gmail (email), drive (files), people (contacts), actions (tasks).
 Respond with JSON only: {{"sources": ["vault"], "reasoning": "explanation"}}
 
@@ -174,7 +174,7 @@ class QueryRouter:
         calendar_keywords = [
             "meeting", "calendar", "schedule", "appointment",
             "when is", "what's on", "tomorrow", "today",
-            "this week", "next week", "1-1", "1:1"
+            "week", "month", "1-1", "1:1"
         ]
         if any(kw in query_lower for kw in calendar_keywords):
             sources.add("calendar")

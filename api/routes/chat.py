@@ -5,12 +5,13 @@ import json
 import asyncio
 import logging
 import re
+import base64
 from typing import Optional
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from api.services.vectorstore import VectorStore
 from api.services.synthesizer import construct_prompt, get_synthesizer
@@ -71,12 +72,84 @@ def extract_date_context(query: str) -> Optional[str]:
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
+# Attachment configuration
+ALLOWED_MEDIA_TYPES = {
+    # Images - 5MB each
+    "image/png": 5 * 1024 * 1024,
+    "image/jpeg": 5 * 1024 * 1024,
+    "image/jpg": 5 * 1024 * 1024,
+    "image/gif": 5 * 1024 * 1024,
+    "image/webp": 5 * 1024 * 1024,
+    # PDFs - 10MB
+    "application/pdf": 10 * 1024 * 1024,
+    # Text files - 1MB
+    "text/plain": 1 * 1024 * 1024,
+    "text/markdown": 1 * 1024 * 1024,
+    "text/csv": 1 * 1024 * 1024,
+    "application/json": 1 * 1024 * 1024,
+}
+MAX_ATTACHMENTS = 5
+MAX_TOTAL_SIZE = 20 * 1024 * 1024  # 20MB
+
+
+class Attachment(BaseModel):
+    """Single attachment in a message."""
+    filename: str
+    media_type: str
+    data: str  # Base64 encoded content
+
+    @field_validator("media_type")
+    @classmethod
+    def validate_media_type(cls, v):
+        if v not in ALLOWED_MEDIA_TYPES:
+            raise ValueError(f"Unsupported file type: {v}. Allowed types: images (PNG, JPG, GIF, WebP), PDFs, and text files (TXT, MD, CSV, JSON)")
+        return v
+
+    def get_size_bytes(self) -> int:
+        """Calculate the size of the decoded data."""
+        # Base64 encoding adds ~33% overhead
+        return len(self.data) * 3 // 4
+
+    def validate_size(self):
+        """Validate the attachment size against limits."""
+        size = self.get_size_bytes()
+        max_size = ALLOWED_MEDIA_TYPES.get(self.media_type, 0)
+        if size > max_size:
+            max_mb = max_size / (1024 * 1024)
+            actual_mb = size / (1024 * 1024)
+            raise ValueError(
+                f"File '{self.filename}' ({actual_mb:.1f}MB) exceeds "
+                f"limit for {self.media_type} ({max_mb:.0f}MB)"
+            )
+
 
 class AskStreamRequest(BaseModel):
     """Request for streaming ask endpoint."""
     question: str
     include_sources: bool = True
     conversation_id: Optional[str] = None
+    attachments: Optional[list[Attachment]] = None
+
+    @field_validator("attachments")
+    @classmethod
+    def validate_attachments(cls, v):
+        if v is None:
+            return v
+        if len(v) > MAX_ATTACHMENTS:
+            raise ValueError(f"Maximum {MAX_ATTACHMENTS} attachments allowed, got {len(v)}")
+
+        # Validate each attachment's size
+        total_size = 0
+        for att in v:
+            att.validate_size()
+            total_size += att.get_size_bytes()
+
+        if total_size > MAX_TOTAL_SIZE:
+            total_mb = total_size / (1024 * 1024)
+            max_mb = MAX_TOTAL_SIZE / (1024 * 1024)
+            raise ValueError(f"Total attachment size ({total_mb:.1f}MB) exceeds limit ({max_mb:.0f}MB)")
+
+        return v
 
 
 class SaveToVaultRequest(BaseModel):
@@ -139,8 +212,17 @@ async def ask_stream(request: AskStreamRequest):
                 f"confidence: {routing_result.confidence})"
             )
 
-            # Send routing info first
-            yield f"data: {json.dumps({'type': 'routing', 'sources': routing_result.sources, 'reasoning': routing_result.reasoning, 'latency_ms': routing_result.latency_ms})}\n\n"
+            # Add "attachment" to sources if attachments are present
+            effective_sources = list(routing_result.sources)
+            if request.attachments:
+                effective_sources.append("attachment")
+                # Log attachment metadata (not content)
+                for att in request.attachments:
+                    size_kb = att.get_size_bytes() / 1024
+                    print(f"  Attachment: {att.filename} ({att.media_type}, {size_kb:.1f}KB)")
+
+            # Send routing info first (with attachment source if applicable)
+            yield f"data: {json.dumps({'type': 'routing', 'sources': effective_sources, 'reasoning': routing_result.reasoning, 'latency_ms': routing_result.latency_ms})}\n\n"
 
             # Get relevant data based on routing
             chunks = []
@@ -284,13 +366,30 @@ async def ask_stream(request: AskStreamRequest):
 
             prompt = construct_prompt(request.question, chunks)
 
+            # Prepare attachments for synthesizer (convert Pydantic models to dicts)
+            attachments_for_api = None
+            if request.attachments:
+                attachments_for_api = [
+                    {
+                        "filename": att.filename,
+                        "media_type": att.media_type,
+                        "data": att.data
+                    }
+                    for att in request.attachments
+                ]
+
             # Stream from Claude
             synthesizer = get_synthesizer()
             full_response = ""
 
-            async for content in synthesizer.stream_response(prompt):
-                full_response += content
-                yield f"data: {json.dumps({'type': 'content', 'content': content})}\n\n"
+            async for chunk in synthesizer.stream_response(prompt, attachments=attachments_for_api):
+                if isinstance(chunk, dict) and chunk.get("type") == "usage":
+                    # This is usage data, send it to client
+                    yield f"data: {json.dumps(chunk)}\n\n"
+                else:
+                    # This is text content
+                    full_response += chunk
+                    yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
                 await asyncio.sleep(0)  # Allow other tasks to run
 
             # Save assistant response
@@ -300,7 +399,7 @@ async def ask_stream(request: AskStreamRequest):
                 full_response,
                 sources=sources,
                 routing={
-                    "sources": routing_result.sources,
+                    "sources": effective_sources,  # Include "attachment" if applicable
                     "reasoning": routing_result.reasoning
                 }
             )

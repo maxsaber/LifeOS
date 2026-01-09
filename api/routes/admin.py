@@ -302,6 +302,50 @@ async def reclassify_granola_files(request: ReclassifyRequest) -> GranolaProcess
         )
 
 
+class DeduplicateResponse(BaseModel):
+    """Response from deduplication operation."""
+    status: str
+    message: str
+    duplicates_found: int
+    files_deleted: int
+    files_kept: int
+    details: list[dict] = []
+
+
+@router.post("/granola/deduplicate", response_model=DeduplicateResponse)
+async def deduplicate_granola_files() -> DeduplicateResponse:
+    """
+    Find and remove all duplicate Granola files in the vault.
+
+    For each set of duplicates (files with the same granola_id),
+    keeps the file in the best location (based on classification)
+    and deletes the rest.
+    """
+    try:
+        from api.services.granola_processor import GranolaProcessor
+
+        processor = GranolaProcessor(settings.vault_path)
+        results = processor.deduplicate_all()
+
+        return DeduplicateResponse(
+            status="success",
+            message=f"Found {results['duplicates_found']} duplicate sets, deleted {results['files_deleted']} files",
+            duplicates_found=results["duplicates_found"],
+            files_deleted=results["files_deleted"],
+            files_kept=results["files_kept"],
+            details=results["details"]
+        )
+    except Exception as e:
+        logger.error(f"Deduplication failed: {e}")
+        return DeduplicateResponse(
+            status="error",
+            message=f"Deduplication failed: {str(e)}",
+            duplicates_found=0,
+            files_deleted=0,
+            files_kept=0
+        )
+
+
 # ============ Calendar Indexer Endpoints ============
 
 
@@ -384,18 +428,33 @@ async def trigger_calendar_sync(days_past: int = 30, days_future: int = 30) -> C
 
 
 @router.post("/calendar/start")
-async def start_calendar_scheduler(interval_hours: float = 24.0):
+async def start_calendar_scheduler(
+    interval_hours: Optional[float] = None,
+    use_time_schedule: bool = True,
+    timezone: str = "America/New_York"
+):
     """
     Start the calendar sync scheduler.
 
     Args:
-        interval_hours: Hours between syncs (default: 24)
+        interval_hours: Hours between syncs (if not using time schedule)
+        use_time_schedule: Use time-of-day schedule (default: True, syncs at 8 AM, noon, 3 PM)
+        timezone: Timezone for time schedule (default: America/New_York)
     """
     try:
         from api.services.calendar_indexer import get_calendar_indexer
         indexer = get_calendar_indexer()
-        indexer.start_scheduler(interval_hours=interval_hours)
-        return {"status": "started", "message": f"Calendar scheduler started ({interval_hours}h interval)"}
+
+        if use_time_schedule:
+            indexer.start_time_scheduler(
+                schedule_times=[(8, 0), (12, 0), (15, 0)],
+                timezone=timezone
+            )
+            return {"status": "started", "message": f"Calendar scheduler started (8:00, 12:00, 15:00 {timezone})"}
+        else:
+            hours = interval_hours or 24.0
+            indexer.start_scheduler(interval_hours=hours)
+            return {"status": "started", "message": f"Calendar scheduler started ({hours}h interval)"}
     except Exception as e:
         logger.error(f"Failed to start calendar scheduler: {e}")
         return {"status": "error", "message": str(e)}
@@ -412,3 +471,60 @@ async def stop_calendar_scheduler():
     except Exception as e:
         logger.error(f"Failed to stop calendar scheduler: {e}")
         return {"status": "error", "message": str(e)}
+
+
+# ============ Usage Tracking Endpoints ============
+
+
+class UsageStats(BaseModel):
+    """Usage statistics for a time period."""
+    total_cost: float
+    total_input_tokens: int
+    total_output_tokens: int
+    request_count: int
+
+
+class UsageSummary(BaseModel):
+    """Complete usage summary."""
+    last_24h: UsageStats
+    last_7d: UsageStats
+    last_30d: UsageStats
+    all_time: UsageStats
+    daily_breakdown: list[dict]
+
+
+@router.get("/usage", response_model=UsageSummary)
+async def get_usage_summary() -> UsageSummary:
+    """
+    Get usage summary with stats for 24h, 7d, 30d, and all-time.
+
+    Also includes daily cost breakdown for charting.
+    """
+    try:
+        from api.services.usage_store import get_usage_store
+        usage_store = get_usage_store()
+        summary = usage_store.get_summary()
+
+        return UsageSummary(
+            last_24h=UsageStats(**summary["last_24h"]),
+            last_7d=UsageStats(**summary["last_7d"]),
+            last_30d=UsageStats(**summary["last_30d"]),
+            all_time=UsageStats(**summary["all_time"]),
+            daily_breakdown=summary["daily_breakdown"]
+        )
+    except Exception as e:
+        logger.error(f"Failed to get usage summary: {e}")
+        # Return empty stats on error
+        empty_stats = UsageStats(
+            total_cost=0.0,
+            total_input_tokens=0,
+            total_output_tokens=0,
+            request_count=0
+        )
+        return UsageSummary(
+            last_24h=empty_stats,
+            last_7d=empty_stats,
+            last_30d=empty_stats,
+            all_time=empty_stats,
+            daily_breakdown=[]
+        )

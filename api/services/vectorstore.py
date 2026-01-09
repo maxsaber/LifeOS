@@ -281,3 +281,20 @@ class VectorStore:
                 if meta and "file_path" in meta:
                     paths.add(meta["file_path"])
         return paths
+
+
+# Singleton instance
+_vector_store: Optional[VectorStore] = None
+
+
+def get_vector_store() -> VectorStore:
+    """
+    Get or create the VectorStore singleton.
+
+    Returns:
+        VectorStore instance
+    """
+    global _vector_store
+    if _vector_store is None:
+        _vector_store = VectorStore()
+    return _vector_store

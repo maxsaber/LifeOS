@@ -226,7 +226,6 @@ class TestConversationStore:
         assert conversations[0].message_count == 2
 
 
-@pytest.mark.skip(reason="TestClient initialization timeout - needs investigation")
 class TestConversationAPI:
     """Test the conversation API endpoints."""
 

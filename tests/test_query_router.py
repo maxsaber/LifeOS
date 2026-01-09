@@ -203,8 +203,7 @@ class TestQueryRouter:
 class TestKeywordFallback:
     """Test the keyword-based fallback routing."""
 
-    @pytest.mark.asyncio
-    async def test_calendar_keywords(self):
+    def test_calendar_keywords(self):
         """Calendar keywords should route to calendar."""
         from api.services.query_router import QueryRouter
 
@@ -221,8 +220,7 @@ class TestKeywordFallback:
             result = router._keyword_fallback(query)
             assert "calendar" in result.sources, f"Failed for query: {query}"
 
-    @pytest.mark.asyncio
-    async def test_email_keywords(self):
+    def test_email_keywords(self):
         """Email keywords should route to gmail."""
         from api.services.query_router import QueryRouter
 
@@ -239,8 +237,7 @@ class TestKeywordFallback:
             result = router._keyword_fallback(query)
             assert "gmail" in result.sources, f"Failed for query: {query}"
 
-    @pytest.mark.asyncio
-    async def test_drive_keywords(self):
+    def test_drive_keywords(self):
         """Drive keywords should route to drive."""
         from api.services.query_router import QueryRouter
 
@@ -256,8 +253,7 @@ class TestKeywordFallback:
             result = router._keyword_fallback(query)
             assert "drive" in result.sources, f"Failed for query: {query}"
 
-    @pytest.mark.asyncio
-    async def test_people_keywords(self):
+    def test_people_keywords(self):
         """People keywords should route to people."""
         from api.services.query_router import QueryRouter
 
@@ -273,8 +269,7 @@ class TestKeywordFallback:
             result = router._keyword_fallback(query)
             assert "people" in result.sources, f"Failed for query: {query}"
 
-    @pytest.mark.asyncio
-    async def test_actions_keywords(self):
+    def test_actions_keywords(self):
         """Action keywords should route to actions."""
         from api.services.query_router import QueryRouter
 
@@ -290,8 +285,7 @@ class TestKeywordFallback:
             result = router._keyword_fallback(query)
             assert "actions" in result.sources, f"Failed for query: {query}"
 
-    @pytest.mark.asyncio
-    async def test_default_to_vault(self):
+    def test_default_to_vault(self):
         """Unknown queries should default to vault."""
         from api.services.query_router import QueryRouter
 
@@ -344,8 +338,7 @@ class TestRouterAccuracy:
         ("Prepare me for tomorrow", ["calendar", "actions", "vault"]),
     ]
 
-    @pytest.mark.asyncio
-    async def test_keyword_fallback_accuracy(self):
+    def test_keyword_fallback_accuracy(self):
         """Keyword fallback should match at least 70% of expected sources."""
         from api.services.query_router import QueryRouter
 

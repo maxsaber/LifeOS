@@ -9,14 +9,17 @@ Features:
 - Updates incrementally on schedule
 - Stores event metadata for filtering
 - Supports both personal and work calendars
+- Supports time-of-day scheduling (e.g., 8 AM, noon, 3 PM Eastern)
 """
 import logging
 import threading
 import time
 from datetime import datetime, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from api.services.calendar import CalendarService, CalendarEvent
+from api.services.google_auth import GoogleAccount
 from api.services.vectorstore import VectorStore, get_vector_store
 
 logger = logging.getLogger(__name__)
@@ -143,7 +146,7 @@ class CalendarIndexer:
 
         # Try personal calendar
         try:
-            personal_calendar = CalendarService(account="personal")
+            personal_calendar = CalendarService(account_type=GoogleAccount.PERSONAL)
             personal_events = personal_calendar.get_events_in_range(start_date, end_date)
             indexed = self.index_events(personal_events)
             total_indexed += indexed
@@ -155,7 +158,7 @@ class CalendarIndexer:
 
         # Try work calendar
         try:
-            work_calendar = CalendarService(account="work")
+            work_calendar = CalendarService(account_type=GoogleAccount.WORK)
             work_events = work_calendar.get_events_in_range(start_date, end_date)
             indexed = self.index_events(work_events)
             total_indexed += indexed
@@ -232,6 +235,98 @@ class CalendarIndexer:
             self._scheduler_thread.join(timeout=5)
             self._scheduler_thread = None
             logger.info("Calendar sync scheduler stopped")
+
+    def _get_next_scheduled_time(self, schedule_times: list[tuple[int, int]], tz: ZoneInfo) -> datetime:
+        """
+        Calculate the next scheduled sync time.
+
+        Args:
+            schedule_times: List of (hour, minute) tuples in the target timezone
+            tz: Timezone for schedule times
+
+        Returns:
+            Next scheduled time as a datetime in UTC
+        """
+        now = datetime.now(tz)
+        today = now.date()
+
+        # Find the next scheduled time
+        for hour, minute in sorted(schedule_times):
+            scheduled = datetime(today.year, today.month, today.day, hour, minute, tzinfo=tz)
+            if scheduled > now:
+                return scheduled
+
+        # All times today have passed, schedule for tomorrow's first time
+        tomorrow = today + timedelta(days=1)
+        first_hour, first_minute = min(schedule_times)
+        return datetime(tomorrow.year, tomorrow.month, tomorrow.day, first_hour, first_minute, tzinfo=tz)
+
+    def _time_scheduler_loop(self, schedule_times: list[tuple[int, int]], timezone: str, skip_initial_sync: bool = False):
+        """
+        Background scheduler loop that runs at specific times of day.
+
+        Args:
+            schedule_times: List of (hour, minute) tuples
+            timezone: IANA timezone string (e.g., "America/New_York")
+            skip_initial_sync: If True, skip the initial sync on startup
+        """
+        tz = ZoneInfo(timezone)
+
+        # Initial sync on startup (unless skipped)
+        if not skip_initial_sync:
+            try:
+                self.sync()
+            except Exception as e:
+                logger.error(f"Initial calendar sync failed: {e}")
+
+        while not self._stop_event.is_set():
+            # Calculate seconds until next scheduled time
+            next_time = self._get_next_scheduled_time(schedule_times, tz)
+            now = datetime.now(tz)
+            wait_seconds = (next_time - now).total_seconds()
+
+            logger.info(f"Next calendar sync scheduled for {next_time.strftime('%Y-%m-%d %H:%M %Z')} ({wait_seconds/3600:.1f}h from now)")
+
+            # Wait for scheduled time or stop signal
+            if self._stop_event.wait(wait_seconds):
+                break  # Stop event was set
+
+            if not self._stop_event.is_set():
+                try:
+                    self.sync()
+                except Exception as e:
+                    logger.error(f"Scheduled calendar sync failed: {e}")
+
+    def start_time_scheduler(
+        self,
+        schedule_times: list[tuple[int, int]] = [(8, 0), (12, 0), (15, 0)],
+        timezone: str = "America/New_York",
+        skip_initial_sync: bool = True
+    ):
+        """
+        Start the background sync scheduler at specific times of day.
+
+        Args:
+            schedule_times: List of (hour, minute) tuples in 24-hour format
+                           Default: 8:00 AM, 12:00 PM, 3:00 PM
+            timezone: IANA timezone string (default: America/New_York for Eastern)
+            skip_initial_sync: Skip initial sync on startup (default: True to avoid blocking)
+        """
+        if self._scheduler_thread and self._scheduler_thread.is_alive():
+            logger.warning("Scheduler already running")
+            return
+
+        self._stop_event.clear()
+        self._scheduler_thread = threading.Thread(
+            target=self._time_scheduler_loop,
+            args=(schedule_times, timezone, skip_initial_sync),
+            daemon=True,
+            name="CalendarIndexerScheduler"
+        )
+        self._scheduler_thread.start()
+
+        times_str = ", ".join(f"{h:02d}:{m:02d}" for h, m in schedule_times)
+        logger.info(f"Calendar sync scheduler started (times: {times_str} {timezone})")
 
     def get_status(self) -> dict:
         """Get scheduler status."""

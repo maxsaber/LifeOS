@@ -253,3 +253,89 @@ class TestAccessibility:
         # Just verify colors are set (detailed contrast check would need more logic)
         assert body_color, "Text color should be set"
         assert body_bg, "Background color should be set"
+
+
+class TestAttachmentUI:
+    """Test attachment UI functionality."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, page: Page):
+        """Navigate to app."""
+        page.set_viewport_size(DESKTOP_VIEWPORT)
+        page.goto("http://localhost:8000")
+        page.wait_for_selector(".welcome")
+
+    def test_attach_button_visible(self, page: Page):
+        """Attach button should be visible next to send button."""
+        attach_btn = page.locator(".attach-btn")
+        expect(attach_btn).to_be_visible()
+        expect(attach_btn).to_have_attribute("title", "Attach files")
+
+    def test_attach_button_size(self, page: Page):
+        """Attach button should meet minimum touch target size."""
+        attach_btn = page.locator(".attach-btn")
+        box = attach_btn.bounding_box()
+        assert box["width"] >= 44, f"Attach button too narrow: {box['width']}px"
+        assert box["height"] >= 44, f"Attach button too short: {box['height']}px"
+
+    def test_file_input_hidden(self, page: Page):
+        """File input should be hidden (used programmatically)."""
+        file_input = page.locator("#fileInput")
+        expect(file_input).to_be_hidden()
+
+    def test_file_input_accepts_correct_types(self, page: Page):
+        """File input should accept correct file types."""
+        file_input = page.locator("#fileInput")
+        accept = file_input.get_attribute("accept")
+        # Check for key file types
+        assert "image/png" in accept, "Should accept PNG images"
+        assert "image/jpeg" in accept, "Should accept JPEG images"
+        assert "application/pdf" in accept, "Should accept PDFs"
+        assert "text/plain" in accept, "Should accept text files"
+
+    def test_attachments_preview_hidden_by_default(self, page: Page):
+        """Attachments preview area should be hidden when empty."""
+        preview = page.locator("#attachmentsPreview")
+        expect(preview).not_to_have_class("visible")
+
+    def test_drag_over_highlights_input_area(self, page: Page):
+        """Dragging file over input area should show visual feedback."""
+        input_area = page.locator("#inputArea")
+
+        # Simulate drag enter event
+        input_area.dispatch_event("dragenter", {
+            "dataTransfer": {"files": []}
+        })
+
+        # Check for drag-over class
+        expect(input_area).to_have_class("input-area drag-over")
+
+    def test_attach_button_keyboard_accessible(self, page: Page):
+        """Attach button should be keyboard accessible."""
+        attach_btn = page.locator(".attach-btn")
+        # Should be focusable
+        attach_btn.focus()
+        expect(attach_btn).to_be_focused()
+
+
+class TestAttachmentMobileUI:
+    """Test attachment UI on mobile viewport."""
+
+    @pytest.fixture(autouse=True)
+    def setup(self, page: Page):
+        """Set mobile viewport and navigate to app."""
+        page.set_viewport_size(MOBILE_VIEWPORT)
+        page.goto("http://localhost:8000")
+        page.wait_for_selector(".welcome")
+
+    def test_attach_button_visible_on_mobile(self, page: Page):
+        """Attach button should be visible on mobile."""
+        attach_btn = page.locator(".attach-btn")
+        expect(attach_btn).to_be_visible()
+
+    def test_attach_button_touch_target_mobile(self, page: Page):
+        """Attach button should have adequate touch target on mobile."""
+        attach_btn = page.locator(".attach-btn")
+        box = attach_btn.bounding_box()
+        assert box["width"] >= 44, f"Attach button too small for touch: {box['width']}px"
+        assert box["height"] >= 44, f"Attach button too small for touch: {box['height']}px"

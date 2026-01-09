@@ -37,12 +37,16 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to start Granola processor: {e}")
 
-    # Startup: Initialize and start Calendar indexer with daily sync
+    # Startup: Initialize and start Calendar indexer at specific times (Eastern)
     try:
         from api.services.calendar_indexer import get_calendar_indexer
         _calendar_indexer = get_calendar_indexer()
-        _calendar_indexer.start_scheduler(interval_hours=24.0)
-        logger.info("Calendar indexer scheduler started (24h interval)")
+        # Sync at 8 AM, noon, and 3 PM Eastern
+        _calendar_indexer.start_time_scheduler(
+            schedule_times=[(8, 0), (12, 0), (15, 0)],
+            timezone="America/New_York"
+        )
+        logger.info("Calendar indexer scheduler started (8:00, 12:00, 15:00 Eastern)")
     except Exception as e:
         logger.error(f"Failed to start Calendar indexer: {e}")
 
