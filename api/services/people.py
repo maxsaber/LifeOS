@@ -48,7 +48,7 @@ PEOPLE_DICTIONARY = {
     },
     "Madi": {
         "canonical": "Madi",
-        "aliases": ["madi", "Maddie"], # Common misspelling
+        "aliases": ["madi", "Maddie", "Madeline", "Madeline Eden", "Madi Eden"],
         "category": "work"
     },
     "Hayley": {
