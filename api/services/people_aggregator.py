@@ -685,12 +685,12 @@ def extract_gmail_contacts(gmail_service, days_back: int = 730) -> list[dict]:
                             contacts[email] = {
                                 'email': email,
                                 'name': name,
-                                'last_contact': msg.date,
+                                'last_contact': _make_aware(msg.date),
                                 'email_count': 0,
                             }
                         contacts[email]['email_count'] += 1
-                        if msg.date > contacts[email]['last_contact']:
-                            contacts[email]['last_contact'] = msg.date
+                        if _is_newer(msg.date, contacts[email]['last_contact']):
+                            contacts[email]['last_contact'] = _make_aware(msg.date)
 
         # Also search received emails
         messages = gmail_service.search(
@@ -708,12 +708,12 @@ def extract_gmail_contacts(gmail_service, days_back: int = 730) -> list[dict]:
                     contacts[email] = {
                         'email': email,
                         'name': name,
-                        'last_contact': msg.date,
+                        'last_contact': _make_aware(msg.date),
                         'email_count': 0,
                     }
                 contacts[email]['email_count'] += 1
-                if msg.date > contacts[email]['last_contact']:
-                    contacts[email]['last_contact'] = msg.date
+                if _is_newer(msg.date, contacts[email]['last_contact']):
+                    contacts[email]['last_contact'] = _make_aware(msg.date)
 
     except Exception as e:
         logger.error(f"Failed to extract Gmail contacts: {e}")
@@ -762,11 +762,11 @@ def extract_calendar_attendees(calendar_service, days_back: int = 365) -> list[d
                         'name': name,
                         'email': email,
                         'meeting_count': 0,
-                        'last_meeting': event.start_time,
+                        'last_meeting': _make_aware(event.start_time),
                     }
                 attendees[key]['meeting_count'] += 1
-                if event.start_time > attendees[key]['last_meeting']:
-                    attendees[key]['last_meeting'] = event.start_time
+                if _is_newer(event.start_time, attendees[key]['last_meeting']):
+                    attendees[key]['last_meeting'] = _make_aware(event.start_time)
 
     except Exception as e:
         logger.error(f"Failed to extract calendar attendees: {e}")

@@ -9,7 +9,7 @@ Implements three-pass entity resolution:
 import logging
 import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -28,6 +28,15 @@ from config.people_config import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _make_aware(dt: datetime) -> datetime:
+    """Ensure datetime is timezone-aware (UTC)."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 @dataclass
@@ -207,7 +216,7 @@ class EntityResolver:
 
             # Recency boost
             if entity.last_seen:
-                days_since = (datetime.now() - entity.last_seen).days
+                days_since = (datetime.now(timezone.utc) - _make_aware(entity.last_seen)).days
                 if days_since < EntityResolutionConfig.RECENCY_THRESHOLD_DAYS:
                     score += EntityResolutionConfig.RECENCY_BOOST_POINTS
 
@@ -274,8 +283,8 @@ class EntityResolver:
             display_name=name,
             vault_contexts=vault_contexts,
             category=category,
-            first_seen=datetime.now(),
-            last_seen=datetime.now(),
+            first_seen=datetime.now(timezone.utc),
+            last_seen=datetime.now(timezone.utc),
         )
 
         stored = self._store.add(entity)
@@ -318,8 +327,8 @@ class EntityResolver:
             display_name=display_name,
             vault_contexts=vault_contexts,
             category=category,
-            first_seen=datetime.now(),
-            last_seen=datetime.now(),
+            first_seen=datetime.now(timezone.utc),
+            last_seen=datetime.now(timezone.utc),
             confidence_score=0.7,  # Slightly lower for disambiguated
         )
 
@@ -444,8 +453,8 @@ class EntityResolver:
                 emails=[email.lower()],
                 vault_contexts=vault_contexts,
                 category=category,
-                first_seen=datetime.now(),
-                last_seen=datetime.now(),
+                first_seen=datetime.now(timezone.utc),
+                last_seen=datetime.now(timezone.utc),
             )
 
             stored = self._store.add(entity)
@@ -590,8 +599,8 @@ class EntityResolver:
             vault_contexts=vault_contexts,
             category=category,
             sources=["linkedin"],
-            first_seen=datetime.now(),
-            last_seen=datetime.now(),
+            first_seen=datetime.now(timezone.utc),
+            last_seen=datetime.now(timezone.utc),
         )
 
         stored = self._store.add(entity)

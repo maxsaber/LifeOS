@@ -178,8 +178,13 @@ class TestPersonEntity:
         assert restored.category == original.category
         assert restored.vault_contexts == original.vault_contexts
         assert restored.sources == original.sources
-        assert restored.first_seen == original.first_seen
-        assert restored.last_seen == original.last_seen
+        # Datetimes are normalized to UTC-aware after serialization roundtrip
+        # So we compare the timestamp values (year, month, day, hour, minute, second)
+        assert restored.first_seen.replace(tzinfo=None) == original.first_seen.replace(tzinfo=None)
+        assert restored.last_seen.replace(tzinfo=None) == original.last_seen.replace(tzinfo=None)
+        # Restored datetimes should be timezone-aware
+        assert restored.first_seen.tzinfo is not None
+        assert restored.last_seen.tzinfo is not None
         assert restored.meeting_count == original.meeting_count
         assert restored.email_count == original.email_count
         assert restored.mention_count == original.mention_count
@@ -455,3 +460,56 @@ class TestPersonEntityStore:
 
         temp_store.add(PersonEntity(canonical_name="Two", emails=["two@test.com"]))
         assert temp_store.count() == 2
+
+
+class TestTimezoneHandling:
+    """Tests for timezone-aware datetime handling."""
+
+    def test_from_dict_naive_datetime_becomes_aware(self):
+        """Test that naive datetime strings become timezone-aware."""
+        data = {
+            "id": "test-id",
+            "canonical_name": "Test Person",
+            "emails": ["test@test.com"],
+            "first_seen": "2024-01-15T10:30:00",  # No timezone
+            "last_seen": "2024-06-01T14:00:00",   # No timezone
+        }
+        entity = PersonEntity.from_dict(data)
+        assert entity.first_seen.tzinfo is not None
+        assert entity.last_seen.tzinfo is not None
+
+    def test_from_dict_aware_datetime_preserved(self):
+        """Test that timezone-aware datetime strings are preserved."""
+        data = {
+            "id": "test-id",
+            "canonical_name": "Test Person",
+            "emails": ["test@test.com"],
+            "first_seen": "2024-01-15T10:30:00+00:00",
+            "last_seen": "2024-06-01T14:00:00-05:00",
+        }
+        entity = PersonEntity.from_dict(data)
+        assert entity.first_seen.tzinfo is not None
+        assert entity.last_seen.tzinfo is not None
+
+    def test_merge_mixed_timezone_datetimes(self):
+        """Test merging entities with mixed timezone awareness."""
+        from datetime import datetime, timezone
+
+        entity1 = PersonEntity(
+            id="id1",
+            canonical_name="Test",
+            emails=["test1@test.com"],
+            first_seen=datetime(2024, 1, 1),  # Naive
+            last_seen=datetime(2024, 6, 1),   # Naive
+        )
+        entity2 = PersonEntity(
+            id="id2",
+            canonical_name="Test",
+            emails=["test2@test.com"],
+            first_seen=datetime(2023, 6, 1, tzinfo=timezone.utc),  # Aware, earlier
+            last_seen=datetime(2024, 12, 1, tzinfo=timezone.utc),  # Aware, later
+        )
+        # Should NOT raise TypeError
+        merged = entity1.merge(entity2)
+        assert merged.first_seen.year == 2023  # Earlier
+        assert merged.last_seen.month == 12  # Later

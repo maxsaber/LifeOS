@@ -82,7 +82,13 @@ class TestInteraction:
         restored = Interaction.from_dict(data)
         assert restored.id == original.id
         assert restored.person_id == original.person_id
-        assert restored.timestamp == original.timestamp
+        # Datetimes are normalized to UTC-aware after serialization roundtrip
+        # So we compare the timestamp values (year, month, day, hour, minute, second)
+        assert restored.timestamp.replace(tzinfo=None) == original.timestamp.replace(tzinfo=None)
+        assert restored.created_at.replace(tzinfo=None) == original.created_at.replace(tzinfo=None)
+        # Restored datetimes should be timezone-aware
+        assert restored.timestamp.tzinfo is not None
+        assert restored.created_at.tzinfo is not None
         assert restored.source_type == original.source_type
         assert restored.title == original.title
         assert restored.snippet == original.snippet
@@ -466,3 +472,40 @@ class TestInteractionFactories:
         )
 
         assert interaction.source_type == "granola"
+
+
+class TestTimezoneHandling:
+    """Tests for timezone-aware datetime handling."""
+
+    def test_from_dict_naive_datetime_becomes_aware(self):
+        """Test that naive datetime strings become timezone-aware."""
+        data = {
+            "id": "test-id",
+            "person_id": "person-123",
+            "timestamp": "2024-06-15T10:30:00",  # No timezone
+            "source_type": "gmail",
+            "title": "Test Email",
+            "source_link": "https://example.com",
+            "source_id": "msg-123",
+            "created_at": "2024-06-15T11:00:00",  # No timezone
+        }
+        interaction = Interaction.from_dict(data)
+        assert interaction.timestamp.tzinfo is not None
+        assert interaction.created_at.tzinfo is not None
+
+    def test_from_row_naive_datetime_becomes_aware(self):
+        """Test that naive datetime from SQLite becomes timezone-aware."""
+        row = (
+            "id-1",
+            "person-123",
+            "2024-06-15T10:30:00",  # Naive timestamp
+            "calendar",
+            "Meeting Title",
+            "Snippet text",
+            "https://example.com",
+            "event-123",
+            "2024-06-15T11:00:00",  # Naive created_at
+        )
+        interaction = Interaction.from_row(row)
+        assert interaction.timestamp.tzinfo is not None
+        assert interaction.created_at.tzinfo is not None

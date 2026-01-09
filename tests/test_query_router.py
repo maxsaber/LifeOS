@@ -397,3 +397,41 @@ class TestRouterIntegration:
 
         # First call may be slow (model loading), but should still be reasonable
         assert result.latency_ms < 5000, f"Latency too high: {result.latency_ms}ms"
+
+
+class TestPeopleRouting:
+    """Tests for people query routing."""
+
+    @pytest.fixture
+    def router(self):
+        from api.services.query_router import QueryRouter
+        return QueryRouter()
+
+    def test_extract_person_name_prep_for_meeting(self, router):
+        """Test extracting name from 'prep me for meeting with X'."""
+        name = router._extract_person_name("prep me for meeting with Kevin")
+        assert name == "Kevin"
+
+    def test_extract_person_name_full_name(self, router):
+        """Test extracting full name."""
+        name = router._extract_person_name("tell me about Kevin Chen")
+        assert name == "Kevin Chen"
+
+    def test_extract_person_name_who_is(self, router):
+        """Test extracting name from 'who is X'."""
+        name = router._extract_person_name("who is Sarah Miller")
+        assert name == "Sarah Miller"
+
+    def test_extract_person_name_no_match(self, router):
+        """Test that non-people queries return None."""
+        name = router._extract_person_name("what meetings do I have tomorrow")
+        assert name is None
+
+    @pytest.mark.asyncio
+    async def test_people_keywords_route_to_people_source(self, router):
+        """Test that people keywords route to people source."""
+        # Mock Ollama as unavailable to use keyword fallback
+        with patch.object(router.ollama_client, 'is_available', return_value=False):
+            result = await router.route("prep me for meeting with Kevin")
+        assert "people" in result.sources
+        assert "calendar" in result.sources

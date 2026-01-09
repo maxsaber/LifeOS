@@ -49,6 +49,7 @@ class RoutingResult:
     latency_ms: int
     recommended_model: str = "sonnet"  # "haiku", "sonnet", or "opus"
     complexity_score: float = 0.5  # 0.0-1.0
+    extracted_person_name: Optional[str] = None
 
 
 class QueryRouter:
@@ -67,6 +68,22 @@ class QueryRouter:
             ollama_client: Optional custom Ollama client (default creates new one)
         """
         self.ollama_client = ollama_client or OllamaClient()
+
+    def _extract_person_name(self, query: str) -> Optional[str]:
+        """Extract person name from a people-related query."""
+        patterns = [
+            r"prep(?:are)?\s+(?:me\s+)?for\s+(?:meeting|call|1[:\-]1)\s+with\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+            r"tell\s+me\s+about\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+            r"who\s+is\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+            r"background\s+on\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+            r"briefing\s+(?:on|for)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+            r"meeting\s+with\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, query, re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        return None
 
     async def route(self, query: str) -> RoutingResult:
         """
@@ -240,6 +257,8 @@ class QueryRouter:
             reasons.append("people keywords")
             # Also search vault for people context
             sources.add("vault")
+            # Also search calendar for meeting history and email lookup
+            sources.add("calendar")
 
         # Action keywords
         action_keywords = [

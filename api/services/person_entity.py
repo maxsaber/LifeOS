@@ -12,7 +12,7 @@ import json
 import logging
 import uuid
 from dataclasses import dataclass, field, asdict
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, TYPE_CHECKING
 
@@ -20,6 +20,15 @@ if TYPE_CHECKING:
     from api.services.people_aggregator import PersonRecord
 
 logger = logging.getLogger(__name__)
+
+
+def _make_aware(dt: Optional[datetime]) -> Optional[datetime]:
+    """Ensure datetime is timezone-aware (UTC if naive)."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 @dataclass
@@ -114,16 +123,16 @@ class PersonEntity:
         # Combine vault contexts
         vault_contexts = list(set(self.vault_contexts + other.vault_contexts))
 
-        # Take earliest first_seen
+        # Take earliest first_seen (use _make_aware for safe comparison)
         first_seen = self.first_seen
         if other.first_seen:
-            if first_seen is None or other.first_seen < first_seen:
+            if first_seen is None or _make_aware(other.first_seen) < _make_aware(first_seen):
                 first_seen = other.first_seen
 
-        # Take latest last_seen
+        # Take latest last_seen (use _make_aware for safe comparison)
         last_seen = self.last_seen
         if other.last_seen:
-            if last_seen is None or other.last_seen > last_seen:
+            if last_seen is None or _make_aware(other.last_seen) > _make_aware(last_seen):
                 last_seen = other.last_seen
 
         # Sum counts
@@ -182,11 +191,13 @@ class PersonEntity:
     @classmethod
     def from_dict(cls, data: dict) -> "PersonEntity":
         """Create PersonEntity from dict."""
-        # Parse datetime strings
+        # Parse datetime strings and ensure timezone-aware
         if data.get("first_seen") and isinstance(data["first_seen"], str):
-            data["first_seen"] = datetime.fromisoformat(data["first_seen"])
+            dt = datetime.fromisoformat(data["first_seen"])
+            data["first_seen"] = _make_aware(dt)
         if data.get("last_seen") and isinstance(data["last_seen"], str):
-            data["last_seen"] = datetime.fromisoformat(data["last_seen"])
+            dt = datetime.fromisoformat(data["last_seen"])
+            data["last_seen"] = _make_aware(dt)
         return cls(**data)
 
     @classmethod

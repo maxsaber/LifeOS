@@ -9,7 +9,7 @@ import json
 import uuid
 import logging
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 from urllib.parse import quote
@@ -18,6 +18,15 @@ from config.settings import settings
 from config.people_config import InteractionConfig
 
 logger = logging.getLogger(__name__)
+
+
+def _make_aware(dt: Optional[datetime]) -> Optional[datetime]:
+    """Ensure datetime is timezone-aware (UTC if naive)."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
 
 
 def get_interaction_db_path() -> str:
@@ -62,24 +71,32 @@ class Interaction:
     def from_dict(cls, data: dict) -> "Interaction":
         """Create Interaction from dict."""
         if isinstance(data.get("timestamp"), str):
-            data["timestamp"] = datetime.fromisoformat(data["timestamp"])
+            dt = datetime.fromisoformat(data["timestamp"])
+            data["timestamp"] = _make_aware(dt)
         if isinstance(data.get("created_at"), str):
-            data["created_at"] = datetime.fromisoformat(data["created_at"])
+            dt = datetime.fromisoformat(data["created_at"])
+            data["created_at"] = _make_aware(dt)
         return cls(**data)
 
     @classmethod
     def from_row(cls, row: tuple) -> "Interaction":
         """Create Interaction from SQLite row."""
+        # Parse and normalize timestamps to be timezone-aware
+        timestamp = datetime.fromisoformat(row[2]) if row[2] else datetime.now(timezone.utc)
+        timestamp = _make_aware(timestamp)
+        created_at = datetime.fromisoformat(row[8]) if row[8] else datetime.now(timezone.utc)
+        created_at = _make_aware(created_at)
+
         return cls(
             id=row[0],
             person_id=row[1],
-            timestamp=datetime.fromisoformat(row[2]) if row[2] else datetime.now(),
+            timestamp=timestamp,
             source_type=row[3],
             title=row[4],
             snippet=row[5],
             source_link=row[6] or "",
             source_id=row[7],
-            created_at=datetime.fromisoformat(row[8]) if row[8] else datetime.now(),
+            created_at=created_at,
         )
 
     @property
@@ -533,7 +550,7 @@ class InteractionStore:
 
         last_str = ""
         if last:
-            days_ago = (datetime.now() - last.timestamp).days
+            days_ago = (datetime.now(timezone.utc) - _make_aware(last.timestamp)).days
             if days_ago == 0:
                 last_str = "today"
             elif days_ago == 1:

@@ -21,6 +21,7 @@ from api.services.calendar import CalendarService
 from api.services.drive import DriveService
 from api.services.gmail import GmailService
 from api.services.usage_store import get_usage_store
+from api.services.briefings import get_briefings_service
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -506,6 +507,67 @@ async def ask_stream(request: AskStreamRequest):
                     mod_date = chunk.get('modified_date', 'unknown')
                     print(f"  {i+1}. {fn} ({mod_date})")
                     print(f"      combined={score:.3f} semantic={semantic:.3f} recency={recency:.3f}")
+
+            # Handle people queries - generate stakeholder briefings
+            if "people" in routing_result.sources:
+                print("PROCESSING PEOPLE QUERY...")
+
+                # Extract person name from query
+                person_name = query_router._extract_person_name(request.question)
+                person_email = None
+
+                if person_name:
+                    print(f"  Extracted person name: {person_name}")
+
+                    # Search calendar for person's email (7 days back and forward)
+                    from api.services.google_auth import GoogleAccount
+
+                    for account_type in [GoogleAccount.PERSONAL, GoogleAccount.WORK]:
+                        try:
+                            calendar = CalendarService(account_type)
+                            events = calendar.search_events(
+                                attendee=person_name,
+                                days_forward=7,
+                                days_back=7
+                            )
+                            for event in events:
+                                for attendee in event.attendees:
+                                    if '@' in attendee:
+                                        # Check if name appears in email or we have a name match
+                                        if person_name.lower() in attendee.lower():
+                                            person_email = attendee
+                                            break
+                                if person_email:
+                                    break
+                            if person_email:
+                                break
+                        except Exception as e:
+                            print(f"  Calendar search error ({account_type.value}): {e}")
+
+                    if person_email:
+                        print(f"  Found email from calendar: {person_email}")
+
+                    # Generate briefing
+                    try:
+                        briefing_service = get_briefings_service()
+                        briefing_result = await briefing_service.generate_briefing(
+                            person_name,
+                            email=person_email
+                        )
+
+                        if briefing_result.get("status") == "success":
+                            briefing_text = briefing_result.get("briefing", "")
+                            extra_context.append({
+                                "source": "people_briefing",
+                                "content": f"## Stakeholder Briefing: {person_name}\n\n{briefing_text}",
+                                "metadata": briefing_result.get("metadata", {})
+                            })
+                            print(f"  Generated briefing with {briefing_result.get('notes_count', 0)} notes")
+                        else:
+                            print(f"  Briefing failed: {briefing_result.get('message')}")
+                    except Exception as e:
+                        print(f"  Briefing generation error: {e}")
+                        logger.error(f"Failed to generate briefing for {person_name}: {e}")
 
             print(f"{'='*60}\n")
 
