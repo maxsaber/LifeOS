@@ -454,6 +454,28 @@
             color: var(--accent-hover);
         }
 
+        /* Collapsible sources */
+        .sources.collapsed .source-link:nth-child(n+4) {
+            display: none;
+        }
+
+        .sources-toggle {
+            display: inline-flex;
+            align-items: center;
+            padding: 0.375rem 0.625rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: color 0.2s;
+            background: none;
+            border: none;
+            min-height: 32px;
+        }
+
+        .sources-toggle:hover {
+            color: var(--text-secondary);
+        }
+
         .meta-actions {
             display: flex;
             gap: 0.5rem;
@@ -1216,6 +1238,32 @@
             color: var(--text-muted);
             font-size: 0.875rem;
         }
+
+        /* Conversation search */
+        .conversation-search {
+            padding: 0.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .conversation-search-input {
+            width: 100%;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.8125rem;
+            font-family: inherit;
+        }
+
+        .conversation-search-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .conversation-search-input::placeholder {
+            color: var(--text-muted);
+        }
     </style>
 </head>
 <body>
@@ -1227,6 +1275,9 @@
         <div class="sidebar-header">
             <h1>LifeOS</h1>
             <button class="new-chat-btn" onclick="newChat()" title="New chat">+</button>
+        </div>
+        <div class="conversation-search">
+            <input type="text" class="conversation-search-input" id="conversationSearch" placeholder="Search conversations..." oninput="filterConversations()">
         </div>
         <div class="conversations-list" id="conversationsList">
             <div class="empty-conversations">No conversations yet</div>
@@ -1380,6 +1431,7 @@
         let currentConversationId = null;
         let sessionCost = 0;
         let attachments = []; // Array of {file, dataUrl, filename, mediaType, sizeBytes}
+        let allConversations = []; // Store all conversations for filtering
 
         // Attachment configuration
         const ALLOWED_TYPES = {
@@ -1720,16 +1772,84 @@
                 const response = await fetch('/api/conversations');
                 if (response.ok) {
                     const data = await response.json();
-                    renderConversations(data.conversations || []);
+                    allConversations = data.conversations || [];
+                    filterConversations(); // Apply current search filter
                 }
             } catch (e) {
                 console.log('Could not load conversations');
             }
         }
 
-        function renderConversations(conversations) {
-            if (conversations.length === 0) {
-                conversationsList.innerHTML = '<div class="empty-conversations">No conversations yet</div>';
+        // Cache for conversation messages (for search)
+        const conversationMessagesCache = {};
+        let searchDebounceTimer = null;
+
+        function filterConversations() {
+            const searchInput = document.getElementById('conversationSearch');
+            const searchTerm = (searchInput?.value || '').toLowerCase().trim();
+
+            if (!searchTerm) {
+                renderConversations(allConversations);
+                return;
+            }
+
+            // Debounce the search to avoid too many API calls
+            clearTimeout(searchDebounceTimer);
+            searchDebounceTimer = setTimeout(() => filterConversationsAsync(searchTerm), 200);
+        }
+
+        async function filterConversationsAsync(searchTerm) {
+            // First, filter by title (immediate results)
+            const titleMatches = allConversations.filter(conv => {
+                const title = (conv.title || 'New conversation').toLowerCase();
+                return title.includes(searchTerm);
+            });
+
+            // Show title matches immediately
+            renderConversations(titleMatches, true);
+
+            // Then search in message content for remaining conversations
+            const nonTitleMatches = allConversations.filter(conv => {
+                const title = (conv.title || 'New conversation').toLowerCase();
+                return !title.includes(searchTerm);
+            });
+
+            // Fetch and search message content
+            const messageMatches = [];
+            for (const conv of nonTitleMatches) {
+                try {
+                    // Use cache if available
+                    if (!conversationMessagesCache[conv.id]) {
+                        const response = await fetch(`/api/conversations/${conv.id}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            conversationMessagesCache[conv.id] = data.messages || [];
+                        }
+                    }
+
+                    const messages = conversationMessagesCache[conv.id] || [];
+                    const hasMatch = messages.some(msg =>
+                        (msg.content || '').toLowerCase().includes(searchTerm)
+                    );
+                    if (hasMatch) {
+                        messageMatches.push(conv);
+                    }
+                } catch (e) {
+                    // Skip conversations we can't fetch
+                }
+            }
+
+            // Combine results: title matches first, then message matches
+            const allMatches = [...titleMatches, ...messageMatches];
+            renderConversations(allMatches);
+        }
+
+        function renderConversations(conversations, isPartial = false) {
+            if (conversations.length === 0 && !isPartial) {
+                const searchInput = document.getElementById('conversationSearch');
+                const isSearching = searchInput?.value?.trim();
+                const emptyText = isSearching ? 'No matching conversations' : 'No conversations yet';
+                conversationsList.innerHTML = `<div class="empty-conversations">${emptyText}</div>`;
                 return;
             }
 
@@ -1738,7 +1858,7 @@
                      onclick="loadConversation('${conv.id}')">
                     <div class="conversation-icon">💬</div>
                     <div class="conversation-info">
-                        <div class="conversation-title">${escapeHtml(conv.title || 'New conversation')}</div>
+                        <div class="conversation-title" title="${escapeHtml(conv.title || 'New conversation')}">${escapeHtml(conv.title || 'New conversation')}</div>
                         <div class="conversation-date">${formatDate(conv.updated_at)}</div>
                     </div>
                     <button class="conversation-delete" onclick="event.stopPropagation(); deleteConversation('${conv.id}')" title="Delete">✕</button>
@@ -1831,7 +1951,9 @@
                 html += `<div class="message-meta">`;
 
                 if (sources.length > 0) {
-                    html += `<div class="sources">`;
+                    // Add collapsed class if more than 3 sources
+                    const collapsedClass = sources.length > 3 ? ' collapsed' : '';
+                    html += `<div class="sources${collapsedClass}">`;
                     sources.forEach(src => {
                         const fileName = src.file_name || src;
                         const sourceType = src.source_type || 'vault';
@@ -1846,6 +1968,11 @@
                             html += `<a href="${obsidianUrl}" class="source-link">📄 ${fileName}</a>`;
                         }
                     });
+                    // Add toggle button if more than 3 sources
+                    if (sources.length > 3) {
+                        const hiddenCount = sources.length - 3;
+                        html += `<button class="sources-toggle" onclick="toggleSources(this)">Show ${hiddenCount} more...</button>`;
+                    }
                     html += `</div>`;
                 }
 
@@ -1892,6 +2019,24 @@
                     btn.textContent = '📋';
                 }, 2000);
             });
+        }
+
+        function toggleSources(btn) {
+            const sourcesDiv = btn.closest('.sources');
+            const isCollapsed = sourcesDiv.classList.contains('collapsed');
+            const sourceLinks = sourcesDiv.querySelectorAll('.source-link');
+            const totalCount = sourceLinks.length;
+            const hiddenCount = totalCount - 3;
+
+            if (isCollapsed) {
+                // Expand
+                sourcesDiv.classList.remove('collapsed');
+                btn.textContent = 'Show less';
+            } else {
+                // Collapse
+                sourcesDiv.classList.add('collapsed');
+                btn.textContent = `Show ${hiddenCount} more...`;
+            }
         }
 
         async function sendMessage() {
@@ -2014,7 +2159,9 @@
                                         }
 
                                         if (sources.length > 0) {
-                                            metaHtml += '<div class="sources">';
+                                            // Add collapsed class if more than 3 sources
+                                            const collapsedClass = sources.length > 3 ? ' collapsed' : '';
+                                            metaHtml += `<div class="sources${collapsedClass}">`;
                                             sources.forEach(src => {
                                                 const fileName = src.file_name || src;
                                                 const sourceType = src.source_type || 'vault';
@@ -2029,6 +2176,11 @@
                                                     metaHtml += `<a href="${obsidianUrl}" class="source-link">📄 ${fileName}</a>`;
                                                 }
                                             });
+                                            // Add toggle button if more than 3 sources
+                                            if (sources.length > 3) {
+                                                const hiddenCount = sources.length - 3;
+                                                metaHtml += `<button class="sources-toggle" onclick="toggleSources(this)">Show ${hiddenCount} more...</button>`;
+                                            }
                                             metaHtml += '</div>';
                                         }
 
@@ -2208,11 +2360,55 @@
             }
         }
 
-        // Close modal on escape key
+        // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
+            const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+            const modKey = isMac ? e.metaKey : e.ctrlKey;
+
+            // Check if any modal is open
+            const rememberModalOpen = document.getElementById('rememberModal').classList.contains('visible');
+            const usageModalOpen = document.getElementById('usageModal').classList.contains('visible');
+            const anyModalOpen = rememberModalOpen || usageModalOpen;
+
+            // Escape - close any open modal
             if (e.key === 'Escape') {
-                closeRememberModal();
-                closeUsageModal();
+                if (rememberModalOpen) closeRememberModal();
+                if (usageModalOpen) closeUsageModal();
+                return;
+            }
+
+            // Enter - save memory when Remember modal is open
+            if (e.key === 'Enter' && !e.shiftKey && rememberModalOpen) {
+                e.preventDefault();
+                saveMemory();
+                return;
+            }
+
+            // Don't handle other shortcuts if a modal is open
+            if (anyModalOpen) return;
+
+            // Cmd/Ctrl+K - new conversation
+            if (modKey && e.key.toLowerCase() === 'k') {
+                e.preventDefault();
+                newChat();
+                return;
+            }
+
+            // Cmd/Ctrl+A - open attachment file picker (only when not in text input)
+            if (modKey && e.key.toLowerCase() === 'a') {
+                // Allow default select-all behavior in text inputs
+                const activeEl = document.activeElement;
+                const isTextInput = activeEl && (
+                    activeEl.tagName === 'INPUT' ||
+                    activeEl.tagName === 'TEXTAREA' ||
+                    activeEl.isContentEditable
+                );
+
+                if (!isTextInput) {
+                    e.preventDefault();
+                    openFilePicker();
+                }
+                return;
             }
         });
 
@@ -2372,12 +2568,62 @@
             const now = new Date();
             const diff = now - date;
 
+            // Under 1 minute: "Just now"
             if (diff < 60000) return 'Just now';
-            if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
-            if (diff < 86400000) return Math.floor(diff / 3600000) + 'h ago';
-            if (diff < 604800000) return Math.floor(diff / 86400000) + 'd ago';
 
-            return date.toLocaleDateString();
+            // Under 1 hour: "5m ago", "23m ago"
+            if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+
+            // Check if date is today (same calendar day in local timezone)
+            const isToday = date.toDateString() === now.toDateString();
+
+            // Under 24 hours AND today: "2h ago", "11h ago"
+            if (diff < 86400000 && isToday) {
+                return Math.floor(diff / 3600000) + 'h ago';
+            }
+
+            // Check if date is yesterday
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            const isYesterday = date.toDateString() === yesterday.toDateString();
+
+            // Format time as "3:15 PM"
+            const timeStr = date.toLocaleTimeString('en-US', {
+                hour: 'numeric',
+                minute: '2-digit',
+                hour12: true
+            });
+
+            // Yesterday: "Yesterday 3:15 PM"
+            if (isYesterday) {
+                return 'Yesterday ' + timeStr;
+            }
+
+            // Format month and day as "Jan 8"
+            const monthDay = date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric'
+            });
+
+            // Check if same year
+            const isSameYear = date.getFullYear() === now.getFullYear();
+
+            // This year: "Jan 8" (short) or could include time for recent dates
+            if (isSameYear) {
+                // For dates within the last week, include time
+                if (diff < 604800000) {
+                    return monthDay + ', ' + timeStr;
+                }
+                // Older this-year dates: just "Jan 8"
+                return monthDay;
+            }
+
+            // Older (different year): "Jan 8, 2025"
+            return date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+            });
         }
 
         // Initialize
