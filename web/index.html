@@ -37,6 +37,7 @@
             box-sizing: border-box;
             margin: 0;
             padding: 0;
+            touch-action: manipulation;  /* Disable iOS double-tap delay globally */
         }
 
         html, body {
@@ -721,6 +722,11 @@
             margin-top: 0.25rem;
         }
 
+        .usage-stat-card.session-card {
+            border-color: var(--accent);
+            background: var(--bg-secondary);
+        }
+
         .usage-chart-container {
             background: var(--bg-primary);
             border-radius: 8px;
@@ -732,6 +738,10 @@
         @media (max-width: 768px) {
             .usage-stats-grid {
                 grid-template-columns: repeat(2, 1fr);
+            }
+
+            .usage-stat-card.session-card {
+                grid-column: span 2;
             }
 
             .usage-modal {
@@ -797,7 +807,7 @@
 
         .input-field {
             width: 100%;
-            padding: 0.875rem 1rem;
+            padding: 0.6875rem 1rem;  /* Adjusted to match 48px button height */
             background: var(--bg-primary);
             border: 1px solid var(--border);
             border-radius: 12px;
@@ -1116,7 +1126,23 @@
             }
 
             .cost-display {
+                padding: 0.375rem 0.5rem;
+                min-width: 32px;
+                height: 32px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .cost-display .label,
+            .cost-display .amount {
                 display: none;
+            }
+
+            .cost-display::before {
+                content: '$';
+                font-weight: 600;
+                font-size: 0.875rem;
             }
 
             .header {
@@ -1218,7 +1244,7 @@
                     <span>💭</span> Remember
                 </button>
                 <div class="cost-display" id="costDisplay" onclick="openUsageModal()" title="Click to view usage stats">
-                    Session: <span class="amount" id="sessionCost">$0.00</span>
+                    <span class="label">Session:</span> <span class="amount" id="sessionCost">$0.00</span>
                 </div>
                 <div class="status">
                     <span class="status-dot" id="statusDot"></span>
@@ -1296,6 +1322,10 @@
             </div>
             <div class="modal-body">
                 <div class="usage-stats-grid">
+                    <div class="usage-stat-card session-card">
+                        <div class="usage-stat-label">This Session</div>
+                        <div class="usage-stat-value" id="usageSession">$0.00</div>
+                    </div>
                     <div class="usage-stat-card">
                         <div class="usage-stat-label">24 Hours</div>
                         <div class="usage-stat-value" id="usage24h">$0.00</div>
@@ -1384,6 +1414,50 @@
             sidebar.classList.remove('open');
             overlay.classList.remove('visible');
         }
+
+        function openSidebar() {
+            sidebar.classList.add('open');
+            overlay.classList.add('visible');
+        }
+
+        // Swipe gesture to open/close sidebar on mobile
+        (function setupSwipeGestures() {
+            let touchStartX = 0;
+            let touchStartY = 0;
+            let isSwiping = false;
+            const edgeThreshold = 30;  // px from left edge to trigger
+            const swipeThreshold = 50; // px movement to complete swipe
+
+            document.addEventListener('touchstart', (e) => {
+                touchStartX = e.touches[0].clientX;
+                touchStartY = e.touches[0].clientY;
+                // Only track swipes starting from left edge (when sidebar closed)
+                // or from sidebar area (when open)
+                isSwiping = touchStartX < edgeThreshold || sidebar.classList.contains('open');
+            }, { passive: true });
+
+            document.addEventListener('touchend', (e) => {
+                if (!isSwiping) return;
+
+                const touchEndX = e.changedTouches[0].clientX;
+                const touchEndY = e.changedTouches[0].clientY;
+                const deltaX = touchEndX - touchStartX;
+                const deltaY = Math.abs(touchEndY - touchStartY);
+
+                // Ignore if vertical movement is greater (scrolling)
+                if (deltaY > Math.abs(deltaX)) return;
+
+                if (!sidebar.classList.contains('open') && touchStartX < edgeThreshold && deltaX > swipeThreshold) {
+                    // Swipe right from left edge - open sidebar
+                    openSidebar();
+                } else if (sidebar.classList.contains('open') && deltaX < -swipeThreshold) {
+                    // Swipe left when sidebar open - close it
+                    closeSidebar();
+                }
+
+                isSwiping = false;
+            }, { passive: true });
+        })();
 
         // Scroll handling
         function setupScrollListener() {
@@ -2146,6 +2220,8 @@
 
         async function openUsageModal() {
             document.getElementById('usageModal').classList.add('visible');
+            // Show current session cost in modal
+            document.getElementById('usageSession').textContent = '$' + sessionCost.toFixed(3);
             await loadUsageStats();
         }
 
