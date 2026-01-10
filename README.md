@@ -1,51 +1,85 @@
 # LifeOS
 
-Personal assistant system for semantic search and synthesis across Obsidian vault and Google Suite.
+Personal AI assistant for semantic search and synthesis across your digital life — Obsidian notes, Google Suite, iMessage, and more.
 
 ## Overview
 
-LifeOS is a self-hosted RAG (Retrieval-Augmented Generation) system that provides intelligent search and synthesis across your personal knowledge base. It runs entirely on a Mac Mini with local embeddings, local vector database, and a local LLM for query routing.
+LifeOS is a self-hosted RAG (Retrieval-Augmented Generation) system that provides intelligent search and synthesis across your personal knowledge base. It runs on a Mac Mini with local embeddings, local vector database, and a local LLM for query routing. All your data stays local.
 
 **Key Features:**
-- Semantic search across ~4,500 Obsidian notes
-- Google Suite integration (Calendar, Gmail, Drive)
-- Local LLM query routing (Ollama + Llama 3.2)
-- Streaming chat interface with Claude synthesis
-- Recency-biased search results
-- Stakeholder briefings and people context
-- Adaptive retrieval for Google Drive (reads more content on demand)
-- Multi-account support (personal + work Google accounts)
-- Google Docs to Obsidian sync (one-way, nightly)
+- **Semantic + Keyword Search** — Hybrid search (vector + BM25) across Obsidian notes with recency bias
+- **Google Suite Integration** — Calendar, Gmail, Drive with multi-account support
+- **iMessage History** — Query your text message conversations (requires Full Disk Access)
+- **People Intelligence** — Entity resolution linking contacts across vault, email, calendar, LinkedIn, and iMessage
+- **Stakeholder Briefings** — Generate context about people before meetings
+- **Local LLM Routing** — Ollama + Llama 3.2 routes queries to relevant data sources
+- **Streaming Chat** — Claude-powered synthesis with source citations
+- **Conversation Memory** — Persistent conversations with cost tracking
+- **Save to Vault** — Save AI responses directly to Obsidian
+- **File Attachments** — Attach images and files to queries
+- **Nightly Sync** — Automated sync of all data sources at 3 AM Eastern
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Web UI                                │
-│                   (Vanilla HTML/JS)                          │
-└─────────────────────────┬───────────────────────────────────┘
-                          │ SSE Stream
-┌─────────────────────────▼───────────────────────────────────┐
-│                     FastAPI Backend                          │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
-│  │ Query Router│  │  Synthesizer│  │   Data Sources      │  │
-│  │  (Ollama)   │  │   (Claude)  │  │ ┌─────┐ ┌────────┐  │  │
-│  └──────┬──────┘  └──────┬──────┘  │ │Vault│ │Calendar│  │  │
-│         │                │         │ └─────┘ └────────┘  │  │
-│         ▼                │         │ ┌─────┐ ┌────────┐  │  │
-│  ┌─────────────┐         │         │ │Gmail│ │ Drive  │  │  │
-│  │  ChromaDB   │◄────────┘         │ └─────┘ └────────┘  │  │
-│  │(Vector Store)│                  └─────────────────────┘  │
-│  └─────────────┘                                            │
-└─────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                              Web UI (Vanilla HTML/JS)                         │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │ Chat + SSE  │  │Conversations│  │   Memories  │  │  File Attachments   │  │
+│  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+└──────────────────────────────────┬───────────────────────────────────────────┘
+                                   │ SSE Stream
+┌──────────────────────────────────▼───────────────────────────────────────────┐
+│                           FastAPI Backend                                     │
+│                                                                               │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                         Query Router (Ollama)                          │  │
+│  │                      Routes to relevant data sources                   │  │
+│  └────────────────────────────────┬───────────────────────────────────────┘  │
+│                                   │                                           │
+│  ┌────────────────────────────────▼───────────────────────────────────────┐  │
+│  │                        Hybrid Search Engine                            │  │
+│  │  ┌─────────────────┐           ┌─────────────────┐                     │  │
+│  │  │ ChromaDB        │           │ BM25 Index      │                     │  │
+│  │  │ (Vector Search) │           │ (Keyword Search)│                     │  │
+│  │  └─────────────────┘           └─────────────────┘                     │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                               │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                          Data Sources                                  │  │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐          │  │
+│  │  │ Vault   │ │ Gmail   │ │Calendar │ │  Drive  │ │iMessage │          │  │
+│  │  │(Obsidian)│ │         │ │         │ │         │ │         │          │  │
+│  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘          │  │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐                                  │  │
+│  │  │ People  │ │ Actions │ │Memories │                                  │  │
+│  │  │(Entity) │ │ (Tasks) │ │         │                                  │  │
+│  │  └─────────┘ └─────────┘ └─────────┘                                  │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                               │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                         Synthesizer (Claude)                           │  │
+│  │              Generates responses with source citations                 │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+│                                                                               │
+│  ┌────────────────────────────────────────────────────────────────────────┐  │
+│  │                       Nightly Sync (3 AM Eastern)                      │  │
+│  │   Vault Reindex → LinkedIn → Gmail → Calendar → GDocs → iMessage      │  │
+│  └────────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Components:**
-- **Embeddings**: sentence-transformers (`all-MiniLM-L6-v2`) - local
-- **Vector DB**: ChromaDB - local
-- **Query Router**: Ollama + Llama 3.2 3B - local
-- **Synthesis**: Claude API (Anthropic)
-- **Backend**: FastAPI + Python 3.13
+**Core Components:**
+| Component | Technology | Location |
+|-----------|------------|----------|
+| Embeddings | sentence-transformers (`all-MiniLM-L6-v2`) | Local |
+| Vector DB | ChromaDB | Local |
+| Keyword Index | BM25 (rank_bm25) | Local |
+| Query Router | Ollama + Llama 3.2 3B | Local |
+| Synthesis | Claude API (Anthropic) | Cloud |
+| Backend | FastAPI + Python 3.13 | Local |
+| iMessage DB | SQLite (macOS Messages) | Local |
+| Storage | SQLite (conversations, costs, entities) | Local |
 
 ## Quick Start
 
@@ -227,8 +261,12 @@ pytest tests/test_e2e_flow.py::TestRealUserFlow -v --browser chromium
 | `test_e2e_flow.py` | E2E flow & error handling | 12 |
 | `test_ui_browser.py` | Playwright UI tests | 25 |
 | `test_gdoc_sync.py` | Google Docs sync | 17 |
+| `test_imessage.py` | iMessage integration | 15 |
+| `test_phone_utils.py` | Phone normalization | 8 |
+| `test_person_entity.py` | PersonEntity store | 12 |
+| `test_entity_resolver.py` | Entity resolution | 14 |
 
-**Total: 388+ tests**
+**Total: 580+ tests**
 
 ### Pre-commit Hook
 
@@ -250,38 +288,72 @@ The hook will:
 ```
 LifeOS/
 ├── api/
-│   ├── main.py              # FastAPI application
+│   ├── main.py                    # FastAPI app + nightly sync scheduler
 │   ├── routes/
-│   │   ├── chat.py          # /api/ask/stream endpoint
-│   │   ├── search.py        # /api/search endpoint
-│   │   ├── calendar.py      # Calendar endpoints
-│   │   ├── gmail.py         # Gmail endpoints
-│   │   ├── drive.py         # Drive endpoints
-│   │   ├── people.py        # People/briefings endpoints
-│   │   └── admin.py         # Admin endpoints
+│   │   ├── chat.py                # /api/ask/stream (SSE streaming)
+│   │   ├── search.py              # /api/search (vector + keyword)
+│   │   ├── calendar.py            # Google Calendar endpoints
+│   │   ├── gmail.py               # Gmail endpoints
+│   │   ├── drive.py               # Google Drive endpoints
+│   │   ├── people.py              # People/briefings endpoints
+│   │   └── admin.py               # Admin/health endpoints
 │   └── services/
-│       ├── vectorstore.py   # ChromaDB operations
-│       ├── indexer.py       # Document indexing
-│       ├── chunking.py      # Text chunking
-│       ├── embeddings.py    # Embedding generation
-│       ├── synthesizer.py   # Claude synthesis
-│       ├── ollama_client.py # Local LLM client
-│       ├── query_router.py  # Query routing logic
-│       ├── google_auth.py   # OAuth handling
-│       └── ...
+│       ├── vectorstore.py         # ChromaDB operations
+│       ├── bm25_index.py          # Keyword search index
+│       ├── hybrid_search.py       # Combined vector + BM25 search
+│       ├── indexer.py             # Document indexing
+│       ├── chunker.py             # Text chunking
+│       ├── embeddings.py          # Embedding generation
+│       ├── synthesizer.py         # Claude synthesis
+│       ├── query_router.py        # LLM query routing
+│       ├── ollama_client.py       # Ollama client
+│       ├── google_auth.py         # Google OAuth
+│       ├── calendar.py            # Calendar API
+│       ├── calendar_indexer.py    # Calendar event indexing
+│       ├── gmail.py               # Gmail API
+│       ├── drive.py               # Drive API
+│       ├── gdoc_sync.py           # Google Docs → Obsidian sync
+│       ├── imessage.py            # iMessage export/query
+│       ├── phone_utils.py         # Phone number normalization
+│       ├── person_entity.py       # PersonEntity store
+│       ├── entity_resolver.py     # Fuzzy name matching
+│       ├── people.py              # People extraction
+│       ├── people_aggregator.py   # Multi-source people aggregation
+│       ├── briefings.py           # Stakeholder briefing synthesis
+│       ├── actions.py             # Action item extraction
+│       ├── conversation_store.py  # Conversation persistence
+│       ├── memory_store.py        # User memories
+│       ├── cost_tracker.py        # API cost tracking
+│       ├── interaction_store.py   # People interaction tracking
+│       ├── granola_processor.py   # Granola meeting notes
+│       ├── model_selector.py      # Claude model selection
+│       └── resilience.py          # Error handling/retries
 ├── config/
-│   ├── settings.py          # Application settings
-│   ├── gdoc_sync.yaml       # Google Docs sync mappings
+│   ├── settings.py                # Application settings
+│   ├── gdoc_sync.yaml             # Google Docs sync config
+│   ├── people_dictionary.json     # Known people (gitignored)
+│   ├── people_dictionary.example.json  # Template
 │   └── prompts/
-│       └── query_router.txt # Router prompt (editable)
+│       └── query_router.txt       # Router prompt (editable)
+├── data/                          # Local databases (gitignored)
+│   ├── chromadb/                  # Vector store
+│   ├── imessage.db                # iMessage export
+│   ├── conversations.db           # Chat history
+│   ├── cost_tracker.db            # Usage costs
+│   └── person_entities.db         # People data
 ├── web/
-│   └── index.html           # Chat UI
-├── tests/                   # Test suite (371+ tests)
+│   └── index.html                 # Chat UI (vanilla JS)
+├── tests/                         # Test suite (580+ tests)
 ├── scripts/
-│   ├── deploy.sh            # Deployment script (test, restart, commit, push)
-│   ├── test.sh              # Test runner (unit, integration, browser)
-│   ├── service.sh           # Service management (start, stop, status)
-│   └── pre-commit           # Git pre-commit hook
+│   ├── deploy.sh                  # Test → restart → commit → push
+│   ├── test.sh                    # Test runner
+│   ├── server.sh                  # Server management
+│   ├── service.sh                 # launchd service management
+│   ├── authenticate_google.py     # Google OAuth setup
+│   └── import_phone_contacts.py   # Import contacts from CSV
+├── docs/
+│   ├── LifeOS PRD.md              # Product requirements
+│   └── LifeOS Backlog.md          # Feature backlog
 ├── requirements.txt
 ├── pyproject.toml
 └── README.md
@@ -340,14 +412,16 @@ LifeOS/
 
 The local LLM (Llama 3.2 3B via Ollama) routes queries to appropriate data sources:
 
-| Source | Content |
-|--------|---------|
-| `vault` | Obsidian notes, meeting notes, personal docs |
-| `calendar` | Google Calendar events and schedules |
-| `gmail` | Email messages and correspondence |
-| `drive` | Google Drive files and spreadsheets |
-| `people` | Stakeholder profiles and context |
-| `actions` | Open tasks and commitments |
+| Source | Content | Example Queries |
+|--------|---------|-----------------|
+| `vault` | Obsidian notes, meeting notes, personal docs | "What did we discuss about the product launch?" |
+| `calendar` | Google Calendar events and schedules | "What's on my calendar tomorrow?" |
+| `gmail` | Email messages and correspondence | "What did John email about?" |
+| `drive` | Google Drive files and spreadsheets | "Find the Q4 budget spreadsheet" |
+| `imessage` | iMessage/SMS conversation history | "What did I text Sarah about dinner?" |
+| `people` | Stakeholder profiles and context | "Tell me about Alex before my meeting" |
+| `actions` | Open tasks and commitments | "What are my open action items?" |
+| `memories` | User-saved memories and notes | "What did I want to remember about the project?" |
 
 The router prompt is editable at `config/prompts/query_router.txt`.
 
@@ -398,6 +472,130 @@ source .venv/bin/activate
 python -c "from api.services.gdoc_sync import sync_gdocs; print(sync_gdocs())"
 ```
 
+## iMessage Integration
+
+LifeOS can query your iMessage/SMS history by reading from the macOS Messages database.
+
+### Prerequisites
+
+1. **Full Disk Access**: Grant Full Disk Access to Terminal (or your IDE) in System Preferences → Privacy & Security → Full Disk Access
+2. The source database is at `~/Library/Messages/chat.db`
+
+### How It Works
+
+1. **Export**: Messages are exported from macOS Messages to a local SQLite database (`./data/imessage.db`)
+2. **Incremental Sync**: Only new messages (by ROWID) are synced each night
+3. **Entity Mapping**: Phone numbers are matched to PersonEntity records for "Who did I text?" queries
+4. **Privacy**: All data stays local; messages are never sent to external services
+
+### Manual Sync
+
+```bash
+source venv/bin/activate
+python -c "from api.services.imessage import sync_and_join_imessages; print(sync_and_join_imessages())"
+```
+
+### Querying Messages
+
+Ask natural language questions like:
+- "What did I text Mom about last week?"
+- "Show me my recent messages with John"
+- "Did Sarah confirm dinner plans?"
+
+## People & Entity Resolution
+
+LifeOS maintains a unified view of people across all data sources using the PersonEntity system.
+
+### Data Sources for People
+
+| Source | What's Extracted |
+|--------|------------------|
+| Obsidian Vault | Names mentioned in notes, meeting attendees |
+| Gmail | Sender/recipient names and emails |
+| Google Calendar | Event attendees |
+| LinkedIn Export | Professional connections (CSV import) |
+| iMessage | Phone contacts |
+| Phone Contacts | Contact names and numbers |
+
+### Entity Resolution
+
+The system uses fuzzy matching to link the same person across sources:
+- "John Smith" in your notes
+- "john.smith@company.com" in email
+- "+1-555-123-4567" in iMessage
+
+All get resolved to a single PersonEntity with a unified profile.
+
+### Configuration
+
+Create `config/people_dictionary.json` to define known people and aliases:
+
+```json
+{
+  "John Smith": {
+    "aliases": ["Johnny", "J. Smith"],
+    "email": "john@example.com",
+    "phone": "+15551234567"
+  }
+}
+```
+
+See `config/people_dictionary.example.json` for the format.
+
+### Stakeholder Briefings
+
+Before a meeting, ask: "Brief me on John Smith"
+
+LifeOS will synthesize:
+- Recent email threads
+- Past meeting notes
+- Calendar history
+- iMessage conversations
+- LinkedIn connection info
+
+## Nightly Sync
+
+LifeOS runs automated sync operations at **3 AM Eastern** daily.
+
+### Sync Operations (in order)
+
+1. **Vault Reindex** — Full reindex of all Obsidian notes
+2. **LinkedIn Sync** — Import connections from CSV (if updated)
+3. **Gmail Sync** — Fetch recent emails for people context
+4. **Calendar Sync** — Update calendar event index
+5. **Google Docs Sync** — Sync configured docs to vault
+6. **iMessage Sync** — Export new messages from macOS Messages
+
+### Manual Trigger
+
+To run all sync operations manually:
+
+```bash
+# Individual syncs
+python -c "from api.services.imessage import sync_and_join_imessages; sync_and_join_imessages()"
+python -c "from api.services.gdoc_sync import sync_gdocs; sync_gdocs()"
+
+# Or restart server to trigger startup sync
+./scripts/server.sh restart
+```
+
+### Monitoring
+
+Check sync status via admin endpoints:
+- `GET /api/admin/health` — Overall health
+- `GET /api/admin/calendar/status` — Calendar indexer status
+- `GET /api/admin/granola/status` — Granola processor status
+
+## Cost Tracking
+
+LifeOS tracks Claude API costs per conversation and session.
+
+- **Session Cost**: Displayed in the UI header (resets on page refresh)
+- **Conversation Cost**: Stored per conversation in SQLite
+- **Usage History**: View historical costs via the usage modal
+
+Data stored in `./data/cost_tracker.db`.
+
 ## Documentation
 
 - **PRD**: `docs/LifeOS PRD.md`
@@ -406,18 +604,25 @@ python -c "from api.services.gdoc_sync import sync_gdocs; print(sync_gdocs())"
 
 ## Version History
 
+- **v0.9.0** - People System v2 & iMessage Integration
+  - iMessage history export and querying
+  - PersonEntity system with cross-source entity resolution
+  - Phone contacts import
+  - Fuzzy name matching for people lookup
+  - UI improvements: keyboard shortcuts, conversation search, collapsible sources
+  - Open sourced under GPL-3.0
 - **v0.8.0** - PRD Completion Release
-  - Persistent memories with Claude synthesis (P6.3)
-  - Calendar event indexing with daily sync (P3.2)
+  - Persistent memories with Claude synthesis
+  - Calendar event indexing with daily sync
   - Remember button in UI for quick memory entry
-  - Save to vault button improvements (hide after save, better errors)
-  - Session-scoped test fixtures for faster tests
-- **v0.7.0** - Local LLM Query Router (P3.5)
-- **v0.6.2** - Recency bias and QA test suite
-- **v0.6.1** - Admin endpoints and setup utilities
-- **v0.6.0** - Error handling and resilience (P4.2)
-- **v0.5.0** - Service management with launchd (P4.1)
-- **v0.4.0** - Stakeholder briefings (P2.3)
+  - Save to vault button
+  - Cost tracking per conversation/session
+- **v0.7.0** - Local LLM Query Router
+  - Ollama + Llama 3.2 for query routing
+  - Fallback to keyword-based routing
+- **v0.6.0** - Error handling and resilience
+- **v0.5.0** - Service management with launchd
+- **v0.4.0** - Stakeholder briefings
 
 ## License
 
