@@ -29,12 +29,12 @@ def main():
     parser.add_argument(
         "--personal",
         action="store_true",
-        help="Authenticate personal account (nbramia@gmail.com)"
+        help="Authenticate personal account (e.g., your-email@gmail.com)"
     )
     parser.add_argument(
         "--work",
         action="store_true",
-        help="Authenticate work account (nathanramia@movementlabs.com)"
+        help="Authenticate work account (e.g., your-email@company.com)"
     )
     parser.add_argument(
         "--all",

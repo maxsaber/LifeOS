@@ -20,7 +20,7 @@ Related files:
 
 **Data Sources:**
 - Obsidian vault (~4,500 markdown files)
-- Google suite from personal nbramia@gmail.com and work nathanramia@movementlabs.com accounts. For each:
+- Google suite from personal (e.g., nbramia@gmail.com) and work (e.g., nathanramia@movementlabs.com) accounts. For each:
 	- Google Calendar (hybrid: indexed + live)
 	- Google Gmail (live queries only)
 	- Google Drive (hybrid: key docs indexed, rest live)
@@ -33,7 +33,7 @@ This project is designed for autonomous execution using the Ralph Wiggum techniq
 
 **Directory Structure:**
 ```
-/Users/nathanramia/Documents/Code/LifeOS/
+/path/to/LifeOS/   # (e.g., /Users/nathanramia/Documents/Code/LifeOS/)
 ├── .ralph/                  # Ralph loop state (gitignored)
 │   ├── scratchpad.md        # Cross-iteration notes and progress
 │   ├── checkpoints/         # Git checkpoint tags
@@ -52,7 +52,7 @@ This project is designed for autonomous execution using the Ralph Wiggum techniq
 └── README.md
 ```
 
-**Vault Path:** `/Users/nathanramia/Notes 2025/`
+**Vault Path:** `/path/to/vault/` (e.g., `/Users/nathanramia/Notes 2025/`)
 
 ---
 
@@ -861,7 +861,7 @@ All content written by LifeOS (Save to Vault, generated briefings, etc.) must:
 ### P3.1: Google OAuth Setup
 
 **Requirements:**
-- Google Cloud project with Calendar, Gmail, Drive APIs enabled (including for Docs and sheets) for both personal account nbramia@gmail.com and work account nathanramia@movementlabs.com - read-only for work and read-write for personal
+- Google Cloud project with Calendar, Gmail, Drive APIs enabled (including for Docs and sheets) for both personal account (e.g., nbramia@gmail.com) and work account (e.g., nathanramia@movementlabs.com) - read-only for work and read-write for personal
 - OAuth 2.0 credentials (desktop app type)
 - One-time browser-based auth flow
 - Token storage (access + refresh) in local file
@@ -869,8 +869,8 @@ All content written by LifeOS (Save to Vault, generated briefings, etc.) must:
 
 **Acceptance Criteria:**
 ```
-[ ] OAuth flow completes successfully in browser for personal account nbramia@gmail.com
-[ ] OAuth flow completes successfully in browser for work account nathanramia@movementlabs.com
+[ ] OAuth flow completes successfully in browser for personal account (e.g., nbramia@gmail.com)
+[ ] OAuth flow completes successfully in browser for work account (e.g., nathanramia@movementlabs.com)
 [ ] Access tokens stored locally
 [ ] Refresh tokens stored locally
 [ ] Tokens auto-refresh when expired
@@ -2438,6 +2438,372 @@ EXCLUDED_EMAIL_PATTERNS = [
 **Design Document:** See `docs/plans/2026-01-09-people-system-v2-integration-design.md` for full details.
 
 **Completion Promise:** `<promise>P8.2-PEOPLE-V2-INTEGRATION-COMPLETE</promise>`
+
+---
+
+### P8.3: Phone Contacts Import
+
+**Requirements:**
+Import phone contacts from CSV export to enhance people entities with phone numbers and fill gaps in contact information.
+
+**Data Source:**
+- One-time CSV export from iOS Contacts app: `data/phonecontacts*.csv`
+- ~1175 contacts with fields: First Name, Last Name, Display Name, Nickname, E-mail Address (1-3), Home Phone, Business Phone, Home Fax, Business Fax, Pager, Mobile Phone, Organization, Notes
+
+**Processing Logic:**
+
+1. **Parse CSV** using Python csv module
+2. **For each contact:**
+   - Normalize phone numbers to E.164 format (+1XXXXXXXXXX)
+   - Collect all email addresses (up to 3 per contact)
+   - Build full name from First + Last, or use Display Name
+3. **Entity Resolution:**
+   - First try: Match by email address (highest confidence)
+   - Second try: Match by exact name (after normalization)
+   - Third try: Fuzzy match by name with >90% similarity
+   - If no match: Create new entity
+4. **Update matched entities:**
+   - Add phone numbers to entity (primary key: phone number list)
+   - Add any new email addresses found
+   - Set/update company from Organization field
+   - Store original CSV record in notes for reference
+5. **Track import statistics:**
+   - Matched by email
+   - Matched by exact name
+   - Matched by fuzzy name
+   - New entities created
+   - Skipped (insufficient data)
+
+**Phone Number Normalization:**
+```python
+def normalize_phone(raw: str) -> Optional[str]:
+    """
+    Normalize phone number to E.164 format.
+
+    Examples:
+    - "(901) 229-5017" → "+19012295017"
+    - "901-229-5017" → "+19012295017"
+    - "+1 901 229 5017" → "+19012295017"
+    - "9012295017" → "+19012295017"  (assumes US)
+    """
+    digits = re.sub(r'\D', '', raw)
+    if len(digits) == 10:
+        return f"+1{digits}"
+    elif len(digits) == 11 and digits[0] == '1':
+        return f"+{digits}"
+    elif len(digits) > 11:
+        return f"+{digits}"  # International
+    return None  # Invalid
+```
+
+**PersonEntity Updates:**
+```python
+@dataclass
+class PersonEntity:
+    # ... existing fields ...
+    phone_numbers: list[str]  # NEW: E.164 format phones
+    phone_primary: Optional[str]  # NEW: Preferred phone (mobile > business > home)
+```
+
+**Script:** `scripts/import_phone_contacts.py`
+- Standalone script for one-time or periodic import
+- Can be run manually or triggered via API
+- Idempotent: safe to run multiple times
+
+**Acceptance Criteria:**
+```
+[ ] CSV parser handles all contact fields correctly
+[ ] Phone numbers normalized to E.164 format
+[ ] US numbers assumed for 10-digit inputs
+[ ] International numbers preserved
+[ ] Invalid phone numbers (< 10 digits) skipped with warning
+[ ] Email-based matching works across multiple email fields
+[ ] Exact name matching uses normalized names (lowercase, trimmed)
+[ ] Fuzzy name matching uses >90% threshold
+[ ] New entities created only when no match found
+[ ] Existing entities updated with new phone numbers
+[ ] Duplicate phone numbers not added
+[ ] Import statistics logged and returned
+[ ] Script is idempotent (re-running doesn't duplicate data)
+[ ] Unit tests for phone normalization
+[ ] Unit tests for entity matching logic
+[ ] Integration test: import sample contacts, verify entity updates
+```
+
+**Completion Promise:** `<promise>P8.3-PHONE-CONTACTS-COMPLETE</promise>`
+
+---
+
+### P8.4: iMessage Integration
+
+**Requirements:**
+Export iMessage history to local SQLite database and join with people entities to enable queries like "what have I discussed with [person] over text?" and "show me my recent text conversations."
+
+**Architecture:**
+```
+┌─────────────────────────────────────────────────────────────┐
+│                   iMessage Integration                       │
+│                                                              │
+│  ┌────────────────┐    ┌─────────────────┐                  │
+│  │ ~/Library/     │    │ scripts/        │                  │
+│  │ Messages/      │───▶│ export_imessage │                  │
+│  │ chat.db        │    │ .py             │                  │
+│  │ (289k msgs)    │    └────────┬────────┘                  │
+│  └────────────────┘             │                           │
+│                                 ▼                           │
+│  ┌─────────────────────────────────────────┐               │
+│  │          data/imessage.db                │               │
+│  │  ┌──────────────┐  ┌──────────────────┐ │               │
+│  │  │   messages   │  │   sync_state     │ │               │
+│  │  │ - rowid      │  │ - last_rowid     │ │               │
+│  │  │ - phone      │  │ - last_sync      │ │               │
+│  │  │ - timestamp  │  │                  │ │               │
+│  │  │ - is_from_me │  └──────────────────┘ │               │
+│  │  │ - text       │                       │               │
+│  │  │ - person_id  │◀──────────────────────┤               │
+│  │  └──────────────┘   EntityResolver      │               │
+│  └─────────────────────────────────────────┘               │
+│                                                              │
+│                         │                                    │
+│                         ▼                                    │
+│  ┌─────────────────────────────────────────┐               │
+│  │              BriefingsService            │               │
+│  │  "What have I texted Taylor about?"     │               │
+│  │  → Query imessage.db WHERE person_id    │               │
+│  │  → Return recent messages + summary     │               │
+│  └─────────────────────────────────────────┘               │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**Data Source:**
+- macOS iMessage database: `~/Library/Messages/chat.db`
+- ~289k messages from 2016 to present
+- ~2755 unique phone numbers/email addresses
+
+**Export Database Schema:**
+```sql
+-- Main messages table
+CREATE TABLE messages (
+    rowid INTEGER PRIMARY KEY,  -- Original ROWID from chat.db
+    phone TEXT NOT NULL,        -- E.164 format or email
+    timestamp DATETIME NOT NULL,
+    is_from_me INTEGER NOT NULL,
+    text TEXT,
+    has_attachment INTEGER DEFAULT 0,
+    attachment_filename TEXT,
+    person_id TEXT,             -- FK to people entity (populated by resolver)
+    UNIQUE(rowid)
+);
+
+CREATE INDEX idx_messages_phone ON messages(phone);
+CREATE INDEX idx_messages_timestamp ON messages(timestamp);
+CREATE INDEX idx_messages_person_id ON messages(person_id);
+
+-- Sync state tracking
+CREATE TABLE sync_state (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    last_rowid INTEGER DEFAULT 0,
+    last_sync DATETIME
+);
+```
+
+**Export Script:** `scripts/export_imessage.py`
+
+1. **Initial Full Export:**
+   - Query all messages from chat.db
+   - Join with handle table to get phone/email
+   - Convert Apple timestamp to ISO 8601
+   - Normalize phone numbers to E.164
+   - Store in data/imessage.db
+   - Track highest ROWID for incremental
+
+2. **Incremental Export (nightly):**
+   - Read last_rowid from sync_state
+   - Query only WHERE ROWID > last_rowid
+   - Append new messages
+   - Update sync_state
+
+**Apple Timestamp Conversion:**
+```python
+def apple_to_datetime(apple_timestamp: int) -> datetime:
+    """
+    Convert Apple CFAbsoluteTime (nanoseconds since 2001-01-01) to datetime.
+    """
+    # Apple epoch is 2001-01-01 00:00:00 UTC
+    # Unix epoch is 1970-01-01 00:00:00 UTC
+    # Difference: 978307200 seconds
+    unix_timestamp = (apple_timestamp / 1_000_000_000) + 978307200
+    return datetime.fromtimestamp(unix_timestamp, tz=timezone.utc)
+```
+
+**Entity Resolution:**
+
+After export, run entity resolution to link messages to people:
+
+```python
+def resolve_imessage_entities():
+    """
+    Link messages to PersonEntity records by phone number.
+    """
+    resolver = get_entity_resolver()
+
+    # Get all unique phones from messages without person_id
+    unresolved = db.execute("""
+        SELECT DISTINCT phone FROM messages
+        WHERE person_id IS NULL
+    """).fetchall()
+
+    for (phone,) in unresolved:
+        # Try to resolve by phone number
+        entity = resolver.resolve_by_phone(phone)
+        if entity:
+            db.execute("""
+                UPDATE messages SET person_id = ? WHERE phone = ?
+            """, (entity.id, phone))
+
+    db.commit()
+```
+
+**EntityResolver Update:**
+```python
+class EntityResolver:
+    def resolve_by_phone(self, phone: str) -> Optional[PersonEntity]:
+        """
+        Find entity by phone number.
+
+        Args:
+            phone: E.164 format phone number
+
+        Returns:
+            Matching PersonEntity or None
+        """
+        normalized = normalize_phone(phone)
+        if not normalized:
+            return None
+
+        # Search entities with matching phone
+        for entity in self.entities.values():
+            if normalized in entity.phone_numbers:
+                return entity
+
+        return None
+```
+
+**Interaction Creation:**
+
+Don't create individual Interaction records for every message (too many). Instead:
+- Create one Interaction per person per day with iMessage activity
+- Store message count and snippet of most recent message
+- Link type: "imessage"
+
+```python
+@dataclass
+class Interaction:
+    # ... existing fields ...
+    source_type: str  # "gmail" | "calendar" | "vault" | "granola" | "imessage"
+    message_count: Optional[int]  # For imessage: number of messages that day
+```
+
+**BriefingsService Integration:**
+
+Add iMessage context to person briefings:
+
+```python
+def get_person_briefing(self, name: str) -> dict:
+    # ... existing code ...
+
+    # Add iMessage summary
+    if entity.phone_numbers:
+        imessage_stats = self._get_imessage_stats(entity.id)
+        briefing["imessage"] = {
+            "total_messages": imessage_stats["total"],
+            "messages_sent": imessage_stats["sent"],
+            "messages_received": imessage_stats["received"],
+            "last_text": imessage_stats["last_timestamp"],
+            "recent_topics": imessage_stats["recent_topics"],  # Optional: Claude summary
+        }
+```
+
+**Query Examples:**
+- "What have I texted Taylor about recently?" → Query messages by person_id, summarize
+- "When did I last text Mom?" → Query MAX(timestamp) WHERE person_id = X
+- "Show me my text conversations from last week" → Query and group by person
+
+**Nightly Sync Addition:**
+
+Add to `_nightly_sync_loop()` in main.py:
+
+```python
+# === Step 4: iMessage Incremental Export ===
+try:
+    logger.info("Nightly sync: Starting iMessage export...")
+    from scripts.export_imessage import incremental_export
+    imessage_stats = incremental_export()
+    logger.info(f"Nightly sync: iMessage export completed: {imessage_stats}")
+except Exception as e:
+    logger.error(f"Nightly sync: iMessage export failed: {e}")
+```
+
+**Acceptance Criteria:**
+
+Export Script:
+```
+[ ] Reads from ~/Library/Messages/chat.db successfully
+[ ] Converts Apple timestamps to ISO 8601 correctly
+[ ] Normalizes phone numbers to E.164 format
+[ ] Handles email-based iMessage IDs (keep as-is)
+[ ] Creates data/imessage.db with correct schema
+[ ] Full export completes in <5 minutes for 289k messages
+[ ] Incremental export only processes new messages (ROWID > last_rowid)
+[ ] sync_state table tracks last processed ROWID
+[ ] Attachment metadata (filename, has_attachment) captured
+[ ] Actual attachment files NOT copied (metadata only)
+[ ] Script handles missing/locked chat.db gracefully
+```
+
+Entity Resolution:
+```
+[ ] resolve_by_phone finds entities with matching phone numbers
+[ ] Phone normalization handles various input formats
+[ ] Messages linked to person_id after resolution
+[ ] Unresolved phones logged for manual review
+[ ] Re-running resolution updates newly matched phones
+```
+
+Interaction Creation:
+```
+[ ] One Interaction per person per day (not per message)
+[ ] Interaction includes message count
+[ ] source_type = "imessage"
+[ ] source_link points to Messages app (messages://)
+```
+
+Briefings Integration:
+```
+[ ] Person briefing includes iMessage stats when phone numbers exist
+[ ] Stats show: total messages, sent/received split, last text date
+[ ] "What have I texted X about?" returns relevant summary
+[ ] Query latency <2 seconds for message search
+```
+
+Nightly Sync:
+```
+[ ] Incremental export runs after Gmail/Calendar sync
+[ ] New messages exported and entities resolved
+[ ] Sync completes in <30 seconds for typical daily volume
+[ ] Failures logged but don't block other sync operations
+```
+
+Tests:
+```
+[ ] Unit tests for Apple timestamp conversion
+[ ] Unit tests for phone number normalization
+[ ] Unit tests for entity phone matching
+[ ] Integration test: export sample messages, verify resolution
+[ ] Integration test: briefing includes iMessage stats
+```
+
+**Completion Promise:** `<promise>P8.4-IMESSAGE-INTEGRATION-COMPLETE</promise>`
 
 ---
 

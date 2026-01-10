@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     # Paths (use LIFEOS_ prefix)
     vault_path: Path = Field(
-        default=Path("/Users/nathanramia/Notes 2025"),
+        default=Path("./vault"),
         alias="LIFEOS_VAULT_PATH"
     )
     chroma_path: Path = Field(

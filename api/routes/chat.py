@@ -125,6 +125,108 @@ def extract_date_context(query: str) -> Optional[str]:
 
     return None
 
+
+def extract_message_date_range(query: str) -> tuple[Optional[datetime], Optional[datetime]]:
+    """
+    Extract date range for message queries.
+
+    Supports: last month, last week, in December, this month, past N days/weeks/months
+    Returns (start_date, end_date) tuple.
+    """
+    query_lower = query.lower()
+    today = datetime.now()
+
+    # "last month" or "past month"
+    if "last month" in query_lower or "past month" in query_lower:
+        # First day of last month
+        first_of_this_month = today.replace(day=1)
+        last_month_end = first_of_this_month - timedelta(days=1)
+        last_month_start = last_month_end.replace(day=1)
+        return (last_month_start, last_month_end)
+
+    # "this month"
+    if "this month" in query_lower:
+        first_of_month = today.replace(day=1, hour=0, minute=0, second=0)
+        return (first_of_month, today)
+
+    # "last week" or "past week"
+    if "last week" in query_lower or "past week" in query_lower:
+        start = today - timedelta(days=7)
+        return (start, today)
+
+    # "past N days/weeks/months"
+    past_pattern = r'(?:past|last)\s+(\d+)\s+(day|days|week|weeks|month|months)'
+    match = re.search(past_pattern, query_lower)
+    if match:
+        num, unit = match.groups()
+        num = int(num)
+        if 'day' in unit:
+            start = today - timedelta(days=num)
+        elif 'week' in unit:
+            start = today - timedelta(weeks=num)
+        elif 'month' in unit:
+            start = today - timedelta(days=num * 30)  # Approximate
+        return (start, today)
+
+    # "in December", "in January", etc.
+    month_pattern = r'\bin\s+(january|february|march|april|may|june|july|august|september|october|november|december)\b'
+    match = re.search(month_pattern, query_lower)
+    if match:
+        month_str = match.group(1)
+        month_map = {
+            'january': 1, 'february': 2, 'march': 3, 'april': 4,
+            'may': 5, 'june': 6, 'july': 7, 'august': 8,
+            'september': 9, 'october': 10, 'november': 11, 'december': 12
+        }
+        month = month_map.get(month_str)
+        if month:
+            year = today.year
+            # If month is in the future, use last year
+            if month > today.month:
+                year -= 1
+            start = datetime(year, month, 1)
+            # End of month
+            if month == 12:
+                end = datetime(year + 1, 1, 1) - timedelta(days=1)
+            else:
+                end = datetime(year, month + 1, 1) - timedelta(days=1)
+            return (start, end)
+
+    return (None, None)
+
+
+def extract_message_search_terms(query: str, person_name: str) -> Optional[str]:
+    """
+    Extract search terms for message content from query.
+
+    Looks for patterns like "about X", "regarding X", "mentioning X"
+    """
+    query_lower = query.lower()
+    person_lower = person_name.lower()
+
+    # Remove the person's name to focus on topic
+    query_without_person = query_lower.replace(person_lower, "").strip()
+
+    # Patterns that indicate topic search
+    patterns = [
+        r'about\s+(.+?)(?:\s+with|\s+in|\s+from|\s*$)',
+        r'regarding\s+(.+?)(?:\s+with|\s+in|\s+from|\s*$)',
+        r'mentioning\s+(.+?)(?:\s+with|\s+in|\s+from|\s*$)',
+        r'discussed?\s+(.+?)(?:\s+with|\s+in|\s+from|\s*$)',
+        r'talked?\s+about\s+(.+?)(?:\s+with|\s+in|\s+from|\s*$)',
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, query_without_person)
+        if match:
+            term = match.group(1).strip()
+            # Clean up common words
+            term = re.sub(r'\b(the|a|an|our|my|her|his|their)\b', '', term).strip()
+            if len(term) > 2:
+                return term
+
+    return None
+
 router = APIRouter(prefix="/api", tags=["chat"])
 
 # Attachment configuration
@@ -508,13 +610,14 @@ async def ask_stream(request: AskStreamRequest):
                     print(f"  {i+1}. {fn} ({mod_date})")
                     print(f"      combined={score:.3f} semantic={semantic:.3f} recency={recency:.3f}")
 
-            # Handle people queries - generate stakeholder briefings
+            # Handle people queries - generate stakeholder briefings + message history
             if "people" in routing_result.sources:
                 print("PROCESSING PEOPLE QUERY...")
 
                 # Extract person name from query
                 person_name = query_router._extract_person_name(request.question)
                 person_email = None
+                entity_id = None
 
                 if person_name:
                     print(f"  Extracted person name: {person_name}")
@@ -547,7 +650,54 @@ async def ask_stream(request: AskStreamRequest):
                     if person_email:
                         print(f"  Found email from calendar: {person_email}")
 
-                    # Generate briefing
+                    # Resolve entity to get entity_id for message queries
+                    try:
+                        from api.services.entity_resolver import get_entity_resolver
+                        resolver = get_entity_resolver()
+                        result = resolver.resolve(name=person_name, email=person_email)
+                        if result:
+                            entity_id = result.entity.id
+                            print(f"  Resolved entity: {result.entity.canonical_name} ({entity_id})")
+                    except Exception as e:
+                        print(f"  Entity resolution error: {e}")
+
+                    # Check if query asks for specific message context
+                    start_date, end_date = extract_message_date_range(request.question)
+                    search_term = extract_message_search_terms(request.question, person_name)
+
+                    # If date range or search term specified, query messages directly
+                    if entity_id and (start_date or end_date or search_term):
+                        try:
+                            from api.services.imessage import query_person_messages
+                            print(f"  Querying messages: dates={start_date} to {end_date}, search={search_term}")
+
+                            msg_result = query_person_messages(
+                                entity_id=entity_id,
+                                search_term=search_term,
+                                start_date=start_date,
+                                end_date=end_date,
+                                limit=150,  # More messages for context
+                            )
+
+                            if msg_result["count"] > 0:
+                                date_info = ""
+                                if msg_result["date_range"]:
+                                    dr = msg_result["date_range"]
+                                    date_info = f" ({dr['start'][:10]} to {dr['end'][:10]})"
+
+                                extra_context.append({
+                                    "source": "imessage",
+                                    "content": f"## Text Message History with {person_name}{date_info}\n\n{msg_result['formatted']}",
+                                    "count": msg_result["count"],
+                                })
+                                print(f"  Found {msg_result['count']} messages in range")
+                            else:
+                                print(f"  No messages found for query")
+                        except Exception as e:
+                            print(f"  Message query error: {e}")
+                            logger.error(f"Failed to query messages for {person_name}: {e}")
+
+                    # Generate briefing (always include for context)
                     try:
                         briefing_service = get_briefings_service()
                         briefing_result = await briefing_service.generate_briefing(
@@ -604,6 +754,13 @@ async def ask_stream(request: AskStreamRequest):
                             'url': event.get('html_link'),
                             'source_account': event.get('source_account'),
                         })
+                # Add iMessage source
+                elif ctx.get("source") == "imessage":
+                    msg_count = ctx.get("count", 0)
+                    sources.insert(0, {  # Put at beginning since it's most relevant
+                        'file_name': f"💬 Text Messages ({msg_count} messages)",
+                        'source_type': 'imessage',
+                    })
 
             # Send sources to client
             if request.include_sources:
@@ -818,15 +975,16 @@ Output ONLY the markdown content for the note, starting with the frontmatter."""
             folder = "LifeOS/People"
 
         # Write to vault
-        from pathlib import Path
-        vault_path = Path("/Users/nathanramia/Notes 2025")
+        vault_path = settings.vault_path
         note_path = vault_path / folder / filename
 
         note_path.parent.mkdir(parents=True, exist_ok=True)
         note_path.write_text(note_content)
 
         # Return obsidian link
-        obsidian_url = f"obsidian://open?vault=Notes%202025&file={folder}/{filename}"
+        from urllib.parse import quote
+        vault_name = quote(vault_path.name)
+        obsidian_url = f"obsidian://open?vault={vault_name}&file={folder}/{filename}"
 
         return {
             "status": "saved",

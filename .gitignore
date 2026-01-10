@@ -39,6 +39,10 @@ token-*.json
 *.pem
 *.key
 
+# Personal configuration
+config/people_dictionary.json
+config/launchd/com.lifeos.api.plist
+
 # Logs
 *.log
 logs/

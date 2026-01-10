@@ -400,8 +400,8 @@ python -c "from api.services.gdoc_sync import sync_gdocs; print(sync_gdocs())"
 
 ## Documentation
 
-- **PRD**: `/Users/nathanramia/Notes 2025/LifeOS/LifeOS PRD.md`
-- **Backlog**: `/Users/nathanramia/Notes 2025/LifeOS/LifeOS Backlog.md`
+- **PRD**: `docs/LifeOS PRD.md`
+- **Backlog**: `docs/LifeOS Backlog.md`
 - **Router Prompt**: `config/prompts/query_router.txt`
 
 ## Version History
@@ -421,4 +421,4 @@ python -c "from api.services.gdoc_sync import sync_gdocs; print(sync_gdocs())"
 
 ## License
 
-Private - All rights reserved.
+This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.

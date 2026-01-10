@@ -13,50 +13,29 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# People Dictionary - known people with aliases and categories
-PEOPLE_DICTIONARY = {
-    # Self (excluded from tracking)
-    "Nathan": {
-        "canonical": "Nathan",
-        "aliases": ["nathan", "me", "I"],
-        "category": "self",
-        "exclude": True
-    },
+# Path to people dictionary config file
+PEOPLE_DICTIONARY_PATH = Path(__file__).parent.parent.parent / "config" / "people_dictionary.json"
 
-    # Family/Personal
-    "Taylor": {
-        "canonical": "Taylor",
-        "aliases": ["taylor", "Anne Taylor Walker", "Taylor Walker"],
-        "category": "family"
-    },
-    "Malea": {
-        "canonical": "Malea",
-        "aliases": ["malea", "Malia", "malia"],  # Common misspelling
-        "category": "family"
-    },
 
-    "Thy": {
-        "canonical": "Thy",
-        "aliases": ["thy", "Thy Ramia", "Thy Nguyen", "T"],  # Common mis-trancription
-        "category": "family"
-    },
-    # Work - Movement Labs
-    "Yoni": {
-        "canonical": "Yoni",
-        "aliases": ["yoni", "Yoni Landau", "Yonatan"],
-        "category": "work"
-    },
-    "Madi": {
-        "canonical": "Madi",
-        "aliases": ["madi", "Maddie", "Madeline", "Madeline Eden", "Madi Eden"],
-        "category": "work"
-    },
-    "Hayley": {
-        "canonical": "Hayley",
-        "aliases": ["hayley", "Haley", "haley"],  # Common misspelling
-        "category": "work"
-    },
-}
+def _load_people_dictionary() -> dict:
+    """
+    Load people dictionary from config file.
+
+    Returns empty dict if file doesn't exist, allowing the system to work
+    without personal configuration.
+    """
+    if PEOPLE_DICTIONARY_PATH.exists():
+        try:
+            with open(PEOPLE_DICTIONARY_PATH, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logger.warning(f"Failed to load people dictionary: {e}")
+            return {}
+    return {}
+
+
+# People Dictionary - loaded from config file
+PEOPLE_DICTIONARY = _load_people_dictionary()
 
 # Build reverse lookup for aliases
 ALIAS_MAP = {}
