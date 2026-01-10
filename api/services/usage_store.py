@@ -37,7 +37,7 @@ class UsageStore:
     def __init__(self, db_path: str = None):
         """Initialize the usage store."""
         if db_path is None:
-            db_path = str(settings.data_path / "usage.db")
+            db_path = str(Path(settings.chroma_path).parent / "usage.db")
 
         self.db_path = db_path
         Path(db_path).parent.mkdir(parents=True, exist_ok=True)

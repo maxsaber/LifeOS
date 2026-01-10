@@ -80,6 +80,73 @@ def extract_search_keywords(query: str) -> list[str]:
     return unique_keywords[:5]  # Limit to top 5 keywords
 
 
+def expand_followup_query(query: str, conversation_history: list) -> str:
+    """
+    Expand a follow-up query with context from conversation history.
+
+    Detects short queries with pronouns (our, their, they, them, he, she, it)
+    or implicit references and expands them with context from previous messages.
+
+    Args:
+        query: The current user query
+        conversation_history: List of previous messages in the conversation
+
+    Returns:
+        Expanded query with context, or original query if not a follow-up
+    """
+    if not conversation_history:
+        return query
+
+    query_lower = query.lower().strip()
+
+    # Follow-up indicators: short query with pronouns or implicit references
+    followup_patterns = [
+        "what about", "how about", "and ", "but ",
+        "their ", "they ", "them ", "he ", "she ", "it ",
+        "our ", "his ", "her ", "its ",
+        "the same", "more about", "anything else",
+        "what else", "tell me more"
+    ]
+
+    is_followup = (
+        len(query.split()) < 10 and  # Short query
+        any(pattern in query_lower for pattern in followup_patterns)
+    )
+
+    if not is_followup:
+        return query
+
+    # Find the most recent user question that mentions a person or topic
+    for msg in reversed(conversation_history):
+        if msg.role == "user":
+            # Extract person name or topic from previous query
+            prev_query_lower = msg.content.lower()
+
+            # Check for person-related queries
+            person_patterns = [
+                r"(?:with|about|from|to)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+                r"interactions?\s+with\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+            ]
+
+            for pattern in person_patterns:
+                match = re.search(pattern, msg.content, re.IGNORECASE)
+                if match:
+                    person_name = match.group(1).strip()
+                    # Avoid matching common words
+                    if person_name.lower() not in {'the', 'a', 'an', 'my', 'our', 'their'}:
+                        # Expand the query with the person name
+                        expanded = f"{query} (regarding {person_name})"
+                        return expanded
+
+            # If no person found but previous query exists, reference it
+            if len(msg.content) < 200:  # Don't include very long queries
+                expanded = f"{query} [Context: previous question was about '{msg.content[:100]}']"
+                return expanded
+            break
+
+    return query
+
+
 def extract_date_context(query: str) -> Optional[str]:
     """
     Extract date references from query and convert to YYYY-MM-DD format.
@@ -130,11 +197,22 @@ def extract_message_date_range(query: str) -> tuple[Optional[datetime], Optional
     """
     Extract date range for message queries.
 
-    Supports: last month, last week, in December, this month, past N days/weeks/months
+    Supports: last month, last week, in December, this month, past N days/weeks/months,
+              lately, recently
     Returns (start_date, end_date) tuple.
     """
     query_lower = query.lower()
     today = datetime.now()
+
+    # "lately" - default to last 30 days
+    if "lately" in query_lower:
+        start = today - timedelta(days=30)
+        return (start, today)
+
+    # "recently" or "recent" - default to last 14 days
+    if "recently" in query_lower or "recent " in query_lower:
+        start = today - timedelta(days=14)
+        return (start, today)
 
     # "last month" or "past month"
     if "last month" in query_lower or "past month" in query_lower:
@@ -207,21 +285,30 @@ def extract_message_search_terms(query: str, person_name: str) -> Optional[str]:
     # Remove the person's name to focus on topic
     query_without_person = query_lower.replace(person_lower, "").strip()
 
+    # Temporal words that shouldn't be search terms
+    temporal_words = {'lately', 'recently', 'today', 'yesterday', 'tomorrow',
+                      'last', 'this', 'next', 'week', 'month', 'year', 'now'}
+
     # Patterns that indicate topic search
     patterns = [
-        r'about\s+(.+?)(?:\s+with|\s+in|\s+from|\s*$)',
-        r'regarding\s+(.+?)(?:\s+with|\s+in|\s+from|\s*$)',
-        r'mentioning\s+(.+?)(?:\s+with|\s+in|\s+from|\s*$)',
-        r'discussed?\s+(.+?)(?:\s+with|\s+in|\s+from|\s*$)',
-        r'talked?\s+about\s+(.+?)(?:\s+with|\s+in|\s+from|\s*$)',
+        r'about\s+(.+?)(?:\s+with|\s+in|\s+from|\s*\??\s*$)',
+        r'regarding\s+(.+?)(?:\s+with|\s+in|\s+from|\s*\??\s*$)',
+        r'mentioning\s+(.+?)(?:\s+with|\s+in|\s+from|\s*\??\s*$)',
+        r'discussed?\s+(.+?)(?:\s+with|\s+in|\s+from|\s*\??\s*$)',
+        r'talked?\s+about\s+(.+?)(?:\s+with|\s+in|\s+from|\s*\??\s*$)',
+        r'talking\s+about\s+(.+?)(?:\s+with|\s+in|\s+from|\s*\??\s*$)',
     ]
 
     for pattern in patterns:
         match = re.search(pattern, query_without_person)
         if match:
             term = match.group(1).strip()
-            # Clean up common words
+            # Clean up common words and punctuation
             term = re.sub(r'\b(the|a|an|our|my|her|his|their)\b', '', term).strip()
+            term = term.rstrip('?').strip()
+            # Filter out temporal words
+            if term.lower() in temporal_words:
+                return None
             if len(term) > 2:
                 return term
 
@@ -349,9 +436,22 @@ async def ask_stream(request: AskStreamRequest):
             # Save user message
             store.add_message(conversation_id, "user", request.question)
 
+            # Get conversation history for context in follow-up questions
+            conversation_history = store.get_messages(conversation_id, limit=10)
+            # Exclude current message to avoid duplication
+            if conversation_history and conversation_history[-1].role == "user" and conversation_history[-1].content == request.question:
+                conversation_history = conversation_history[:-1]
+
+            # Expand follow-up queries with conversation context
+            query_for_routing = request.question
+            if conversation_history:
+                query_for_routing = expand_followup_query(request.question, conversation_history)
+                if query_for_routing != request.question:
+                    print(f"Expanded query: '{request.question}' -> '{query_for_routing}'")
+
             # Route query to determine sources
             query_router = QueryRouter()
-            routing_result = await query_router.route(request.question)
+            routing_result = await query_router.route(query_for_routing)
 
             # Console logging for debugging
             print(f"\n{'='*60}")
@@ -779,7 +879,11 @@ async def ask_stream(request: AskStreamRequest):
                     "metadata": {"source": ctx["source"]}
                 })
 
-            prompt = construct_prompt(request.question, chunks)
+            # Use conversation_history we already retrieved earlier for follow-up expansion
+            if conversation_history:
+                print(f"Including {len(conversation_history)} messages of conversation history for synthesis")
+
+            prompt = construct_prompt(request.question, chunks, conversation_history=conversation_history)
 
             # Prepare attachments for synthesizer (convert Pydantic models to dicts)
             attachments_for_api = None

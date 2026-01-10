@@ -74,15 +74,28 @@ class QueryRouter:
         # Common words that should NOT be captured as part of a name
         stop_words = {'on', 'at', 'today', 'tomorrow', 'this', 'next', 'monday',
                       'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
-                      'sunday', 'morning', 'afternoon', 'evening', 'week', 'about'}
+                      'sunday', 'morning', 'afternoon', 'evening', 'week', 'about',
+                      'last', 'month', 'year', 'recently', 'lately'}
 
         patterns = [
+            # Meeting/call prep patterns
             r"prep(?:are)?\s+(?:me\s+)?for\s+(?:my\s+)?(?:meeting|call|1[:\-]1)\s+with\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+            r"meeting\s+with\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+            # Info/briefing patterns
             r"tell\s+me\s+about\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
             r"who\s+is\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
             r"background\s+on\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
             r"briefing\s+(?:on|for)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
-            r"meeting\s+with\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+            # Message/text patterns
+            r"(?:text|message|sms)s?\s+(?:with|from|to)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+            r"(?:texted?|messaged?)\s+(?:with\s+)?([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+            r"what\s+(?:did|have)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\s+and\s+I",
+            r"what\s+(?:did|have)\s+I\s+(?:and\s+)?([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\s+(?:discuss|talk|text|message)",
+            # Conversation patterns
+            r"conversation(?:s)?\s+with\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+            r"discuss(?:ed|ions?)?\s+with\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
+            # Generic "with [Name]" at end
+            r"with\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)\s*(?:last|this|in|about|$)",
         ]
         for pattern in patterns:
             match = re.search(pattern, query, re.IGNORECASE)
@@ -261,15 +274,26 @@ class QueryRouter:
         # People keywords
         people_keywords = [
             "tell me about", "who is", "prep me for",
-            "meeting with", "briefing", "background on"
+            "meeting with", "briefing", "background on",
+            "text with", "texts with", "texted", "texting",
+            "message with", "messages with", "messaged", "messaging",
+            "discuss with", "discussed with", "talked with", "talking with",
+            "talking about", "been talking",
+            "conversation with", "conversations with",
+            "and i discuss", "and i talk", "and i text",
+            "did i text", "did i message", "sms with",
+            "interactions with", "interaction with", "in touch with",
+            "lately", "recently"
         ]
         if any(kw in query_lower for kw in people_keywords):
             sources.add("people")
             reasons.append("people keywords")
             # Also search vault for people context
             sources.add("vault")
-            # Also search calendar for meeting history and email lookup
+            # Also search calendar for meeting history
             sources.add("calendar")
+            # Also search gmail for email communications
+            sources.add("gmail")
 
         # Action keywords
         action_keywords = [

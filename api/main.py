@@ -98,6 +98,16 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
         except Exception as e:
             logger.error(f"Nightly sync: Google Docs sync failed: {e}")
 
+        # === Step 4: iMessage Sync ===
+        # Exports new messages and joins with PersonEntity records
+        try:
+            logger.info("Nightly sync: Starting iMessage sync...")
+            from api.services.imessage import sync_and_join_imessages
+            imessage_stats = sync_and_join_imessages()
+            logger.info(f"Nightly sync: iMessage sync completed: {imessage_stats}")
+        except Exception as e:
+            logger.error(f"Nightly sync: iMessage sync failed: {e}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

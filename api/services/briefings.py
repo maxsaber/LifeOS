@@ -27,6 +27,13 @@ try:
 except ImportError:
     HAS_V2_PEOPLE = False
 
+# iMessage imports
+try:
+    from api.services.imessage import IMessageStore, get_imessage_store
+    HAS_IMESSAGE = True
+except ImportError:
+    HAS_IMESSAGE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -55,6 +62,9 @@ class BriefingContext:
     # v2: Interaction history (formatted markdown)
     interaction_history: str = ""
 
+    # iMessage history (formatted markdown)
+    imessage_history: str = ""
+
     # Sources
     sources: list[str] = field(default_factory=list)
 
@@ -80,6 +90,9 @@ Generate a concise, actionable briefing about {person_name} based on the context
 
 ## Interaction History
 {interaction_history}
+
+## Recent Messages (iMessage/SMS)
+{imessage_history}
 
 ## Related Notes
 {related_notes_text}
@@ -133,6 +146,7 @@ class BriefingsService:
         action_registry: Optional[ActionRegistry] = None,
         entity_resolver: Optional["EntityResolver"] = None,
         interaction_store: Optional["InteractionStore"] = None,
+        imessage_store: Optional["IMessageStore"] = None,
     ):
         """Initialize briefings service."""
         self._people_aggregator = people_aggregator
@@ -140,6 +154,7 @@ class BriefingsService:
         self._action_registry = action_registry
         self._entity_resolver = entity_resolver
         self._interaction_store = interaction_store
+        self._imessage_store = imessage_store
 
     @property
     def people_aggregator(self) -> PeopleAggregator:
@@ -181,6 +196,16 @@ class BriefingsService:
             except Exception as e:
                 logger.debug(f"InteractionStore not available: {e}")
         return self._interaction_store
+
+    @property
+    def imessage_store(self) -> Optional["IMessageStore"]:
+        """Lazy-load iMessage store."""
+        if self._imessage_store is None and HAS_IMESSAGE:
+            try:
+                self._imessage_store = get_imessage_store()
+            except Exception as e:
+                logger.debug(f"IMessageStore not available: {e}")
+        return self._imessage_store
 
     def gather_context(self, person_name: str, email: Optional[str] = None) -> Optional[BriefingContext]:
         """
@@ -255,27 +280,28 @@ class BriefingsService:
             except Exception as e:
                 logger.warning(f"Could not get interaction history: {e}")
 
-        # Search vault for mentions
-        # v2: Always search, removing the PEOPLE_DICTIONARY restriction
-        try:
-            # Try with people filter first if name is known
-            filters = None
-            if resolved in PEOPLE_DICTIONARY:
-                filters = {"people": [resolved]}
+        # Get iMessage history (if available and entity found)
+        if self.imessage_store and context.entity_id:
+            try:
+                messages = self.imessage_store.get_messages_for_entity(
+                    context.entity_id, limit=15
+                )
+                if messages:
+                    context.imessage_history = self._format_imessage_history(messages)
+                    if "iMessage" not in context.sources:
+                        context.sources.append("iMessage")
+            except Exception as e:
+                logger.warning(f"Could not get iMessage history: {e}")
 
+        # Search vault for mentions
+        # Search by person name - ChromaDB doesn't support filtering on JSON array fields
+        # so we rely on semantic search with the person name
+        try:
             chunks = self.vector_store.search(
                 query=resolved,
                 top_k=15,
-                filters=filters
+                filters=None
             )
-
-            # If no results with filter, try without filter
-            if not chunks and filters:
-                chunks = self.vector_store.search(
-                    query=resolved,
-                    top_k=15,
-                    filters=None
-                )
 
             for chunk in chunks:
                 context.related_notes.append({
@@ -305,6 +331,31 @@ class BriefingsService:
             logger.warning(f"Could not get action items: {e}")
 
         return context
+
+    def _format_imessage_history(self, messages: list) -> str:
+        """
+        Format iMessage history for the briefing prompt.
+
+        Args:
+            messages: List of IMessageRecord objects
+
+        Returns:
+            Formatted markdown string
+        """
+        if not messages:
+            return "_No recent messages._"
+
+        lines = []
+        for msg in messages[:15]:  # Limit to 15 most recent
+            direction = "→" if msg.is_from_me else "←"
+            date_str = msg.timestamp.strftime("%Y-%m-%d %H:%M")
+            # Truncate long messages
+            text = msg.text[:200] + "..." if len(msg.text) > 200 else msg.text
+            # Escape any markdown in the message
+            text = text.replace("\n", " ").strip()
+            lines.append(f"- **{date_str}** {direction} {text}")
+
+        return "\n".join(lines)
 
     async def generate_briefing(self, person_name: str, email: Optional[str] = None) -> dict:
         """
@@ -351,6 +402,9 @@ class BriefingsService:
         # Format interaction history
         interaction_history = context.interaction_history or "_No interaction history available._"
 
+        # Format iMessage history
+        imessage_history = context.imessage_history or "_No recent messages._"
+
         # Format LinkedIn line for output
         linkedin_line = ""
         if context.linkedin_url:
@@ -370,6 +424,7 @@ class BriefingsService:
             mention_count=context.mention_count,
             last_interaction=context.last_interaction.strftime("%Y-%m-%d") if context.last_interaction else "Unknown",
             interaction_history=interaction_history,
+            imessage_history=imessage_history,
             related_notes_text=related_notes_text,
             action_items_text=action_items_text,
             linkedin_line=linkedin_line,

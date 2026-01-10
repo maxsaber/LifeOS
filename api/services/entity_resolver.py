@@ -98,6 +98,20 @@ class EntityResolver:
             return None
         return self._store.get_by_email(email.lower())
 
+    def resolve_by_phone(self, phone: str) -> Optional[PersonEntity]:
+        """
+        Phone anchor: Exact phone match (E.164 format).
+
+        Args:
+            phone: Phone number in E.164 format (+1XXXXXXXXXX)
+
+        Returns:
+            PersonEntity if found, None otherwise
+        """
+        if not phone:
+            return None
+        return self._store.get_by_phone(phone)
+
     def resolve_by_name(
         self,
         name: str,
@@ -396,21 +410,24 @@ class EntityResolver:
         self,
         name: Optional[str] = None,
         email: Optional[str] = None,
+        phone: Optional[str] = None,
         context_path: Optional[str] = None,
         create_if_missing: bool = False,
     ) -> Optional[ResolutionResult]:
         """
-        Main entry point: resolve a person by name and/or email.
+        Main entry point: resolve a person by name, email, and/or phone.
 
         Priority:
         1. Email exact match (if email provided)
-        2. Name exact match
-        3. Fuzzy name match with context boost
-        4. Create new entity (if create_if_missing)
+        2. Phone exact match (if phone provided, E.164 format)
+        3. Name exact match
+        4. Fuzzy name match with context boost
+        5. Create new entity (if create_if_missing)
 
         Args:
             name: Person's name
             email: Person's email
+            phone: Person's phone (E.164 format, e.g., +1XXXXXXXXXX)
             context_path: Vault path for context boost
             create_if_missing: Create new entity if not found
 
@@ -428,15 +445,32 @@ class EntityResolver:
                     match_type="email_exact",
                 )
 
+        # Pass 1b: Phone exact match
+        if phone:
+            entity = self.resolve_by_phone(phone)
+            if entity:
+                return ResolutionResult(
+                    entity=entity,
+                    is_new=False,
+                    confidence=1.0,
+                    match_type="phone_exact",
+                )
+
         # Pass 2 & 3: Name matching
         if name:
             result = self.resolve_by_name(
                 name, context_path, create_if_missing=create_if_missing
             )
             if result:
-                # If we also have an email, add it to the entity
+                # If we also have email/phone, add them to the entity
+                updated = False
                 if email and result.is_new:
                     result.entity.add_email(email)
+                    updated = True
+                if phone and result.is_new:
+                    result.entity.add_phone(phone)
+                    updated = True
+                if updated:
                     self._store.update(result.entity)
                 return result
 
@@ -451,6 +485,8 @@ class EntityResolver:
                 canonical_name=name_from_email,
                 display_name=name_from_email,
                 emails=[email.lower()],
+                phone_numbers=[phone] if phone else [],
+                phone_primary=phone,
                 vault_contexts=vault_contexts,
                 category=category,
                 first_seen=datetime.now(timezone.utc),

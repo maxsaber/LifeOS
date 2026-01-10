@@ -39,6 +39,8 @@ def populated_resolver(temp_store):
         PersonEntity(
             canonical_name="Yoni Landau",
             emails=["yoni@movementlabs.xyz"],
+            phone_numbers=["+19012295017"],
+            phone_primary="+19012295017",
             company="Movement Labs",
             category="work",
             vault_contexts=["Work/ML/"],
@@ -48,6 +50,7 @@ def populated_resolver(temp_store):
         PersonEntity(
             canonical_name="Sarah Chen",
             emails=["sarah@movementlabs.xyz"],
+            phone_numbers=["+15551234567"],
             company="Movement Labs",
             category="work",
             vault_contexts=["Work/ML/"],
@@ -64,6 +67,7 @@ def populated_resolver(temp_store):
         PersonEntity(
             canonical_name="Taylor",
             emails=["taylor@gmail.com"],
+            phone_numbers=["+15559876543"],
             category="family",
             vault_contexts=["Personal/"],
             last_seen=datetime.now(),
@@ -100,6 +104,26 @@ class TestResolveByEmail:
         """Test empty/null email returns None."""
         assert populated_resolver.resolve_by_email("") is None
         assert populated_resolver.resolve_by_email(None) is None
+
+
+class TestResolveByPhone:
+    """Tests for phone number anchoring."""
+
+    def test_exact_phone_match(self, populated_resolver):
+        """Test exact phone match returns entity."""
+        entity = populated_resolver.resolve_by_phone("+19012295017")
+        assert entity is not None
+        assert entity.canonical_name == "Yoni Landau"
+
+    def test_unknown_phone_returns_none(self, populated_resolver):
+        """Test unknown phone returns None."""
+        entity = populated_resolver.resolve_by_phone("+15555555555")
+        assert entity is None
+
+    def test_empty_phone_returns_none(self, populated_resolver):
+        """Test empty/null phone returns None."""
+        assert populated_resolver.resolve_by_phone("") is None
+        assert populated_resolver.resolve_by_phone(None) is None
 
 
 class TestResolveByName:
@@ -210,6 +234,37 @@ class TestResolveMain:
             create_if_missing=False,
         )
         assert result is None
+
+    def test_resolve_with_phone_priority(self, populated_resolver):
+        """Test phone matching works when email not found."""
+        result = populated_resolver.resolve(
+            name="Wrong Name",
+            phone="+19012295017",
+        )
+        assert result is not None
+        assert result.entity.canonical_name == "Yoni Landau"
+        assert result.match_type == "phone_exact"
+
+    def test_resolve_email_over_phone(self, populated_resolver):
+        """Test email takes priority over phone."""
+        result = populated_resolver.resolve(
+            email="sarah@movementlabs.xyz",
+            phone="+19012295017",  # Yoni's phone
+        )
+        assert result is not None
+        assert result.entity.canonical_name == "Sarah Chen"
+        assert result.match_type == "email_exact"
+
+    def test_resolve_create_with_phone(self, populated_resolver):
+        """Test creating entity with phone number."""
+        result = populated_resolver.resolve(
+            name="New Contact",
+            phone="+15550001234",
+            create_if_missing=True,
+        )
+        assert result is not None
+        assert result.is_new is True
+        assert "+15550001234" in result.entity.phone_numbers
 
 
 class TestResolveFromLinkedIn:

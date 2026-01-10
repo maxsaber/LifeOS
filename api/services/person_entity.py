@@ -73,6 +73,10 @@ class PersonEntity:
     related_notes: list[str] = field(default_factory=list)
     aliases: list[str] = field(default_factory=list)
 
+    # Phone numbers (E.164 format: +1XXXXXXXXXX)
+    phone_numbers: list[str] = field(default_factory=list)
+    phone_primary: Optional[str] = None  # Preferred phone (mobile > business > home)
+
     # Resolution metadata
     confidence_score: float = 1.0  # 0.0-1.0, how confident we are in merges
 
@@ -102,6 +106,30 @@ class PersonEntity:
             return False
         if not self.has_email(email):
             self.emails.append(email.lower())
+            return True
+        return False
+
+    def has_phone(self, phone: str) -> bool:
+        """Check if this person has a specific phone number."""
+        return phone in self.phone_numbers
+
+    def add_phone(self, phone: str) -> bool:
+        """
+        Add a phone number if not already present.
+
+        Args:
+            phone: E.164 format phone number (+1XXXXXXXXXX)
+
+        Returns:
+            True if phone was added, False if already exists
+        """
+        if not phone:
+            return False
+        if not self.has_phone(phone):
+            self.phone_numbers.append(phone)
+            # Set as primary if first phone number
+            if not self.phone_primary:
+                self.phone_primary = phone
             return True
         return False
 
@@ -146,6 +174,15 @@ class PersonEntity:
         # Combine aliases
         aliases = list(set(self.aliases + other.aliases))
 
+        # Combine phone numbers (unique)
+        phone_numbers = list(self.phone_numbers)
+        for phone in other.phone_numbers:
+            if phone not in phone_numbers:
+                phone_numbers.append(phone)
+
+        # Phone primary: prefer self, then other
+        phone_primary = self.phone_primary or other.phone_primary
+
         # Take first non-None values for single fields
         company = self.company or other.company
         position = self.position or other.position
@@ -175,6 +212,8 @@ class PersonEntity:
             mention_count=mention_count,
             related_notes=related_notes,
             aliases=aliases,
+            phone_numbers=phone_numbers,
+            phone_primary=phone_primary,
             confidence_score=confidence_score,
         )
 
@@ -276,6 +315,7 @@ class PersonEntityStore:
         self._entities: dict[str, PersonEntity] = {}  # Keyed by entity ID
         self._email_index: dict[str, str] = {}  # email.lower() → entity ID
         self._name_index: dict[str, str] = {}  # canonical_name.lower() → entity ID
+        self._phone_index: dict[str, str] = {}  # E.164 phone → entity ID
         self._load()
 
     def _load(self) -> None:
@@ -312,6 +352,11 @@ class PersonEntityStore:
             if alias:
                 self._name_index[alias.lower()] = entity.id
 
+        # Phone index
+        for phone in entity.phone_numbers:
+            if phone:
+                self._phone_index[phone] = entity.id
+
     def _remove_from_indices(self, entity: PersonEntity) -> None:
         """Remove entity from lookup indices."""
         for email in entity.emails:
@@ -323,6 +368,10 @@ class PersonEntityStore:
         for alias in entity.aliases:
             if alias:
                 self._name_index.pop(alias.lower(), None)
+
+        for phone in entity.phone_numbers:
+            if phone:
+                self._phone_index.pop(phone, None)
 
     def save(self) -> None:
         """Persist entities to disk."""
@@ -395,6 +444,13 @@ class PersonEntityStore:
     def get_by_email(self, email: str) -> Optional[PersonEntity]:
         """Get entity by email address (case-insensitive)."""
         entity_id = self._email_index.get(email.lower())
+        if entity_id:
+            return self._entities.get(entity_id)
+        return None
+
+    def get_by_phone(self, phone: str) -> Optional[PersonEntity]:
+        """Get entity by phone number (E.164 format)."""
+        entity_id = self._phone_index.get(phone)
         if entity_id:
             return self._entities.get(entity_id)
         return None
@@ -476,6 +532,7 @@ class PersonEntityStore:
             "by_category": by_category,
             "total_emails_indexed": len(self._email_index),
             "total_names_indexed": len(self._name_index),
+            "total_phones_indexed": len(self._phone_index),
         }
 
 

@@ -72,6 +72,37 @@ class TestPersonEntity:
         # Empty email
         assert entity.add_email("") is False
 
+    def test_has_phone(self):
+        """Test has_phone method."""
+        entity = PersonEntity(
+            canonical_name="Test",
+            phone_numbers=["+19012295017"],
+        )
+
+        assert entity.has_phone("+19012295017")
+        assert not entity.has_phone("+15555555555")
+
+    def test_add_phone(self):
+        """Test add_phone method."""
+        entity = PersonEntity(canonical_name="Test", phone_numbers=[])
+
+        # Add first phone - should also set as primary
+        assert entity.add_phone("+19012295017") is True
+        assert len(entity.phone_numbers) == 1
+        assert entity.phone_primary == "+19012295017"
+
+        # Add second phone
+        assert entity.add_phone("+15551234567") is True
+        assert len(entity.phone_numbers) == 2
+        assert entity.phone_primary == "+19012295017"  # Still first one
+
+        # Try to add duplicate
+        assert entity.add_phone("+19012295017") is False
+        assert len(entity.phone_numbers) == 2
+
+        # Empty phone
+        assert entity.add_phone("") is False
+
     def test_merge_entities(self):
         """Test merging two PersonEntity objects."""
         entity1 = PersonEntity(
@@ -84,6 +115,8 @@ class TestPersonEntity:
             meeting_count=5,
             email_count=10,
             aliases=["Sarah"],
+            phone_numbers=["+19012295017"],
+            phone_primary="+19012295017",
             confidence_score=0.9,
         )
 
@@ -97,6 +130,8 @@ class TestPersonEntity:
             meeting_count=3,
             email_count=5,
             aliases=["S. Chen"],
+            phone_numbers=["+15551234567"],  # Different phone
+            phone_primary="+15551234567",
             confidence_score=0.8,
         )
 
@@ -126,6 +161,14 @@ class TestPersonEntity:
         # Should combine aliases
         assert "Sarah" in merged.aliases
         assert "S. Chen" in merged.aliases
+
+        # Should combine phone numbers
+        assert len(merged.phone_numbers) == 2
+        assert "+19012295017" in merged.phone_numbers
+        assert "+15551234567" in merged.phone_numbers
+
+        # Should preserve first entity's phone_primary
+        assert merged.phone_primary == "+19012295017"
 
         # Should take first non-None values
         assert merged.company == "Movement Labs"
@@ -286,6 +329,21 @@ class TestPersonEntityStore:
         assert temp_store.get_by_email("TEST@EXAMPLE.COM") is not None
         assert temp_store.get_by_email("other@example.com") is None
 
+    def test_get_by_phone(self, temp_store):
+        """Test retrieving entity by phone number."""
+        entity = PersonEntity(
+            canonical_name="Phone Test",
+            emails=["phone@example.com"],
+            phone_numbers=["+19012295017", "+15551234567"],
+        )
+
+        temp_store.add(entity)
+
+        # Phone lookup
+        assert temp_store.get_by_phone("+19012295017") is not None
+        assert temp_store.get_by_phone("+15551234567") is not None
+        assert temp_store.get_by_phone("+15555555555") is None
+
     def test_get_by_name(self, temp_store):
         """Test retrieving entity by name or alias."""
         entity = PersonEntity(
@@ -415,12 +473,14 @@ class TestPersonEntityStore:
             PersonEntity(
                 canonical_name="Work Person",
                 emails=["work@company.com"],
+                phone_numbers=["+19012295017"],
                 sources=["linkedin", "gmail"],
                 category="work",
             ),
             PersonEntity(
                 canonical_name="Family Person",
                 emails=["family@home.com", "alt@home.com"],
+                phone_numbers=["+15551234567", "+15559876543"],
                 sources=["gmail"],
                 category="family",
             ),
@@ -437,6 +497,7 @@ class TestPersonEntityStore:
         assert stats["by_category"]["work"] == 1
         assert stats["by_category"]["family"] == 1
         assert stats["total_emails_indexed"] == 3
+        assert stats["total_phones_indexed"] == 3
 
     def test_get_all(self, temp_store):
         """Test getting all entities."""
