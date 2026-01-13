@@ -2807,6 +2807,980 @@ Tests:
 
 ---
 
+## Phase 9: Advanced Retrieval Improvements
+
+This phase implements four major retrieval enhancements based on Anthropic's contextual retrieval research and industry best practices. Combined, these improvements are expected to increase retrieval accuracy by 35-67%.
+
+**Rationale:**
+Current hybrid search (vector + BM25) works well for explicit queries but struggles with:
+- Context loss: Chunks like "KTN: TT11YZS7J" lack context about what document they're from
+- Precision: Top results include false positives that a more sophisticated model could filter
+- Boundary issues: Information split across chunk boundaries may not be retrieved
+- Discovery: "Which file has X" queries require full document awareness
+
+**Expected Improvements (based on Anthropic research):**
+- Contextual chunking alone: 35-50% reduction in retrieval failures
+- Cross-encoder re-ranking: 15-25% precision improvement
+- Combined with document summaries: Additional 10-15% for discovery queries
+
+---
+
+### P9.1: Contextual Chunking
+
+**Requirements:**
+Add document context to each chunk during indexing. Instead of storing raw text, prepend 1-2 sentences explaining what document the chunk is from and what it contains. This helps the embedding model understand context and significantly improves retrieval accuracy.
+
+**Current vs New Chunking:**
+
+```
+CURRENT (raw chunk):
+"KTN: TT11YZS7J
+Passport: A43579960
+Expires: July 1, 2034"
+
+NEW (contextual chunk):
+"This chunk is from Taylor.md, a personal profile document in the People folder
+containing travel documents, contact info, and important dates for Taylor.
+
+KTN: TT11YZS7J
+Passport: A43579960
+Expires: July 1, 2034"
+```
+
+**Context Generation Strategy:**
+
+1. **Template-Based Context** (fast, no API cost):
+   For most documents, generate context from metadata:
+   ```
+   "This chunk is from {file_name}, a {note_type} document in the {folder_path} folder
+   {about_phrase}."
+   ```
+
+   Where `about_phrase` is derived from:
+   - Granola notes: "containing meeting notes from {date} with {attendees}"
+   - People files: "containing personal information about {person_name}"
+   - Meeting notes: "containing notes from a {meeting_type} meeting"
+   - Daily notes: "containing daily notes from {date}"
+   - General: "containing notes about {inferred_topic}" (from first header or title)
+
+2. **Inferred Topic Detection:**
+   - Extract from H1 header if present
+   - Extract from filename (strip date, extension)
+   - Use first 50 chars of content if no header
+   - Never include raw content in context description
+
+**Implementation Changes:**
+
+**chunker.py** - Add context generation:
+```python
+def generate_chunk_context(
+    file_path: Path,
+    metadata: dict,
+    chunk_content: str,
+    chunk_index: int,
+    total_chunks: int
+) -> str:
+    """
+    Generate contextual prefix for a chunk.
+
+    Returns 1-2 sentences describing document context.
+    """
+    file_name = file_path.name
+    folder = file_path.parent.name
+    note_type = metadata.get("note_type", "note")
+
+    # Build context description
+    if metadata.get("granola_id"):
+        # Granola meeting note
+        people = metadata.get("people", [])
+        date = metadata.get("modified_date", "")
+        attendees = ", ".join(people[:3]) if people else "attendees"
+        context = f"This chunk is from {file_name}, a meeting note containing " \
+                  f"discussion from {date} with {attendees}."
+    elif folder == "People" or "People" in str(file_path):
+        # People profile
+        person_name = file_name.replace(".md", "")
+        context = f"This chunk is from {file_name}, a personal profile document " \
+                  f"containing contact info, travel documents, and notes about {person_name}."
+    elif "Daily" in str(file_path) or re.match(r"\d{4}-\d{2}-\d{2}", file_name):
+        # Daily notes
+        context = f"This chunk is from {file_name}, a daily log containing " \
+                  f"activities and notes from that day."
+    else:
+        # General note - infer topic from header or filename
+        topic = _infer_topic(file_name, chunk_content)
+        context = f"This chunk is from {file_name} in {folder}/, " \
+                  f"containing notes about {topic}."
+
+    # Add chunk position for multi-chunk docs
+    if total_chunks > 1:
+        context += f" (Part {chunk_index + 1} of {total_chunks})"
+
+    return context
+
+
+def _infer_topic(file_name: str, content: str) -> str:
+    """Infer document topic from filename or first header."""
+    # Try H1 header
+    h1_match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
+    if h1_match:
+        return h1_match.group(1).strip()[:50]
+
+    # Use cleaned filename
+    topic = file_name.replace(".md", "")
+    topic = re.sub(r'\d{4}[-_]?\d{2}[-_]?\d{2}', '', topic)  # Remove dates
+    topic = re.sub(r'[_-]+', ' ', topic).strip()
+    return topic if topic else "general notes"
+```
+
+**indexer.py** - Pass context to chunks:
+```python
+def index_file(self, file_path: Path) -> int:
+    # ... existing code ...
+
+    # Generate chunks
+    chunks = chunk_document(body, is_granola, settings.chunk_size, settings.chunk_overlap)
+
+    # Add context to each chunk
+    for i, chunk in enumerate(chunks):
+        context = generate_chunk_context(
+            file_path=file_path,
+            metadata=metadata,
+            chunk_content=chunk["content"],
+            chunk_index=i,
+            total_chunks=len(chunks)
+        )
+        # Prepend context to chunk content
+        chunk["content"] = f"{context}\n\n{chunk['content']}"
+        chunk["has_context"] = True  # Flag for later reference
+
+    # ... rest of indexing ...
+```
+
+**BM25 Index Update:**
+The BM25 index should store BOTH:
+1. Contextualized content (for semantic-aware keyword search)
+2. Original file_name and people (unchanged for exact matching)
+
+**Backward Compatibility:**
+- Existing chunks without context still work
+- New `has_context` metadata flag distinguishes contextual chunks
+- Full reindex required to add context to all documents
+
+**Process:**
+1. Write unit tests for `generate_chunk_context()`
+2. Write tests for topic inference from headers/filenames
+3. Implement context generation in chunker.py
+4. Write tests for indexer context integration
+5. Update indexer to add context during indexing
+6. Write tests for BM25 with contextualized content
+7. Verify hybrid search still works with new chunk format
+8. Full vault reindex to apply context
+9. A/B test: compare retrieval accuracy with/without context
+10. Browser integration test: verify person queries work better
+
+**Acceptance Criteria:**
+```
+[ ] generate_chunk_context() produces valid context strings
+[ ] Context includes file_name, folder, and inferred topic
+[ ] Granola notes context mentions attendees and date
+[ ] People files context mentions person name
+[ ] Daily notes context mentions date
+[ ] Topic inference extracts from H1 header when present
+[ ] Topic inference falls back to cleaned filename
+[ ] Multi-chunk documents show "Part X of Y"
+[ ] Contextualized chunks are properly embedded
+[ ] BM25 index stores contextualized content
+[ ] Hybrid search returns contextualized results
+[ ] Original content still searchable (not just context)
+[ ] has_context metadata flag set on new chunks
+[ ] Full reindex completes in <10 minutes for ~4500 files
+[ ] Unit tests for context generation
+[ ] Unit tests for topic inference
+[ ] Integration test: index file, search, verify context in results
+[ ] Browser test: "What is Taylor's KTN?" returns Taylor.md first
+[ ] Browser test: "passport info" finds relevant people files
+```
+
+**Completion Promise:** `<promise>P9.1-CONTEXTUAL-CHUNKING-COMPLETE</promise>`
+
+---
+
+### P9.2: Cross-Encoder Re-ranking
+
+**Requirements:**
+Add a cross-encoder re-ranking step after hybrid search. Cross-encoders see the query and document together (unlike bi-encoders), enabling much more accurate relevance scoring. This significantly improves precision by filtering out false positives.
+
+**Architecture:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Enhanced Search Pipeline                     │
+│                                                                   │
+│  Query: "What is Alex's phone number?"                          │
+│                    │                                              │
+│                    ▼                                              │
+│  ┌─────────────────────────────────────────┐                    │
+│  │         Hybrid Search (existing)         │                    │
+│  │  Vector + BM25 + RRF + Boosts           │                    │
+│  │  Returns: top 50 candidates              │                    │
+│  └────────────────────┬────────────────────┘                    │
+│                       │                                          │
+│                       ▼                                          │
+│  ┌─────────────────────────────────────────┐                    │
+│  │         Cross-Encoder Re-ranking         │  ← NEW            │
+│  │  Model: ms-marco-MiniLM-L6-v2           │                    │
+│  │  Input: (query, chunk) pairs             │                    │
+│  │  Output: relevance scores 0.0-1.0       │                    │
+│  │  Returns: top 10-20, re-ranked          │                    │
+│  └────────────────────┬────────────────────┘                    │
+│                       │                                          │
+│                       ▼                                          │
+│  ┌─────────────────────────────────────────┐                    │
+│  │            Synthesis (existing)          │                    │
+│  │  Claude with re-ranked context          │                    │
+│  └─────────────────────────────────────────┘                    │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Model Selection:**
+- **Primary:** `cross-encoder/ms-marco-MiniLM-L6-v2`
+  - Size: ~90MB
+  - Speed: ~200ms for 50 pairs on CPU
+  - Accuracy: Very high for retrieval tasks
+  - Trained on MS MARCO passage ranking dataset
+
+- **Alternative:** `cross-encoder/ms-marco-MiniLM-L12-v2`
+  - Slightly more accurate, 2x slower
+  - Use if quality > speed for your use case
+
+**Implementation:**
+
+**New file: `api/services/reranker.py`**
+```python
+"""
+Cross-encoder re-ranking service for LifeOS.
+
+Uses a cross-encoder model to re-rank search results by computing
+query-document relevance scores. Much more accurate than bi-encoder
+similarity because it sees query and document together.
+"""
+import logging
+from typing import Optional, TYPE_CHECKING
+from functools import lru_cache
+
+if TYPE_CHECKING:
+    from sentence_transformers import CrossEncoder
+
+logger = logging.getLogger(__name__)
+
+
+class RerankerService:
+    """
+    Cross-encoder re-ranking service.
+
+    Lazy-loads model on first use to avoid slow startup.
+    Caches model in memory for subsequent calls.
+    """
+
+    def __init__(self, model_name: str = "cross-encoder/ms-marco-MiniLM-L6-v2"):
+        self.model_name = model_name
+        self._model: Optional["CrossEncoder"] = None
+
+    def _get_model(self) -> "CrossEncoder":
+        """Lazy-load cross-encoder model."""
+        if self._model is None:
+            from sentence_transformers import CrossEncoder
+            logger.info(f"Loading cross-encoder model: {self.model_name}")
+            self._model = CrossEncoder(self.model_name)
+            logger.info("Cross-encoder model loaded")
+        return self._model
+
+    def rerank(
+        self,
+        query: str,
+        results: list[dict],
+        top_k: int = 10,
+        content_key: str = "content"
+    ) -> list[dict]:
+        """
+        Re-rank search results using cross-encoder.
+
+        Args:
+            query: Search query string
+            results: List of search results with content
+            top_k: Number of results to return after re-ranking
+            content_key: Key in result dict containing text to score
+
+        Returns:
+            Re-ranked results with cross_encoder_score added
+        """
+        if not results:
+            return []
+
+        if len(results) <= top_k:
+            # Not enough results to re-rank meaningfully
+            for r in results:
+                r["cross_encoder_score"] = r.get("hybrid_score", 0.5)
+            return results
+
+        model = self._get_model()
+
+        # Prepare query-document pairs
+        pairs = [(query, r.get(content_key, "")) for r in results]
+
+        # Score all pairs
+        try:
+            scores = model.predict(pairs, show_progress_bar=False)
+        except Exception as e:
+            logger.error(f"Cross-encoder scoring failed: {e}")
+            # Fall back to original ranking
+            return results[:top_k]
+
+        # Add scores to results
+        for result, score in zip(results, scores):
+            result["cross_encoder_score"] = float(score)
+
+        # Sort by cross-encoder score (descending)
+        reranked = sorted(results, key=lambda x: -x["cross_encoder_score"])
+
+        return reranked[:top_k]
+
+
+# Singleton instance
+_reranker_instance: Optional[RerankerService] = None
+
+
+def get_reranker() -> RerankerService:
+    """Get singleton reranker instance."""
+    global _reranker_instance
+    if _reranker_instance is None:
+        _reranker_instance = RerankerService()
+    return _reranker_instance
+```
+
+**Update `hybrid_search.py`:**
+```python
+def search(
+    self,
+    query: str,
+    top_k: int = 20,
+    apply_recency_boost: bool = True,
+    use_reranker: bool = True,        # NEW
+    rerank_candidates: int = 50       # NEW
+) -> list[dict]:
+    """
+    Perform hybrid search with optional cross-encoder re-ranking.
+
+    When use_reranker=True:
+    1. Retrieve rerank_candidates results via hybrid search
+    2. Re-rank top candidates using cross-encoder
+    3. Return top_k after re-ranking
+    """
+    # Fetch more candidates for re-ranking
+    fetch_k = rerank_candidates if use_reranker else top_k
+
+    # ... existing hybrid search code ...
+    # Returns fetch_k results
+
+    # Apply cross-encoder re-ranking
+    if use_reranker and len(final_results) > top_k:
+        try:
+            from api.services.reranker import get_reranker
+            reranker = get_reranker()
+            final_results = reranker.rerank(
+                query=expanded_query,
+                results=final_results,
+                top_k=top_k,
+                content_key="content"
+            )
+        except Exception as e:
+            logger.warning(f"Re-ranking failed, using hybrid scores: {e}")
+            final_results = final_results[:top_k]
+
+    return final_results[:top_k]
+```
+
+**Settings Addition:**
+```python
+# config/settings.py
+class Settings(BaseSettings):
+    # ... existing ...
+
+    # Cross-encoder re-ranking
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L6-v2"
+    reranker_enabled: bool = True
+    reranker_candidates: int = 50  # Fetch this many for re-ranking
+```
+
+**Dependencies:**
+Add to `requirements.txt`:
+```
+sentence-transformers>=2.2.0  # Already present for embeddings
+# Cross-encoder support is built into sentence-transformers
+```
+
+**Performance Considerations:**
+- Model loads in ~2-3 seconds on first query (lazy loading)
+- Re-ranking 50 candidates: ~200ms on M4 Mac Mini CPU
+- Consider caching model in memory via singleton
+- For very high traffic, consider GPU or model optimization
+
+**Process:**
+1. Write unit tests for RerankerService
+2. Implement RerankerService with lazy loading
+3. Write tests for hybrid search with re-ranking
+4. Integrate reranker into hybrid_search.py
+5. Add settings for reranker configuration
+6. Write tests for fallback behavior (reranker fails)
+7. Benchmark: latency impact of re-ranking
+8. A/B test: precision with/without re-ranking
+9. Browser integration test: verify improved results
+
+**Acceptance Criteria:**
+```
+[ ] RerankerService loads cross-encoder model on first use
+[ ] Model cached in memory for subsequent calls
+[ ] rerank() scores all query-document pairs
+[ ] Results sorted by cross_encoder_score descending
+[ ] cross_encoder_score added to each result
+[ ] Graceful fallback if re-ranking fails
+[ ] hybrid_search.search() accepts use_reranker parameter
+[ ] Default: re-ranking enabled with 50 candidates
+[ ] Re-ranking disabled by setting use_reranker=False
+[ ] Re-ranking latency <300ms for 50 candidates (M4 Mac Mini)
+[ ] Total search latency <500ms with re-ranking
+[ ] Settings allow model and candidate count configuration
+[ ] Unit tests for RerankerService
+[ ] Unit tests for hybrid search integration
+[ ] Integration test: search with/without reranking
+[ ] Browser test: top result more accurate after re-ranking
+[ ] Browser test: person queries return correct person first
+```
+
+**Completion Promise:** `<promise>P9.2-CROSS-ENCODER-RERANKING-COMPLETE</promise>`
+
+---
+
+### P9.3: Overlapping Chunks (Enhancement)
+
+**Requirements:**
+Increase chunk overlap from 10% to 20% to ensure context isn't lost at chunk boundaries. Currently chunks have 50 tokens of overlap (10% of 500). Increasing to 100 tokens (20%) improves retrieval for information that spans chunk boundaries.
+
+**Current Settings:**
+```python
+chunk_size: int = 500  # tokens
+chunk_overlap: int = 50  # tokens (10%)
+```
+
+**New Settings:**
+```python
+chunk_size: int = 500  # tokens
+chunk_overlap: int = 100  # tokens (20%)
+```
+
+**Trade-offs:**
+| Aspect | 10% Overlap | 20% Overlap |
+|--------|-------------|-------------|
+| Storage | Baseline | ~10% increase |
+| Indexing time | Baseline | ~10% increase |
+| Duplicate results | Rare | Occasional |
+| Boundary context | Often lost | Usually preserved |
+| Retrieval quality | Good | Better |
+
+**Implementation Changes:**
+
+**config/settings.py:**
+```python
+chunk_overlap: int = 100  # tokens (20% of 500)
+```
+
+**chunker.py** - Already supports configurable overlap, no changes needed.
+
+**Deduplication Enhancement:**
+With more overlap, we may get duplicate/overlapping chunks in search results. Add deduplication:
+
+**hybrid_search.py:**
+```python
+def _deduplicate_overlapping_chunks(results: list[dict]) -> list[dict]:
+    """
+    Remove overlapping chunks from same file, keeping highest scored.
+
+    Two chunks from the same file are considered overlapping if:
+    - Chunk indices are adjacent (i.e., chunk_1 and chunk_2)
+    - Both appear in top results
+
+    Keep the one with higher score, skip the other.
+    """
+    seen_file_chunks = {}  # file_path -> set of chunk_indices
+    deduplicated = []
+
+    for result in results:
+        file_path = result.get("file_path", "")
+        chunk_idx = result.get("metadata", {}).get("chunk_index", -1)
+
+        if file_path not in seen_file_chunks:
+            seen_file_chunks[file_path] = set()
+
+        # Check if adjacent chunk already included
+        adjacent = {chunk_idx - 1, chunk_idx, chunk_idx + 1}
+        if not adjacent.intersection(seen_file_chunks[file_path]):
+            deduplicated.append(result)
+            seen_file_chunks[file_path].add(chunk_idx)
+        # else: skip this overlapping chunk (lower score)
+
+    return deduplicated
+```
+
+**Process:**
+1. Update settings to 100 token overlap
+2. Write tests for overlapping chunk generation
+3. Verify chunker produces correct overlap
+4. Write tests for deduplication
+5. Implement deduplication in hybrid search
+6. Full vault reindex with new overlap
+7. Verify storage increase is ~10%
+8. Browser test: boundary information retrieval
+
+**Acceptance Criteria:**
+```
+[ ] chunk_overlap setting changed to 100 tokens
+[ ] Chunker produces 20% overlap between adjacent chunks
+[ ] Overlap visible in chunk content (last ~100 tokens = first ~100 tokens of next)
+[ ] BM25 index updated with overlapping chunks
+[ ] Vector store updated with overlapping chunks
+[ ] Deduplication removes adjacent chunks from same file
+[ ] Higher-scored chunk preserved, lower skipped
+[ ] Storage increase ~10% after reindex
+[ ] Full reindex completes successfully
+[ ] Unit tests for chunker overlap
+[ ] Unit tests for deduplication
+[ ] Integration test: info at chunk boundary retrieved correctly
+[ ] Browser test: query spanning chunk boundary returns relevant result
+```
+
+**Completion Promise:** `<promise>P9.3-OVERLAPPING-CHUNKS-COMPLETE</promise>`
+
+---
+
+### P9.4: Document Summaries
+
+**Requirements:**
+Generate a 1-2 sentence summary of each document during indexing and store as a separate searchable chunk. This enables "which file has X" queries and improves retrieval for high-level document discovery.
+
+**Architecture:**
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Document Summary System                       │
+│                                                                   │
+│  Indexing:                                                       │
+│  ┌─────────────────┐    ┌─────────────────────────────────────┐ │
+│  │  Document.md    │───▶│  Ollama (llama3.2:3b)                │ │
+│  │  (full content) │    │  "Summarize this document in 1-2    │ │
+│  │                 │    │   sentences..."                      │ │
+│  └─────────────────┘    └──────────────┬──────────────────────┘ │
+│                                        │                         │
+│                                        ▼                         │
+│  ┌─────────────────────────────────────────────────────────────┐│
+│  │  Summary Chunk (stored in vector store + BM25)              ││
+│  │  ID: {file_path}::summary                                   ││
+│  │  Content: "This document contains meeting notes from the    ││
+│  │           Q4 budget review with Kevin and Sarah, covering   ││
+│  │           2025 projections and cost reduction initiatives." ││
+│  │  Metadata: {is_summary: true, file_path: ...}              ││
+│  └─────────────────────────────────────────────────────────────┘│
+│                                                                   │
+│  Search: "Which file has Q4 budget info?"                       │
+│          → Summary chunks match, return file_paths              │
+│                                                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Summary Generation Strategy:**
+
+1. **Use Local LLM (Ollama):**
+   - Model: llama3.2:3b (already installed for routing)
+   - No API cost
+   - ~500ms per summary on M4 Mac Mini
+   - Fallback: first 200 chars of content if Ollama unavailable
+
+2. **Summary Prompt:**
+   ```
+   Summarize this document in 1-2 sentences. Focus on:
+   - What type of document it is (meeting notes, personal profile, project doc, etc.)
+   - Key topics, people, or decisions it covers
+   - Any important dates or deadlines mentioned
+
+   Document content:
+   {first 2000 chars of document}
+
+   Summary:
+   ```
+
+3. **When to Generate:**
+   - During initial indexing of new files
+   - During nightly reindex (only if content changed)
+   - Skip if file < 100 tokens (too short)
+   - Skip if summary already exists and content unchanged
+
+**Implementation:**
+
+**New file: `api/services/summarizer.py`**
+```python
+"""
+Document summarization service using local LLM.
+
+Generates brief summaries for document discovery and high-level search.
+Uses Ollama with llama3.2:3b for zero-cost local summarization.
+"""
+import logging
+from typing import Optional
+from api.services.ollama_client import get_ollama_client
+
+logger = logging.getLogger(__name__)
+
+SUMMARY_PROMPT = """Summarize this document in 1-2 sentences. Focus on:
+- What type of document it is (meeting notes, personal profile, project doc, etc.)
+- Key topics, people, or decisions it covers
+- Any important dates or deadlines mentioned
+
+Document content:
+{content}
+
+Summary:"""
+
+
+def generate_summary(
+    content: str,
+    file_name: str,
+    max_content_chars: int = 2000,
+    timeout: int = 10
+) -> Optional[str]:
+    """
+    Generate a document summary using local LLM.
+
+    Args:
+        content: Document content to summarize
+        file_name: Name of file (for logging)
+        max_content_chars: Max chars to send to LLM
+        timeout: Timeout in seconds for LLM call
+
+    Returns:
+        1-2 sentence summary, or None if generation fails
+    """
+    if len(content) < 100:
+        # Too short to summarize meaningfully
+        return None
+
+    try:
+        client = get_ollama_client()
+
+        # Truncate content if needed
+        truncated = content[:max_content_chars]
+        if len(content) > max_content_chars:
+            truncated += "\n[... content truncated ...]"
+
+        prompt = SUMMARY_PROMPT.format(content=truncated)
+
+        response = client.generate(
+            prompt=prompt,
+            max_tokens=150,  # Summary should be brief
+            temperature=0.3,  # Low temperature for factual summary
+            timeout=timeout
+        )
+
+        summary = response.get("response", "").strip()
+
+        # Validate summary
+        if len(summary) < 20 or len(summary) > 500:
+            logger.warning(f"Invalid summary length for {file_name}: {len(summary)}")
+            return _fallback_summary(content, file_name)
+
+        return summary
+
+    except Exception as e:
+        logger.warning(f"Summary generation failed for {file_name}: {e}")
+        return _fallback_summary(content, file_name)
+
+
+def _fallback_summary(content: str, file_name: str) -> str:
+    """Generate fallback summary from first content lines."""
+    # Extract first meaningful line (skip frontmatter, headers)
+    lines = content.split('\n')
+    for line in lines:
+        line = line.strip()
+        if line and not line.startswith('#') and not line.startswith('---'):
+            if len(line) > 20:
+                return f"Document '{file_name}': {line[:150]}..."
+
+    return f"Document '{file_name}' containing various notes."
+```
+
+**indexer.py updates:**
+```python
+def index_file(self, file_path: Path) -> int:
+    # ... existing chunking code ...
+
+    # Generate document summary (for discovery queries)
+    from api.services.summarizer import generate_summary
+
+    summary = generate_summary(body, file_path.name)
+    if summary:
+        summary_chunk = {
+            "content": f"Document summary for {file_path.name}: {summary}",
+            "chunk_index": -1,  # Special index for summary
+            "is_summary": True
+        }
+
+        # Add to vector store with summary ID
+        summary_id = f"{file_path.resolve()}::summary"
+        self.vector_store.add_document(
+            chunks=[summary_chunk],
+            metadata={**metadata, "is_summary": True},
+            doc_id=summary_id
+        )
+
+        # Add to BM25 index
+        self.bm25_index.add_document(
+            doc_id=summary_id,
+            content=summary_chunk["content"],
+            file_name=file_path.name,
+            people=all_people
+        )
+
+    # ... rest of indexing ...
+```
+
+**Search Integration:**
+
+Summary chunks are searchable like regular chunks. For "which file" queries:
+1. Summary chunks often rank highest (whole-document context)
+2. Results link back to the full document via file_path
+3. UI can show "Found in document summary" indicator
+
+**Batch Summary Generation:**
+
+For initial indexing of existing vault, add batch processing:
+
+**scripts/generate_summaries.py:**
+```python
+"""
+Generate summaries for all documents in vault.
+Run once after initial setup, then incrementally during indexing.
+"""
+import time
+from pathlib import Path
+from api.services.summarizer import generate_summary
+
+def batch_generate_summaries(vault_path: Path, limit: int = None):
+    """Generate summaries for all markdown files."""
+    md_files = list(vault_path.rglob("*.md"))
+
+    if limit:
+        md_files = md_files[:limit]
+
+    stats = {"success": 0, "failed": 0, "skipped": 0}
+
+    for i, path in enumerate(md_files):
+        try:
+            content = path.read_text(encoding="utf-8")
+            summary = generate_summary(content, path.name)
+
+            if summary:
+                stats["success"] += 1
+                print(f"[{i+1}/{len(md_files)}] {path.name}: {summary[:50]}...")
+            else:
+                stats["skipped"] += 1
+
+        except Exception as e:
+            stats["failed"] += 1
+            print(f"[{i+1}/{len(md_files)}] FAILED {path.name}: {e}")
+
+        # Rate limiting to avoid overwhelming Ollama
+        time.sleep(0.1)
+
+    print(f"\nSummary generation complete: {stats}")
+```
+
+**Process:**
+1. Write unit tests for generate_summary()
+2. Implement summarizer service with Ollama
+3. Write tests for fallback summary generation
+4. Implement fallback for when Ollama unavailable
+5. Write tests for summary indexing
+6. Update indexer to create summary chunks
+7. Write tests for summary search integration
+8. Verify summaries appear in search results
+9. Create batch generation script
+10. Run batch generation on existing vault
+11. Browser test: "which file has X" queries
+
+**Acceptance Criteria:**
+```
+[ ] generate_summary() calls Ollama with appropriate prompt
+[ ] Summaries are 1-2 sentences (20-500 chars)
+[ ] Content truncated to 2000 chars before sending to LLM
+[ ] Fallback summary uses first content line if LLM fails
+[ ] Summary chunks stored with is_summary=True metadata
+[ ] Summary chunk ID format: {file_path}::summary
+[ ] Summaries indexed in both vector store and BM25
+[ ] Summary chunks appear in search results
+[ ] file_path in summary chunk links to original document
+[ ] Short documents (<100 tokens) skipped for summarization
+[ ] Batch script generates summaries with rate limiting
+[ ] Batch completes for ~4500 files in <1 hour
+[ ] Unit tests for summarizer service
+[ ] Unit tests for fallback generation
+[ ] Integration test: index file, search summary, find document
+[ ] Browser test: "which file has budget info" finds relevant docs
+[ ] Browser test: "what documents mention Taylor" returns summaries
+```
+
+**Completion Promise:** `<promise>P9.4-DOCUMENT-SUMMARIES-COMPLETE</promise>`
+
+---
+
+### P9.5: Integration Testing & Validation
+
+**Requirements:**
+Comprehensive integration testing of all Phase 9 improvements together, plus browser-based validation from the user's perspective.
+
+**Test Suite:**
+
+**tests/test_phase9_integration.py:**
+```python
+"""
+Integration tests for Phase 9 retrieval improvements.
+Tests all four improvements working together.
+"""
+import pytest
+from pathlib import Path
+
+@pytest.mark.integration
+class TestPhase9Integration:
+
+    def test_contextual_chunking_improves_person_retrieval(self):
+        """Verify contextual chunks rank higher for person queries."""
+        # Index a person file
+        # Search for "{person}'s phone number"
+        # Verify person file is in top 3 results
+        pass
+
+    def test_cross_encoder_reranking_precision(self):
+        """Verify cross-encoder re-ranking improves precision."""
+        # Search with and without re-ranking
+        # Verify relevant result ranks higher with re-ranking
+        pass
+
+    def test_overlapping_chunks_boundary_retrieval(self):
+        """Verify info at chunk boundaries is retrievable."""
+        # Create document with info spanning chunk boundary
+        # Search for that specific info
+        # Verify it's found (would fail with no overlap)
+        pass
+
+    def test_document_summaries_discovery(self):
+        """Verify document summaries enable discovery queries."""
+        # Search "which file has budget information"
+        # Verify summary chunk returns with correct file_path
+        pass
+
+    def test_all_improvements_combined(self):
+        """Verify all improvements work together without conflicts."""
+        # Full end-to-end test with all features enabled
+        pass
+```
+
+**Browser Validation Test Cases:**
+
+| Test Case | Query | Expected Result |
+|-----------|-------|-----------------|
+| Person lookup | "What is Taylor's KTN?" | Taylor.md in top 1, KTN value returned |
+| Phone number | "Alex's phone number" | Alex.md in top 1, phone returned |
+| Document discovery | "Which file has Q4 budget?" | Budget file summary, link to doc |
+| Boundary info | "meeting with Kevin on Dec 15" | Correct meeting note found |
+| Complex query | "Prepare me for meeting with Sarah" | Relevant briefing with multiple sources |
+
+**Benchmark Test:**
+
+Create benchmark comparing retrieval quality before/after Phase 9:
+
+```python
+BENCHMARK_QUERIES = [
+    # Person queries
+    ("Taylor's passport expiration", "Taylor.md"),
+    ("Alex's email address", "Alex.md"),
+
+    # Topic queries
+    ("Q4 budget projections", "Budget Review.md"),
+    ("hiring plans for Q1", "Hiring.md"),
+
+    # Discovery queries
+    ("which file has travel documents", "Taylor.md"),
+    ("documents about ML strategy", "Strategy.md"),
+
+    # Boundary queries (info spans chunks)
+    ("action items from budget meeting", "Budget Meeting.md"),
+]
+
+def run_benchmark():
+    """Run benchmark and report accuracy."""
+    results = []
+    for query, expected_file in BENCHMARK_QUERIES:
+        search_results = hybrid_search.search(query, top_k=5)
+        top_files = [r["file_name"] for r in search_results[:3]]
+
+        found_in_top3 = expected_file in top_files
+        results.append({
+            "query": query,
+            "expected": expected_file,
+            "found_in_top3": found_in_top3,
+            "actual_top3": top_files
+        })
+
+    accuracy = sum(1 for r in results if r["found_in_top3"]) / len(results)
+    print(f"Benchmark accuracy: {accuracy:.1%}")
+    return results
+```
+
+**Acceptance Criteria:**
+```
+[ ] All Phase 9 unit tests pass
+[ ] All Phase 9 integration tests pass
+[ ] Benchmark accuracy >85% on test queries
+[ ] Person lookup accuracy: >95% (top 1 correct)
+[ ] Document discovery accuracy: >80% (expected file in top 3)
+[ ] Total search latency <600ms with all improvements
+[ ] No regression in existing functionality
+[ ] Browser test: all 5 validation test cases pass
+[ ] Memory usage increase <200MB from new models
+[ ] Index size increase <20% from summaries + overlap
+```
+
+**Completion Promise:** `<promise>P9.5-INTEGRATION-TESTING-COMPLETE</promise>`
+
+---
+
+### Phase 9 Summary
+
+| Sub-Phase | Description | Expected Impact |
+|-----------|-------------|-----------------|
+| P9.1 | Contextual Chunking | +35-50% retrieval accuracy |
+| P9.2 | Cross-Encoder Re-ranking | +15-25% precision |
+| P9.3 | Overlapping Chunks | Better boundary handling |
+| P9.4 | Document Summaries | Better discovery queries |
+| P9.5 | Integration Testing | Validation of all improvements |
+
+**Implementation Order:**
+1. **P9.3** (Overlapping Chunks) - Simple config change, reindex
+2. **P9.1** (Contextual Chunking) - Core improvement, requires reindex
+3. **P9.2** (Cross-Encoder Re-ranking) - New service, no reindex
+4. **P9.4** (Document Summaries) - Requires Ollama, batch processing
+5. **P9.5** (Integration Testing) - Validates everything works together
+
+**Total Estimated Effort:** 2-3 days of focused implementation
+
+---
+
 ## Success Metrics
 
 After Phase 2 complete:
@@ -2835,4 +3809,4 @@ After Phase 3 complete:
 
 ---
 
-*Last updated: 2026-01-09*
+*Last updated: 2026-01-13*

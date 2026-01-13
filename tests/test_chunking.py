@@ -9,12 +9,16 @@ import pytest
 
 # All tests in this file are fast unit tests
 pytestmark = pytest.mark.unit
+from pathlib import Path
 from api.services.chunker import (
     parse_markdown,
     chunk_by_headers,
     chunk_by_tokens,
     chunk_document,
     extract_frontmatter,
+    generate_chunk_context,
+    add_context_to_chunks,
+    _infer_topic,
 )
 
 
@@ -210,3 +214,143 @@ Content 2.
         for i, chunk in enumerate(chunks):
             assert "chunk_index" in chunk
             assert chunk["chunk_index"] == i
+
+
+class TestTopicInference:
+    """Test topic inference from filename and content (P9.1)."""
+
+    def test_infers_topic_from_h1_header(self):
+        """Should use H1 header as topic when present."""
+        content = "# Budget Review Meeting\n\nDiscussed quarterly targets."
+        topic = _infer_topic("random_file.md", content)
+        assert topic == "Budget Review Meeting"
+
+    def test_infers_topic_from_filename(self):
+        """Should use cleaned filename when no H1."""
+        content = "Some content without a header."
+        topic = _infer_topic("2025-01-13 Team Standup.md", content)
+        assert "Team Standup" in topic
+
+    def test_removes_date_patterns_from_filename(self):
+        """Should remove YYYYMMDD and YYYY-MM-DD from filenames."""
+        topic = _infer_topic("20250113 Notes.md", "Content")
+        assert "20250113" not in topic
+        assert "Notes" in topic
+
+    def test_truncates_long_topics(self):
+        """Should truncate topics longer than 50 chars."""
+        content = "# " + "A" * 100 + "\n\nContent"
+        topic = _infer_topic("file.md", content)
+        assert len(topic) <= 50
+
+
+class TestContextGeneration:
+    """Test contextual chunk prefix generation (P9.1)."""
+
+    def test_generates_granola_context(self):
+        """Should generate context for Granola meeting notes."""
+        metadata = {
+            "granola_id": "abc123",
+            "people": ["Alice", "Bob", "Charlie"],
+            "modified_date": "2025-01-13",
+            "note_type": "Granola"
+        }
+        context = generate_chunk_context(
+            file_path=Path("/vault/Granola/Meeting with Team.md"),
+            metadata=metadata,
+            chunk_content="Discussion about roadmap.",
+            chunk_index=0,
+            total_chunks=3
+        )
+        assert "Meeting with Team.md" in context
+        assert "meeting notes" in context.lower()
+        assert "Alice" in context
+        assert "(Part 1 of 3)" in context
+
+    def test_generates_people_context(self):
+        """Should generate context for People profile notes."""
+        metadata = {"note_type": "Personal"}
+        context = generate_chunk_context(
+            file_path=Path("/vault/People/John Smith.md"),
+            metadata=metadata,
+            chunk_content="Phone: 555-1234",
+            chunk_index=0,
+            total_chunks=1
+        )
+        assert "John Smith" in context
+        assert "personal profile" in context.lower()
+
+    def test_generates_daily_note_context(self):
+        """Should generate context for daily notes."""
+        metadata = {"note_type": "Personal"}
+        context = generate_chunk_context(
+            file_path=Path("/vault/Daily/2025-01-13.md"),
+            metadata=metadata,
+            chunk_content="Today I worked on...",
+            chunk_index=0,
+            total_chunks=1
+        )
+        assert "2025-01-13" in context
+        assert "daily log" in context.lower()
+
+    def test_generates_general_context(self):
+        """Should generate context for general notes."""
+        metadata = {"note_type": "Other"}
+        context = generate_chunk_context(
+            file_path=Path("/vault/Projects/LifeOS Architecture.md"),
+            metadata=metadata,
+            chunk_content="# LifeOS Architecture\n\nSystem design...",
+            chunk_index=0,
+            total_chunks=2
+        )
+        assert "LifeOS Architecture.md" in context
+        assert "Projects" in context
+
+    def test_no_part_suffix_for_single_chunk(self):
+        """Should not add part suffix for single-chunk docs."""
+        metadata = {"note_type": "Other"}
+        context = generate_chunk_context(
+            file_path=Path("/vault/Notes/Quick Note.md"),
+            metadata=metadata,
+            chunk_content="Just a note.",
+            chunk_index=0,
+            total_chunks=1
+        )
+        assert "Part" not in context
+
+
+class TestAddContextToChunks:
+    """Test the add_context_to_chunks entry point (P9.1)."""
+
+    def test_adds_context_to_all_chunks(self):
+        """Should prepend context to each chunk's content."""
+        chunks = [
+            {"content": "First chunk content", "chunk_index": 0},
+            {"content": "Second chunk content", "chunk_index": 1},
+        ]
+        metadata = {"note_type": "Other"}
+        result = add_context_to_chunks(
+            chunks=chunks,
+            file_path=Path("/vault/Notes/Test.md"),
+            metadata=metadata
+        )
+
+        assert len(result) == 2
+        for chunk in result:
+            assert chunk["has_context"] is True
+            assert "This chunk is from" in chunk["content"]
+            # Original content should still be present
+            assert "chunk content" in chunk["content"]
+
+    def test_context_separated_by_blank_line(self):
+        """Context should be separated from content by blank line."""
+        chunks = [{"content": "Original content", "chunk_index": 0}]
+        metadata = {"note_type": "Other"}
+        result = add_context_to_chunks(
+            chunks=chunks,
+            file_path=Path("/vault/Test.md"),
+            metadata=metadata
+        )
+
+        # Should have context + blank line + original content
+        assert "\n\n" in result[0]["content"]

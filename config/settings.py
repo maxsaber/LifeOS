@@ -37,7 +37,7 @@ class Settings(BaseSettings):
 
     # Chunking
     chunk_size: int = 500  # tokens
-    chunk_overlap: int = 50  # tokens
+    chunk_overlap: int = 100  # tokens (20% overlap for better boundary handling)
 
     # Search
     default_top_k: int = 20

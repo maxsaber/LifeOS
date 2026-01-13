@@ -179,6 +179,69 @@ def calculate_recency_boost(date_str: Optional[str], max_boost: float = 0.5) -> 
         return 0.0
 
 
+def deduplicate_overlapping_chunks(results: list[dict]) -> list[dict]:
+    """
+    Remove overlapping chunks from same file, keeping highest scored.
+
+    With 20% chunk overlap, adjacent chunks may both appear in results.
+    This deduplicates by keeping only the highest-scored chunk when
+    adjacent chunks from the same file are present.
+
+    Args:
+        results: Search results sorted by score (descending)
+
+    Returns:
+        Deduplicated results with adjacent chunks removed
+    """
+    if not results:
+        return results
+
+    seen_file_chunks: dict[str, set[int]] = {}  # file_path -> set of chunk_indices
+    deduplicated = []
+
+    for result in results:
+        file_path = result.get("file_path", "") or result.get("metadata", {}).get("file_path", "")
+
+        # Extract chunk index from result
+        chunk_idx = result.get("metadata", {}).get("chunk_index", -1)
+        if chunk_idx == -1:
+            # Try to extract from ID (format: /path/file.md::N or /path/file.md_N)
+            doc_id = result.get("id", "")
+            if "::" in doc_id:
+                try:
+                    chunk_idx = int(doc_id.split("::")[-1])
+                except ValueError:
+                    chunk_idx = -1
+            elif "_" in doc_id:
+                try:
+                    chunk_idx = int(doc_id.rsplit("_", 1)[-1])
+                except ValueError:
+                    chunk_idx = -1
+
+        if not file_path:
+            # No file path, can't deduplicate, include it
+            deduplicated.append(result)
+            continue
+
+        if file_path not in seen_file_chunks:
+            seen_file_chunks[file_path] = set()
+
+        if chunk_idx == -1:
+            # Unknown chunk index, include it
+            deduplicated.append(result)
+            seen_file_chunks[file_path].add(-1)
+            continue
+
+        # Check if adjacent chunk already included
+        adjacent = {chunk_idx - 1, chunk_idx, chunk_idx + 1}
+        if not adjacent.intersection(seen_file_chunks[file_path]):
+            deduplicated.append(result)
+            seen_file_chunks[file_path].add(chunk_idx)
+        # else: skip this overlapping chunk (lower score since results are sorted)
+
+    return deduplicated
+
+
 class HybridSearch:
     """
     Main search orchestrator combining vector and BM25 search.
@@ -350,6 +413,9 @@ class HybridSearch:
 
         # Re-sort by final score and limit
         final_results.sort(key=lambda x: -x.get("hybrid_score", 0))
+
+        # Deduplicate overlapping chunks (important with 20% overlap)
+        final_results = deduplicate_overlapping_chunks(final_results)
 
         return final_results[:top_k]
 

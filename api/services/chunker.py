@@ -3,10 +3,16 @@ Markdown parsing and chunking service for LifeOS.
 
 Chunking strategies:
 - Granola notes: by section headers + action items as separate chunks
-- Long notes (>500 tokens): ~500 token chunks with 50 token overlap
+- Long notes (>500 tokens): ~500 token chunks with overlap
 - Short notes (<500 tokens): whole note as single chunk
+
+Contextual chunking (P9.1):
+- Each chunk is prefixed with 1-2 sentences describing document context
+- This helps embeddings understand what document the chunk is from
+- Expected to improve retrieval accuracy by 35-50%
 """
 import re
+from pathlib import Path
 from typing import Optional
 import frontmatter
 import tiktoken
@@ -216,5 +222,153 @@ def chunk_document(
     # Ensure all chunks have chunk_index
     for i, chunk in enumerate(chunks):
         chunk["chunk_index"] = i
+
+    return chunks
+
+
+def _infer_topic(file_name: str, content: str) -> str:
+    """
+    Infer document topic from filename or first header.
+
+    Args:
+        file_name: Name of the file
+        content: Document content
+
+    Returns:
+        Inferred topic string (max 50 chars)
+    """
+    # Try H1 header first
+    h1_match = re.search(r'^#\s+(.+)$', content, re.MULTILINE)
+    if h1_match:
+        topic = h1_match.group(1).strip()
+        return topic[:50] if len(topic) > 50 else topic
+
+    # Use cleaned filename
+    topic = file_name.replace(".md", "")
+    # Remove common date patterns
+    topic = re.sub(r'\d{4}[-_]?\d{2}[-_]?\d{2}', '', topic)
+    topic = re.sub(r'^\d{8}\s*', '', topic)  # YYYYMMDD at start
+    topic = re.sub(r'\s*\d{8}$', '', topic)  # YYYYMMDD at end
+    # Clean up separators
+    topic = re.sub(r'[_-]+', ' ', topic).strip()
+
+    return topic if topic else "general notes"
+
+
+def generate_chunk_context(
+    file_path: Path,
+    metadata: dict,
+    chunk_content: str,
+    chunk_index: int,
+    total_chunks: int
+) -> str:
+    """
+    Generate contextual prefix for a chunk.
+
+    Adds 1-2 sentences describing what document this chunk is from,
+    which significantly improves retrieval accuracy by helping the
+    embedding model understand context.
+
+    Args:
+        file_path: Path to the source file
+        metadata: Document metadata (frontmatter, extracted info)
+        chunk_content: The actual chunk content
+        chunk_index: Position of this chunk (0-indexed)
+        total_chunks: Total number of chunks in document
+
+    Returns:
+        Context string to prepend to chunk
+    """
+    file_name = file_path.name
+    folder = file_path.parent.name
+    note_type = metadata.get("note_type", "note")
+
+    # Build context based on document type
+    if metadata.get("granola_id"):
+        # Granola meeting note
+        people = metadata.get("people", [])
+        date = metadata.get("modified_date", "")
+        if people:
+            attendees = ", ".join(people[:3])
+            if len(people) > 3:
+                attendees += f" and {len(people) - 3} others"
+        else:
+            attendees = "attendees"
+
+        if date:
+            context = f"This chunk is from {file_name}, meeting notes from {date} with {attendees}."
+        else:
+            context = f"This chunk is from {file_name}, meeting notes with {attendees}."
+
+    elif folder == "People" or "/People/" in str(file_path):
+        # People profile
+        person_name = file_name.replace(".md", "")
+        context = (
+            f"This chunk is from {file_name}, a personal profile document "
+            f"containing contact info, travel documents, and notes about {person_name}."
+        )
+
+    elif "Daily" in str(file_path) or re.match(r"\d{4}-\d{2}-\d{2}", file_name):
+        # Daily notes
+        date_match = re.search(r'(\d{4}-\d{2}-\d{2})', file_name)
+        if date_match:
+            context = f"This chunk is from {file_name}, a daily log containing activities and notes from {date_match.group(1)}."
+        else:
+            context = f"This chunk is from {file_name}, a daily log containing activities and notes."
+
+    elif "Meetings" in str(file_path) or "Meeting" in file_name:
+        # Meeting notes (non-Granola)
+        topic = _infer_topic(file_name, chunk_content)
+        people = metadata.get("people", [])
+        if people:
+            attendees = ", ".join(people[:3])
+            context = f"This chunk is from {file_name} in {folder}/, meeting notes about {topic} with {attendees}."
+        else:
+            context = f"This chunk is from {file_name} in {folder}/, meeting notes about {topic}."
+
+    else:
+        # General note - infer topic from header or filename
+        topic = _infer_topic(file_name, chunk_content)
+        context = f"This chunk is from {file_name} in {folder}/, containing notes about {topic}."
+
+    # Add chunk position for multi-chunk docs
+    if total_chunks > 1:
+        context += f" (Part {chunk_index + 1} of {total_chunks})"
+
+    return context
+
+
+def add_context_to_chunks(
+    chunks: list[dict],
+    file_path: Path,
+    metadata: dict
+) -> list[dict]:
+    """
+    Add contextual prefix to each chunk.
+
+    This is the main entry point for contextual chunking (P9.1).
+    Call this after chunk_document() to add context.
+
+    Args:
+        chunks: List of chunk dicts from chunk_document()
+        file_path: Path to source file
+        metadata: Document metadata
+
+    Returns:
+        Chunks with context prepended to content
+    """
+    total_chunks = len(chunks)
+
+    for i, chunk in enumerate(chunks):
+        context = generate_chunk_context(
+            file_path=file_path,
+            metadata=metadata,
+            chunk_content=chunk["content"],
+            chunk_index=i,
+            total_chunks=total_chunks
+        )
+        # Prepend context with blank line separator
+        chunk["content"] = f"{context}\n\n{chunk['content']}"
+        chunk["has_context"] = True
 
     return chunks

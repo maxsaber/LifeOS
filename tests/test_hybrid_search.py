@@ -374,3 +374,90 @@ class TestHybridBenchmark:
         doc_ids = [r["doc_id"] for r in results]
         assert "doc1" in doc_ids
         assert "doc3" in doc_ids
+
+
+class TestChunkDeduplication:
+    """Test overlapping chunk deduplication (P9.3)."""
+
+    def test_removes_adjacent_chunks(self):
+        """Should remove adjacent chunks from same file, keeping higher scored."""
+        from api.services.hybrid_search import deduplicate_overlapping_chunks
+
+        results = [
+            {"id": "/path/file.md::0", "file_path": "/path/file.md", "hybrid_score": 0.9, "metadata": {"chunk_index": 0}},
+            {"id": "/path/file.md::1", "file_path": "/path/file.md", "hybrid_score": 0.8, "metadata": {"chunk_index": 1}},
+            {"id": "/path/other.md::0", "file_path": "/path/other.md", "hybrid_score": 0.7, "metadata": {"chunk_index": 0}},
+        ]
+
+        deduplicated = deduplicate_overlapping_chunks(results)
+
+        # chunk 1 from file.md should be removed (adjacent to chunk 0)
+        assert len(deduplicated) == 2
+        doc_ids = [r["id"] for r in deduplicated]
+        assert "/path/file.md::0" in doc_ids
+        assert "/path/other.md::0" in doc_ids
+        assert "/path/file.md::1" not in doc_ids
+
+    def test_keeps_non_adjacent_chunks(self):
+        """Should keep chunks that are not adjacent."""
+        from api.services.hybrid_search import deduplicate_overlapping_chunks
+
+        results = [
+            {"id": "/path/file.md::0", "file_path": "/path/file.md", "hybrid_score": 0.9, "metadata": {"chunk_index": 0}},
+            {"id": "/path/file.md::5", "file_path": "/path/file.md", "hybrid_score": 0.8, "metadata": {"chunk_index": 5}},
+        ]
+
+        deduplicated = deduplicate_overlapping_chunks(results)
+
+        # Both should be kept (not adjacent)
+        assert len(deduplicated) == 2
+
+    def test_handles_underscore_id_format(self):
+        """Should extract chunk index from underscore format IDs."""
+        from api.services.hybrid_search import deduplicate_overlapping_chunks
+
+        results = [
+            {"id": "/path/file.md_0", "file_path": "/path/file.md", "hybrid_score": 0.9, "metadata": {}},
+            {"id": "/path/file.md_1", "file_path": "/path/file.md", "hybrid_score": 0.8, "metadata": {}},
+        ]
+
+        deduplicated = deduplicate_overlapping_chunks(results)
+
+        # Second chunk should be removed (adjacent)
+        assert len(deduplicated) == 1
+        assert deduplicated[0]["id"] == "/path/file.md_0"
+
+    def test_handles_empty_results(self):
+        """Should return empty list for empty input."""
+        from api.services.hybrid_search import deduplicate_overlapping_chunks
+
+        deduplicated = deduplicate_overlapping_chunks([])
+        assert deduplicated == []
+
+    def test_handles_missing_file_path(self):
+        """Should include results without file_path."""
+        from api.services.hybrid_search import deduplicate_overlapping_chunks
+
+        results = [
+            {"id": "chunk1", "content": "test", "hybrid_score": 0.9, "metadata": {}},
+            {"id": "chunk2", "content": "test2", "hybrid_score": 0.8, "metadata": {}},
+        ]
+
+        deduplicated = deduplicate_overlapping_chunks(results)
+
+        # Both should be kept (no file_path to check)
+        assert len(deduplicated) == 2
+
+    def test_uses_metadata_file_path(self):
+        """Should fall back to metadata.file_path if top-level missing."""
+        from api.services.hybrid_search import deduplicate_overlapping_chunks
+
+        results = [
+            {"id": "chunk1", "metadata": {"file_path": "/path/file.md", "chunk_index": 0}, "hybrid_score": 0.9},
+            {"id": "chunk2", "metadata": {"file_path": "/path/file.md", "chunk_index": 1}, "hybrid_score": 0.8},
+        ]
+
+        deduplicated = deduplicate_overlapping_chunks(results)
+
+        # Second chunk should be removed (adjacent)
+        assert len(deduplicated) == 1
