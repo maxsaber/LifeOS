@@ -25,8 +25,8 @@ class Settings(BaseSettings):
         alias="LIFEOS_CHROMA_PATH"
     )
 
-    # Server
-    port: int = Field(default=8080, alias="LIFEOS_PORT")
+    # Server (port 8000 is canonical - keep in sync with scripts/server.sh)
+    port: int = Field(default=8000, alias="LIFEOS_PORT")
     host: str = Field(default="0.0.0.0", alias="LIFEOS_HOST")
 
     # API Keys (no prefix - standard env var names)
