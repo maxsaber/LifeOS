@@ -153,7 +153,8 @@ Meeting with Kevin and Sarah to discuss Q4 projections.
         from config.settings import settings
 
         assert settings.reranker_model == "cross-encoder/ms-marco-MiniLM-L6-v2"
-        assert settings.reranker_enabled is True
+        # Reranker disabled: deprioritizes exact matches for factual queries
+        assert settings.reranker_enabled is False
         assert settings.reranker_candidates == 50
 
     def test_all_services_can_be_imported(self):

@@ -33,16 +33,16 @@ echo ""
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 cd "$PROJECT_ROOT"
 
-# Activate virtual environment if it exists
-if [ -d "venv" ]; then
-    source venv/bin/activate
+# Activate virtual environment (located outside Documents for faster startup)
+if [ -f "$HOME/.venvs/lifeos/bin/activate" ]; then
+    source "$HOME/.venvs/lifeos/bin/activate"
 fi
 
 # Run only unit tests (fast) - skip slow tests that require ChromaDB or Ollama
-echo "Running: pytest -m 'unit and not slow' tests/ -v --tb=short"
+echo "Running: uv run pytest -m 'unit and not slow' tests/ -v --tb=short"
 echo ""
 
-if pytest -m "unit and not slow" tests/ -v --tb=short; then
+if uv run pytest -m "unit and not slow" tests/ -v --tb=short; then
     echo ""
     echo "========================================"
     echo "  Unit tests passed! Proceeding with commit."

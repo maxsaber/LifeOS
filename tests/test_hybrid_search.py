@@ -299,8 +299,9 @@ class TestHybridSearch:
             assert results[0].get("id") == "new_chunk"
 
     def test_fallback_to_vector_only(self, temp_db):
-        """Should fallback to vector search if BM25 unavailable."""
+        """Should fallback to vector search if BM25 returns no results."""
         from api.services.hybrid_search import HybridSearch
+        from api.services.bm25_index import BM25Index
         from unittest.mock import MagicMock
 
         mock_vector_store = MagicMock()
@@ -308,8 +309,10 @@ class TestHybridSearch:
             {"id": "chunk1", "content": "Test content", "metadata": {}},
         ]
 
-        # Pass mock directly to constructor with no BM25
-        hybrid = HybridSearch(vector_store=mock_vector_store, bm25_index=None)
+        # Use empty BM25 index (new temp db has no documents)
+        empty_bm25 = BM25Index(db_path=temp_db)
+
+        hybrid = HybridSearch(vector_store=mock_vector_store, bm25_index=empty_bm25)
         results = hybrid.search("test", top_k=5)
 
         assert len(results) == 1

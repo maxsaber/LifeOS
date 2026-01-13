@@ -48,8 +48,14 @@ class Settings(BaseSettings):
     ollama_timeout: int = Field(default=10, alias="OLLAMA_TIMEOUT")
 
     # Cross-encoder re-ranking (P9.2)
+    # DISABLED: reranker deprioritizes exact keyword matches for factual queries
+    # e.g., "Taylor's KTN" gets pushed down by semantically similar but wrong results
+    #
+    # TODO: To re-enable, implement query-type detection in hybrid_search.py:
+    # - Factual queries (proper nouns, codes): preserve top-k BM25 exact matches
+    # - Semantic queries (concepts, discovery): apply cross-encoder reranking
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L6-v2"
-    reranker_enabled: bool = True
+    reranker_enabled: bool = False
     reranker_candidates: int = 50  # Fetch this many for re-ranking
 
 

@@ -29,6 +29,8 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
+from config.settings import settings
+
 # Lazy imports to avoid slow ChromaDB initialization at import time
 if TYPE_CHECKING:
     from api.services.vectorstore import VectorStore
@@ -291,7 +293,7 @@ class HybridSearch:
         query: str,
         top_k: int = 20,
         apply_recency_boost: bool = True,
-        use_reranker: bool = True,
+        use_reranker: bool | None = None,
         rerank_candidates: int = 50
     ) -> list[dict]:
         """
@@ -318,6 +320,10 @@ class HybridSearch:
         Returns:
             List of dicts with id, content, file_path, file_name, hybrid_score
         """
+        # Use settings default if not explicitly specified
+        if use_reranker is None:
+            use_reranker = settings.reranker_enabled
+
         # Determine how many candidates to fetch
         fetch_k = rerank_candidates if use_reranker else top_k
         # Expand person names (nicknames -> canonical names)

@@ -67,6 +67,7 @@ The server does NOT auto-reload. Changes won't take effect until restart.
 2. **Forgetting to restart after code changes** → Use `./scripts/server.sh restart`
 3. **Committing without testing** → Use `./scripts/deploy.sh`
 4. **Starting server on localhost only** → Must use 0.0.0.0 for Tailscale
+5. **Overfitting to specific test cases** → All fixes must be system-level changes (config, algorithms, full reindex), never single-file patches to pass one query
 
 ---
 
