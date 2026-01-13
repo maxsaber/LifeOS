@@ -216,6 +216,26 @@ class IndexerService:
                 people=all_people if all_people else None
             )
 
+        # Generate document summary for discovery queries (P9.4)
+        try:
+            from api.services.summarizer import generate_summary
+            summary = generate_summary(body, path.name)
+            if summary:
+                summary_id = f"{path.resolve()}::summary"
+                summary_content = f"Document summary for {path.name}: {summary}"
+
+                # Add summary chunk to BM25 (for keyword search)
+                self.bm25_index.add_document(
+                    doc_id=summary_id,
+                    content=summary_content,
+                    file_name=path.name,
+                    people=all_people if all_people else None
+                )
+
+                logger.debug(f"Generated summary for {file_path}")
+        except Exception as e:
+            logger.warning(f"Summary generation failed for {file_path}: {e}")
+
         logger.debug(f"Indexed {file_path} with {len(chunks)} chunks")
 
     def delete_file(self, file_path: str) -> None:
@@ -230,6 +250,11 @@ class IndexerService:
         real_path = os.path.realpath(file_path)
         self.vector_store.delete_document(real_path)
         self.bm25_index.delete_document(real_path)
+
+        # Also delete summary chunk if exists
+        summary_id = f"{real_path}::summary"
+        self.bm25_index.delete_document(summary_id)
+
         logger.debug(f"Deleted {file_path} from index (resolved: {real_path})")
 
     def _extract_note_date(self, path: Path, frontmatter: dict) -> str:
