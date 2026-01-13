@@ -47,5 +47,10 @@ class Settings(BaseSettings):
     ollama_model: str = Field(default="llama3.2:3b", alias="OLLAMA_MODEL")
     ollama_timeout: int = Field(default=10, alias="OLLAMA_TIMEOUT")
 
+    # Cross-encoder re-ranking (P9.2)
+    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L6-v2"
+    reranker_enabled: bool = True
+    reranker_candidates: int = 50  # Fetch this many for re-ranking
+
 
 settings = Settings()

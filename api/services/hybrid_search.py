@@ -290,24 +290,36 @@ class HybridSearch:
         self,
         query: str,
         top_k: int = 20,
-        apply_recency_boost: bool = True
+        apply_recency_boost: bool = True,
+        use_reranker: bool = True,
+        rerank_candidates: int = 50
     ) -> list[dict]:
         """
-        Perform hybrid search combining vector and BM25.
+        Perform hybrid search combining vector and BM25 with optional cross-encoder re-ranking.
 
-        Pipeline: name expansion → vector + BM25 → RRF fusion → boosting → ranking.
+        Pipeline: name expansion → vector + BM25 → RRF fusion → boosting →
+                  [cross-encoder re-ranking] → ranking.
 
         Filename boost (2x) applied when person name in query matches filename,
         ensuring person-specific files rank first for person queries.
+
+        When use_reranker=True:
+        1. Retrieve rerank_candidates results via hybrid search
+        2. Re-rank candidates using cross-encoder model
+        3. Return top_k after re-ranking
 
         Args:
             query: Search query string
             top_k: Maximum results to return
             apply_recency_boost: Apply recency boosting (default True)
+            use_reranker: Apply cross-encoder re-ranking (default True)
+            rerank_candidates: Number of candidates to fetch for re-ranking (default 50)
 
         Returns:
             List of dicts with id, content, file_path, file_name, hybrid_score
         """
+        # Determine how many candidates to fetch
+        fetch_k = rerank_candidates if use_reranker else top_k
         # Expand person names (nicknames -> canonical names)
         expanded_query = expand_person_names(query)
         if expanded_query != query:
@@ -315,7 +327,7 @@ class HybridSearch:
 
         # Get vector results (use expanded query for better semantic matching)
         vector_store = self._get_vector_store()
-        vector_results = vector_store.search(query=expanded_query, top_k=top_k * 2)
+        vector_results = vector_store.search(query=expanded_query, top_k=fetch_k)
 
         # Extract doc IDs and create lookup
         vector_doc_ids = []
@@ -334,7 +346,7 @@ class HybridSearch:
 
         if bm25_index:
             try:
-                bm25_results = bm25_index.search(expanded_query, limit=top_k * 2)
+                bm25_results = bm25_index.search(expanded_query, limit=fetch_k)
                 bm25_doc_ids = [r["doc_id"] for r in bm25_results]
                 # Store BM25 results for later lookup
                 bm25_results_by_id = {r["doc_id"]: r for r in bm25_results}
@@ -362,7 +374,7 @@ class HybridSearch:
         # Build final results with recency boost
         final_results = []
 
-        for doc_id, rrf_score in fused[:top_k * 2]:
+        for doc_id, rrf_score in fused[:fetch_k]:
             # Get full result data
             if doc_id in results_by_id:
                 result = results_by_id[doc_id].copy()
@@ -417,7 +429,25 @@ class HybridSearch:
         # Deduplicate overlapping chunks (important with 20% overlap)
         final_results = deduplicate_overlapping_chunks(final_results)
 
-        return final_results[:top_k]
+        # Apply cross-encoder re-ranking if enabled and we have enough candidates
+        if use_reranker and len(final_results) > top_k:
+            try:
+                from api.services.reranker import get_reranker
+                reranker = get_reranker()
+                final_results = reranker.rerank(
+                    query=expanded_query,
+                    results=final_results,
+                    top_k=top_k,
+                    content_key="content"
+                )
+                logger.debug(f"Re-ranked {len(final_results)} results with cross-encoder")
+            except Exception as e:
+                logger.warning(f"Re-ranking failed, using hybrid scores: {e}")
+                final_results = final_results[:top_k]
+        else:
+            final_results = final_results[:top_k]
+
+        return final_results
 
 
 # Singleton instance
