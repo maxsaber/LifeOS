@@ -1,6 +1,20 @@
 """
 LifeOS - Personal RAG System for Obsidian Vault
 FastAPI Application Entry Point
+
+WARNING: Do not run this file directly with uvicorn!
+=========================================================
+Always use the server management script:
+
+    ./scripts/server.sh start    # Start server
+    ./scripts/server.sh restart  # Restart after code changes
+    ./scripts/server.sh stop     # Stop server
+
+Running uvicorn directly can create ghost processes that bind to different
+interfaces, causing localhost and Tailscale/network access to hit different
+server instances with different code versions.
+
+See CLAUDE.md for full instructions for AI coding agents.
 """
 import logging
 import threading
@@ -59,6 +73,10 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
         if stop_event.is_set():
             break
 
+        # Stagger sync operations with delays to avoid database contention
+        import time
+        STEP_DELAY = 60  # seconds between steps
+
         # === Step 1: Vault Reindex ===
         # This indexes all vault notes, which triggers _sync_people_to_v2() hook
         # for each file, extracting people mentions and creating interactions
@@ -71,11 +89,13 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
         except Exception as e:
             logger.error(f"Nightly sync: Vault reindex failed: {e}")
 
+        time.sleep(STEP_DELAY)  # Let ChromaDB settle
+
         # === Step 2: LinkedIn + Gmail + Calendar Sync ===
         try:
             logger.info("Nightly sync: Starting People v2 sync (LinkedIn, Gmail, Calendar)...")
             from api.services.people_aggregator import sync_people_v2
-            from api.services.gmail_service import get_gmail_service
+            from api.services.gmail import get_gmail_service
 
             gmail_service = get_gmail_service()
 
@@ -88,6 +108,8 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
         except Exception as e:
             logger.error(f"Nightly sync: People v2 sync failed: {e}")
 
+        time.sleep(STEP_DELAY)  # Let APIs settle
+
         # === Step 3: Google Docs Sync ===
         # Syncs configured Google Docs to Obsidian vault as Markdown
         try:
@@ -98,6 +120,8 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
         except Exception as e:
             logger.error(f"Nightly sync: Google Docs sync failed: {e}")
 
+        time.sleep(STEP_DELAY)  # Let filesystem settle
+
         # === Step 4: iMessage Sync ===
         # Exports new messages and joins with PersonEntity records
         try:
@@ -107,6 +131,8 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
             logger.info(f"Nightly sync: iMessage sync completed: {imessage_stats}")
         except Exception as e:
             logger.error(f"Nightly sync: iMessage sync failed: {e}")
+
+        logger.info("Nightly sync: All steps complete")
 
 
 @asynccontextmanager

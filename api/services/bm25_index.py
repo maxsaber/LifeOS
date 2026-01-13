@@ -1,7 +1,20 @@
 """
 BM25 Index for LifeOS.
 
-Provides keyword-based search using SQLite FTS5.
+Keyword-based search using SQLite FTS5 to complement vector search.
+Finds exact matches for names, IDs, and codes that vector search may miss.
+
+## Key Design Decisions
+
+- **OR semantics**: AND fails when no chunk has all terms
+- **Query sanitization**: Strips FTS5 special chars (', ", ?, .)
+- **Stop word removal**: Filters "what", "is", "the", etc.
+- **BM25 scores are negative**: Lower = better match
+
+## Usage
+
+    from api.services.bm25_index import get_bm25_index
+    results = get_bm25_index().search("Alex phone", limit=20)
 """
 import sqlite3
 import logging
@@ -107,6 +120,42 @@ class BM25Index:
         finally:
             conn.close()
 
+    def _sanitize_query(self, query: str, use_or: bool = True) -> str:
+        """
+        Sanitize query for FTS5 MATCH syntax.
+
+        FTS5 has special characters that cause syntax errors:
+        - Quotes, apostrophes, parentheses need removal
+        - Reserved words (AND, OR, NOT, NEAR) are handled by FTS5
+
+        Args:
+            query: Raw query string
+            use_or: If True, join terms with OR (any term matches).
+                   If False, use default AND (all terms must match).
+
+        Returns:
+            Sanitized query safe for FTS5
+        """
+        import re
+        # Remove characters that break FTS5 syntax
+        # Periods in filenames (like .md), question marks, etc cause issues
+        # Keep alphanumeric, spaces, hyphens, underscores
+        sanitized = re.sub(r"['\"\(\)\[\]\{\}\*\^\~\.\:\;\?\!]", " ", query)
+        # Collapse multiple spaces
+        sanitized = re.sub(r"\s+", " ", sanitized).strip()
+
+        if use_or and sanitized:
+            # Join terms with OR for more lenient matching
+            # Filter out common stop words that add noise
+            stop_words = {'a', 'an', 'the', 'is', 'are', 'was', 'were', 'what',
+                         'when', 'where', 'who', 'which', 'how', 'and', 'or',
+                         'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by'}
+            terms = [t for t in sanitized.split() if t.lower() not in stop_words]
+            if terms:
+                sanitized = " OR ".join(terms)
+
+        return sanitized
+
     def search(
         self,
         query: str,
@@ -125,26 +174,35 @@ class BM25Index:
         if not query.strip():
             return []
 
+        # Sanitize query for FTS5 syntax
+        sanitized_query = self._sanitize_query(query)
+        if not sanitized_query:
+            return []
+
         conn = sqlite3.connect(self.db_path)
         try:
             # FTS5 MATCH query with BM25 ranking
             # Search across content, file_name, and people
+            # Return all columns for full result data
             cursor = conn.execute(
                 """
-                SELECT doc_id, bm25(chunks_fts) as score
+                SELECT doc_id, content, file_name, people, bm25(chunks_fts) as score
                 FROM chunks_fts
                 WHERE chunks_fts MATCH ?
                 ORDER BY score
                 LIMIT ?
                 """,
-                (query, limit)
+                (sanitized_query, limit)
             )
 
             results = []
             for row in cursor.fetchall():
                 results.append({
                     "doc_id": row[0],
-                    "bm25_score": row[1]  # Note: BM25 scores are negative, lower is better
+                    "content": row[1],
+                    "file_name": row[2],
+                    "people": row[3].split(",") if row[3] else [],
+                    "bm25_score": row[4]  # Note: BM25 scores are negative, lower is better
                 })
 
             return results

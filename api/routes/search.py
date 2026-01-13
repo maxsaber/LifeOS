@@ -10,12 +10,14 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
 from api.services.vectorstore import VectorStore
+from api.services.hybrid_search import HybridSearch
 from config.settings import settings
 
 router = APIRouter(prefix="/api", tags=["search"])
 
 # Initialize vector store (singleton)
 _vector_store: VectorStore | None = None
+_hybrid_search: HybridSearch | None = None
 
 
 def get_vector_store() -> VectorStore:
@@ -24,6 +26,14 @@ def get_vector_store() -> VectorStore:
     if _vector_store is None:
         _vector_store = VectorStore(persist_directory=str(settings.chroma_path))
     return _vector_store
+
+
+def get_hybrid_search() -> HybridSearch:
+    """Get or create hybrid search instance."""
+    global _hybrid_search
+    if _hybrid_search is None:
+        _hybrid_search = HybridSearch(vector_store=get_vector_store())
+    return _hybrid_search
 
 
 class SearchFilters(BaseModel):
@@ -94,12 +104,11 @@ async def search(request: SearchRequest) -> SearchResponse:
         # ChromaDB doesn't support range queries directly on strings
         # For now, we'll filter in post-processing if needed
 
-    # Search vector store
-    vector_store = get_vector_store()
-    raw_results = vector_store.search(
+    # Search using hybrid search (vector + BM25 keyword)
+    hybrid_search = get_hybrid_search()
+    raw_results = hybrid_search.search(
         query=request.query,
-        top_k=request.top_k,
-        filters=chroma_filter if chroma_filter else None
+        top_k=request.top_k
     )
 
     # Post-process results
@@ -163,7 +172,7 @@ async def search(request: SearchRequest) -> SearchResponse:
             modified_date=r.get("modified_date"),
             people=people,
             tags=tags,
-            score=r.get("score", 0.0),
+            score=r.get("hybrid_score", r.get("score", 0.0)),
             semantic_score=r.get("semantic_score"),
             recency_score=r.get("recency_score")
         ))

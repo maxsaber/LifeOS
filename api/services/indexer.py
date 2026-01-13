@@ -15,6 +15,7 @@ from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
 from api.services.chunker import chunk_document, extract_frontmatter
 from api.services.vectorstore import VectorStore
+from api.services.bm25_index import BM25Index
 from api.services.people import extract_people_from_text
 
 # V2 People System integration
@@ -111,6 +112,9 @@ class IndexerService:
         # Initialize vector store
         self.vector_store = VectorStore(persist_directory=str(db_path))
 
+        # Initialize BM25 keyword index
+        self.bm25_index = BM25Index()
+
         # File watcher
         self._observer: Observer | None = None
         self._watching = False
@@ -194,6 +198,20 @@ class IndexerService:
 
         # Update in vector store (handles deletion of old chunks)
         self.vector_store.update_document(chunks, metadata)
+
+        # Update in BM25 index for keyword search
+        # First delete any existing chunks for this file
+        self.bm25_index.delete_document(str(path.resolve()))
+        # Add each chunk to BM25
+        for i, chunk in enumerate(chunks):
+            doc_id = f"{path.resolve()}_{i}"
+            self.bm25_index.add_document(
+                doc_id=doc_id,
+                content=chunk.get("content", ""),
+                file_name=path.name,
+                people=all_people if all_people else None
+            )
+
         logger.debug(f"Indexed {file_path} with {len(chunks)} chunks")
 
     def delete_file(self, file_path: str) -> None:
@@ -207,6 +225,7 @@ class IndexerService:
         # This works even for non-existent files
         real_path = os.path.realpath(file_path)
         self.vector_store.delete_document(real_path)
+        self.bm25_index.delete_document(real_path)
         logger.debug(f"Deleted {file_path} from index (resolved: {real_path})")
 
     def _extract_note_date(self, path: Path, frontmatter: dict) -> str:

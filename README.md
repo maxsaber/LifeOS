@@ -139,18 +139,25 @@ OLLAMA_TIMEOUT=10
 
 ### Running the Server
 
-```bash
-# Activate virtual environment
-source venv/bin/activate
+> **⚠️ IMPORTANT: Always use the server script, never run uvicorn directly!**
+>
+> Running `uvicorn` manually can create ghost processes that cause different behavior
+> when accessing via localhost vs Tailscale/network. The script ensures clean startup.
 
+```bash
 # Start Ollama (if not running)
 ollama serve &
 
-# Run the API server
-uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+# Start the server (ALWAYS use this)
+./scripts/server.sh start
+
+# Other server commands
+./scripts/server.sh stop      # Stop server
+./scripts/server.sh restart   # Restart after code changes
+./scripts/server.sh status    # Check server status
 ```
 
-The web UI will be available at `http://localhost:8000`.
+The web UI will be available at `http://localhost:8000` (and via Tailscale if configured).
 
 ## Development
 
@@ -426,6 +433,82 @@ The local LLM (Llama 3.2 3B via Ollama) routes queries to appropriate data sourc
 The router prompt is editable at `config/prompts/query_router.txt`.
 
 **Fallback:** If Ollama is unavailable, keyword-based routing kicks in automatically.
+
+
+## Hybrid Search System
+
+LifeOS combines vector similarity and keyword matching to find both conceptual and exact matches.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              User Query                                      │
+│                       "What is Alex's phone number?"                         │
+└─────────────────────────────────────┬───────────────────────────────────────┘
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  1. Person Name Expansion                                                    │
+│     • Nicknames → canonical: "Al's phone" → "Alex's phone"                  │
+│     • Configured in config/people_dictionary.json                            │
+└─────────────────────────────────────┬───────────────────────────────────────┘
+                    ┌─────────────────┴─────────────────┐
+                    ▼                                   ▼
+┌───────────────────────────────────┐   ┌───────────────────────────────────┐
+│  2a. Vector Search (ChromaDB)     │   │  2b. BM25 Search (SQLite FTS5)    │
+│  • Semantic similarity            │   │  • Exact keyword matching         │
+│  • Good for concepts              │   │  • OR semantics (any term)        │
+└───────────────────┬───────────────┘   └───────────────────┬───────────────┘
+                    └─────────────────┬─────────────────────┘
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  3. Reciprocal Rank Fusion (RRF)                                             │
+│     • score = Σ 1/(60 + rank) — docs found by BOTH methods score higher     │
+└─────────────────────────────────────┬───────────────────────────────────────┘
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  4. Score Boosting                                                           │
+│     • Recency: 0-50% bonus for newer documents                              │
+│     • Filename: 2x if person name matches file (Alex → Alex.md)             │
+└─────────────────────────────────────┬───────────────────────────────────────┘
+                                      ▼
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  5. Final Ranking — sorted by hybrid_score descending                        │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Key Design Decisions
+
+| Decision | Rationale |
+|----------|-----------|
+| **OR semantics for BM25** | AND fails when no single chunk contains all query terms |
+| **2x filename boost** | Person-specific files must rank first for person queries |
+| **RRF fusion (k=60)** | Score-agnostic merging, no parameter tuning needed |
+
+### Configuration
+
+Add people to `config/people_dictionary.json` for nickname expansion:
+
+```json
+{
+  "Alex": {
+    "canonical": "Alex",
+    "aliases": ["Al", "Alexander"]
+  }
+}
+```
+
+### Debugging
+
+```bash
+# Check if content exists in index
+sqlite3 ./data/bm25_index.db "SELECT doc_id FROM chunks_fts WHERE content LIKE '%term%'"
+
+# Test search ranking
+curl -X POST http://localhost:8000/api/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "your query"}' | jq '.results[:3] | .[] | {file_name, score}'
+```
 
 ## Google Docs Sync
 

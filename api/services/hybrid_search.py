@@ -1,9 +1,29 @@
 """
 Hybrid Search for LifeOS.
 
-Combines vector similarity search with BM25 keyword search
-using Reciprocal Rank Fusion (RRF).
+Combines vector similarity search with BM25 keyword search using
+Reciprocal Rank Fusion (RRF).
+
+## Pipeline
+
+1. **Name Expansion**: Nicknames → canonical ("Al" → "Alex")
+2. **Dual Search**: Vector (semantic) + BM25 (keywords, OR semantics)
+3. **RRF Fusion**: score = Σ 1/(60 + rank)
+4. **Boosting**: Recency (0-50%) + Filename match (2x)
+5. **Ranking**: Sort by hybrid_score
+
+## Key Design Decisions
+
+- **OR semantics**: AND fails when no chunk has all terms
+- **2x filename boost**: Person files rank first for person queries
+- **Possessive handling**: "Alex's" → "alex" for ALIAS_MAP lookup
+
+## Usage
+
+    from api.services.hybrid_search import get_hybrid_search
+    results = get_hybrid_search().search("Alex's phone number", top_k=10)
 """
+import re
 import logging
 from collections import defaultdict
 from datetime import datetime
@@ -17,20 +37,79 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+def expand_person_names(query: str) -> str:
+    """
+    Expand nicknames/aliases in query to canonical names.
+
+    Users use nicknames ("Al") but files use canonical names ("Alex.md").
+    Expanding before search ensures both vector and BM25 find matches.
+
+    Handles possessives: "Al's" → "Alex's", "als" → "Alex's"
+    Configured via config/people_dictionary.json and ALIAS_MAP.
+
+    Args:
+        query: Original search query
+
+    Returns:
+        Query with person names expanded
+
+    Example:
+        >>> expand_person_names("What is Al's phone?")
+        "What is Alex's phone?"
+    """
+    from api.services.people import ALIAS_MAP
+
+    # Tokenize query, preserving case for non-name words
+    words = query.split()
+    expanded = []
+
+    for word in words:
+        # Clean word for lookup (remove possessives, punctuation)
+        clean = re.sub(r"[''`]s$", "", word.lower())
+        clean = re.sub(r"[^a-z]", "", clean)
+
+        # Check for match (minimum 2 chars to avoid expanding common words)
+        canonical = None
+        is_possessive = False
+
+        if len(clean) >= 2 and clean in ALIAS_MAP:
+            canonical = ALIAS_MAP[clean]
+            # Check if original was possessive
+            if word.lower().endswith("'s") or word.lower().endswith("'s"):
+                is_possessive = True
+        elif len(clean) >= 3 and clean.endswith("s") and clean[:-1] in ALIAS_MAP:
+            # Handle "tays" -> "tay" + "s" (possessive without apostrophe)
+            # Require 3+ chars to avoid "is" -> "i" + "s"
+            canonical = ALIAS_MAP[clean[:-1]]
+            is_possessive = True
+
+        if canonical:
+            if is_possessive:
+                expanded.append(f"{canonical}'s")
+            else:
+                expanded.append(canonical)
+        else:
+            expanded.append(word)
+
+    return " ".join(expanded)
+
+
 def reciprocal_rank_fusion(
     vector_results: list[str],
     bm25_results: list[str],
     k: int = 60
 ) -> list[tuple[str, float]]:
     """
-    Merge two ranked lists using Reciprocal Rank Fusion.
+    Merge two ranked lists using Reciprocal Rank Fusion (RRF).
 
-    RRF formula: score = sum(1 / (k + rank)) for each list
-    k = 60 is the standard constant from the original paper.
+    Formula: score(doc) = Σ 1/(k + rank) for each list containing doc
+
+    Documents found by BOTH methods score higher. k=60 is the standard
+    constant from academic literature (Cormack et al., 2009).
 
     Args:
-        vector_results: List of doc IDs ranked by vector similarity
-        bm25_results: List of doc IDs ranked by BM25 relevance
+        vector_results: Doc IDs ranked by vector similarity
+        bm25_results: Doc IDs ranked by BM25 relevance
         k: Ranking constant (default 60)
 
     Returns:
@@ -102,9 +181,12 @@ def calculate_recency_boost(date_str: Optional[str], max_boost: float = 0.5) -> 
 
 class HybridSearch:
     """
-    Combines vector and BM25 search using RRF fusion.
+    Main search orchestrator combining vector and BM25 search.
 
-    Falls back to vector-only search if BM25 is unavailable.
+    Implements: name expansion → dual search → RRF fusion → boosting → ranking.
+    Falls back to vector-only if BM25 is unavailable.
+
+    Results contain: id, content, file_path, file_name, hybrid_score, rrf_score.
     """
 
     def __init__(
@@ -150,17 +232,27 @@ class HybridSearch:
         """
         Perform hybrid search combining vector and BM25.
 
+        Pipeline: name expansion → vector + BM25 → RRF fusion → boosting → ranking.
+
+        Filename boost (2x) applied when person name in query matches filename,
+        ensuring person-specific files rank first for person queries.
+
         Args:
             query: Search query string
-            top_k: Maximum number of results to return
-            apply_recency_boost: Whether to apply recency boosting
+            top_k: Maximum results to return
+            apply_recency_boost: Apply recency boosting (default True)
 
         Returns:
-            List of search results with metadata
+            List of dicts with id, content, file_path, file_name, hybrid_score
         """
-        # Get vector results
+        # Expand person names (nicknames -> canonical names)
+        expanded_query = expand_person_names(query)
+        if expanded_query != query:
+            logger.debug(f"Expanded query: '{query}' -> '{expanded_query}'")
+
+        # Get vector results (use expanded query for better semantic matching)
         vector_store = self._get_vector_store()
-        vector_results = vector_store.search(query=query, top_k=top_k * 2)
+        vector_results = vector_store.search(query=expanded_query, top_k=top_k * 2)
 
         # Extract doc IDs and create lookup
         vector_doc_ids = []
@@ -172,14 +264,17 @@ class HybridSearch:
                 vector_doc_ids.append(doc_id)
                 results_by_id[doc_id] = result
 
-        # Get BM25 results
+        # Get BM25 results (use expanded query for name resolution)
         bm25_index = self._get_bm25_index()
         bm25_doc_ids = []
+        bm25_results_by_id = {}
 
         if bm25_index:
             try:
-                bm25_results = bm25_index.search(query, limit=top_k * 2)
+                bm25_results = bm25_index.search(expanded_query, limit=top_k * 2)
                 bm25_doc_ids = [r["doc_id"] for r in bm25_results]
+                # Store BM25 results for later lookup
+                bm25_results_by_id = {r["doc_id"]: r for r in bm25_results}
             except Exception as e:
                 logger.warning(f"BM25 search failed: {e}")
 
@@ -191,6 +286,16 @@ class HybridSearch:
         # Apply RRF fusion
         fused = reciprocal_rank_fusion(vector_doc_ids, bm25_doc_ids)
 
+        # Extract person names from expanded query for filename boosting
+        from api.services.people import ALIAS_MAP
+        query_person_names = set()
+        for word in expanded_query.lower().split():
+            # Remove possessives and punctuation
+            clean = re.sub(r"[''`]s$", "", word)  # Remove 's first
+            clean = re.sub(r"[^a-z]", "", clean)  # Then remove other non-alpha
+            if clean in ALIAS_MAP:
+                query_person_names.add(ALIAS_MAP[clean].lower())
+
         # Build final results with recency boost
         final_results = []
 
@@ -198,9 +303,25 @@ class HybridSearch:
             # Get full result data
             if doc_id in results_by_id:
                 result = results_by_id[doc_id].copy()
+            elif doc_id in bm25_results_by_id:
+                # BM25-only result - use the content from BM25
+                bm25_result = bm25_results_by_id[doc_id]
+                # Extract file path from doc_id (format: /path/to/file.md_chunkN)
+                file_path = doc_id.rsplit("_", 1)[0] if "_" in doc_id else doc_id
+                result = {
+                    "id": doc_id,
+                    "content": bm25_result.get("content", ""),
+                    "file_path": file_path,
+                    "file_name": bm25_result.get("file_name", ""),
+                    "people": bm25_result.get("people", []),
+                    "metadata": {
+                        "file_name": bm25_result.get("file_name", ""),
+                        "file_path": file_path,
+                        "source": file_path,
+                    }
+                }
             else:
-                # BM25-only result, need to fetch from vector store
-                # For now, create minimal result
+                # Unknown result, create minimal
                 result = {"id": doc_id, "content": "", "metadata": {}}
 
             # Apply recency boost
@@ -210,6 +331,18 @@ class HybridSearch:
                 final_score = rrf_score * (1 + recency_boost)
             else:
                 final_score = rrf_score
+
+            # Apply filename boost if person name appears in filename
+            # This helps when user asks about "Taylor's passport" and Taylor.md exists
+            if query_person_names:
+                file_name = result.get("file_name", "") or result.get("metadata", {}).get("file_name", "")
+                file_name_lower = file_name.lower()
+                for person_name in query_person_names:
+                    if person_name in file_name_lower:
+                        # Significant boost (2x) for exact person name match in filename
+                        final_score *= 2.0
+                        logger.debug(f"Filename boost applied: {file_name} contains {person_name}")
+                        break
 
             result["hybrid_score"] = final_score
             result["rrf_score"] = rrf_score
