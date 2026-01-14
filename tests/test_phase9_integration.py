@@ -153,9 +153,22 @@ Meeting with Kevin and Sarah to discuss Q4 projections.
         from config.settings import settings
 
         assert settings.reranker_model == "cross-encoder/ms-marco-MiniLM-L6-v2"
-        # Reranker disabled: deprioritizes exact matches for factual queries
-        assert settings.reranker_enabled is False
+        # Reranker enabled with query-aware protection for factual queries
+        assert settings.reranker_enabled is True
         assert settings.reranker_candidates == 50
+
+    def test_query_classifier_integration(self):
+        """Verify query classifier works with hybrid search."""
+        from api.services.query_classifier import classify_query
+        from api.services.hybrid_search import find_protected_indices
+
+        # Factual query should be classified correctly
+        assert classify_query("Taylor's KTN") == "factual"
+
+        # And should result in protection
+        results = [{"content": "Taylor's KTN: TT11YZS7J"}]
+        protected = find_protected_indices("Taylor's KTN", results)
+        assert len(protected) > 0
 
     def test_all_services_can_be_imported(self):
         """Verify all Phase 9 services can be imported."""
