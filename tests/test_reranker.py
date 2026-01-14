@@ -208,3 +208,140 @@ class TestHybridSearchWithReranker:
             rerank_candidates=50
         )
         assert isinstance(results, list)
+
+
+class TestProtectedReranking:
+    """Test protected reranking for factual queries."""
+
+    @pytest.mark.slow
+    def test_rerank_with_protected_indices(self):
+        """Should preserve results at protected indices."""
+        from api.services.reranker import RerankerService
+
+        reranker = RerankerService()
+
+        results = [
+            {"id": "exact_match", "content": "Taylor's KTN: TT11YZS7J", "hybrid_score": 0.9},
+            {"id": "semantic_1", "content": "General travel information", "hybrid_score": 0.8},
+            {"id": "semantic_2", "content": "Passport and visa requirements", "hybrid_score": 0.7},
+            {"id": "semantic_3", "content": "Airport security guidelines", "hybrid_score": 0.6},
+        ]
+
+        # Protect index 0 (the exact match)
+        reranked = reranker.rerank(
+            query="Taylor's KTN",
+            results=results,
+            top_k=3,
+            protected_indices=[0]
+        )
+
+        # Protected result should be first
+        assert reranked[0]["id"] == "exact_match"
+        assert len(reranked) == 3
+
+    @pytest.mark.slow
+    def test_rerank_protected_multiple(self):
+        """Should preserve multiple protected results in order."""
+        from api.services.reranker import RerankerService
+
+        reranker = RerankerService()
+
+        results = [
+            {"id": "match_1", "content": "Alex phone: 555-1234", "hybrid_score": 0.9},
+            {"id": "match_2", "content": "Alex email: alex@example.com", "hybrid_score": 0.85},
+            {"id": "unrelated_1", "content": "Random content", "hybrid_score": 0.8},
+            {"id": "unrelated_2", "content": "More random content", "hybrid_score": 0.7},
+        ]
+
+        reranked = reranker.rerank(
+            query="Alex contact info",
+            results=results,
+            top_k=3,
+            protected_indices=[0, 1]
+        )
+
+        # First two should be protected results in order
+        assert reranked[0]["id"] == "match_1"
+        assert reranked[1]["id"] == "match_2"
+        assert len(reranked) == 3
+
+    def test_rerank_no_protection_full_rerank(self):
+        """Without protection, should fully rerank."""
+        from api.services.reranker import RerankerService
+
+        reranker = RerankerService()
+
+        results = [
+            {"id": "doc1", "content": "Budget overview", "hybrid_score": 0.9},
+            {"id": "doc2", "content": "Financial planning details", "hybrid_score": 0.8},
+        ]
+
+        # No protected_indices = full rerank
+        reranked = reranker.rerank(
+            query="test",
+            results=results,
+            top_k=2
+        )
+
+        # Should work normally
+        assert len(reranked) == 2
+
+    def test_protected_indices_unit(self):
+        """Unit test: Should preserve results at protected indices (mocked model)."""
+        from api.services.reranker import RerankerService
+        from unittest.mock import MagicMock, patch
+
+        reranker = RerankerService()
+        mock_model = MagicMock()
+        mock_model.predict.return_value = [0.5, 0.4, 0.3]
+
+        results = [
+            {"id": "exact_match", "content": "Taylor's KTN: TT11YZS7J", "hybrid_score": 0.9},
+            {"id": "semantic_1", "content": "General travel information", "hybrid_score": 0.8},
+            {"id": "semantic_2", "content": "Passport and visa requirements", "hybrid_score": 0.7},
+            {"id": "semantic_3", "content": "Airport security guidelines", "hybrid_score": 0.6},
+        ]
+
+        with patch.object(reranker, '_get_model', return_value=mock_model):
+            reranked = reranker.rerank(
+                query="Taylor's KTN",
+                results=results,
+                top_k=3,
+                protected_indices=[0]
+            )
+
+        # Protected result should be first and marked
+        assert reranked[0]["id"] == "exact_match"
+        assert reranked[0].get("protected") is True
+        assert len(reranked) == 3
+
+    def test_protected_multiple_unit(self):
+        """Unit test: Should preserve multiple protected results in order (mocked model)."""
+        from api.services.reranker import RerankerService
+        from unittest.mock import MagicMock, patch
+
+        reranker = RerankerService()
+        mock_model = MagicMock()
+        mock_model.predict.return_value = [0.5, 0.4]
+
+        results = [
+            {"id": "match_1", "content": "Alex phone: 555-1234", "hybrid_score": 0.9},
+            {"id": "match_2", "content": "Alex email: alex@example.com", "hybrid_score": 0.85},
+            {"id": "unrelated_1", "content": "Random content", "hybrid_score": 0.8},
+            {"id": "unrelated_2", "content": "More random content", "hybrid_score": 0.7},
+        ]
+
+        with patch.object(reranker, '_get_model', return_value=mock_model):
+            reranked = reranker.rerank(
+                query="Alex contact info",
+                results=results,
+                top_k=3,
+                protected_indices=[0, 1]
+            )
+
+        # First two should be protected results in order
+        assert reranked[0]["id"] == "match_1"
+        assert reranked[0].get("protected") is True
+        assert reranked[1]["id"] == "match_2"
+        assert reranked[1].get("protected") is True
+        assert len(reranked) == 3

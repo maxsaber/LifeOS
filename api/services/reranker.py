@@ -62,7 +62,8 @@ class RerankerService:
         query: str,
         results: list[dict],
         top_k: int = 10,
-        content_key: str = "content"
+        content_key: str = "content",
+        protected_indices: list[int] | None = None
     ) -> list[dict]:
         """
         Re-rank search results using cross-encoder.
@@ -72,6 +73,8 @@ class RerankerService:
             results: List of search results with content
             top_k: Number of results to return after re-ranking
             content_key: Key in result dict containing text to score
+            protected_indices: Indices of results to protect from reranking.
+                              Protected results appear first in their original order.
 
         Returns:
             Re-ranked results with cross_encoder_score added
@@ -79,17 +82,49 @@ class RerankerService:
         if not results:
             return []
 
-        if len(results) <= top_k:
+        # Separate protected and unprotected results
+        protected_results = []
+        unprotected_results = []
+
+        if protected_indices:
+            protected_set = set(protected_indices)
+            for i, r in enumerate(results):
+                if i in protected_set:
+                    # Add cross_encoder_score using hybrid_score and mark as protected
+                    r["cross_encoder_score"] = r.get("hybrid_score", 0.5)
+                    r["protected"] = True
+                    protected_results.append((i, r))  # Keep original index for ordering
+                else:
+                    unprotected_results.append(r)
+            # Sort protected results by their original index to maintain order
+            protected_results.sort(key=lambda x: x[0])
+            protected_results = [r for _, r in protected_results]
+        else:
+            unprotected_results = results
+
+        # If no unprotected results, return protected ones
+        if not unprotected_results:
+            return protected_results[:top_k]
+
+        # Calculate how many unprotected results we need
+        unprotected_needed = top_k - len(protected_results)
+
+        if unprotected_needed <= 0:
+            # Protected results fill the entire top_k
+            return protected_results[:top_k]
+
+        # Handle small result sets - don't load model if not enough to rerank
+        if len(unprotected_results) <= unprotected_needed:
             # Not enough results to re-rank meaningfully
             # Still add cross_encoder_score for consistency
-            for r in results:
+            for r in unprotected_results:
                 r["cross_encoder_score"] = r.get("hybrid_score", 0.5)
-            return results
+            return protected_results + unprotected_results
 
         model = self._get_model()
 
-        # Prepare query-document pairs
-        pairs = [(query, r.get(content_key, "")) for r in results]
+        # Prepare query-document pairs for unprotected results only
+        pairs = [(query, r.get(content_key, "")) for r in unprotected_results]
 
         # Score all pairs
         try:
@@ -97,23 +132,30 @@ class RerankerService:
         except Exception as e:
             logger.error(f"Cross-encoder scoring failed: {e}")
             # Fall back to original ranking
-            for r in results:
+            for r in unprotected_results:
                 r["cross_encoder_score"] = r.get("hybrid_score", 0.5)
-            return results[:top_k]
+            return (protected_results + unprotected_results)[:top_k]
 
-        # Add scores to results
-        for result, score in zip(results, scores):
+        # Add scores to unprotected results
+        for result, score in zip(unprotected_results, scores):
             result["cross_encoder_score"] = float(score)
 
-        # Sort by cross-encoder score (descending)
-        reranked = sorted(results, key=lambda x: -x["cross_encoder_score"])
-
-        logger.debug(
-            f"Reranked {len(results)} results, "
-            f"top score: {reranked[0]['cross_encoder_score']:.3f}"
+        # Sort unprotected by cross-encoder score (descending)
+        reranked_unprotected = sorted(
+            unprotected_results, key=lambda x: -x["cross_encoder_score"]
         )
 
-        return reranked[:top_k]
+        # Combine: protected first, then reranked unprotected
+        combined = protected_results + reranked_unprotected
+
+        if combined:
+            logger.debug(
+                f"Reranked {len(unprotected_results)} unprotected results, "
+                f"protected {len(protected_results)} results, "
+                f"top score: {combined[0]['cross_encoder_score']:.3f}"
+            )
+
+        return combined[:top_k]
 
     def is_model_loaded(self) -> bool:
         """Check if model is already loaded."""
