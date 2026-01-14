@@ -68,7 +68,7 @@ def find_protected_indices(
     query_lower = query.lower()
 
     # Extract significant keywords (skip common words)
-    stop_words = {"what", "is", "the", "a", "an", "of", "for", "to", "'s", "s"}
+    stop_words = {"what", "is", "the", "a", "an", "of", "for", "to", "s"}
     keywords = []
     for word in query_lower.split():
         clean = re.sub(r"[''`]s?$", "", word)  # Remove possessive
@@ -86,8 +86,9 @@ def find_protected_indices(
 
         content = result.get("content", "").lower()
 
-        # Check if content contains any significant keyword
-        matches = sum(1 for kw in keywords if kw in content)
+        # Check if content contains any significant keyword (whole words only)
+        content_words = set(re.findall(r'\b\w+\b', content))
+        matches = sum(1 for kw in keywords if kw in content_words)
         if matches >= 1:  # At least one keyword match
             protected.append(i)
 
@@ -122,7 +123,7 @@ def expand_person_names(query: str) -> str:
 
     for word in words:
         # Clean word for lookup (remove possessives, punctuation)
-        clean = re.sub(r"[''`]s$", "", word.lower())
+        clean = re.sub(r"[''`]s?$", "", word.lower())
         clean = re.sub(r"[^a-z]", "", clean)
 
         # Check for match (minimum 2 chars to avoid expanding common words)
