@@ -30,6 +30,7 @@ from datetime import datetime
 from typing import Optional, TYPE_CHECKING
 
 from config.settings import settings
+from api.services.query_classifier import classify_query
 
 # Lazy imports to avoid slow ChromaDB initialization at import time
 if TYPE_CHECKING:
@@ -37,6 +38,60 @@ if TYPE_CHECKING:
     from api.services.bm25_index import BM25Index
 
 logger = logging.getLogger(__name__)
+
+
+def find_protected_indices(
+    query: str,
+    results: list[dict],
+    max_protected: int = 3
+) -> list[int]:
+    """
+    Find indices of results to protect from reranking.
+
+    For factual queries, protects top results that contain query keywords.
+    For semantic queries, returns empty list (no protection).
+
+    Args:
+        query: Search query string
+        results: Hybrid search results
+        max_protected: Maximum number of results to protect
+
+    Returns:
+        List of indices to protect (may be empty)
+    """
+    query_type = classify_query(query)
+
+    if query_type == "semantic":
+        return []
+
+    # Factual query: find results containing query keywords
+    query_lower = query.lower()
+
+    # Extract significant keywords (skip common words)
+    stop_words = {"what", "is", "the", "a", "an", "of", "for", "to", "'s", "s"}
+    keywords = []
+    for word in query_lower.split():
+        clean = re.sub(r"[''`]s?$", "", word)  # Remove possessive
+        clean = re.sub(r"[^a-z0-9]", "", clean)  # Remove punctuation
+        if clean and clean not in stop_words and len(clean) >= 2:
+            keywords.append(clean)
+
+    if not keywords:
+        return []
+
+    protected = []
+    for i, result in enumerate(results):
+        if len(protected) >= max_protected:
+            break
+
+        content = result.get("content", "").lower()
+
+        # Check if content contains any significant keyword
+        matches = sum(1 for kw in keywords if kw in content)
+        if matches >= 1:  # At least one keyword match
+            protected.append(i)
+
+    return protected
 
 
 def expand_person_names(query: str) -> str:
@@ -439,13 +494,25 @@ class HybridSearch:
         if use_reranker and len(final_results) > top_k:
             try:
                 from api.services.reranker import get_reranker
+
+                # Find protected indices for factual queries
+                protected = find_protected_indices(
+                    expanded_query,
+                    final_results,
+                    max_protected=3
+                )
+
                 reranker = get_reranker()
                 final_results = reranker.rerank(
                     query=expanded_query,
                     results=final_results,
                     top_k=top_k,
-                    content_key="content"
+                    content_key="content",
+                    protected_indices=protected if protected else None
                 )
+
+                if protected:
+                    logger.debug(f"Protected {len(protected)} results from reranking")
                 logger.debug(f"Re-ranked {len(final_results)} results with cross-encoder")
             except Exception as e:
                 logger.warning(f"Re-ranking failed, using hybrid scores: {e}")

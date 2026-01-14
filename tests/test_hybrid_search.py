@@ -464,3 +464,79 @@ class TestChunkDeduplication:
 
         # Second chunk should be removed (adjacent)
         assert len(deduplicated) == 1
+
+
+class TestQueryAwareReranking:
+    """Test query-aware reranking in hybrid search."""
+
+    @pytest.fixture
+    def temp_db(self):
+        """Create a temporary database file."""
+        with tempfile.NamedTemporaryFile(suffix='.db', delete=False) as f:
+            yield f.name
+        os.unlink(f.name)
+
+    def test_factual_query_preserves_bm25_matches(self, temp_db):
+        """Factual queries should preserve top BM25 exact matches."""
+        from api.services.hybrid_search import HybridSearch, find_protected_indices
+        from api.services.bm25_index import BM25Index
+        from unittest.mock import MagicMock
+
+        bm25 = BM25Index(db_path=temp_db)
+        bm25.add_document("taylor_ktn", "Taylor's KTN: TT11YZS7J", "Taylor.md")
+        bm25.add_document("travel_1", "General travel tips", "Travel.md")
+        bm25.add_document("travel_2", "Airport information", "Airport.md")
+
+        mock_vector_store = MagicMock()
+        mock_vector_store.search.return_value = [
+            {"id": "travel_1", "content": "General travel tips", "metadata": {}},
+            {"id": "travel_2", "content": "Airport information", "metadata": {}},
+            {"id": "taylor_ktn", "content": "Taylor's KTN: TT11YZS7J", "metadata": {}},
+        ]
+
+        hybrid = HybridSearch(vector_store=mock_vector_store, bm25_index=bm25)
+
+        # find_protected_indices should identify Taylor.md for factual query
+        results = [
+            {"id": "taylor_ktn", "content": "Taylor's KTN: TT11YZS7J"},
+            {"id": "travel_1", "content": "General travel tips"},
+        ]
+        protected = find_protected_indices("Taylor's KTN", results, max_protected=3)
+
+        # Should protect the exact match
+        assert 0 in protected
+
+    def test_semantic_query_no_protection(self, temp_db):
+        """Semantic queries should not protect any results."""
+        from api.services.hybrid_search import find_protected_indices
+
+        results = [
+            {"id": "doc1", "content": "Meeting with Sarah about project"},
+            {"id": "doc2", "content": "Sarah's feedback on design"},
+        ]
+
+        protected = find_protected_indices(
+            "prepare me for meeting with Sarah",
+            results,
+            max_protected=3
+        )
+
+        # Semantic query = no protection
+        assert len(protected) == 0
+
+    def test_find_protected_indices_checks_content(self, temp_db):
+        """Should only protect results that contain query keywords."""
+        from api.services.hybrid_search import find_protected_indices
+
+        results = [
+            {"id": "doc1", "content": "Random unrelated content"},
+            {"id": "doc2", "content": "Alex's phone: 555-1234"},
+            {"id": "doc3", "content": "More unrelated stuff"},
+        ]
+
+        protected = find_protected_indices("Alex's phone", results, max_protected=3)
+
+        # Should only protect doc2 (contains "Alex" and "phone")
+        assert 1 in protected
+        assert 0 not in protected
+        assert 2 not in protected
