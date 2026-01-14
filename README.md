@@ -74,7 +74,7 @@ LifeOS is a self-hosted RAG (Retrieval-Augmented Generation) system that provide
 |-----------|------------|----------|
 | Embeddings | sentence-transformers (`all-MiniLM-L6-v2`) | Local |
 | Vector DB | ChromaDB | Local |
-| Keyword Index | BM25 (rank_bm25) | Local |
+| Keyword Index | SQLite FTS5 (BM25) | Local |
 | Query Router | Ollama + Llama 3.2 3B | Local |
 | Synthesis | Claude API (Anthropic) | Cloud |
 | Backend | FastAPI + Python 3.13 | Local |
@@ -481,6 +481,7 @@ LifeOS combines vector similarity and keyword matching to find both conceptual a
 
 | Decision | Rationale |
 |----------|-----------|
+| **Contextual chunking** | Each chunk includes document context (filename, folder, type) for better retrieval |
 | **OR semantics for BM25** | AND fails when no single chunk contains all query terms |
 | **2x filename boost** | Person-specific files must rank first for person queries |
 | **RRF fusion (k=60)** | Score-agnostic merging, no parameter tuning needed |
