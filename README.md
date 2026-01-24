@@ -332,7 +332,8 @@ LifeOS/
 │       ├── memory_store.py        # User memories
 │       ├── cost_tracker.py        # API cost tracking
 │       ├── interaction_store.py   # People interaction tracking
-│       ├── granola_processor.py   # Granola meeting notes
+│       ├── granola_processor.py   # Granola meeting notes processor
+│       ├── omi_processor.py       # Omi events processor
 │       ├── model_selector.py      # Claude model selection
 │       └── resilience.py          # Error handling/retries
 ├── config/
@@ -414,6 +415,8 @@ LifeOS/
 - `POST /api/admin/calendar/stop` - Stop calendar scheduler
 - `GET /api/admin/granola/status` - Granola processor status
 - `POST /api/admin/granola/process` - Process Granola inbox
+- `GET /api/admin/omi/status` - Omi processor status
+- `POST /api/admin/omi/process` - Process Omi events
 
 ## Query Routing
 
@@ -669,6 +672,50 @@ Check sync status via admin endpoints:
 - `GET /api/admin/health` — Overall health
 - `GET /api/admin/calendar/status` — Calendar indexer status
 - `GET /api/admin/granola/status` — Granola processor status
+- `GET /api/admin/omi/status` — Omi processor status
+
+## Omi Events Processor
+
+LifeOS automatically processes events captured by [Omi](https://www.omi.me/) (wearable AI device) and routes them to the appropriate folders in your Obsidian vault.
+
+### Source Folder
+
+Events land in `Omi/Events/` with frontmatter containing:
+- `category` — Omi's classification (work, psychology, romantic, parenting, etc.)
+- `omi_id` — Unique identifier for deduplication
+- `date`, `duration_minutes`, `started_at`, `finished_at`
+
+### Destination Folders
+
+| Destination | Criteria |
+|-------------|----------|
+| `Personal/Self-Improvement/Therapy and coaching/Omi` | Content contains therapy patterns (therapist, therapy session, etc.) |
+| `Work/ML/Meetings/Omi` | Category is `work`, `business`, `finance`, or `technology` |
+| `Personal/Omi` | Everything else (default) |
+
+**Note:** Therapy detection requires content patterns — category alone is not sufficient. A `psychology` event without "therapist" in the content goes to `Personal/Omi`.
+
+### Processing
+
+- Runs automatically every 5 minutes (alongside Granola processor)
+- Starts on server boot via launchd
+- Updates frontmatter with LifeOS tags and type
+- Handles duplicates via `omi_id`
+
+### Manual Processing
+
+```bash
+# Process all pending Omi events now
+curl -X POST http://localhost:8000/api/admin/omi/process
+
+# Check status
+curl http://localhost:8000/api/admin/omi/status
+
+# Reclassify files in a folder
+curl -X POST http://localhost:8000/api/admin/omi/reclassify \
+  -H "Content-Type: application/json" \
+  -d '{"folder": "Personal/Omi"}'
+```
 
 ## Cost Tracking
 

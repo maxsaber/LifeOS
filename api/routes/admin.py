@@ -346,6 +346,214 @@ async def deduplicate_granola_files() -> DeduplicateResponse:
         )
 
 
+# ============ Omi Processor Endpoints ============
+
+
+class OmiStatus(BaseModel):
+    """Status of the Omi processor."""
+    status: str
+    running: bool
+    omi_events_path: str
+    pending_files: int
+    interval_seconds: int
+    message: Optional[str] = None
+
+
+class OmiProcessResponse(BaseModel):
+    """Response from Omi processing operation."""
+    status: str
+    message: str
+    processed: int
+    failed: int
+    skipped: int
+    moves: list[dict] = []
+
+
+@router.get("/omi/status", response_model=OmiStatus)
+async def get_omi_status() -> OmiStatus:
+    """
+    Get status of the Omi events processor.
+
+    Returns whether it's running and how many files are pending.
+    """
+    from pathlib import Path
+
+    omi_events_path = Path(settings.vault_path) / "Omi" / "Events"
+    pending_count = len(list(omi_events_path.glob("*.md"))) if omi_events_path.exists() else 0
+
+    # Try to get the processor instance from main
+    try:
+        from api.main import _omi_processor
+        running = _omi_processor.is_running if _omi_processor else False
+        interval = _omi_processor.interval_seconds if _omi_processor else 300
+    except Exception:
+        running = False
+        interval = 300
+
+    return OmiStatus(
+        status="running" if running else "stopped",
+        running=running,
+        omi_events_path=str(omi_events_path),
+        pending_files=pending_count,
+        interval_seconds=interval,
+        message=f"{pending_count} files pending in Omi/Events" if pending_count > 0 else "No files pending"
+    )
+
+
+@router.post("/omi/process", response_model=OmiProcessResponse)
+async def process_omi_backlog() -> OmiProcessResponse:
+    """
+    Process all pending files in the Omi/Events folder immediately.
+
+    Classifies and moves files to appropriate destinations:
+    - /Personal/Omi - general personal events
+    - /Personal/Self-Improvement/Therapy and coaching/Omi - therapy sessions
+    - /Work/ML/Meetings/Omi - work meetings
+    """
+    try:
+        from api.services.omi_processor import OmiProcessor
+
+        processor = OmiProcessor(settings.vault_path)
+        results = processor.process_backlog()
+
+        return OmiProcessResponse(
+            status="success",
+            message=f"Processed {results['processed']} files",
+            processed=results["processed"],
+            failed=results["failed"],
+            skipped=results["skipped"],
+            moves=results["moves"]
+        )
+    except Exception as e:
+        logger.error(f"Omi processing failed: {e}")
+        return OmiProcessResponse(
+            status="error",
+            message=f"Processing failed: {str(e)}",
+            processed=0,
+            failed=0,
+            skipped=0
+        )
+
+
+@router.post("/omi/start")
+async def start_omi_processor():
+    """Start the Omi processor (runs every 5 minutes)."""
+    try:
+        from api.main import _omi_processor
+        if _omi_processor:
+            _omi_processor.start()
+            return {"status": "started", "message": "Omi processor started (runs every 5 minutes)"}
+        else:
+            # Create new processor if not initialized
+            from api.services.omi_processor import OmiProcessor
+            import api.main as main_module
+            main_module._omi_processor = OmiProcessor(settings.vault_path)
+            main_module._omi_processor.start()
+            return {"status": "started", "message": "Omi processor created and started"}
+    except Exception as e:
+        logger.error(f"Failed to start Omi processor: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+@router.post("/omi/stop")
+async def stop_omi_processor():
+    """Stop the Omi processor."""
+    try:
+        from api.main import _omi_processor
+        if _omi_processor:
+            _omi_processor.stop()
+            return {"status": "stopped", "message": "Omi processor stopped"}
+        return {"status": "not_running", "message": "Omi processor was not running"}
+    except Exception as e:
+        logger.error(f"Failed to stop Omi processor: {e}")
+        return {"status": "error", "message": str(e)}
+
+
+class OmiReclassifyRequest(BaseModel):
+    """Request to reclassify Omi files in a folder."""
+    folder: str = "Personal/Omi"
+
+
+@router.post("/omi/reclassify", response_model=OmiProcessResponse)
+async def reclassify_omi_files(request: OmiReclassifyRequest) -> OmiProcessResponse:
+    """
+    Reclassify Omi files that may have been incorrectly categorized.
+
+    Scans the specified folder and moves any Omi files to their correct
+    destination based on classification rules.
+    """
+    try:
+        from api.services.omi_processor import OmiProcessor
+        from pathlib import Path
+
+        processor = OmiProcessor(settings.vault_path)
+        folder_path = Path(settings.vault_path) / request.folder
+
+        results = processor.reclassify_folder(str(folder_path))
+
+        return OmiProcessResponse(
+            status="success",
+            message=f"Reclassified {results['reclassified']} files from {request.folder}",
+            processed=results["reclassified"],
+            failed=results["failed"],
+            skipped=results["skipped"],
+            moves=results["moves"]
+        )
+    except Exception as e:
+        logger.error(f"Omi reclassification failed: {e}")
+        return OmiProcessResponse(
+            status="error",
+            message=f"Reclassification failed: {str(e)}",
+            processed=0,
+            failed=0,
+            skipped=0
+        )
+
+
+class OmiDeduplicateResponse(BaseModel):
+    """Response from Omi deduplication operation."""
+    status: str
+    message: str
+    duplicates_found: int
+    files_deleted: int
+    files_kept: int
+    details: list[dict] = []
+
+
+@router.post("/omi/deduplicate", response_model=OmiDeduplicateResponse)
+async def deduplicate_omi_files() -> OmiDeduplicateResponse:
+    """
+    Find and remove all duplicate Omi files in the vault.
+
+    For each set of duplicates (files with the same omi_id),
+    keeps the file in the best location (based on classification)
+    and deletes the rest.
+    """
+    try:
+        from api.services.omi_processor import OmiProcessor
+
+        processor = OmiProcessor(settings.vault_path)
+        results = processor.deduplicate_all()
+
+        return OmiDeduplicateResponse(
+            status="success",
+            message=f"Found {results['duplicates_found']} duplicate sets, deleted {results['files_deleted']} files",
+            duplicates_found=results["duplicates_found"],
+            files_deleted=results["files_deleted"],
+            files_kept=results["files_kept"],
+            details=results["details"]
+        )
+    except Exception as e:
+        logger.error(f"Omi deduplication failed: {e}")
+        return OmiDeduplicateResponse(
+            status="error",
+            message=f"Deduplication failed: {str(e)}",
+            duplicates_found=0,
+            files_deleted=0,
+            files_kept=0
+        )
+
+
 # ============ Calendar Indexer Endpoints ============
 
 

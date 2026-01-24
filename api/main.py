@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 
 # Background services (initialized on startup)
 _granola_processor = None
+_omi_processor = None
 _calendar_indexer = None
 _people_v2_sync_thread = None
 _people_v2_stop_event = threading.Event()
@@ -138,7 +139,7 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Manage application lifespan - startup and shutdown."""
-    global _granola_processor, _calendar_indexer, _people_v2_sync_thread
+    global _granola_processor, _omi_processor, _calendar_indexer, _people_v2_sync_thread
 
     # Startup: Initialize and start Granola processor
     try:
@@ -148,6 +149,15 @@ async def lifespan(app: FastAPI):
         logger.info("Granola processor started successfully")
     except Exception as e:
         logger.error(f"Failed to start Granola processor: {e}")
+
+    # Startup: Initialize and start Omi processor
+    try:
+        from api.services.omi_processor import OmiProcessor
+        _omi_processor = OmiProcessor(settings.vault_path)
+        _omi_processor.start()
+        logger.info("Omi processor started successfully")
+    except Exception as e:
+        logger.error(f"Failed to start Omi processor: {e}")
 
     # Startup: Initialize and start Calendar indexer at specific times (Eastern)
     try:
@@ -184,6 +194,10 @@ async def lifespan(app: FastAPI):
     if _granola_processor:
         _granola_processor.stop()
         logger.info("Granola processor stopped")
+
+    if _omi_processor:
+        _omi_processor.stop()
+        logger.info("Omi processor stopped")
 
     if _calendar_indexer:
         _calendar_indexer.stop_scheduler()
