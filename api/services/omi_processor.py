@@ -5,7 +5,9 @@ Processes the Omi/Events folder every 5 minutes, automatically
 classifying and moving event notes to the appropriate folder.
 
 Destinations:
-- /Personal/Omi - general personal events
+- /Personal/Omi - general personal events (catchall)
+- /Personal/Relationship/Omi - romantic/relationship discussions
+- /Personal/Finance/Omi - personal finance (mortgage, loans, etc.)
 - /Personal/Self-Improvement/Therapy and coaching/Omi - therapy sessions
 - /Work/ML/Meetings/Omi - work meetings
 """
@@ -63,12 +65,21 @@ WORK_CONTENT_PATTERNS = [
     r"\b(?:R&D|engineering|product)\s*(?:team|meeting)\b",
 ]
 
-# Content patterns that suggest personal (relationship discussions, etc.)
+# Content patterns that suggest personal (generic - catchall)
 PERSONAL_CONTENT_PATTERNS = [
+    r"\bpersonal\b",
+]
+
+# Content patterns for RELATIONSHIP discussions
+# Routes to Personal/Relationship/Omi
+RELATIONSHIP_CONTENT_PATTERNS = [
     r"\bromantic\s*partner",
     r"\brelationship\b.*\b(?:conflict|discussion|issue)\b",
     r"\bco-?parenting\b",
     r"\bpartner\b.*\b(?:feels?|said|wants?)\b",
+    r"\bcouple\b.*\b(?:conflict|discussion|works?)\b",
+    r"\bcommunication\s*(?:conflict|issue|style)\b",
+    r"\bTaylor\b",  # Known partner name
 ]
 
 # Content patterns for PERSONAL finance (overrides business/finance category)
@@ -116,6 +127,8 @@ class OmiProcessor:
 
         # Destination folders (all under vault_path)
         self.dest_personal = "Personal/Omi"
+        self.dest_relationship = "Personal/Relationship/Omi"
+        self.dest_finance = "Personal/Finance/Omi"
         self.dest_therapy = "Personal/Self-Improvement/Therapy and coaching/Omi"
         self.dest_work = "Work/ML/Meetings/Omi"
 
@@ -197,12 +210,15 @@ class OmiProcessor:
         # Check for therapy content patterns (REQUIRED for therapy classification)
         has_therapy_content = self._matches_patterns(full_text, THERAPY_CONTENT_PATTERNS)
 
-        # Check for work signals
-        is_work_category = category in WORK_CATEGORIES
-        has_work_content = self._matches_patterns(full_text, WORK_CONTENT_PATTERNS)
+        # Check for relationship content
+        has_relationship_content = self._matches_patterns(full_text, RELATIONSHIP_CONTENT_PATTERNS)
 
         # Check for personal finance (overrides business/finance category)
         has_personal_finance = self._matches_patterns(full_text, PERSONAL_FINANCE_PATTERNS)
+
+        # Check for work signals
+        is_work_category = category in WORK_CATEGORIES
+        has_work_content = self._matches_patterns(full_text, WORK_CONTENT_PATTERNS)
 
         # Check for personal category
         is_personal_category = category in PERSONAL_CATEGORIES
@@ -210,35 +226,39 @@ class OmiProcessor:
         # Check if category hints at possible therapy (but needs content confirmation)
         is_therapy_hint_category = category in THERAPY_HINT_CATEGORIES
 
+        # Check for romantic/relationship category
+        is_relationship_category = category in {"romantic", "parenting"}
+
         # Classification logic with rationale
         #
         # Priority 1: Therapy detection
         # CRITICAL: Therapy requires content patterns - category alone is NOT enough
-        # psychology/romantic/parenting categories often contain non-therapy content
         if has_therapy_content:
-            if is_therapy_hint_category:
-                return (
-                    self.dest_therapy,
-                    ["omi", "therapy", "personal"],
-                    f"Therapy content patterns + category '{category}'"
-                )
-            else:
-                return (
-                    self.dest_therapy,
-                    ["omi", "therapy", "personal"],
-                    "Therapy content patterns detected"
-                )
+            return (
+                self.dest_therapy,
+                ["omi", "therapy", "personal"],
+                f"Therapy content patterns detected (category: '{category}')"
+            )
 
         # Priority 2: Personal finance detection
         # Overrides business/finance category - mortgage, home loans, etc. are personal
         if has_personal_finance:
             return (
-                self.dest_personal,
+                self.dest_finance,
                 ["omi", "personal", "finance"],
                 "Personal finance content (mortgage, home loan, etc.)"
             )
 
-        # Priority 3: Work detection
+        # Priority 3: Relationship detection
+        # romantic/parenting category OR relationship content patterns
+        if has_relationship_content or is_relationship_category:
+            return (
+                self.dest_relationship,
+                ["omi", "personal", "relationship"],
+                f"Relationship content (category: '{category}')"
+            )
+
+        # Priority 4: Work detection
         # - work category + work content = definitely work
         # - work category alone = likely work
         # - work content alone (without personal category) = likely work
@@ -263,21 +283,13 @@ class OmiProcessor:
                 "Content contains work patterns"
             )
 
-        # Priority 3: Personal (default)
-        # - personal/psychology/romantic/parenting without therapy content = Personal/Omi
+        # Priority 5: Personal catchall
+        # - psychology without therapy content = Personal/Omi
         # - unknown/other category = personal (safest default)
-        if is_personal_category:
-            return (
-                self.dest_personal,
-                ["omi", "personal"],
-                f"Category '{category}' is personal (no therapy patterns)"
-            )
-
-        # Default to personal for anything else
         return (
             self.dest_personal,
             ["omi", "personal"],
-            f"Default classification (category: '{category}')"
+            f"Default personal (category: '{category}')"
         )
 
     def update_frontmatter(
