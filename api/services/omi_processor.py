@@ -71,6 +71,25 @@ PERSONAL_CONTENT_PATTERNS = [
     r"\bpartner\b.*\b(?:feels?|said|wants?)\b",
 ]
 
+# Content patterns for PERSONAL finance (overrides business/finance category)
+# These are personal matters even if Omi categorizes them as "business" or "finance"
+PERSONAL_FINANCE_PATTERNS = [
+    r"\bmortgage\b",
+    r"\bhome\s*(?:loan|purchase|buying)\b",
+    r"\bhouse\s*(?:loan|purchase|buying)\b",
+    r"\bVA\s*loan\b",
+    r"\bFHA\s*loan\b",
+    r"\bdown\s*payment\b",
+    r"\breal\s*estate\s*(?:agent|purchase)\b",
+    r"\bhome\s*(?:inspection|appraisal)\b",
+    r"\bclosing\s*costs?\b",
+    r"\bpersonal\s*finance\b",
+    r"\bretirement\s*(?:account|savings|planning)\b",
+    r"\b401k\b",
+    r"\bIRA\b",
+    r"\btax\s*(?:return|filing|refund)\b",
+]
+
 
 class OmiProcessor:
     """
@@ -182,6 +201,9 @@ class OmiProcessor:
         is_work_category = category in WORK_CATEGORIES
         has_work_content = self._matches_patterns(full_text, WORK_CONTENT_PATTERNS)
 
+        # Check for personal finance (overrides business/finance category)
+        has_personal_finance = self._matches_patterns(full_text, PERSONAL_FINANCE_PATTERNS)
+
         # Check for personal category
         is_personal_category = category in PERSONAL_CATEGORIES
 
@@ -207,7 +229,16 @@ class OmiProcessor:
                     "Therapy content patterns detected"
                 )
 
-        # Priority 2: Work detection
+        # Priority 2: Personal finance detection
+        # Overrides business/finance category - mortgage, home loans, etc. are personal
+        if has_personal_finance:
+            return (
+                self.dest_personal,
+                ["omi", "personal", "finance"],
+                "Personal finance content (mortgage, home loan, etc.)"
+            )
+
+        # Priority 3: Work detection
         # - work category + work content = definitely work
         # - work category alone = likely work
         # - work content alone (without personal category) = likely work
