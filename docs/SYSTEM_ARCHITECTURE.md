@@ -12,6 +12,7 @@ LifeOS is a personal knowledge management system that indexes your Obsidian vaul
 
 | Process | Schedule | Reads From | Writes To |
 |---------|----------|------------|-----------|
+| **ChromaDB Server** | Continuous (boot) | HTTP requests | Vector data |
 | **Launchd API Service** | Continuous (boot) | All data | API logs |
 | **Nightly Sync** | Daily 3:00 AM ET | Vault, Gmail, Calendar, LinkedIn, iMessages | ChromaDB, BM25, Vault, PersonEntity |
 | **Calendar Indexer** | 8 AM, 12 PM, 3 PM ET | Google Calendar (personal + work) | ChromaDB (`lifeos_calendar`) |
@@ -22,6 +23,28 @@ LifeOS is a personal knowledge management system that indexes your Obsidian vaul
 ---
 
 ## Process Details
+
+### 0. ChromaDB Server
+
+**Purpose**: Vector database server for semantic search (runs as separate process to prevent data corruption)
+
+**Configuration**: `config/launchd/com.lifeos.chromadb.plist`
+
+- Host: `0.0.0.0`, Port: `8001`
+- Data directory: `./data/chromadb`
+- Auto-restart on crash (KeepAlive)
+- Health endpoint: `http://localhost:8001/api/v2/heartbeat`
+
+**Management**:
+```bash
+./scripts/chromadb.sh start   # Start server
+./scripts/chromadb.sh stop    # Stop server
+./scripts/chromadb.sh status  # Check status
+```
+
+**Why Client-Server Mode**: ChromaDB's `PersistentClient` does not support concurrent access. Running as a server with `HttpClient` ensures safe concurrent access from the API service, file watcher, and indexer.
+
+---
 
 ### 1. Launchd API Service
 
@@ -165,7 +188,8 @@ Query → Name Expansion → [Vector Search + BM25 Search] → RRF Fusion → Bo
 
 | File | Purpose |
 |------|---------|
-| `config/launchd/com.lifeos.api.plist` | Launchd service configuration |
+| `config/launchd/com.lifeos.chromadb.plist` | ChromaDB server launchd service |
+| `config/launchd/com.lifeos.api.plist` | LifeOS API launchd service |
 | `config/settings.py` | Environment variables, paths, API keys |
 | `config/gdoc_sync.yaml` | Google Docs → vault mapping |
 | `config/prompts/*.txt` | LLM prompt templates |
@@ -222,7 +246,8 @@ Query → Name Expansion → [Vector Search + BM25 Search] → RRF Fusion → Bo
 | Variable | Purpose | Default |
 |----------|---------|---------|
 | `LIFEOS_VAULT_PATH` | Path to Obsidian vault | `./vault` |
-| `LIFEOS_CHROMA_PATH` | Path to ChromaDB data | `./data/chromadb` |
+| `LIFEOS_CHROMA_PATH` | Path to ChromaDB data directory | `./data/chromadb` |
+| `LIFEOS_CHROMA_URL` | ChromaDB server URL | `http://localhost:8001` |
 | `LIFEOS_PORT` | API server port | `8000` |
 | `ANTHROPIC_API_KEY` | Claude API key | Required |
 | `OLLAMA_HOST` | Local LLM endpoint | `http://localhost:11434` |

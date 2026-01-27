@@ -2139,7 +2139,8 @@ Integration:
 **Environment Variables:**
 ```
 LIFEOS_VAULT_PATH=/path/to/obsidian/vault
-LIFEOS_CHROMA_PATH=/path/to/chromadb
+LIFEOS_CHROMA_PATH=/path/to/chromadb          # ChromaDB data directory
+LIFEOS_CHROMA_URL=http://localhost:8001       # ChromaDB server URL
 LIFEOS_PORT=8080
 ANTHROPIC_API_KEY=sk-...
 GOOGLE_CREDENTIALS_PATH=/path/to/credentials.json

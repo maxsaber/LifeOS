@@ -69,11 +69,96 @@ LifeOS is a self-hosted RAG (Retrieval-Augmented Generation) system that provide
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
 
+### Background Processes & Data Flow
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         SCHEDULED PROCESSES                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │  NIGHTLY SYNC (3:00 AM Eastern)                                     │    │
+│  │                                                                      │    │
+│  │  Step 1          Step 2           Step 3          Step 4            │    │
+│  │  ┌──────────┐   ┌──────────┐    ┌──────────┐   ┌──────────┐         │    │
+│  │  │  Vault   │──▶│ People   │──▶ │  GDocs   │──▶│ iMessage │         │    │
+│  │  │ Reindex  │   │   Sync   │    │   Sync   │   │   Sync   │         │    │
+│  │  └────┬─────┘   └────┬─────┘    └────┬─────┘   └────┬─────┘         │    │
+│  │       │              │               │              │                │    │
+│  │       ▼              ▼               ▼              ▼                │    │
+│  │   ChromaDB      PersonEntity      Vault        imessage.db          │    │
+│  │   BM25 Index    Interactions                   PersonEntity         │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+│  ┌─────────────────────────────────────────────────────────────────────┐    │
+│  │  CALENDAR INDEXER (8 AM, 12 PM, 3 PM Eastern)                       │    │
+│  │                                                                      │    │
+│  │   Google Calendar ────────▶ ChromaDB (lifeos_calendar collection)   │    │
+│  │   (personal + work)          Past 30 days + Future 30 days          │    │
+│  └─────────────────────────────────────────────────────────────────────┘    │
+│                                                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                        CONTINUOUS PROCESSES                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐           │
+│  │   FILE WATCHER   │  │ GRANOLA (5 min)  │  │   OMI (5 min)    │           │
+│  │   (real-time)    │  │                  │  │                  │           │
+│  │                  │  │ Granola/         │  │ Omi/Events/      │           │
+│  │ Vault changes ──▶│  │      │           │  │      │           │           │
+│  │      │           │  │      ▼           │  │      ▼           │           │
+│  │      ▼           │  │ Work/ML/Meetings │  │ Personal/Omi     │           │
+│  │ ChromaDB + BM25  │  │ Personal/...     │  │ Work/ML/Omi      │           │
+│  └──────────────────┘  └──────────────────┘  └──────────────────┘           │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                              DATA STORES                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   data/chromadb/          data/chromadb/        ~/Notes 2025/               │
+│  ┌──────────────┐        ┌──────────────┐      ┌──────────────┐             │
+│  │   ChromaDB   │        │  BM25 Index  │      │    Vault     │             │
+│  │  (vectors)   │        │  (keywords)  │      │  (markdown)  │             │
+│  └──────────────┘        └──────────────┘      └──────────────┘             │
+│                                                                              │
+│   data/imessage.db       data/person_         data/interactions.db          │
+│  ┌──────────────┐        entities.db          ┌──────────────┐              │
+│  │   iMessage   │       ┌──────────────┐      │ Interactions │              │
+│  │    Cache     │       │ PersonEntity │      │   per Person │              │
+│  └──────────────┘       └──────────────┘      └──────────────┘              │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+Daily Timeline (Eastern Time):
+───────────────────────────────────────────────────────────────────────────────
+ 00:00 ─────────────────────────────────────────────────────────────────────▶
+   │
+   │    03:00  Nightly Sync (Vault → People → GDocs → iMessage)
+   │      │
+   │      ▼
+   │    08:00  Calendar Sync
+   │      │
+   │      ▼
+   │    12:00  Calendar Sync
+   │      │
+   │      ▼
+   │    15:00  Calendar Sync
+   │      │
+   │      ▼
+   │    24/7   File Watcher (real-time) + Granola/Omi (every 5 min)
+   │
+ 23:59 ─────────────────────────────────────────────────────────────────────▶
+```
+
+> **See also:** [System Architecture](docs/SYSTEM_ARCHITECTURE.md) for detailed process specifications, data store schemas, and API endpoint documentation.
+
 **Core Components:**
 | Component | Technology | Location |
 |-----------|------------|----------|
 | Embeddings | sentence-transformers (`all-MiniLM-L6-v2`) | Local |
-| Vector DB | ChromaDB | Local |
+| Vector DB | ChromaDB (server mode, port 8001) | Local |
 | Keyword Index | SQLite FTS5 (BM25) | Local |
 | Query Router | Ollama + Llama 3.2 3B | Local |
 | Synthesis | Claude API (Anthropic) | Cloud |
@@ -86,6 +171,7 @@ LifeOS is a self-hosted RAG (Retrieval-Augmented Generation) system that provide
 ### Prerequisites
 
 - Python 3.11+
+- ChromaDB server (runs on port 8001)
 - Ollama (for local LLM routing)
 - Anthropic API key (for Claude synthesis)
 - Google OAuth credentials (for Calendar/Gmail/Drive)
@@ -117,9 +203,12 @@ Create a `.env` file in the project root:
 ```bash
 # Paths
 LIFEOS_VAULT_PATH=/path/to/obsidian/vault
-LIFEOS_CHROMA_PATH=./data/chromadb
+LIFEOS_CHROMA_PATH=./data/chromadb          # ChromaDB data directory
 
-# Server
+# ChromaDB Server
+LIFEOS_CHROMA_URL=http://localhost:8001     # ChromaDB server URL
+
+# LifeOS API Server
 LIFEOS_HOST=0.0.0.0
 LIFEOS_PORT=8000
 
@@ -145,16 +234,24 @@ OLLAMA_TIMEOUT=10
 > when accessing via localhost vs Tailscale/network. The script ensures clean startup.
 
 ```bash
+# Start ChromaDB server (required dependency)
+./scripts/chromadb.sh start
+
 # Start Ollama (if not running)
 ollama serve &
 
 # Start the server (ALWAYS use this)
-./scripts/server.sh start
+./scripts/server.sh start     # Auto-starts ChromaDB if not running
 
 # Other server commands
 ./scripts/server.sh stop      # Stop server
 ./scripts/server.sh restart   # Restart after code changes
 ./scripts/server.sh status    # Check server status
+
+# ChromaDB management
+./scripts/chromadb.sh status  # Check ChromaDB status
+./scripts/chromadb.sh stop    # Stop ChromaDB
+./scripts/chromadb.sh restart # Restart ChromaDB
 ```
 
 The web UI will be available at `http://localhost:8000` (and via Tailscale if configured).
@@ -180,8 +277,14 @@ The server does NOT auto-reload. Direct `git commit` will NOT restart the server
 LifeOS uses shell scripts for testing, deployment, and server management:
 
 ```bash
+# === ChromaDB Server (required dependency) ===
+./scripts/chromadb.sh start    # Start ChromaDB server on port 8001
+./scripts/chromadb.sh stop     # Stop ChromaDB server
+./scripts/chromadb.sh restart  # Restart ChromaDB server
+./scripts/chromadb.sh status   # Check ChromaDB status
+
 # === Server Management (use this for day-to-day operations) ===
-./scripts/server.sh start      # Kill existing, start server, wait for healthy
+./scripts/server.sh start      # Kill existing, start server (auto-starts ChromaDB)
 ./scripts/server.sh stop       # Stop the server
 ./scripts/server.sh restart    # Full restart (recommended after code changes)
 ./scripts/server.sh status     # Check server status and health
@@ -356,6 +459,7 @@ LifeOS/
 │   ├── deploy.sh                  # Test → restart → commit → push
 │   ├── test.sh                    # Test runner
 │   ├── server.sh                  # Server management
+│   ├── chromadb.sh                # ChromaDB server management
 │   ├── service.sh                 # launchd service management
 │   ├── authenticate_google.py     # Google OAuth setup
 │   └── import_phone_contacts.py   # Import contacts from CSV
@@ -729,6 +833,7 @@ Data stored in `./data/cost_tracker.db`.
 
 ## Documentation
 
+- **System Architecture**: `docs/SYSTEM_ARCHITECTURE.md` — Detailed process specs, data stores, and API docs
 - **PRD**: `docs/LifeOS PRD.md`
 - **Backlog**: `docs/LifeOS Backlog.md`
 - **Router Prompt**: `config/prompts/query_router.txt`
