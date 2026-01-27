@@ -708,19 +708,21 @@ async def ask_stream(request: AskStreamRequest):
                     try:
                         gmail = GmailService(account_type)
                         # Use person email for targeted search
-                        # When we have a resolved email, don't add keywords - email filter is precise enough
+                        # When we have a resolved email, fetch full body (fewer results since bodies are large)
                         if person_email:
                             if is_sent_to:
                                 messages = gmail.search(
                                     to_email=person_email,
-                                    max_results=10
+                                    max_results=5,
+                                    include_body=True
                                 )
                             else:
                                 messages = gmail.search(
                                     from_email=person_email,
-                                    max_results=10
+                                    max_results=5,
+                                    include_body=True
                                 )
-                            print(f"  Searching {'to' if is_sent_to else 'from'}: {person_email}")
+                            print(f"  Searching {'to' if is_sent_to else 'from'}: {person_email} (with body)")
                         elif search_term:
                             messages = gmail.search(keywords=search_term, max_results=5)
                         else:
@@ -731,21 +733,39 @@ async def ask_stream(request: AskStreamRequest):
                         print(f"  {account_type.value} gmail error: {e}")
 
                 if all_messages:
+                    from zoneinfo import ZoneInfo
+                    eastern = ZoneInfo("America/New_York")
+
                     email_text = "Recent Emails:\n"
                     for m in all_messages:
                         sender = m.sender if hasattr(m, 'sender') else m.get('from', 'Unknown')
                         recipient = m.to if hasattr(m, 'to') else m.get('to', '')
                         subject = m.subject if hasattr(m, 'subject') else m.get('subject', 'No subject')
                         snippet = m.snippet if hasattr(m, 'snippet') else m.get('snippet', '')
+                        body = m.body if hasattr(m, 'body') else m.get('body', '')
                         account = m.source_account if hasattr(m, 'source_account') else ''
-                        date_str = m.date.strftime('%Y-%m-%d %H:%M') if hasattr(m, 'date') and m.date else ''
+
+                        # Convert to Eastern time
+                        date_str = ''
+                        if hasattr(m, 'date') and m.date:
+                            try:
+                                eastern_time = m.date.astimezone(eastern)
+                                date_str = eastern_time.strftime('%Y-%m-%d %I:%M %p ET')
+                            except Exception:
+                                date_str = m.date.strftime('%Y-%m-%d %H:%M')
+
                         email_text += f"- From: {sender} [{account}]\n"
                         if recipient:
                             email_text += f"  To: {recipient}\n"
                         email_text += f"  Subject: {subject}\n"
                         if date_str:
                             email_text += f"  Date: {date_str}\n"
-                        if snippet:
+                        # Show full body if available, otherwise snippet
+                        if body:
+                            # Limit body to prevent context overflow
+                            body_preview = body[:2000] + "..." if len(body) > 2000 else body
+                            email_text += f"  Body:\n{body_preview}\n"
+                        elif snippet:
                             email_text += f"  Preview: {snippet[:200]}...\n"
                     extra_context.append({"source": "gmail", "content": email_text})
                     print(f"  Total: {len(all_messages)} emails from both accounts")

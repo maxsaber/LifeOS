@@ -182,6 +182,7 @@ class GmailService:
         after: Optional[datetime] = None,
         before: Optional[datetime] = None,
         max_results: int = 20,
+        include_body: bool = False,
     ) -> list[EmailMessage]:
         """
         Search emails.
@@ -224,7 +225,7 @@ class GmailService:
             email_messages = []
             for msg in messages:
                 self._rate_limit()
-                message = self.get_message(msg["id"], include_body=False)
+                message = self.get_message(msg["id"], include_body=include_body)
                 if message:
                     email_messages.append(message)
 
