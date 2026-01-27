@@ -52,9 +52,6 @@ class TestBriefingIntegration:
         mock_interaction_store.get_for_person.return_value = []
         mock_interaction_store.format_interaction_history.return_value = "No interactions"
 
-        mock_aggregator = MagicMock()
-        mock_aggregator.search.return_value = []
-
         mock_hybrid_search = MagicMock()
         mock_hybrid_search.search.return_value = []
 
@@ -62,7 +59,6 @@ class TestBriefingIntegration:
         mock_action_registry.get_actions_involving_person.return_value = []
 
         service = BriefingsService(
-            people_aggregator=mock_aggregator,
             hybrid_search=mock_hybrid_search,
             action_registry=mock_action_registry,
             entity_resolver=mock_resolver,

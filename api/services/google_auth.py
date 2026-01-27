@@ -23,10 +23,10 @@ SCOPES_PERSONAL = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-# Scopes for work account (read-only)
+# Scopes for work account (read-only except gmail which needs modify for drafts)
 SCOPES_WORK = [
     "https://www.googleapis.com/auth/calendar.readonly",
-    "https://www.googleapis.com/auth/gmail.readonly",
+    "https://www.googleapis.com/auth/gmail.modify",  # Need modify for drafts
     "https://www.googleapis.com/auth/drive.readonly",
 ]
 

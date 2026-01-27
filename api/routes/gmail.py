@@ -1,15 +1,15 @@
 """
 Gmail API endpoints for LifeOS.
 
-Provides search and retrieval of emails.
+Provides search, retrieval, and draft creation for emails.
 """
 from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from api.services.gmail import get_gmail_service, EmailMessage
+from api.services.gmail import get_gmail_service, EmailMessage, DraftMessage
 from api.services.google_auth import GoogleAccount
 
 router = APIRouter(prefix="/api/gmail", tags=["gmail"])
@@ -33,6 +33,29 @@ class SearchResponse(BaseModel):
     messages: list[EmailResponse]
     count: int
     query: Optional[str] = None
+
+
+class DraftCreateRequest(BaseModel):
+    """Request model for creating a draft."""
+    to: str = Field(..., description="Recipient email address(es), comma-separated for multiple")
+    subject: str = Field(..., description="Email subject line")
+    body: str = Field(..., description="Email body content")
+    cc: Optional[str] = Field(default=None, description="CC recipients, comma-separated")
+    bcc: Optional[str] = Field(default=None, description="BCC recipients, comma-separated")
+    html: bool = Field(default=False, description="If true, body is treated as HTML")
+
+
+class DraftResponse(BaseModel):
+    """Response model for a draft."""
+    draft_id: str
+    message_id: str
+    subject: str
+    to: str
+    body: Optional[str] = None
+    cc: Optional[str] = None
+    bcc: Optional[str] = None
+    source_account: str
+    gmail_url: str = Field(..., description="URL to open draft in Gmail")
 
 
 def _message_to_response(msg: EmailMessage) -> EmailResponse:
@@ -130,3 +153,78 @@ async def get_email(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch email: {e}")
+
+
+@router.post("/drafts", response_model=DraftResponse)
+async def create_draft(
+    request: DraftCreateRequest,
+    account: str = Query(default="personal", description="Account: personal or work"),
+):
+    """
+    **Create a draft email in Gmail.**
+
+    Creates a draft that can be reviewed and sent from Gmail.
+    Returns the draft ID and a direct link to open it in Gmail.
+
+    Example:
+    ```json
+    {
+        "to": "john@example.com",
+        "subject": "Following up on our meeting",
+        "body": "Hi John,\\n\\nGreat meeting today..."
+    }
+    ```
+
+    For multiple recipients, use comma-separated emails:
+    ```json
+    {
+        "to": "john@example.com, jane@example.com",
+        "cc": "boss@example.com",
+        "subject": "Team update"
+    }
+    ```
+    """
+    if not request.to or not request.to.strip():
+        raise HTTPException(status_code=400, detail="Recipient (to) is required")
+    if not request.subject or not request.subject.strip():
+        raise HTTPException(status_code=400, detail="Subject is required")
+    if not request.body or not request.body.strip():
+        raise HTTPException(status_code=400, detail="Body is required")
+
+    try:
+        account_type = GoogleAccount.PERSONAL if account == "personal" else GoogleAccount.WORK
+        service = get_gmail_service(account_type)
+
+        draft = service.create_draft(
+            to=request.to.strip(),
+            subject=request.subject.strip(),
+            body=request.body,
+            cc=request.cc.strip() if request.cc else None,
+            bcc=request.bcc.strip() if request.bcc else None,
+            html=request.html,
+        )
+
+        if not draft:
+            raise HTTPException(status_code=500, detail="Failed to create draft")
+
+        # Generate Gmail URL to open the draft
+        gmail_url = f"https://mail.google.com/mail/u/0/#drafts?compose={draft.draft_id}"
+
+        return DraftResponse(
+            draft_id=draft.draft_id,
+            message_id=draft.message_id,
+            subject=draft.subject,
+            to=draft.to,
+            body=draft.body,
+            cc=draft.cc,
+            bcc=draft.bcc,
+            source_account=draft.source_account,
+            gmail_url=gmail_url,
+        )
+
+    except HTTPException:
+        raise
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create draft: {e}")

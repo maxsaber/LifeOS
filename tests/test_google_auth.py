@@ -81,10 +81,10 @@ class TestGoogleAuthService:
         assert "https://www.googleapis.com/auth/gmail.modify" in SCOPES_PERSONAL
         assert "https://www.googleapis.com/auth/drive" in SCOPES_PERSONAL
 
-    def test_work_account_has_readonly_scopes(self):
-        """Work account should have read-only scopes."""
+    def test_work_account_has_correct_scopes(self):
+        """Work account should have readonly for calendar/drive, modify for gmail (for drafts)."""
         assert "https://www.googleapis.com/auth/calendar.readonly" in SCOPES_WORK
-        assert "https://www.googleapis.com/auth/gmail.readonly" in SCOPES_WORK
+        assert "https://www.googleapis.com/auth/gmail.modify" in SCOPES_WORK  # Need modify for drafts
         assert "https://www.googleapis.com/auth/drive.readonly" in SCOPES_WORK
 
     def test_stores_token_locally(self, mock_credentials_personal, temp_config_dir):

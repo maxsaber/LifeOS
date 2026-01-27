@@ -92,6 +92,11 @@ CURATED_ENDPOINTS = {
         "description": "Search iMessage/SMS text message history. Search by text content (q), phone number (phone), or person entity ID (entity_id). Filter by date range (after/before) or direction (sent/received). Returns message text, timestamp, and associated person.",
         "method": "GET"
     },
+    "/api/gmail/drafts": {
+        "name": "lifeos_gmail_draft",
+        "description": "Create a draft email in Gmail. Provide 'to' (recipient), 'subject', and 'body'. Optional: 'cc', 'bcc', 'html' (bool), 'account' (personal/work). Returns draft_id and gmail_url to open the draft directly in Gmail for review before sending.",
+        "method": "POST"
+    },
 }
 
 

@@ -53,6 +53,32 @@ class EmailMessage:
         }
 
 
+@dataclass
+class DraftMessage:
+    """Represents a Gmail draft."""
+    draft_id: str
+    message_id: str
+    subject: str
+    to: str
+    body: Optional[str] = None
+    cc: Optional[str] = None
+    bcc: Optional[str] = None
+    source_account: str = "personal"
+
+    def to_dict(self) -> dict:
+        """Convert to dict for API response."""
+        return {
+            "draft_id": self.draft_id,
+            "message_id": self.message_id,
+            "subject": self.subject,
+            "to": self.to,
+            "body": self.body,
+            "cc": self.cc,
+            "bcc": self.bcc,
+            "source_account": self.source_account,
+        }
+
+
 def build_gmail_query(
     keywords: Optional[str] = None,
     from_email: Optional[str] = None,
@@ -436,6 +462,77 @@ class GmailService:
 
         except Exception as e:
             logger.error(f"Failed to send email to {to}: {e}")
+            return None
+
+    def create_draft(
+        self,
+        to: str,
+        subject: str,
+        body: str,
+        cc: Optional[str] = None,
+        bcc: Optional[str] = None,
+        html: bool = False,
+    ) -> Optional[DraftMessage]:
+        """
+        Create a draft email.
+
+        Args:
+            to: Recipient email address(es), comma-separated for multiple
+            subject: Email subject
+            body: Email body (plain text or HTML)
+            cc: CC recipients, comma-separated
+            bcc: BCC recipients, comma-separated
+            html: If True, create as HTML email
+
+        Returns:
+            DraftMessage if successful, None otherwise
+        """
+        from email.mime.text import MIMEText
+
+        try:
+            self._rate_limit()
+
+            # Create MIME message
+            if html:
+                message = MIMEText(body, "html")
+            else:
+                message = MIMEText(body, "plain")
+
+            message["to"] = to
+            message["subject"] = subject
+            if cc:
+                message["cc"] = cc
+            if bcc:
+                message["bcc"] = bcc
+
+            # Encode message
+            raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
+
+            # Create draft via Gmail API
+            result = self.service.users().drafts().create(
+                userId="me",
+                body={"message": {"raw": raw}}
+            ).execute()
+
+            draft_id = result.get("id", "")
+            message_data = result.get("message", {})
+            message_id = message_data.get("id", "")
+
+            logger.info(f"Created draft to {to}: {subject} (draft_id={draft_id})")
+
+            return DraftMessage(
+                draft_id=draft_id,
+                message_id=message_id,
+                subject=subject,
+                to=to,
+                body=body,
+                cc=cc,
+                bcc=bcc,
+                source_account=self.account_type.value,
+            )
+
+        except Exception as e:
+            logger.error(f"Failed to create draft to {to}: {e}")
             return None
 
 
