@@ -24,6 +24,11 @@ class Settings(BaseSettings):
         default=Path("./data/chromadb"),
         alias="LIFEOS_CHROMA_PATH"
     )
+    chroma_url: str = Field(
+        default="http://localhost:8001",
+        validation_alias="LIFEOS_CHROMA_URL",
+        description="ChromaDB server URL"
+    )
 
     # Server (port 8000 is canonical - keep in sync with scripts/server.sh)
     port: int = Field(default=8000, alias="LIFEOS_PORT")
