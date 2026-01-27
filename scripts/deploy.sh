@@ -67,12 +67,13 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Activate virtual environment
+# Activate virtual environment (located outside Documents for faster startup)
 activate_venv() {
-    if [ -f "venv/bin/activate" ]; then
-        source venv/bin/activate
+    if [ -f "$HOME/.venvs/lifeos/bin/activate" ]; then
+        source "$HOME/.venvs/lifeos/bin/activate"
     else
-        log_error "Virtual environment not found. Run: python -m venv venv"
+        log_error "Virtual environment not found at ~/.venvs/lifeos"
+        log_error "Run: python -m venv ~/.venvs/lifeos && ~/.venvs/lifeos/bin/pip install -r requirements.txt"
         exit 1
     fi
 }

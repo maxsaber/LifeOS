@@ -15,7 +15,7 @@ from pydantic import BaseModel
 from api.services.conversation_store import (
     get_store, generate_title, format_conversation_history
 )
-from api.services.vectorstore import VectorStore
+from api.services.hybrid_search import HybridSearch
 from api.services.synthesizer import construct_prompt, get_synthesizer
 from api.services.query_router import QueryRouter
 
@@ -198,11 +198,11 @@ async def ask_in_conversation(conversation_id: str, request: AskRequest):
             # Exclude the message we just added (it's the current question)
             history = history[:-1] if history else []
 
-            # Get relevant chunks
+            # Get relevant chunks using hybrid search (vector + BM25)
             chunks = []
             if "vault" in routing_result.sources or not routing_result.sources:
-                vector_store = VectorStore()
-                chunks = vector_store.search(query=request.question, top_k=10)
+                hybrid_search = HybridSearch()
+                chunks = hybrid_search.search(query=request.question, top_k=10)
 
             # Send sources
             sources = []

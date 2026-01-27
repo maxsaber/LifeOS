@@ -61,3 +61,4 @@ build/
 .DS_Store
 Thumbs.db
 venv.bak/
+vault/

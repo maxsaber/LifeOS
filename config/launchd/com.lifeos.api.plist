@@ -5,9 +5,10 @@
     <key>Label</key>
     <string>com.lifeos.api</string>
 
+    <!-- venv is located at ~/.venvs/lifeos to avoid macOS TCC security scanning delays -->
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/nathanramia/Documents/Code/LifeOS/venv/bin/uvicorn</string>
+        <string>/Users/nathanramia/.venvs/lifeos/bin/uvicorn</string>
         <string>api.main:app</string>
         <string>--host</string>
         <string>0.0.0.0</string>
@@ -21,7 +22,7 @@
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/Users/nathanramia/Documents/Code/LifeOS/venv/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>/Users/nathanramia/.venvs/lifeos/bin:/usr/local/bin:/usr/bin:/bin</string>
         <key>LIFEOS_VAULT_PATH</key>
         <string>/Users/nathanramia/Notes 2025</string>
         <!-- ANTHROPIC_API_KEY should be set in ~/.zshrc or launchctl setenv -->

@@ -47,6 +47,7 @@ Deferred features and enhancements to revisit after v1.
 ## Technical Debt / Improvements
 
 - [x] **Test optimization** - ~~Fix slow test suite (30+ min unacceptable). Add pytest markers (`@slow`, `@integration`), lazy imports for ChromaDB, parallel execution with pytest-xdist. Target: <60s for unit tests, <5min for full suite.~~ **DONE: Implemented as P6.4 with pytest markers (@unit, @slow, @integration), pytest-xdist. Unit tests run in ~7s (2026-01-07)**
+- [ ] **Retrieval evaluation framework** - Build test set of 50-100 queries with expected source files. Measure MRR (Mean Reciprocal Rank) and recall@k. Required to objectively measure whether retrieval changes actually improve accuracy.
 - [ ] **Reranking model** - Add a cross-encoder reranker for better result ordering.
 - [ ] **Caching layer** - Cache frequent queries and embeddings.
 - [ ] **Metrics/observability** - Track query latency, retrieval quality, usage patterns.
