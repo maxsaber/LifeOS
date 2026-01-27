@@ -10,13 +10,9 @@ P2.3 Acceptance Criteria:
 """
 import pytest
 
-# These tests use TestClient which initializes the app (slow)
-pytestmark = pytest.mark.slow
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, AsyncMock, patch
-from fastapi.testclient import TestClient
 
-from api.main import app
 from api.services.briefings import BriefingsService, BriefingContext
 
 
@@ -67,10 +63,10 @@ class TestBriefingsService:
         return aggregator
 
     @pytest.fixture
-    def mock_vector_store(self):
-        """Create mock vector store."""
-        store = MagicMock()
-        return store
+    def mock_hybrid_search(self):
+        """Create mock hybrid search."""
+        search = MagicMock()
+        return search
 
     @pytest.fixture
     def mock_action_registry(self):
@@ -95,11 +91,11 @@ class TestBriefingsService:
         return store
 
     @pytest.fixture
-    def service(self, mock_aggregator, mock_vector_store, mock_action_registry, mock_entity_resolver, mock_interaction_store):
+    def service(self, mock_aggregator, mock_hybrid_search, mock_action_registry, mock_entity_resolver, mock_interaction_store):
         """Create briefings service with mocks."""
         return BriefingsService(
             people_aggregator=mock_aggregator,
-            vector_store=mock_vector_store,
+            hybrid_search=mock_hybrid_search,
             action_registry=mock_action_registry,
             entity_resolver=mock_entity_resolver,
             interaction_store=mock_interaction_store,
@@ -135,10 +131,10 @@ class TestBriefingsService:
         assert context.company == "Movement Labs"
         assert context.meeting_count == 10
 
-    def test_gather_context_searches_vault(self, service, mock_aggregator, mock_vector_store):
+    def test_gather_context_searches_vault(self, service, mock_aggregator, mock_hybrid_search):
         """Should search vault for mentions."""
         mock_aggregator.search.return_value = []
-        mock_vector_store.search.return_value = [
+        mock_hybrid_search.search.return_value = [
             {
                 "content": "Meeting with Yoni about Q1 goals",
                 "metadata": {"file_name": "Q1 Planning.md", "file_path": "/vault/Q1 Planning.md"},
@@ -169,7 +165,7 @@ class TestBriefingsService:
         assert context.action_items[0]["task"] == "Review budget proposal"
 
     @pytest.mark.asyncio
-    async def test_generate_briefing_for_known_person(self, service, mock_aggregator, mock_vector_store):
+    async def test_generate_briefing_for_known_person(self, service, mock_aggregator, mock_hybrid_search):
         """Should generate briefing for known person."""
         from api.services.people_aggregator import PersonRecord
 
@@ -180,7 +176,7 @@ class TestBriefingsService:
             sources=["linkedin"],
         )
         mock_aggregator.search.return_value = [mock_record]
-        mock_vector_store.search.return_value = [
+        mock_hybrid_search.search.return_value = [
             {"content": "Discussion about strategy", "metadata": {"file_name": "Strategy.md"}, "score": 0.9}
         ]
 
@@ -196,22 +192,25 @@ class TestBriefingsService:
             assert result["person_name"] == "Yoni"
 
     @pytest.mark.asyncio
-    async def test_generate_briefing_handles_unknown_person(self, service, mock_aggregator, mock_vector_store):
+    async def test_generate_briefing_handles_unknown_person(self, service, mock_aggregator, mock_hybrid_search):
         """Should handle unknown person gracefully."""
         mock_aggregator.search.return_value = []
-        mock_vector_store.search.return_value = []
+        mock_hybrid_search.search.return_value = []
 
         result = await service.generate_briefing("unknown_person_xyz")
 
         assert result["status"] in ["not_found", "limited"]
 
 
+@pytest.mark.slow
 class TestBriefingsAPI:
     """Test briefings API endpoints."""
 
     @pytest.fixture
     def client(self):
         """Create test client."""
+        from fastapi.testclient import TestClient
+        from api.main import app
         return TestClient(app)
 
     def test_briefing_endpoint_exists(self, client):

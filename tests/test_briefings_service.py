@@ -147,9 +147,9 @@ class TestBriefingsServiceV2Integration:
         mock_aggregator = MagicMock()
         mock_aggregator.search.return_value = []
 
-        # Mock vector store
-        mock_vector_store = MagicMock()
-        mock_vector_store.search.return_value = []
+        # Mock hybrid search
+        mock_hybrid_search = MagicMock()
+        mock_hybrid_search.search.return_value = []
 
         # Mock action registry
         mock_action_registry = MagicMock()
@@ -157,7 +157,7 @@ class TestBriefingsServiceV2Integration:
 
         service = BriefingsService(
             people_aggregator=mock_aggregator,
-            vector_store=mock_vector_store,
+            hybrid_search=mock_hybrid_search,
             action_registry=mock_action_registry,
             entity_resolver=resolver,
             interaction_store=populated_interaction_store,
@@ -196,15 +196,15 @@ class TestBriefingsServiceV2Integration:
         mock_aggregator = MagicMock()
         mock_aggregator.search.return_value = [mock_record]
 
-        mock_vector_store = MagicMock()
-        mock_vector_store.search.return_value = []
+        mock_hybrid_search = MagicMock()
+        mock_hybrid_search.search.return_value = []
 
         mock_action_registry = MagicMock()
         mock_action_registry.get_actions_involving_person.return_value = []
 
         service = BriefingsService(
             people_aggregator=mock_aggregator,
-            vector_store=mock_vector_store,
+            hybrid_search=mock_hybrid_search,
             action_registry=mock_action_registry,
             entity_resolver=resolver,
         )
@@ -227,15 +227,15 @@ class TestBriefingsServiceV2Integration:
         mock_aggregator = MagicMock()
         mock_aggregator.search.return_value = []
 
-        mock_vector_store = MagicMock()
-        mock_vector_store.search.return_value = []
+        mock_hybrid_search = MagicMock()
+        mock_hybrid_search.search.return_value = []
 
         mock_action_registry = MagicMock()
         mock_action_registry.get_actions_involving_person.return_value = []
 
         service = BriefingsService(
             people_aggregator=mock_aggregator,
-            vector_store=mock_vector_store,
+            hybrid_search=mock_hybrid_search,
             action_registry=mock_action_registry,
             entity_resolver=resolver,
         )
@@ -265,15 +265,15 @@ class TestBriefingsServiceGenerateBriefing:
         mock_aggregator = MagicMock()
         mock_aggregator.search.return_value = []
 
-        mock_vector_store = MagicMock()
-        mock_vector_store.search.return_value = []
+        mock_hybrid_search = MagicMock()
+        mock_hybrid_search.search.return_value = []
 
         mock_action_registry = MagicMock()
         mock_action_registry.get_actions_involving_person.return_value = []
 
         service = BriefingsService(
             people_aggregator=mock_aggregator,
-            vector_store=mock_vector_store,
+            hybrid_search=mock_hybrid_search,
             action_registry=mock_action_registry,
             entity_resolver=resolver,
             interaction_store=populated_interaction_store,
@@ -302,15 +302,15 @@ class TestBriefingsServiceGenerateBriefing:
         mock_aggregator = MagicMock()
         mock_aggregator.search.return_value = []
 
-        mock_vector_store = MagicMock()
-        mock_vector_store.search.return_value = []
+        mock_hybrid_search = MagicMock()
+        mock_hybrid_search.search.return_value = []
 
         mock_action_registry = MagicMock()
         mock_action_registry.get_actions_involving_person.return_value = []
 
         service = BriefingsService(
             people_aggregator=mock_aggregator,
-            vector_store=mock_vector_store,
+            hybrid_search=mock_hybrid_search,
             action_registry=mock_action_registry,
             entity_resolver=resolver,
         )
@@ -334,9 +334,9 @@ class TestVaultSearchImprovement:
 
     def test_vault_search_without_people_dictionary_restriction(self):
         """Test that vault search works for people not in PEOPLE_DICTIONARY."""
-        # Mock vector store
-        mock_vector_store = MagicMock()
-        mock_vector_store.search.return_value = [
+        # Mock hybrid search
+        mock_hybrid_search = MagicMock()
+        mock_hybrid_search.search.return_value = [
             {
                 "metadata": {"file_name": "Test Note.md", "file_path": "/vault/test.md"},
                 "content": "Meeting with John Smith about project X",
@@ -352,7 +352,7 @@ class TestVaultSearchImprovement:
 
         service = BriefingsService(
             people_aggregator=mock_aggregator,
-            vector_store=mock_vector_store,
+            hybrid_search=mock_hybrid_search,
             action_registry=mock_action_registry,
         )
 
@@ -364,5 +364,5 @@ class TestVaultSearchImprovement:
         assert context.related_notes[0]["file_name"] == "Test Note.md"
 
         # Verify search was called without filter first
-        calls = mock_vector_store.search.call_args_list
+        calls = mock_hybrid_search.search.call_args_list
         assert len(calls) >= 1
