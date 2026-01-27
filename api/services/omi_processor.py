@@ -748,6 +748,12 @@ class OmiProcessor:
                 logger.info(f"Omi cycle: processed {results['processed']} files")
         except Exception as e:
             logger.error(f"Omi processor cycle failed: {e}")
+            # Record failure for nightly batch report
+            try:
+                from api.services.notifications import record_failure
+                record_failure("Omi processor", str(e))
+            except Exception as notify_err:
+                logger.error(f"Failed to record Omi failure: {notify_err}")
 
         # Schedule next run
         if self._running:

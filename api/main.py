@@ -30,7 +30,7 @@ from fastapi.exceptions import RequestValidationError
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from api.routes import search, ask, calendar, gmail, drive, people, chat, briefings, admin, conversations, memories
+from api.routes import search, ask, calendar, gmail, drive, people, chat, briefings, admin, conversations, memories, imessage
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -78,6 +78,9 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
         import time
         STEP_DELAY = 60  # seconds between steps
 
+        # Track failures for notification
+        failures = []
+
         # === Step 1: Vault Reindex ===
         # This indexes all vault notes, which triggers _sync_people_to_v2() hook
         # for each file, extracting people mentions and creating interactions
@@ -89,6 +92,7 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
             logger.info(f"Nightly sync: Vault reindex complete ({files_indexed} files)")
         except Exception as e:
             logger.error(f"Nightly sync: Vault reindex failed: {e}")
+            failures.append(("Vault reindex", str(e)))
 
         time.sleep(STEP_DELAY)  # Let ChromaDB settle
 
@@ -108,6 +112,7 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
             logger.info(f"Nightly sync: People v2 sync completed: {stats}")
         except Exception as e:
             logger.error(f"Nightly sync: People v2 sync failed: {e}")
+            failures.append(("People v2 sync", str(e)))
 
         time.sleep(STEP_DELAY)  # Let APIs settle
 
@@ -120,6 +125,7 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
             logger.info(f"Nightly sync: Google Docs sync completed: {gdoc_stats}")
         except Exception as e:
             logger.error(f"Nightly sync: Google Docs sync failed: {e}")
+            failures.append(("Google Docs sync", str(e)))
 
         time.sleep(STEP_DELAY)  # Let filesystem settle
 
@@ -132,6 +138,32 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
             logger.info(f"Nightly sync: iMessage sync completed: {imessage_stats}")
         except Exception as e:
             logger.error(f"Nightly sync: iMessage sync failed: {e}")
+            failures.append(("iMessage sync", str(e)))
+
+        # Collect processor failures from the last 24 hours
+        try:
+            from api.services.notifications import get_recent_failures, clear_failures
+            processor_failures = get_recent_failures(hours=24)
+            for ts, source, error in processor_failures:
+                failures.append((f"{source} ({ts.strftime('%H:%M')})", error))
+            if processor_failures:
+                clear_failures()  # Clear after collecting
+                logger.info(f"Collected {len(processor_failures)} processor failures from last 24h")
+        except Exception as e:
+            logger.error(f"Failed to collect processor failures: {e}")
+
+        # Send notification if any failures occurred
+        if failures:
+            logger.warning(f"Nightly sync: {len(failures)} failure(s), sending alert...")
+            try:
+                from api.services.notifications import send_alert
+                failure_lines = [f"- {name}: {error}" for name, error in failures]
+                send_alert(
+                    subject=f"Nightly sync: {len(failures)} failure(s)",
+                    body=f"The following operations failed in the last 24 hours:\n\n" + "\n".join(failure_lines),
+                )
+            except Exception as e:
+                logger.error(f"Failed to send failure notification: {e}")
 
         logger.info("Nightly sync: All steps complete")
 
@@ -237,6 +269,7 @@ app.include_router(briefings.router)
 app.include_router(admin.router)
 app.include_router(conversations.router)
 app.include_router(memories.router)
+app.include_router(imessage.router)
 
 # Serve static files
 web_dir = Path(__file__).parent.parent / "web"
@@ -470,6 +503,12 @@ async def full_health_check():
         "memories_list",
         "GET", "/api/memories",
         params={"limit": 1}
+    )
+
+    # 11. iMessage Statistics (GET /api/imessage/statistics)
+    await test_endpoint(
+        "imessage_stats",
+        "GET", "/api/imessage/statistics",
     )
 
     # Set overall status

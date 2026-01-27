@@ -743,6 +743,12 @@ class GranolaProcessor:
                 logger.info(f"Granola cycle: processed {results['processed']} files")
         except Exception as e:
             logger.error(f"Granola processor cycle failed: {e}")
+            # Record failure for nightly batch report
+            try:
+                from api.services.notifications import record_failure
+                record_failure("Granola processor", str(e))
+            except Exception as notify_err:
+                logger.error(f"Failed to record Granola failure: {notify_err}")
 
         # Schedule next run
         if self._running:

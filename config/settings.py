@@ -58,5 +58,12 @@ class Settings(BaseSettings):
     reranker_enabled: bool = True  # Re-enabled with query-aware protection
     reranker_candidates: int = 50
 
+    # Notifications
+    alert_email: str = Field(
+        default="",
+        alias="LIFEOS_ALERT_EMAIL",
+        description="Email address for sync failure alerts"
+    )
+
 
 settings = Settings()

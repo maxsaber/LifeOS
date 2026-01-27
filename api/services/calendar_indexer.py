@@ -32,6 +32,7 @@ DAYS_FUTURE = 30
 CALENDAR_COLLECTION = "lifeos_calendar"
 
 
+
 class CalendarIndexer:
     """
     Indexes calendar events into ChromaDB for semantic search.
@@ -296,6 +297,12 @@ class CalendarIndexer:
                     self.sync()
                 except Exception as e:
                     logger.error(f"Scheduled calendar sync failed: {e}")
+                    # Record failure for nightly batch report
+                    try:
+                        from api.services.notifications import record_failure
+                        record_failure("Calendar sync", str(e))
+                    except Exception as notify_err:
+                        logger.error(f"Failed to record calendar failure: {notify_err}")
 
     def start_time_scheduler(
         self,

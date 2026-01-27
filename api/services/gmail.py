@@ -390,6 +390,54 @@ class GmailService:
 
         return None
 
+    def send_email(
+        self,
+        to: str,
+        subject: str,
+        body: str,
+        html: bool = False,
+    ) -> Optional[str]:
+        """
+        Send an email.
+
+        Args:
+            to: Recipient email address
+            subject: Email subject
+            body: Email body (plain text or HTML)
+            html: If True, send as HTML email
+
+        Returns:
+            Message ID if successful, None otherwise
+        """
+        from email.mime.text import MIMEText
+
+        try:
+            self._rate_limit()
+
+            # Create message
+            if html:
+                message = MIMEText(body, "html")
+            else:
+                message = MIMEText(body, "plain")
+
+            message["to"] = to
+            message["subject"] = subject
+
+            # Encode and send
+            raw = base64.urlsafe_b64encode(message.as_bytes()).decode("utf-8")
+
+            result = self.service.users().messages().send(
+                userId="me",
+                body={"raw": raw}
+            ).execute()
+
+            logger.info(f"Sent email to {to}: {subject}")
+            return result.get("id")
+
+        except Exception as e:
+            logger.error(f"Failed to send email to {to}: {e}")
+            return None
+
 
 # Singleton services per account
 _gmail_services: dict[GoogleAccount, GmailService] = {}

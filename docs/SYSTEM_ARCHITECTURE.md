@@ -76,6 +76,14 @@ LifeOS is a personal knowledge management system that indexes your Obsidian vaul
 
 **Error Handling**: Each step catches exceptions independently and continues to next step.
 
+**Failure Notifications**: After all steps complete, the nightly sync:
+1. Collects any processor failures (Granola, Omi, Calendar) from the last 24 hours
+2. Combines with any nightly sync step failures
+3. Sends a single batch email if any failures occurred
+4. Clears the failure log after sending
+
+Configure `LIFEOS_ALERT_EMAIL` in `.env` to receive notifications.
+
 ---
 
 ### 3. Calendar Indexer
@@ -239,6 +247,12 @@ Query → Name Expansion → [Vector Search + BM25 Search] → RRF Fusion → Bo
 - `GET /api/conversations` - List conversations
 - `POST /api/chat` - Send message in conversation
 
+### iMessage
+- `GET /api/imessage/search` - Search text message history
+- `GET /api/imessage/conversations` - Recent conversations summary
+- `GET /api/imessage/statistics` - Message database statistics
+- `GET /api/imessage/person/{entity_id}` - Messages with a specific person
+
 ---
 
 ## Environment Variables
@@ -249,6 +263,7 @@ Query → Name Expansion → [Vector Search + BM25 Search] → RRF Fusion → Bo
 | `LIFEOS_CHROMA_PATH` | Path to ChromaDB data directory | `./data/chromadb` |
 | `LIFEOS_CHROMA_URL` | ChromaDB server URL | `http://localhost:8001` |
 | `LIFEOS_PORT` | API server port | `8000` |
+| `LIFEOS_ALERT_EMAIL` | Email for sync failure alerts | None (disabled) |
 | `ANTHROPIC_API_KEY` | Claude API key | Required |
 | `OLLAMA_HOST` | Local LLM endpoint | `http://localhost:11434` |
 
