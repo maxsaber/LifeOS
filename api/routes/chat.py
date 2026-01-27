@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, field_validator
 
 from api.services.vectorstore import VectorStore
+from api.services.hybrid_search import HybridSearch
 from api.services.synthesizer import construct_prompt, get_synthesizer
 from api.services.query_router import QueryRouter
 from api.services.conversation_store import get_store, generate_title
@@ -665,17 +666,62 @@ async def ask_stream(request: AskStreamRequest):
             if "gmail" in routing_result.sources:
                 print("FETCHING GMAIL DATA (both personal and work)...")
                 from api.services.google_auth import GoogleAccount
+                from api.services.entity_resolver import get_entity_resolver
 
                 # Extract keywords for search
                 keywords = extract_search_keywords(request.question)
                 search_term = " ".join(keywords) if keywords else None
                 print(f"  Search keywords: {keywords}")
 
+                # Resolve person name to email for targeted search
+                person_email = None
+                is_sent_to = False  # Whether query is about emails sent TO the person
+                person_name = query_router._extract_person_name(request.question)
+                if person_name:
+                    print(f"  Detected person name: {person_name}")
+                    try:
+                        resolver = get_entity_resolver()
+                        result = resolver.resolve(name=person_name)
+                        if result and result.entity:
+                            # Get primary email from entity
+                            entity = result.entity
+                            if entity.emails:
+                                person_email = entity.emails[0]
+                                print(f"  Resolved to email: {person_email}")
+                            elif entity.email:
+                                person_email = entity.email
+                                print(f"  Resolved to email: {person_email}")
+                    except Exception as e:
+                        print(f"  Entity resolution error: {e}")
+
+                    # Check if query is about emails sent TO the person
+                    query_lower = request.question.lower()
+                    if any(phrase in query_lower for phrase in [
+                        "i sent", "sent to", "emailed to", "wrote to",
+                        "email to", "message to", "i emailed", "i wrote"
+                    ]):
+                        is_sent_to = True
+                        print(f"  Query is about emails SENT TO {person_name}")
+
                 all_messages = []
                 for account_type in [GoogleAccount.PERSONAL, GoogleAccount.WORK]:
                     try:
                         gmail = GmailService(account_type)
-                        if search_term:
+                        # Use person email for targeted search
+                        # When we have a resolved email, don't add keywords - email filter is precise enough
+                        if person_email:
+                            if is_sent_to:
+                                messages = gmail.search(
+                                    to_email=person_email,
+                                    max_results=10
+                                )
+                            else:
+                                messages = gmail.search(
+                                    from_email=person_email,
+                                    max_results=10
+                                )
+                            print(f"  Searching {'to' if is_sent_to else 'from'}: {person_email}")
+                        elif search_term:
                             messages = gmail.search(keywords=search_term, max_results=5)
                         else:
                             messages = gmail.search(max_results=5)  # Recent emails
@@ -688,36 +734,44 @@ async def ask_stream(request: AskStreamRequest):
                     email_text = "Recent Emails:\n"
                     for m in all_messages:
                         sender = m.sender if hasattr(m, 'sender') else m.get('from', 'Unknown')
+                        recipient = m.to if hasattr(m, 'to') else m.get('to', '')
                         subject = m.subject if hasattr(m, 'subject') else m.get('subject', 'No subject')
                         snippet = m.snippet if hasattr(m, 'snippet') else m.get('snippet', '')
                         account = m.source_account if hasattr(m, 'source_account') else ''
+                        date_str = m.date.strftime('%Y-%m-%d %H:%M') if hasattr(m, 'date') and m.date else ''
                         email_text += f"- From: {sender} [{account}]\n"
+                        if recipient:
+                            email_text += f"  To: {recipient}\n"
                         email_text += f"  Subject: {subject}\n"
+                        if date_str:
+                            email_text += f"  Date: {date_str}\n"
                         if snippet:
-                            email_text += f"  Preview: {snippet[:150]}...\n"
+                            email_text += f"  Preview: {snippet[:200]}...\n"
                     extra_context.append({"source": "gmail", "content": email_text})
                     print(f"  Total: {len(all_messages)} emails from both accounts")
 
             # Handle vault queries (always include as fallback)
             if "vault" in routing_result.sources or not routing_result.sources or not extra_context:
-                vector_store = VectorStore()
+                # Use hybrid search (vector + BM25 keyword) for better keyword matching
+                hybrid_search = HybridSearch()
 
                 # Check for date context in query
                 date_filter = extract_date_context(request.question)
                 if date_filter:
                     print(f"DATE CONTEXT DETECTED: {date_filter}")
-                    # Filter to files from that date
+                    # For date-filtered queries, use vector store directly
+                    vector_store = VectorStore()
                     chunks = vector_store.search(
                         query=request.question,
                         top_k=10,
                         filters={"modified_date": date_filter}
                     )
-                    # If no results with date filter, fall back to regular search
+                    # If no results with date filter, fall back to hybrid search
                     if not chunks:
-                        print("  No results with date filter, falling back to regular search")
-                        chunks = vector_store.search(query=request.question, top_k=10)
+                        print("  No results with date filter, falling back to hybrid search")
+                        chunks = hybrid_search.search(query=request.question, top_k=10)
                 else:
-                    chunks = vector_store.search(query=request.question, top_k=10)
+                    chunks = hybrid_search.search(query=request.question, top_k=10)
 
                 # Log search results
                 print(f"\nVAULT SEARCH RESULTS (top {len(chunks)}):")

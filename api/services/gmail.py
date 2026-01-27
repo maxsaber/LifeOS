@@ -178,6 +178,7 @@ class GmailService:
         self,
         keywords: Optional[str] = None,
         from_email: Optional[str] = None,
+        to_email: Optional[str] = None,
         after: Optional[datetime] = None,
         before: Optional[datetime] = None,
         max_results: int = 20,
@@ -188,6 +189,7 @@ class GmailService:
         Args:
             keywords: Keywords to search
             from_email: Filter by sender
+            to_email: Filter by recipient
             after: Emails after this date
             before: Emails before this date
             max_results: Maximum messages to return
@@ -198,6 +200,7 @@ class GmailService:
         query = build_gmail_query(
             keywords=keywords,
             from_email=from_email,
+            to_email=to_email,
             after=after,
             before=before,
         )

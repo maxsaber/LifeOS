@@ -78,6 +78,12 @@ class QueryRouter:
                       'last', 'month', 'year', 'recently', 'lately'}
 
         patterns = [
+            # Email patterns (allow lowercase names like "tay")
+            # Use word boundary and exclude common words like "about", "a", "the"
+            r"email(?:ed)?\s+(?:to\s+)?([a-zA-Z]+)\s+(?:about|regarding)",
+            r"(?:I\s+)?(?:sent|wrote|emailed)\s+(?:an?\s+)?(?:email\s+)?(?:to\s+)?([a-zA-Z]+)\s+(?:about|regarding|a\s+)",
+            r"email\s+(?:I\s+)?sent\s+(?:to\s+)?([a-zA-Z]+)\s",
+            r"email\s+(?:from|to)\s+([a-zA-Z]+)(?:\s|$)",
             # Meeting/call prep patterns
             r"prep(?:are)?\s+(?:me\s+)?for\s+(?:my\s+)?(?:meeting|call|1[:\-]1)\s+with\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
             r"meeting\s+with\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
