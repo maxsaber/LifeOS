@@ -2,16 +2,20 @@
 Synthesizer service for LifeOS.
 
 Handles Claude API calls for RAG synthesis.
+
+NOTE: anthropic library is imported lazily to speed up test collection.
 """
 import base64
 import logging
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Any, TYPE_CHECKING
 from zoneinfo import ZoneInfo
-import anthropic
 
 from config.settings import settings
 from api.services.model_selector import get_claude_model_name
+
+if TYPE_CHECKING:
+    import anthropic
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +106,7 @@ class Synthesizer:
         """
         # Use provided key, but only fall back to settings if not explicitly passed
         self.api_key = api_key if api_key is not None else settings.anthropic_api_key
-        self._client: anthropic.Anthropic | None = None
+        self._client: Any = None
 
     def _validate_api_key(self):
         """Validate that API key is configured."""
@@ -113,9 +117,10 @@ class Synthesizer:
             )
 
     @property
-    def client(self) -> anthropic.Anthropic:
+    def client(self) -> "anthropic.Anthropic":
         """Lazy-load the Anthropic client."""
         if self._client is None:
+            import anthropic
             self._client = anthropic.Anthropic(api_key=self.api_key)
         return self._client
 
@@ -150,6 +155,8 @@ class Synthesizer:
             model = get_claude_model_name(tier)
 
         logger.debug(f"Using model: {model}")
+
+        import anthropic
 
         try:
             response = self.client.messages.create(
@@ -202,6 +209,8 @@ class Synthesizer:
         message_content = build_message_content(prompt, attachments)
         if attachments:
             logger.info(f"Multi-modal request with {len(attachments)} attachment(s)")
+
+        import anthropic
 
         try:
             with self.client.messages.stream(

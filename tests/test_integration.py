@@ -1,17 +1,20 @@
 """
 Integration tests for LifeOS.
 Tests end-to-end workflows with real components.
+
+NOTE: Imports are deferred to avoid loading heavy dependencies (ChromaDB,
+sentence-transformers) during pytest collection, which would slow down unit tests.
 """
 import pytest
 
 # These are full integration tests requiring ChromaDB (slow)
 pytestmark = pytest.mark.slow
+
+# Standard library imports are fine at module level (lightweight)
 import tempfile
 import time
 from pathlib import Path
 from datetime import datetime
-
-from api.services.indexer import IndexerService
 
 
 class TestFullIndexingWorkflow:
@@ -107,6 +110,8 @@ This document describes the technical architecture of the LifeOS system.
 
     def test_full_index_and_search(self, test_vault, temp_db):
         """Should index all files and return relevant search results."""
+        from api.services.indexer import IndexerService
+
         indexer = IndexerService(
             vault_path=str(test_vault),
             db_path=str(temp_db)
@@ -135,6 +140,8 @@ This document describes the technical architecture of the LifeOS system.
 
     def test_granola_chunking(self, test_vault, temp_db):
         """Granola notes should be chunked by headers."""
+        from api.services.indexer import IndexerService
+
         indexer = IndexerService(
             vault_path=str(test_vault),
             db_path=str(temp_db)
@@ -154,6 +161,8 @@ This document describes the technical architecture of the LifeOS system.
 
     def test_people_filter(self, test_vault, temp_db):
         """Should be able to filter by people in frontmatter."""
+        from api.services.indexer import IndexerService
+
         indexer = IndexerService(
             vault_path=str(test_vault),
             db_path=str(temp_db)
@@ -172,6 +181,8 @@ This document describes the technical architecture of the LifeOS system.
 
     def test_long_note_chunking(self, test_vault, temp_db):
         """Long notes should be chunked appropriately."""
+        from api.services.indexer import IndexerService
+
         indexer = IndexerService(
             vault_path=str(test_vault),
             db_path=str(temp_db)
@@ -191,6 +202,8 @@ This document describes the technical architecture of the LifeOS system.
 
     def test_watch_and_update(self, test_vault, temp_db):
         """File changes should be detected and indexed."""
+        from api.services.indexer import IndexerService
+
         indexer = IndexerService(
             vault_path=str(test_vault),
             db_path=str(temp_db)

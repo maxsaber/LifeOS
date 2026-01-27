@@ -6,18 +6,21 @@ P1.1 Acceptance Criteria:
 - File modification triggers re-indexing within 5 seconds
 - File deletion removes chunks from ChromaDB
 - Indexer recovers gracefully from restart (no duplicate chunks)
+
+NOTE: Imports are deferred to avoid loading heavy dependencies (ChromaDB,
+sentence-transformers) during pytest collection, which would slow down unit tests.
 """
 import pytest
 
 # These tests require ChromaDB and file watching (slow)
 pytestmark = pytest.mark.slow
+
+# Standard library imports are fine at module level (lightweight)
 import tempfile
 import time
 import os
 from pathlib import Path
 from datetime import datetime
-
-from api.services.indexer import IndexerService
 
 
 class TestIndexerService:
@@ -65,6 +68,8 @@ We talked about Q1 targets.
     @pytest.fixture
     def indexer(self, temp_vault, temp_db):
         """Create indexer instance."""
+        from api.services.indexer import IndexerService
+
         indexer = IndexerService(
             vault_path=str(temp_vault),
             db_path=str(temp_db)

@@ -3,13 +3,17 @@ Tests for ChromaDB vector store integration.
 
 Requires ChromaDB server running on localhost:8001.
 Uses a separate test collection to avoid polluting production data.
+
+NOTE: Imports are deferred to avoid loading heavy dependencies (ChromaDB,
+sentence-transformers) during pytest collection, which would slow down unit tests.
 """
 import pytest
 
 # These tests require ChromaDB server (slow)
 pytestmark = pytest.mark.slow
+
+# Standard library imports are fine at module level (lightweight)
 from datetime import datetime
-from api.services.vectorstore import VectorStore
 
 
 class TestVectorStore:
@@ -18,6 +22,8 @@ class TestVectorStore:
     @pytest.fixture
     def vector_store(self):
         """Create vector store instance with test collection."""
+        from api.services.vectorstore import VectorStore
+
         # Use a test collection name to avoid polluting production data
         store = VectorStore(collection_name="lifeos_vault_test")
         # Clear any existing test data

@@ -2,9 +2,14 @@
 Embedding service using sentence-transformers.
 
 Uses all-MiniLM-L6-v2 for local embedding generation.
+
+NOTE: sentence_transformers is imported lazily to avoid slow startup.
+This allows tests to import this module without loading the ML library.
 """
-from sentence_transformers import SentenceTransformer
-from typing import Union
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
 
 
 class EmbeddingService:
@@ -18,12 +23,13 @@ class EmbeddingService:
             model_name: Name of the sentence-transformers model to use.
         """
         self.model_name = model_name
-        self._model = None
+        self._model: Any = None
 
     @property
-    def model(self) -> SentenceTransformer:
+    def model(self) -> "SentenceTransformer":
         """Lazy-load the model."""
         if self._model is None:
+            from sentence_transformers import SentenceTransformer
             self._model = SentenceTransformer(self.model_name)
         return self._model
 

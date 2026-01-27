@@ -1,15 +1,13 @@
 """
 Tests for embedding generation using sentence-transformers.
+
+NOTE: Imports are deferred to avoid loading sentence-transformers during
+pytest collection, which would slow down unit test runs.
 """
 import pytest
 
 # These tests require loading the sentence-transformers model (slow)
 pytestmark = pytest.mark.slow
-import numpy as np
-from api.services.embeddings import (
-    EmbeddingService,
-    get_embedding_service,
-)
 
 
 class TestEmbeddingService:
@@ -18,6 +16,7 @@ class TestEmbeddingService:
     @pytest.fixture
     def embedding_service(self):
         """Create embedding service instance."""
+        from api.services.embeddings import get_embedding_service
         return get_embedding_service()
 
     def test_generates_embeddings(self, embedding_service):
@@ -45,6 +44,8 @@ class TestEmbeddingService:
 
     def test_similar_texts_have_similar_embeddings(self, embedding_service):
         """Semantically similar texts should have higher cosine similarity."""
+        import numpy as np
+
         text1 = "We discussed the quarterly budget."
         text2 = "The meeting covered financial planning for Q1."
         text3 = "My cat likes to sleep on the couch."
@@ -79,6 +80,8 @@ class TestEmbeddingService:
 
     def test_consistent_embeddings(self, embedding_service):
         """Same text should produce same embedding."""
+        import numpy as np
+
         text = "Consistent embedding test."
         emb1 = embedding_service.embed_text(text)
         emb2 = embedding_service.embed_text(text)

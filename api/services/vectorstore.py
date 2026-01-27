@@ -2,16 +2,19 @@
 ChromaDB vector store service for LifeOS.
 
 Connects to ChromaDB server via HTTP for thread-safe concurrent access.
+
+NOTE: Heavy dependencies (chromadb, embeddings) are imported lazily
+to speed up pytest collection for unit tests.
 """
-import chromadb
-from chromadb.config import Settings
-from typing import Optional
+from typing import Optional, Any, TYPE_CHECKING
 from datetime import datetime
 import json
 import math
 
-from api.services.embeddings import get_embedding_service
 from config.settings import settings
+
+if TYPE_CHECKING:
+    import chromadb
 
 
 class VectorStore:
@@ -29,6 +32,9 @@ class VectorStore:
             collection_name: Name of the collection
             server_url: ChromaDB server URL (default: from settings)
         """
+        import chromadb
+        from chromadb.config import Settings
+
         self.collection_name = collection_name
         self.server_url = server_url or settings.chroma_url
 
@@ -45,7 +51,8 @@ class VectorStore:
             metadata={"hnsw:space": "cosine"}
         )
 
-        # Get embedding service
+        # Get embedding service (lazy import)
+        from api.services.embeddings import get_embedding_service
         self._embedding_service = get_embedding_service()
 
     def _parse_host(self, url: str) -> str:
