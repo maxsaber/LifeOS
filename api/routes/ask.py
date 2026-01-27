@@ -9,23 +9,23 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-from api.services.vectorstore import VectorStore
+from api.services.hybrid_search import HybridSearch
 from api.services.synthesizer import get_synthesizer, construct_prompt
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["ask"])
 
-# Initialize vector store (singleton)
-_vector_store: VectorStore | None = None
+# Initialize hybrid search (singleton)
+_hybrid_search: HybridSearch | None = None
 
 
-def get_vector_store() -> VectorStore:
-    """Get or create vector store instance."""
-    global _vector_store
-    if _vector_store is None:
-        _vector_store = VectorStore(persist_directory=str(settings.chroma_path))
-    return _vector_store
+def get_hybrid_search() -> HybridSearch:
+    """Get or create hybrid search instance."""
+    global _hybrid_search
+    if _hybrid_search is None:
+        _hybrid_search = HybridSearch()
+    return _hybrid_search
 
 
 class AskRequest(BaseModel):
@@ -78,19 +78,23 @@ def get_claude_response(prompt: str) -> dict:
 @router.post("/ask", response_model=AskResponse)
 async def ask(request: AskRequest) -> AskResponse:
     """
-    Ask a question and get a synthesized answer from the vault.
+    **Ask a question and get a synthesized answer** from the Obsidian vault.
 
-    Args:
-        request: Ask request with question
+    Use this for questions that require a synthesized, natural language answer:
+    - "What did I decide about the product roadmap?"
+    - "Summarize my notes on machine learning"
+    - "What are my key takeaways from last week's meetings?"
 
-    Returns:
-        Synthesized answer with sources and timing info
+    This combines hybrid search (semantic + keyword) with Claude synthesis
+    to provide a coherent answer with source citations.
+
+    For raw search results without synthesis, use `vault_search` instead.
     """
-    # Step 1: Retrieve relevant context
+    # Step 1: Retrieve relevant context using hybrid search (vector + BM25)
     retrieval_start = time.time()
 
-    vector_store = get_vector_store()
-    chunks = vector_store.search(
+    hybrid_search = get_hybrid_search()
+    chunks = hybrid_search.search(
         query=request.question,
         top_k=10  # Get top 10 chunks for context
     )

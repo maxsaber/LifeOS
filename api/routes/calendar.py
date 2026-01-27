@@ -73,9 +73,15 @@ async def get_upcoming_events(
     max_results: int = Query(default=50, ge=1, le=100, description="Maximum events to return"),
 ):
     """
-    Get upcoming calendar events.
+    **Get upcoming calendar events** from Google Calendar.
 
-    Returns events from now until `days` in the future.
+    Use this to answer questions like:
+    - "What's on my calendar today/this week?"
+    - "Do I have any meetings tomorrow?"
+    - "What's my schedule for the next few days?"
+
+    Returns event title, start/end times, attendees, location, and description.
+    Query both `account=personal` AND `account=work` for complete schedule.
     """
     try:
         account_type = GoogleAccount.PERSONAL if account == "personal" else GoogleAccount.WORK
@@ -102,9 +108,17 @@ async def search_events(
     days_forward: int = Query(default=30, ge=1, le=365, description="Days to search in the future"),
 ):
     """
-    Search calendar events.
+    **Search calendar events** by keyword or attendee.
 
-    Searches by keyword in title/description and/or filters by attendee.
+    Use this for:
+    - "When did I last meet with John?" → `attendee=john@email.com`
+    - "Find meetings about project X" → `q=project X`
+    - "When is my next 1:1 with Sarah?" → `attendee=sarah@email.com`
+
+    **TIP**: Use `people_v2_resolve` first to get attendee's email for accurate filtering.
+
+    Searches past 30 days and future 30 days by default.
+    Query both personal and work accounts for complete results.
     """
     if not q and not attendee:
         raise HTTPException(

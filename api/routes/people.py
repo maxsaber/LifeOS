@@ -263,10 +263,17 @@ def _entity_to_response(entity) -> PersonResponse:
 @router.post("/v2/resolve", response_model=EntityResolveResponse)
 async def resolve_entity(request: EntityResolveRequest) -> EntityResolveResponse:
     """
-    Resolve a person to an entity using the v2 entity resolution algorithm.
+    **PRIMARY TOOL for finding someone's email, full name, and contact info from a nickname or partial name.**
 
-    Uses email anchoring, fuzzy name matching with context boost, and
-    disambiguation for ambiguous names.
+    Use this FIRST when you need to:
+    - Find someone's email address (e.g., "tay" → annetaylorwalker@gmail.com)
+    - Get someone's full/canonical name (e.g., "tay" → "Taylor Walker, MD, MPH")
+    - Look up contact details before searching Gmail, Calendar, or other sources
+
+    Example: To find emails to/from "Tay", first call this with {"name": "tay"} to get their email,
+    then use that email in gmail_search with "to:email" or "from:email".
+
+    Returns the resolved entity with email, canonical_name, company, position, aliases, and LinkedIn URL.
     """
     if not HAS_V2_PEOPLE:
         raise HTTPException(status_code=501, detail="People System v2 not available")

@@ -81,13 +81,18 @@ class SearchResponse(BaseModel):
 @router.post("/search", response_model=SearchResponse)
 async def search(request: SearchRequest) -> SearchResponse:
     """
-    Search the indexed vault for relevant content.
+    **Search the Obsidian vault** using hybrid semantic + keyword search.
 
-    Args:
-        request: Search request with query and optional filters
+    This searches indexed notes, meeting notes, daily logs, and documents in the vault.
+    Uses both vector similarity (semantic) and BM25 (keyword) matching for best results.
 
-    Returns:
-        Search results with metadata and timing info
+    Use this for:
+    - "What did we discuss about project X?" → searches meeting notes
+    - "Find notes about quarterly planning" → semantic search
+    - "Nathan's phone number" → keyword search for specific info
+
+    Returns matching content chunks with file path, note type, and relevance score.
+    Results are ranked by combined semantic + keyword + recency score.
     """
     start_time = time.time()
 

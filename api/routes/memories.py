@@ -101,16 +101,19 @@ async def synthesize_memory(content: str) -> str:
 @router.post("", response_model=MemoryResponse)
 async def create_memory(request: CreateMemoryRequest):
     """
-    Create a new memory.
+    **Save a persistent memory** that will be included in future conversation context.
 
-    If synthesize=True (default), uses Claude to format casual input
-    into a well-structured memory statement.
+    Use this when the user says things like:
+    - "Remember that..." or "Don't forget..."
+    - "Always check..." or "Note that..."
+    - Personal preferences, name spellings, important facts
 
-    Example input: "remember that anytime I ask about Erika or Madi or Hayley
-    you should also check the alternative spellings Erica and Haley and Maddie"
+    Examples:
+    - "Remember Taylor goes by 'Tay'" → saves alias for entity resolution
+    - "Always ask about my dog Max" → saves personal context
+    - "I prefer ES6 syntax" → saves coding preferences
 
-    Synthesized output: "Alternative spellings: Erika may be spelled as Erica.
-    Madi may be spelled as Maddie. Hayley may be spelled as Haley."
+    Memories persist across sessions and are automatically retrieved when relevant.
     """
     store = get_memory_store()
 
@@ -131,9 +134,10 @@ async def list_memories(
     limit: int = 100
 ):
     """
-    List all memories, optionally filtered by category.
+    **List stored memories** to see what the system remembers about the user.
 
-    Categories: people, preferences, facts, decisions, reminders, context
+    Use this to review saved memories before adding new ones.
+    Filter by category: people, preferences, facts, decisions, reminders, context.
     """
     store = get_memory_store()
     memories = store.list_memories(category=category, limit=limit)
@@ -187,9 +191,10 @@ async def delete_memory(memory_id: str):
 @router.get("/search/{query}", response_model=MemoryListResponse)
 async def search_memories(query: str, limit: int = 10):
     """
-    Search memories by keyword matching.
+    **Search memories by keyword** to find specific saved information.
 
-    Returns memories that match the query keywords, sorted by relevance.
+    Use this to check if a memory already exists before creating a new one,
+    or to retrieve specific remembered facts/preferences.
     """
     store = get_memory_store()
     memories = store.search_memories(query, limit=limit)

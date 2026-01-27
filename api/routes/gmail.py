@@ -52,7 +52,7 @@ def _message_to_response(msg: EmailMessage) -> EmailResponse:
 
 @router.get("/search", response_model=SearchResponse)
 async def search_emails(
-    q: Optional[str] = Query(default=None, description="Search keywords"),
+    q: Optional[str] = Query(default=None, description="Gmail search query - supports 'to:email', 'from:email', 'subject:text', 'newer_than:1d', etc."),
     from_email: Optional[str] = Query(default=None, alias="from", description="Filter by sender email"),
     after: Optional[str] = Query(default=None, description="Emails after date (YYYY-MM-DD)"),
     before: Optional[str] = Query(default=None, description="Emails before date (YYYY-MM-DD)"),
@@ -60,9 +60,20 @@ async def search_emails(
     max_results: int = Query(default=20, ge=1, le=100, description="Maximum results"),
 ):
     """
-    Search emails.
+    **Search Gmail for emails.** Queries both personal and work accounts by default.
 
-    At least one search parameter (q, from, after, before) is required.
+    **IMPORTANT**: To search emails to/from a specific person, first use `people_v2_resolve` to get their
+    email address, then search with `q=to:email` or `q=from:email`.
+
+    Examples:
+    - Find emails from someone: `q=from:john@example.com`
+    - Find emails to someone: `q=to:jane@example.com`
+    - Recent emails: `q=newer_than:7d`
+    - Subject search: `q=subject:quarterly report`
+    - Combined: `q=from:boss@work.com newer_than:30d`
+
+    Returns message_id, subject, sender, date, and snippet for each email.
+    Use `gmail_message` with message_id to get full body if needed.
     """
     if not any([q, from_email, after, before]):
         raise HTTPException(

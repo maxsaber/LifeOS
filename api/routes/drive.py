@@ -56,9 +56,16 @@ async def search_files(
     max_results: int = Query(default=20, ge=1, le=100, description="Maximum results"),
 ):
     """
-    Search Drive files.
+    **Search Google Drive** for documents, spreadsheets, and files.
 
-    Use 'q' for general search (name + content), or 'name'/'content' for specific searches.
+    Use this for:
+    - "Find the Q4 budget spreadsheet" → `q=Q4 budget`
+    - "Find docs about project roadmap" → `content=project roadmap`
+    - "Find files named 'meeting notes'" → `name=meeting notes`
+
+    Returns file name, type, modified date, and web link.
+    Use `drive_file_content` to get full text content of a specific file.
+    Query both personal and work accounts for complete results.
     """
     # q is a general search - applies to both name and content
     search_name = name or q

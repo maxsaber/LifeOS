@@ -31,13 +31,20 @@ class BriefingResponse(BaseModel):
 @router.post("/briefing", response_model=BriefingResponse)
 async def get_briefing(request: BriefingRequest) -> BriefingResponse:
     """
-    Generate a stakeholder briefing for a person.
+    **Generate a comprehensive briefing about a person** for meeting prep or relationship context.
 
-    This aggregates all context about a person from:
+    Use this when you need:
+    - "Tell me about John Smith before my meeting"
+    - "What's my history with Sarah?"
+    - "Prepare me for my 1:1 with Mike"
+
+    Aggregates context from:
     - People metadata (LinkedIn, Gmail, Calendar)
     - Vault notes mentioning them
     - Action items involving them
-    - Interaction history (v2)
+    - Recent interaction history
+
+    For just resolving a name to email/contact info, use `people_v2_resolve` instead.
     """
     if not request.person_name.strip():
         raise HTTPException(status_code=400, detail="Person name cannot be empty")
@@ -57,9 +64,13 @@ async def get_briefing_by_name(
     email: Optional[str] = Query(default=None, description="Optional email for better resolution")
 ) -> BriefingResponse:
     """
-    Generate a stakeholder briefing by person name (URL path).
+    **Generate a briefing by person name** (convenience GET endpoint).
 
-    Convenience endpoint for "tell me about X" style queries.
+    Same as POST /briefing but with name in URL. Use for:
+    - "Tell me about {person_name}"
+    - Quick lookup by name
+
+    Provide email parameter for better resolution if you have it.
     """
     if not person_name.strip():
         raise HTTPException(status_code=400, detail="Person name cannot be empty")
