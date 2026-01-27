@@ -1,28 +1,18 @@
 """
 People API endpoints for LifeOS.
 
-Provides access to aggregated people from all sources.
-Supports both v1 (PeopleAggregator) and v2 (EntityResolver) systems.
+Provides access to aggregated people from the v2 EntityResolver system.
 """
+from datetime import datetime, timezone
 from typing import Optional
 import logging
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from api.services.people_aggregator import get_people_aggregator, PersonRecord
-from api.services.gmail import get_gmail_service
-from api.services.calendar import get_calendar_service
-from api.services.google_auth import GoogleAccount
-
-# v2 imports
-try:
-    from api.services.entity_resolver import get_entity_resolver
-    from api.services.person_entity import get_person_entity_store
-    from api.services.interaction_store import get_interaction_store
-    HAS_V2_PEOPLE = True
-except ImportError:
-    HAS_V2_PEOPLE = False
+from api.services.entity_resolver import get_entity_resolver
+from api.services.person_entity import get_person_entity_store
+from api.services.interaction_store import get_interaction_store
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +31,6 @@ class PersonResponse(BaseModel):
     mention_count: int = 0
     last_seen: Optional[str] = None
     category: str = "unknown"
-    # v2 fields
     entity_id: Optional[str] = None
     linkedin_url: Optional[str] = None
     display_name: Optional[str] = None
@@ -55,154 +44,12 @@ class SearchResponse(BaseModel):
     query: str
 
 
-class SyncResponse(BaseModel):
-    """Response for sync endpoint."""
-    status: str
-    sources: dict[str, int]
-    total_people: int
-
-
 class StatisticsResponse(BaseModel):
     """Response for statistics endpoint."""
     total_people: int
     by_source: dict[str, int]
+    by_category: dict[str, int]
 
-
-def _record_to_response(record: PersonRecord) -> PersonResponse:
-    """Convert PersonRecord to API response."""
-    return PersonResponse(
-        canonical_name=record.canonical_name,
-        email=record.email,
-        company=record.company,
-        position=record.position,
-        sources=record.sources,
-        meeting_count=record.meeting_count,
-        email_count=record.email_count,
-        mention_count=record.mention_count,
-        last_seen=record.last_seen.isoformat() if record.last_seen else None,
-        category=record.category,
-    )
-
-
-@router.get("/search", response_model=SearchResponse)
-async def search_people(
-    q: str = Query(..., description="Search query for name or email"),
-):
-    """Search for people by name or email."""
-    aggregator = get_people_aggregator()
-    results = aggregator.search(q)
-
-    return SearchResponse(
-        people=[_record_to_response(r) for r in results],
-        count=len(results),
-        query=q,
-    )
-
-
-@router.get("/person/{name}", response_model=PersonResponse)
-async def get_person(name: str):
-    """Get a specific person by name."""
-    aggregator = get_people_aggregator()
-    person = aggregator.get_person(name)
-
-    if not person:
-        raise HTTPException(status_code=404, detail=f"Person '{name}' not found")
-
-    return _record_to_response(person)
-
-
-@router.get("/statistics", response_model=StatisticsResponse)
-async def get_statistics():
-    """Get statistics about aggregated people."""
-    aggregator = get_people_aggregator()
-    stats = aggregator.get_statistics()
-
-    return StatisticsResponse(
-        total_people=stats['total_people'],
-        by_source=stats['by_source'],
-    )
-
-
-@router.post("/sync", response_model=SyncResponse)
-async def sync_all_sources():
-    """
-    Sync people from all sources.
-
-    This triggers a full sync from:
-    - LinkedIn connections CSV
-    - Gmail contacts (last 2 years)
-    - Calendar attendees (last year)
-    """
-    try:
-        # Get services for sync
-        gmail_service = None
-        calendar_service = None
-
-        try:
-            gmail_service = get_gmail_service(GoogleAccount.PERSONAL)
-        except Exception as e:
-            pass  # Gmail not available
-
-        try:
-            calendar_service = get_calendar_service(GoogleAccount.PERSONAL)
-        except Exception as e:
-            pass  # Calendar not available
-
-        aggregator = get_people_aggregator(
-            linkedin_csv_path="./data/LinkedInConnections.csv",
-            gmail_service=gmail_service,
-            calendar_service=calendar_service,
-        )
-
-        results = aggregator.sync_all_sources()
-        stats = aggregator.get_statistics()
-
-        return SyncResponse(
-            status="success",
-            sources=results,
-            total_people=stats['total_people'],
-        )
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Sync failed: {e}")
-
-
-@router.get("/list", response_model=SearchResponse)
-async def list_people(
-    limit: int = Query(default=50, ge=1, le=500, description="Max results"),
-    source: Optional[str] = Query(default=None, description="Filter by source"),
-):
-    """List all people, optionally filtered by source."""
-    aggregator = get_people_aggregator()
-    all_people = aggregator.get_all_people()
-
-    # Filter by source if specified
-    if source:
-        all_people = [p for p in all_people if source in p.sources]
-
-    # Sort by last_seen (most recent first), then by name
-    all_people.sort(
-        key=lambda p: (p.last_seen or datetime.min.replace(tzinfo=timezone.utc), p.canonical_name),
-        reverse=True
-    )
-
-    # Limit results
-    all_people = all_people[:limit]
-
-    return SearchResponse(
-        people=[_record_to_response(p) for p in all_people],
-        count=len(all_people),
-        query="*",
-    )
-
-
-# Import at bottom to avoid circular import
-from datetime import datetime, timezone
-
-
-# ============================================================================
-# v2 Entity Endpoints (requires People System v2)
-# ============================================================================
 
 class EntityResolveRequest(BaseModel):
     """Request for entity resolution."""
@@ -260,14 +107,104 @@ def _entity_to_response(entity) -> PersonResponse:
     )
 
 
-@router.post("/v2/resolve", response_model=EntityResolveResponse)
+@router.get("/search", response_model=SearchResponse)
+async def search_people(
+    q: str = Query(..., description="Search query for name or email"),
+):
+    """Search for people by name or email."""
+    store = get_person_entity_store()
+    all_entities = store.get_all()
+
+    # Search by name, email, or aliases
+    query_lower = q.lower()
+    results = []
+    for entity in all_entities:
+        if query_lower in entity.canonical_name.lower():
+            results.append(entity)
+        elif any(query_lower in email.lower() for email in entity.emails):
+            results.append(entity)
+        elif any(query_lower in alias.lower() for alias in entity.aliases):
+            results.append(entity)
+        elif entity.display_name and query_lower in entity.display_name.lower():
+            results.append(entity)
+
+    # Sort by relevance (exact matches first, then by last_seen)
+    results.sort(
+        key=lambda e: (
+            e.canonical_name.lower() != query_lower,  # Exact match first
+            -(e.last_seen.timestamp() if e.last_seen else 0)  # Recent first
+        )
+    )
+
+    return SearchResponse(
+        people=[_entity_to_response(e) for e in results],
+        count=len(results),
+        query=q,
+    )
+
+
+@router.get("/person/{name}", response_model=PersonResponse)
+async def get_person(name: str):
+    """Get a specific person by name."""
+    resolver = get_entity_resolver()
+    result = resolver.resolve(name=name)
+
+    if not result or not result.entity:
+        raise HTTPException(status_code=404, detail=f"Person '{name}' not found")
+
+    return _entity_to_response(result.entity)
+
+
+@router.get("/statistics", response_model=StatisticsResponse)
+async def get_statistics():
+    """Get statistics about aggregated people."""
+    store = get_person_entity_store()
+    stats = store.get_statistics()
+
+    return StatisticsResponse(
+        total_people=stats.get('total', 0),
+        by_source=stats.get('by_source', {}),
+        by_category=stats.get('by_category', {}),
+    )
+
+
+@router.get("/list", response_model=SearchResponse)
+async def list_people(
+    limit: int = Query(default=50, ge=1, le=500, description="Max results"),
+    category: Optional[str] = Query(default=None, description="Filter by category"),
+):
+    """List all people, optionally filtered by category."""
+    store = get_person_entity_store()
+    all_entities = store.get_all()
+
+    # Filter by category if specified
+    if category:
+        all_entities = [e for e in all_entities if e.category == category]
+
+    # Sort by last_seen (most recent first)
+    all_entities.sort(
+        key=lambda e: e.last_seen or datetime.min.replace(tzinfo=timezone.utc),
+        reverse=True
+    )
+
+    # Limit results
+    all_entities = all_entities[:limit]
+
+    return SearchResponse(
+        people=[_entity_to_response(e) for e in all_entities],
+        count=len(all_entities),
+        query="*",
+    )
+
+
+@router.post("/resolve", response_model=EntityResolveResponse)
 async def resolve_entity(request: EntityResolveRequest) -> EntityResolveResponse:
     """
     **PRIMARY TOOL for finding someone's email, full name, and contact info from a nickname or partial name.**
 
     Use this FIRST when you need to:
-    - Find someone's email address (e.g., "tay" → annetaylorwalker@gmail.com)
-    - Get someone's full/canonical name (e.g., "tay" → "Taylor Walker, MD, MPH")
+    - Find someone's email address (e.g., "tay" -> annetaylorwalker@gmail.com)
+    - Get someone's full/canonical name (e.g., "tay" -> "Taylor Walker, MD, MPH")
     - Look up contact details before searching Gmail, Calendar, or other sources
 
     Example: To find emails to/from "Tay", first call this with {"name": "tay"} to get their email,
@@ -275,9 +212,6 @@ async def resolve_entity(request: EntityResolveRequest) -> EntityResolveResponse
 
     Returns the resolved entity with email, canonical_name, company, position, aliases, and LinkedIn URL.
     """
-    if not HAS_V2_PEOPLE:
-        raise HTTPException(status_code=501, detail="People System v2 not available")
-
     if not request.name and not request.email:
         raise HTTPException(status_code=400, detail="Must provide name or email")
 
@@ -301,48 +235,9 @@ async def resolve_entity(request: EntityResolveRequest) -> EntityResolveResponse
     )
 
 
-@router.get("/v2/entities", response_model=SearchResponse)
-async def list_entities(
-    limit: int = Query(default=50, ge=1, le=500, description="Max results"),
-    category: Optional[str] = Query(default=None, description="Filter by category"),
-):
-    """
-    List all entities from the v2 entity store.
-
-    This uses the new PersonEntity system instead of PeopleAggregator.
-    """
-    if not HAS_V2_PEOPLE:
-        raise HTTPException(status_code=501, detail="People System v2 not available")
-
-    store = get_person_entity_store()
-    all_entities = store.get_all()
-
-    # Filter by category if specified
-    if category:
-        all_entities = [e for e in all_entities if e.category == category]
-
-    # Sort by last_seen (most recent first)
-    all_entities.sort(
-        key=lambda e: e.last_seen or datetime.min,
-        reverse=True
-    )
-
-    # Limit results
-    all_entities = all_entities[:limit]
-
-    return SearchResponse(
-        people=[_entity_to_response(e) for e in all_entities],
-        count=len(all_entities),
-        query="*",
-    )
-
-
-@router.get("/v2/entity/{entity_id}", response_model=PersonResponse)
+@router.get("/entity/{entity_id}", response_model=PersonResponse)
 async def get_entity(entity_id: str):
     """Get a specific entity by ID."""
-    if not HAS_V2_PEOPLE:
-        raise HTTPException(status_code=501, detail="People System v2 not available")
-
     store = get_person_entity_store()
     entity = store.get_by_id(entity_id)
 
@@ -352,7 +247,7 @@ async def get_entity(entity_id: str):
     return _entity_to_response(entity)
 
 
-@router.get("/v2/entity/{entity_id}/interactions", response_model=InteractionsResponse)
+@router.get("/entity/{entity_id}/interactions", response_model=InteractionsResponse)
 async def get_entity_interactions(
     entity_id: str,
     days_back: int = Query(default=90, ge=1, le=365, description="Days to look back"),
@@ -364,9 +259,6 @@ async def get_entity_interactions(
     Returns a list of interactions (emails, meetings, note mentions) with
     links to the original sources.
     """
-    if not HAS_V2_PEOPLE:
-        raise HTTPException(status_code=501, detail="People System v2 not available")
-
     # Verify entity exists
     store = get_person_entity_store()
     entity = store.get_by_id(entity_id)
@@ -397,20 +289,48 @@ async def get_entity_interactions(
     )
 
 
-@router.get("/v2/statistics")
-async def get_v2_statistics():
-    """Get statistics from the v2 people system."""
-    if not HAS_V2_PEOPLE:
-        raise HTTPException(status_code=501, detail="People System v2 not available")
+# Legacy v2 endpoints (redirect to main endpoints for backward compatibility)
+@router.post("/v2/resolve", response_model=EntityResolveResponse, include_in_schema=False)
+async def resolve_entity_v2(request: EntityResolveRequest) -> EntityResolveResponse:
+    """Legacy v2 endpoint - redirects to main resolve endpoint."""
+    return await resolve_entity(request)
 
-    entity_store = get_person_entity_store()
+
+@router.get("/v2/entities", response_model=SearchResponse, include_in_schema=False)
+async def list_entities_v2(
+    limit: int = Query(default=50, ge=1, le=500),
+    category: Optional[str] = Query(default=None),
+):
+    """Legacy v2 endpoint - redirects to main list endpoint."""
+    return await list_people(limit=limit, category=category)
+
+
+@router.get("/v2/entity/{entity_id}", response_model=PersonResponse, include_in_schema=False)
+async def get_entity_v2(entity_id: str):
+    """Legacy v2 endpoint - redirects to main entity endpoint."""
+    return await get_entity(entity_id)
+
+
+@router.get("/v2/entity/{entity_id}/interactions", response_model=InteractionsResponse, include_in_schema=False)
+async def get_entity_interactions_v2(
+    entity_id: str,
+    days_back: int = Query(default=90, ge=1, le=365),
+    limit: int = Query(default=50, ge=1, le=200),
+):
+    """Legacy v2 endpoint - redirects to main interactions endpoint."""
+    return await get_entity_interactions(entity_id, days_back=days_back, limit=limit)
+
+
+@router.get("/v2/statistics", include_in_schema=False)
+async def get_v2_statistics():
+    """Legacy v2 endpoint - redirects to main statistics."""
+    store = get_person_entity_store()
     interaction_store = get_interaction_store()
 
-    entity_stats = entity_store.get_statistics()
+    entity_stats = store.get_statistics()
     interaction_stats = interaction_store.get_statistics()
 
     return {
         "entities": entity_stats,
         "interactions": interaction_stats,
-        "v2_enabled": True,
     }

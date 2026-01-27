@@ -45,8 +45,8 @@ get_pid() {
             return 0
         fi
     fi
-    # Fallback: find by port
-    lsof -ti :$PORT 2>/dev/null | head -1
+    # Fallback: find by port (only LISTEN state)
+    lsof -ti :$PORT -sTCP:LISTEN 2>/dev/null | head -1
 }
 
 is_healthy() {

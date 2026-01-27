@@ -2,11 +2,11 @@
 Briefings service for LifeOS.
 
 Generates stakeholder briefings by aggregating:
-- People metadata from PeopleAggregator (v1) or EntityResolver (v2)
+- People metadata from EntityResolver
 - Vault notes mentioning the person
 - Action items involving the person
 - Calendar meetings with the person
-- Interaction history (v2)
+- Interaction history
 """
 import logging
 from datetime import datetime, timedelta
@@ -14,18 +14,11 @@ from typing import Optional
 from dataclasses import dataclass, field
 
 from api.services.people import resolve_person_name, PEOPLE_DICTIONARY
-from api.services.people_aggregator import PeopleAggregator, get_people_aggregator
-from api.services.vectorstore import VectorStore
+from api.services.hybrid_search import HybridSearch
 from api.services.actions import ActionRegistry, get_action_registry
 from api.services.synthesizer import get_synthesizer
-
-# v2 imports - these may not be populated yet
-try:
-    from api.services.entity_resolver import EntityResolver, get_entity_resolver
-    from api.services.interaction_store import InteractionStore, get_interaction_store
-    HAS_V2_PEOPLE = True
-except ImportError:
-    HAS_V2_PEOPLE = False
+from api.services.entity_resolver import EntityResolver, get_entity_resolver
+from api.services.interaction_store import InteractionStore, get_interaction_store
 
 # iMessage imports
 try:
@@ -141,34 +134,25 @@ class BriefingsService:
 
     def __init__(
         self,
-        people_aggregator: Optional[PeopleAggregator] = None,
-        vector_store: Optional[VectorStore] = None,
+        hybrid_search: Optional[HybridSearch] = None,
         action_registry: Optional[ActionRegistry] = None,
-        entity_resolver: Optional["EntityResolver"] = None,
-        interaction_store: Optional["InteractionStore"] = None,
+        entity_resolver: Optional[EntityResolver] = None,
+        interaction_store: Optional[InteractionStore] = None,
         imessage_store: Optional["IMessageStore"] = None,
     ):
         """Initialize briefings service."""
-        self._people_aggregator = people_aggregator
-        self._vector_store = vector_store
+        self._hybrid_search = hybrid_search
         self._action_registry = action_registry
         self._entity_resolver = entity_resolver
         self._interaction_store = interaction_store
         self._imessage_store = imessage_store
 
     @property
-    def people_aggregator(self) -> PeopleAggregator:
-        """Lazy-load people aggregator."""
-        if self._people_aggregator is None:
-            self._people_aggregator = get_people_aggregator()
-        return self._people_aggregator
-
-    @property
-    def vector_store(self) -> VectorStore:
-        """Lazy-load vector store."""
-        if self._vector_store is None:
-            self._vector_store = VectorStore()
-        return self._vector_store
+    def hybrid_search(self) -> HybridSearch:
+        """Lazy-load hybrid search."""
+        if self._hybrid_search is None:
+            self._hybrid_search = HybridSearch()
+        return self._hybrid_search
 
     @property
     def action_registry(self) -> ActionRegistry:
@@ -178,23 +162,17 @@ class BriefingsService:
         return self._action_registry
 
     @property
-    def entity_resolver(self) -> Optional["EntityResolver"]:
-        """Lazy-load entity resolver (v2)."""
-        if self._entity_resolver is None and HAS_V2_PEOPLE:
-            try:
-                self._entity_resolver = get_entity_resolver()
-            except Exception as e:
-                logger.debug(f"EntityResolver not available: {e}")
+    def entity_resolver(self) -> EntityResolver:
+        """Lazy-load entity resolver."""
+        if self._entity_resolver is None:
+            self._entity_resolver = get_entity_resolver()
         return self._entity_resolver
 
     @property
-    def interaction_store(self) -> Optional["InteractionStore"]:
-        """Lazy-load interaction store (v2)."""
-        if self._interaction_store is None and HAS_V2_PEOPLE:
-            try:
-                self._interaction_store = get_interaction_store()
-            except Exception as e:
-                logger.debug(f"InteractionStore not available: {e}")
+    def interaction_store(self) -> InteractionStore:
+        """Lazy-load interaction store."""
+        if self._interaction_store is None:
+            self._interaction_store = get_interaction_store()
         return self._interaction_store
 
     @property
@@ -229,47 +207,27 @@ class BriefingsService:
             resolved_name=resolved,
         )
 
-        # Try v2 EntityResolver first (if available)
+        # Resolve person using EntityResolver
         entity = None
-        if self.entity_resolver:
-            try:
-                result = self.entity_resolver.resolve(name=resolved, email=email)
-                if result:
-                    entity = result.entity
-                    context.entity_id = entity.id
-                    context.resolved_name = entity.display_name or entity.canonical_name
-                    context.email = entity.emails[0] if entity.emails else None
-                    context.company = entity.company
-                    context.position = entity.position
-                    context.category = entity.category
-                    context.linkedin_url = entity.linkedin_url
-                    context.meeting_count = entity.meeting_count
-                    context.email_count = entity.email_count
-                    context.mention_count = entity.mention_count
-                    context.last_interaction = entity.last_seen
-                    context.sources.extend(entity.sources)
-                    logger.debug(f"Resolved {person_name} via EntityResolver: {entity.canonical_name}")
-            except Exception as e:
-                logger.warning(f"Could not use EntityResolver: {e}")
-
-        # Fall back to v1 PeopleAggregator if no entity found
-        if not entity:
-            try:
-                results = self.people_aggregator.search(resolved)
-                if results:
-                    person_record = results[0]
-                    context.email = person_record.email
-                    context.company = person_record.company
-                    context.position = person_record.position
-                    context.category = person_record.category
-                    context.meeting_count = person_record.meeting_count
-                    context.email_count = person_record.email_count
-                    context.mention_count = person_record.mention_count
-                    context.last_interaction = person_record.last_seen
-                    context.sources.extend(person_record.sources)
-                    logger.debug(f"Resolved {person_name} via PeopleAggregator")
-            except Exception as e:
-                logger.warning(f"Could not search people aggregator: {e}")
+        try:
+            result = self.entity_resolver.resolve(name=resolved, email=email)
+            if result:
+                entity = result.entity
+                context.entity_id = entity.id
+                context.resolved_name = entity.display_name or entity.canonical_name
+                context.email = entity.emails[0] if entity.emails else None
+                context.company = entity.company
+                context.position = entity.position
+                context.category = entity.category
+                context.linkedin_url = entity.linkedin_url
+                context.meeting_count = entity.meeting_count
+                context.email_count = entity.email_count
+                context.mention_count = entity.mention_count
+                context.last_interaction = entity.last_seen
+                context.sources.extend(entity.sources)
+                logger.debug(f"Resolved {person_name} via EntityResolver: {entity.canonical_name}")
+        except Exception as e:
+            logger.warning(f"Could not resolve person: {e}")
 
         # Get interaction history from v2 InteractionStore (if available and entity found)
         if self.interaction_store and context.entity_id:
@@ -293,14 +251,13 @@ class BriefingsService:
             except Exception as e:
                 logger.warning(f"Could not get iMessage history: {e}")
 
-        # Search vault for mentions
+        # Search vault for mentions using hybrid search (vector + BM25)
         # Search by person name - ChromaDB doesn't support filtering on JSON array fields
-        # so we rely on semantic search with the person name
+        # so we rely on semantic + keyword search with the person name
         try:
-            chunks = self.vector_store.search(
+            chunks = self.hybrid_search.search(
                 query=resolved,
-                top_k=15,
-                filters=None
+                top_k=15
             )
 
             for chunk in chunks:

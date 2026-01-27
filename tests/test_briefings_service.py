@@ -143,10 +143,6 @@ class TestBriefingsServiceV2Integration:
         """Test that gather_context uses EntityResolver when available."""
         resolver = EntityResolver(populated_entity_store)
 
-        # Mock the v1 aggregator to ensure we're using v2
-        mock_aggregator = MagicMock()
-        mock_aggregator.search.return_value = []
-
         # Mock hybrid search
         mock_hybrid_search = MagicMock()
         mock_hybrid_search.search.return_value = []
@@ -156,7 +152,6 @@ class TestBriefingsServiceV2Integration:
         mock_action_registry.get_actions_involving_person.return_value = []
 
         service = BriefingsService(
-            people_aggregator=mock_aggregator,
             hybrid_search=mock_hybrid_search,
             action_registry=mock_action_registry,
             entity_resolver=resolver,
@@ -177,24 +172,9 @@ class TestBriefingsServiceV2Integration:
         assert context.interaction_history != ""
         assert "interactions" in context.interaction_history.lower()
 
-    def test_gather_context_falls_back_to_aggregator(self, temp_entity_store):
-        """Test fallback to PeopleAggregator when entity not found in v2."""
+    def test_gather_context_handles_unknown_person(self, temp_entity_store):
+        """Test handling of unknown person (not found in entity store)."""
         resolver = EntityResolver(temp_entity_store)  # Empty store
-
-        # Mock v1 aggregator with data
-        mock_record = MagicMock()
-        mock_record.email = "test@example.com"
-        mock_record.company = "Test Co"
-        mock_record.position = "Engineer"
-        mock_record.category = "work"
-        mock_record.meeting_count = 2
-        mock_record.email_count = 5
-        mock_record.mention_count = 1
-        mock_record.last_seen = datetime.now()
-        mock_record.sources = ["gmail"]
-
-        mock_aggregator = MagicMock()
-        mock_aggregator.search.return_value = [mock_record]
 
         mock_hybrid_search = MagicMock()
         mock_hybrid_search.search.return_value = []
@@ -203,7 +183,6 @@ class TestBriefingsServiceV2Integration:
         mock_action_registry.get_actions_involving_person.return_value = []
 
         service = BriefingsService(
-            people_aggregator=mock_aggregator,
             hybrid_search=mock_hybrid_search,
             action_registry=mock_action_registry,
             entity_resolver=resolver,
@@ -211,11 +190,10 @@ class TestBriefingsServiceV2Integration:
 
         context = service.gather_context("Unknown Person")
 
-        # Should have fallen back to aggregator
+        # Should return context with resolved name but no entity data
         assert context is not None
-        assert context.email == "test@example.com"
-        assert context.company == "Test Co"
-        assert context.entity_id is None  # No v2 entity
+        assert context.resolved_name == "Unknown Person"
+        assert context.entity_id is None
 
     def test_gather_context_with_email_parameter(
         self,
@@ -224,9 +202,6 @@ class TestBriefingsServiceV2Integration:
         """Test that email parameter helps resolution."""
         resolver = EntityResolver(populated_entity_store)
 
-        mock_aggregator = MagicMock()
-        mock_aggregator.search.return_value = []
-
         mock_hybrid_search = MagicMock()
         mock_hybrid_search.search.return_value = []
 
@@ -234,7 +209,6 @@ class TestBriefingsServiceV2Integration:
         mock_action_registry.get_actions_involving_person.return_value = []
 
         service = BriefingsService(
-            people_aggregator=mock_aggregator,
             hybrid_search=mock_hybrid_search,
             action_registry=mock_action_registry,
             entity_resolver=resolver,
@@ -262,9 +236,6 @@ class TestBriefingsServiceGenerateBriefing:
         """Test that generated briefing includes v2 fields."""
         resolver = EntityResolver(populated_entity_store)
 
-        mock_aggregator = MagicMock()
-        mock_aggregator.search.return_value = []
-
         mock_hybrid_search = MagicMock()
         mock_hybrid_search.search.return_value = []
 
@@ -272,7 +243,6 @@ class TestBriefingsServiceGenerateBriefing:
         mock_action_registry.get_actions_involving_person.return_value = []
 
         service = BriefingsService(
-            people_aggregator=mock_aggregator,
             hybrid_search=mock_hybrid_search,
             action_registry=mock_action_registry,
             entity_resolver=resolver,
@@ -299,9 +269,6 @@ class TestBriefingsServiceGenerateBriefing:
         """Test generate_briefing accepts email parameter."""
         resolver = EntityResolver(populated_entity_store)
 
-        mock_aggregator = MagicMock()
-        mock_aggregator.search.return_value = []
-
         mock_hybrid_search = MagicMock()
         mock_hybrid_search.search.return_value = []
 
@@ -309,7 +276,6 @@ class TestBriefingsServiceGenerateBriefing:
         mock_action_registry.get_actions_involving_person.return_value = []
 
         service = BriefingsService(
-            people_aggregator=mock_aggregator,
             hybrid_search=mock_hybrid_search,
             action_registry=mock_action_registry,
             entity_resolver=resolver,
@@ -344,14 +310,10 @@ class TestVaultSearchImprovement:
             }
         ]
 
-        mock_aggregator = MagicMock()
-        mock_aggregator.search.return_value = []
-
         mock_action_registry = MagicMock()
         mock_action_registry.get_actions_involving_person.return_value = []
 
         service = BriefingsService(
-            people_aggregator=mock_aggregator,
             hybrid_search=mock_hybrid_search,
             action_registry=mock_action_registry,
         )

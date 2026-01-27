@@ -57,12 +57,6 @@ class TestBriefingsService:
     """Test BriefingsService."""
 
     @pytest.fixture
-    def mock_aggregator(self):
-        """Create mock people aggregator."""
-        aggregator = MagicMock()
-        return aggregator
-
-    @pytest.fixture
     def mock_hybrid_search(self):
         """Create mock hybrid search."""
         search = MagicMock()
@@ -77,53 +71,55 @@ class TestBriefingsService:
 
     @pytest.fixture
     def mock_entity_resolver(self):
-        """Create mock entity resolver for v2."""
+        """Create mock entity resolver."""
         resolver = MagicMock()
         resolver.resolve.return_value = None  # Default to not found, tests can override
         return resolver
 
     @pytest.fixture
     def mock_interaction_store(self):
-        """Create mock interaction store for v2."""
+        """Create mock interaction store."""
         store = MagicMock()
         store.get_for_person.return_value = []
         store.format_interaction_history.return_value = ""
         return store
 
     @pytest.fixture
-    def service(self, mock_aggregator, mock_hybrid_search, mock_action_registry, mock_entity_resolver, mock_interaction_store):
+    def service(self, mock_hybrid_search, mock_action_registry, mock_entity_resolver, mock_interaction_store):
         """Create briefings service with mocks."""
         return BriefingsService(
-            people_aggregator=mock_aggregator,
             hybrid_search=mock_hybrid_search,
             action_registry=mock_action_registry,
             entity_resolver=mock_entity_resolver,
             interaction_store=mock_interaction_store,
         )
 
-    def test_gather_context_resolves_name(self, service, mock_aggregator):
+    def test_gather_context_resolves_name(self, service):
         """Should resolve person name."""
-        mock_aggregator.search.return_value = []
-
         context = service.gather_context("yoni")
 
         assert context is not None
         assert context.resolved_name == "Yoni"
 
-    def test_gather_context_includes_person_record(self, service, mock_aggregator):
-        """Should include data from people aggregator."""
-        from api.services.people_aggregator import PersonRecord
+    def test_gather_context_includes_entity_data(self, service, mock_entity_resolver):
+        """Should include data from entity resolver."""
+        from api.services.person_entity import PersonEntity
+        from datetime import datetime
 
-        mock_record = PersonRecord(
+        mock_entity = PersonEntity(
+            id="test-123",
             canonical_name="Yoni",
-            email="yoni@example.com",
+            emails=["yoni@example.com"],
             company="Movement Labs",
             position="CEO",
             sources=["linkedin", "calendar"],
             meeting_count=10,
             email_count=20,
         )
-        mock_aggregator.search.return_value = [mock_record]
+
+        mock_result = MagicMock()
+        mock_result.entity = mock_entity
+        mock_entity_resolver.resolve.return_value = mock_result
 
         context = service.gather_context("yoni")
 
@@ -131,9 +127,8 @@ class TestBriefingsService:
         assert context.company == "Movement Labs"
         assert context.meeting_count == 10
 
-    def test_gather_context_searches_vault(self, service, mock_aggregator, mock_hybrid_search):
+    def test_gather_context_searches_vault(self, service, mock_hybrid_search):
         """Should search vault for mentions."""
-        mock_aggregator.search.return_value = []
         mock_hybrid_search.search.return_value = [
             {
                 "content": "Meeting with Yoni about Q1 goals",
@@ -147,10 +142,8 @@ class TestBriefingsService:
         assert len(context.related_notes) == 1
         assert "Q1 Planning.md" in context.sources
 
-    def test_gather_context_gets_action_items(self, service, mock_aggregator, mock_action_registry):
+    def test_gather_context_gets_action_items(self, service, mock_action_registry):
         """Should get action items for person."""
-        mock_aggregator.search.return_value = []
-
         mock_action = MagicMock()
         mock_action.task = "Review budget proposal"
         mock_action.owner = "Yoni"
@@ -165,17 +158,21 @@ class TestBriefingsService:
         assert context.action_items[0]["task"] == "Review budget proposal"
 
     @pytest.mark.asyncio
-    async def test_generate_briefing_for_known_person(self, service, mock_aggregator, mock_hybrid_search):
+    async def test_generate_briefing_for_known_person(self, service, mock_entity_resolver, mock_hybrid_search):
         """Should generate briefing for known person."""
-        from api.services.people_aggregator import PersonRecord
+        from api.services.person_entity import PersonEntity
 
-        mock_record = PersonRecord(
+        mock_entity = PersonEntity(
+            id="test-123",
             canonical_name="Yoni",
-            email="yoni@movementlabs.com",
+            emails=["yoni@movementlabs.com"],
             company="Movement Labs",
             sources=["linkedin"],
         )
-        mock_aggregator.search.return_value = [mock_record]
+        mock_result = MagicMock()
+        mock_result.entity = mock_entity
+        mock_entity_resolver.resolve.return_value = mock_result
+
         mock_hybrid_search.search.return_value = [
             {"content": "Discussion about strategy", "metadata": {"file_name": "Strategy.md"}, "score": 0.9}
         ]
@@ -192,9 +189,8 @@ class TestBriefingsService:
             assert result["person_name"] == "Yoni"
 
     @pytest.mark.asyncio
-    async def test_generate_briefing_handles_unknown_person(self, service, mock_aggregator, mock_hybrid_search):
+    async def test_generate_briefing_handles_unknown_person(self, service, mock_hybrid_search):
         """Should handle unknown person gracefully."""
-        mock_aggregator.search.return_value = []
         mock_hybrid_search.search.return_value = []
 
         result = await service.generate_briefing("unknown_person_xyz")
