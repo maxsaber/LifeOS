@@ -1,7 +1,7 @@
 """
 ChromaDB vector store service for LifeOS.
 
-Handles storage and retrieval of document embeddings.
+Connects to ChromaDB server via HTTP for thread-safe concurrent access.
 """
 import chromadb
 from chromadb.config import Settings
@@ -11,6 +11,7 @@ import json
 import math
 
 from api.services.embeddings import get_embedding_service
+from config.settings import settings
 
 
 class VectorStore:
@@ -18,22 +19,23 @@ class VectorStore:
 
     def __init__(
         self,
-        persist_directory: str = "./data/chromadb",
-        collection_name: str = "lifeos_vault"
+        collection_name: str = "lifeos_vault",
+        server_url: str = None
     ):
         """
         Initialize vector store.
 
         Args:
-            persist_directory: Directory to persist ChromaDB data
             collection_name: Name of the collection
+            server_url: ChromaDB server URL (default: from settings)
         """
-        self.persist_directory = persist_directory
         self.collection_name = collection_name
+        self.server_url = server_url or settings.chroma_url
 
-        # Initialize ChromaDB client with persistence
-        self._client = chromadb.PersistentClient(
-            path=persist_directory,
+        # Connect to ChromaDB server via HTTP
+        self._client = chromadb.HttpClient(
+            host=self._parse_host(self.server_url),
+            port=self._parse_port(self.server_url),
             settings=Settings(anonymized_telemetry=False)
         )
 
@@ -45,6 +47,15 @@ class VectorStore:
 
         # Get embedding service
         self._embedding_service = get_embedding_service()
+
+    def _parse_host(self, url: str) -> str:
+        """Extract host from URL."""
+        return url.replace("http://", "").replace("https://", "").split(":")[0]
+
+    def _parse_port(self, url: str) -> int:
+        """Extract port from URL."""
+        parts = url.replace("http://", "").replace("https://", "").split(":")
+        return int(parts[1]) if len(parts) > 1 else 8000
 
     def add_document(
         self,

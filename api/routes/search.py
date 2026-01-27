@@ -24,7 +24,7 @@ def get_vector_store() -> VectorStore:
     """Get or create vector store instance."""
     global _vector_store
     if _vector_store is None:
-        _vector_store = VectorStore(persist_directory=str(settings.chroma_path))
+        _vector_store = VectorStore()
     return _vector_store
 
 

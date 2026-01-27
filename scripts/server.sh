@@ -24,6 +24,7 @@ HOST="0.0.0.0"
 PORT="8000"
 STARTUP_TIMEOUT=180  # seconds to wait for server to start (model loading can take 2-3 minutes)
 HEALTH_URL="http://127.0.0.1:$PORT/health"
+CHROMADB_URL="http://localhost:8001/api/v2/heartbeat"
 LOG_FILE="$PROJECT_DIR/logs/server.log"
 
 # Ensure logs directory exists
@@ -49,6 +50,11 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 # Check if server is healthy
 is_healthy() {
     curl -s -f "$HEALTH_URL" > /dev/null 2>&1
+}
+
+# Check if ChromaDB server is healthy
+chromadb_healthy() {
+    curl -s --max-time 2 "$CHROMADB_URL" > /dev/null 2>&1
 }
 
 # Get server PID
@@ -121,12 +127,24 @@ wait_for_healthy() {
 start_server() {
     log_info "Starting LifeOS server..."
 
+    # Check ChromaDB is running (required dependency)
+    if ! chromadb_healthy; then
+        log_warn "ChromaDB server not running. Starting it..."
+        "$SCRIPT_DIR/chromadb.sh" start
+        if ! chromadb_healthy; then
+            log_error "Failed to start ChromaDB. Cannot start LifeOS."
+            return 1
+        fi
+    else
+        log_info "ChromaDB: Running"
+    fi
+
     # First, ensure no existing processes
     kill_server
 
     # Start the server using Python's uvicorn.run() - more reliable than shell command
     log_info "Launching uvicorn on $HOST:$PORT..."
-    nohup "$PROJECT_DIR/venv/bin/python" -c "
+    nohup "$HOME/.venvs/lifeos/bin/python" -c "
 import uvicorn
 uvicorn.run('api.main:app', host='$HOST', port=$PORT, log_level='info')
 " >> "$LOG_FILE" 2>&1 &

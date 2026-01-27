@@ -110,7 +110,7 @@ class IndexerService:
         self.db_path = Path(db_path)
 
         # Initialize vector store
-        self.vector_store = VectorStore(persist_directory=str(db_path))
+        self.vector_store = VectorStore()
 
         # Initialize BM25 keyword index
         self.bm25_index = BM25Index()

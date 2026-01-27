@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     )
     chroma_url: str = Field(
         default="http://localhost:8001",
-        validation_alias="LIFEOS_CHROMA_URL",
+        alias="LIFEOS_CHROMA_URL",
         description="ChromaDB server URL"
     )
 

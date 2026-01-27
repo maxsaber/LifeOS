@@ -1,13 +1,13 @@
 """
 Tests for ChromaDB vector store integration.
+
+Requires ChromaDB server running on localhost:8001.
+Uses a separate test collection to avoid polluting production data.
 """
 import pytest
 
-# These tests require ChromaDB initialization (slow)
+# These tests require ChromaDB server (slow)
 pytestmark = pytest.mark.slow
-import tempfile
-import os
-from pathlib import Path
 from datetime import datetime
 from api.services.vectorstore import VectorStore
 
@@ -16,17 +16,25 @@ class TestVectorStore:
     """Test ChromaDB vector store operations."""
 
     @pytest.fixture
-    def temp_db_path(self):
-        """Create temporary directory for test database."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            yield Path(tmpdir)
-
-    @pytest.fixture
-    def vector_store(self, temp_db_path):
-        """Create vector store instance with temp database."""
-        store = VectorStore(persist_directory=str(temp_db_path))
+    def vector_store(self):
+        """Create vector store instance with test collection."""
+        # Use a test collection name to avoid polluting production data
+        store = VectorStore(collection_name="lifeos_vault_test")
+        # Clear any existing test data
+        try:
+            store._client.delete_collection("lifeos_vault_test")
+            store._collection = store._client.get_or_create_collection(
+                name="lifeos_vault_test",
+                metadata={"hnsw:space": "cosine"}
+            )
+        except Exception:
+            pass
         yield store
-        # Cleanup happens automatically with temp directory
+        # Cleanup: delete test collection
+        try:
+            store._client.delete_collection("lifeos_vault_test")
+        except Exception:
+            pass
 
     def test_add_document_chunks(self, vector_store):
         """Should add document chunks to the store."""

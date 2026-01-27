@@ -288,6 +288,201 @@ async def health_check():
     }
 
 
+@app.get("/health/full")
+async def full_health_check():
+    """
+    Comprehensive health check that tests all LifeOS services.
+
+    Tests each service by calling the actual API endpoints the same way
+    MCP tools would call them. Use this to verify all MCP tools will work.
+
+    Returns detailed status for each service with timing.
+    """
+    import time
+    import httpx
+    from config.settings import settings
+
+    BASE_URL = f"http://localhost:{settings.port}"
+
+    results = {
+        "status": "healthy",
+        "service": "lifeos",
+        "checks": {},
+        "errors": [],
+    }
+
+    async def test_endpoint(name: str, method: str, path: str, params: dict = None, json_body: dict = None):
+        """Test an endpoint by actually calling it."""
+        start = time.time()
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                url = f"{BASE_URL}{path}"
+                if method == "GET":
+                    resp = await client.get(url, params=params)
+                else:
+                    resp = await client.post(url, json=json_body)
+
+                elapsed = int((time.time() - start) * 1000)
+
+                if resp.status_code == 200:
+                    data = resp.json()
+                    # Extract a summary from the response
+                    if "results" in data:
+                        detail = f"{len(data['results'])} results"
+                    elif "files" in data:
+                        detail = f"{len(data['files'])} files"
+                    elif "events" in data:
+                        detail = f"{len(data['events'])} events"
+                    elif "emails" in data or "messages" in data:
+                        detail = f"{len(data.get('emails', data.get('messages', [])))} emails"
+                    elif "conversations" in data:
+                        detail = f"{len(data['conversations'])} conversations"
+                    elif "memories" in data:
+                        detail = f"{len(data['memories'])} memories"
+                    elif "people" in data:
+                        detail = f"{len(data['people'])} people"
+                    elif "answer" in data:
+                        detail = f"synthesized ({len(data['answer'])} chars)"
+                    else:
+                        detail = "ok"
+
+                    results["checks"][name] = {
+                        "status": "ok",
+                        "latency_ms": elapsed,
+                        "detail": detail
+                    }
+                    return True
+                else:
+                    results["checks"][name] = {
+                        "status": "error",
+                        "latency_ms": elapsed,
+                        "error": f"HTTP {resp.status_code}: {resp.text[:100]}"
+                    }
+                    results["errors"].append(f"{name}: HTTP {resp.status_code}")
+                    return False
+
+        except Exception as e:
+            elapsed = int((time.time() - start) * 1000)
+            results["checks"][name] = {
+                "status": "error",
+                "latency_ms": elapsed,
+                "error": str(e)
+            }
+            results["errors"].append(f"{name}: {str(e)}")
+            return False
+
+    # 1. Config check (no HTTP needed)
+    if settings.anthropic_api_key and settings.anthropic_api_key.strip():
+        results["checks"]["anthropic_api_key"] = {"status": "ok", "detail": "configured"}
+    else:
+        results["checks"]["anthropic_api_key"] = {"status": "error", "error": "not configured"}
+        results["errors"].append("anthropic_api_key: not configured")
+
+    # 2. ChromaDB Server (direct health check)
+    start = time.time()
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{settings.chroma_url}/api/v2/heartbeat")
+            elapsed = int((time.time() - start) * 1000)
+            if resp.status_code == 200:
+                results["checks"]["chromadb_server"] = {
+                    "status": "ok",
+                    "latency_ms": elapsed,
+                    "detail": "connected",
+                    "url": settings.chroma_url
+                }
+            else:
+                results["checks"]["chromadb_server"] = {
+                    "status": "error",
+                    "latency_ms": elapsed,
+                    "error": f"HTTP {resp.status_code}",
+                    "url": settings.chroma_url
+                }
+                results["errors"].append(f"chromadb_server: HTTP {resp.status_code}")
+    except Exception as e:
+        elapsed = int((time.time() - start) * 1000)
+        results["checks"]["chromadb_server"] = {
+            "status": "error",
+            "latency_ms": elapsed,
+            "error": str(e),
+            "url": settings.chroma_url
+        }
+        results["errors"].append(f"chromadb_server: {str(e)}")
+
+    # 3. Vault Search (POST /api/search) - tests ChromaDB + BM25
+    await test_endpoint(
+        "vault_search",
+        "POST", "/api/search",
+        json_body={"query": "test", "top_k": 1}
+    )
+
+    # 3. Calendar Upcoming (GET /api/calendar/upcoming)
+    await test_endpoint(
+        "calendar_upcoming",
+        "GET", "/api/calendar/upcoming",
+        params={"days": 1}
+    )
+
+    # 4. Calendar Search (GET /api/calendar/search)
+    await test_endpoint(
+        "calendar_search",
+        "GET", "/api/calendar/search",
+        params={"q": "meeting"}
+    )
+
+    # 5. Gmail Search (GET /api/gmail/search)
+    await test_endpoint(
+        "gmail_search",
+        "GET", "/api/gmail/search",
+        params={"q": "in:inbox", "max_results": 1}
+    )
+
+    # 6. Drive Search - Personal (GET /api/drive/search)
+    await test_endpoint(
+        "drive_search_personal",
+        "GET", "/api/drive/search",
+        params={"q": "test", "account": "personal", "max_results": 1}
+    )
+
+    # 7. Drive Search - Work (GET /api/drive/search)
+    await test_endpoint(
+        "drive_search_work",
+        "GET", "/api/drive/search",
+        params={"q": "test", "account": "work", "max_results": 1}
+    )
+
+    # 8. People Search (GET /api/people/search)
+    await test_endpoint(
+        "people_search",
+        "GET", "/api/people/search",
+        params={"q": "a"}
+    )
+
+    # 9. Conversations List (GET /api/conversations)
+    await test_endpoint(
+        "conversations_list",
+        "GET", "/api/conversations",
+        params={"limit": 1}
+    )
+
+    # 10. Memories List (GET /api/memories)
+    await test_endpoint(
+        "memories_list",
+        "GET", "/api/memories",
+        params={"limit": 1}
+    )
+
+    # Set overall status
+    failed = [k for k, v in results["checks"].items() if v["status"] == "error"]
+    if failed:
+        results["status"] = "degraded" if len(failed) < 5 else "unhealthy"
+        results["summary"] = f"{len(failed)} service(s) failing: {', '.join(failed)}"
+    else:
+        results["summary"] = f"All {len(results['checks'])} services healthy"
+
+    return results
+
+
 @app.get("/")
 async def root():
     """Serve the chat UI."""
