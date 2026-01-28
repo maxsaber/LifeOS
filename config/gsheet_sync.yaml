@@ -13,22 +13,23 @@ sheets:
     timestamp_column: "Timestamp"
 
     # Map column names to clean YAML keys for Dataview
+    # Note: Column names must match exactly (including ? marks)
     field_mappings:
       "Alcohol yesterday": "alcohol"
       "Feelings": "feeling"
       "Bad feelings": "bad_feeling"
       "Tired feelings": "tired_feeling"
-      "Meaningful connection with Taylor last 24h": "connection_taylor"
+      "Meaningful connection with Taylor last 24h?": "connection_taylor"
+      "Meaningful connection with Malea last 24h?": "connection_malea"
       "Sleep yesterday": "sleep"
-      "Meaningful connection with Malea last 24h": "connection_malea"
       "One word for the day": "one_word"
       "Caffeine today": "caffeine"
       "Exercise today": "exercise"
       "Mood today": "mood"
       "Stress today": "stress"
       "Body today": "body"
-      "Ate for fuel or comfort last 24h": "eating"
       "Ate for fuel or comfort, last 24h": "eating"
+      "What is the most emotionally resonant thing that happened today?": "resonant_moment"
 
     outputs:
       # Individual journal notes with YAML frontmatter (best for Dataview)
