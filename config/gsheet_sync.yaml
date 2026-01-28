@@ -27,7 +27,8 @@ sheets:
       "Mood today": "mood"
       "Stress today": "stress"
       "Body today": "body"
-      "Ate for fuel or comfort last 24h": "fuel_vs_comfort"
+      "Ate for fuel or comfort last 24h": "eating"
+      "Ate for fuel or comfort, last 24h": "eating"
 
     outputs:
       # Individual journal notes with YAML frontmatter (best for Dataview)

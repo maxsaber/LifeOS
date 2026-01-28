@@ -502,7 +502,7 @@ class GSheetSyncService:
         """
         Parse a field value to appropriate Python type for YAML.
 
-        Handles: integers, floats, booleans, lists.
+        Only converts pure numbers. Keeps categorical values (like "3-4 drinks") as strings.
         """
         if not value:
             return ""
@@ -514,25 +514,20 @@ class GSheetSyncService:
         if lower_val in ("no", "false"):
             return False
 
-        # Check for integer
+        # Only convert to int if it's PURELY a number (no other text)
+        stripped = value.strip()
         try:
-            return int(value)
+            return int(stripped)
         except ValueError:
             pass
 
-        # Check for float
+        # Only convert to float if it's PURELY a number
         try:
-            return float(value)
+            return float(stripped)
         except ValueError:
             pass
 
-        # Check for "X-Y" range pattern (e.g., "3-4 drinks") - extract first number
-        range_match = re.match(r'^(\d+)-(\d+)', value)
-        if range_match:
-            # Return average or first number
-            return int(range_match.group(1))
-
-        # Return as string
+        # Keep everything else as string (including "3-4 drinks", "None", etc.)
         return value
 
     def _sync_sheet(self, config: SheetConfig) -> dict:
