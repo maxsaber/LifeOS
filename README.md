@@ -665,52 +665,45 @@ python -c "from api.services.gdoc_sync import sync_gdocs; print(sync_gdocs())"
 
 ## Google Sheets Sync
 
-LifeOS can sync Google Sheets (e.g., form responses from Google Forms) to your vault. Useful for daily journals, habit tracking, or any structured data collection.
+Syncs Google Sheets (e.g., Google Forms responses) to individual vault notes with YAML frontmatter for Dataview queries.
 
-### Prerequisites
+### Setup
 
-1. **Enable Google Sheets API** in your Google Cloud Console project
-2. The Sheets API scope is included in the default OAuth scopes
-
-### Configuration
-
-Edit `config/gsheet_sync.yaml`:
+1. Enable **Google Sheets API** in Google Cloud Console
+2. Configure `config/gsheet_sync.yaml`:
 
 ```yaml
-sync_enabled: true
-
 sheets:
-  - sheet_id: "1ABC123..."  # From the Google Sheets URL
-    name: "Daily Journal"
-    account: "personal"
-    range: "Form Responses 1"  # Sheet tab name
-    timestamp_column: "Timestamp"
-
+  - sheet_id: "1ABC..."  # From Google Sheets URL
+    range: "Form Responses 1"
+    field_mappings:  # Map column names to clean YAML keys
+      "Mood today": "mood"
+      "Sleep yesterday": "sleep"
     outputs:
-      rolling_document:
+      journal_notes:
         enabled: true
-        path: "Personal/Daily Journal Log.md"
-
-      daily_notes:
-        enabled: true
-        path_pattern: "Daily Notes/{date}.md"
-        section_header: "## Daily Journal"
-        insert_after: "## Meetings"
-        create_if_missing: false
+        folder: "Personal/Journal"
 ```
 
-### How It Works
+### Output
 
-1. Reads all rows from the configured Google Sheet
-2. Tracks synced rows in SQLite (`data/gsheet_sync.db`) to avoid duplicates
-3. Creates/updates a **rolling document** with all entries (most recent first)
-4. Optionally **appends to daily notes** under a configurable section header
-5. Runs nightly at 3 AM Eastern alongside other sync operations
+Creates one note per row at `Personal/Journal/YYYY-MM-DD.md`:
+
+```yaml
+---
+date: 2026-01-27
+type: journal
+mood: 6
+sleep: 8
+caffeine: 3-4 cups  # Categorical values stay as strings
+---
+```
+
+Query with Dataview: `TABLE mood, sleep FROM "Personal/Journal"`
 
 ### Manual Sync
 
 ```bash
-source .venv/bin/activate
 python -c "from api.services.gsheet_sync import sync_gsheets; print(sync_gsheets())"
 ```
 
