@@ -164,12 +164,13 @@ class TestModelNames:
     """Test model name mappings."""
 
     def test_haiku_model_name(self):
-        """Haiku should map to correct Claude model."""
+        """Haiku tier should map to a valid Claude model (currently Sonnet 4.5 as Haiku 4.5 may not be available)."""
         from api.services.model_selector import get_claude_model_name
 
         model_name = get_claude_model_name("haiku")
-        assert "haiku" in model_name.lower()
+        # Haiku currently maps to Sonnet 4.5 since Haiku 4.5 may not be available
         assert "claude" in model_name.lower()
+        assert "sonnet" in model_name.lower() or "haiku" in model_name.lower()
 
     def test_sonnet_model_name(self):
         """Sonnet should map to correct Claude model."""

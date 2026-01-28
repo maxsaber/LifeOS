@@ -245,7 +245,12 @@ Query → Name Expansion → [Vector Search + BM25 Search] → RRF Fusion → Bo
 
 ### Conversations
 - `GET /api/conversations` - List conversations
+- `POST /api/ask/stream` - Streaming chat with intelligent routing (supports email composition)
 - `POST /api/chat` - Send message in conversation
+
+### Gmail
+- `GET /api/gmail/search` - Search emails (supports both personal and work accounts)
+- `POST /api/gmail/drafts` - Create a draft email (returns Gmail URL to open draft)
 
 ### iMessage
 - `GET /api/imessage/search` - Search text message history

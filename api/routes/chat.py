@@ -148,6 +148,86 @@ def expand_followup_query(query: str, conversation_history: list) -> str:
     return query
 
 
+def detect_compose_intent(query: str) -> bool:
+    """
+    Detect if the query is asking to compose/draft an email.
+
+    Returns True if the query indicates email composition intent.
+    """
+    query_lower = query.lower()
+
+    # Compose intent patterns
+    compose_patterns = [
+        "draft an email",
+        "draft email",
+        "draft a message",
+        "compose an email",
+        "compose email",
+        "write an email",
+        "write email",
+        "send an email",  # We'll create a draft, not send
+        "send email",
+        "email to ",  # "email to John about..."
+        "write to ",  # "write to Sarah about..."
+        "draft to ",
+    ]
+
+    return any(pattern in query_lower for pattern in compose_patterns)
+
+
+async def extract_draft_params(query: str, conversation_history: list = None) -> Optional[dict]:
+    """
+    Use Claude to extract email draft parameters from a compose request.
+
+    Returns dict with: to, subject, body, account (personal/work)
+    Or None if extraction fails.
+    """
+    # Build context from conversation if available
+    context = ""
+    if conversation_history:
+        recent_msgs = conversation_history[-6:]  # Last 3 exchanges
+        context_parts = []
+        for msg in recent_msgs:
+            context_parts.append(f"{msg.role}: {msg.content[:500]}")
+        if context_parts:
+            context = "\n\nConversation context:\n" + "\n".join(context_parts)
+
+    extraction_prompt = f"""Extract email draft parameters from this request.{context}
+
+User request: {query}
+
+Return a JSON object with these fields (leave empty string if not specified):
+- "to": recipient email or name (required)
+- "subject": email subject line
+- "body": the email body content to write
+- "account": "personal" or "work" (default to "personal" unless work/professional context is mentioned)
+
+If the user is asking to draft a follow-up or reply based on conversation context, use that context to fill in the body.
+
+Return ONLY valid JSON, no other text. Example:
+{{"to": "john@example.com", "subject": "Follow up on meeting", "body": "Hi John,\\n\\nI wanted to follow up...", "account": "personal"}}"""
+
+    try:
+        synthesizer = get_synthesizer()
+        response_text = await synthesizer.get_response(
+            extraction_prompt,
+            max_tokens=1024,
+            model_tier="haiku"  # Fast, cheap for structured extraction
+        )
+
+        # Find JSON in response
+        json_match = re.search(r'\{[^}]+\}', response_text, re.DOTALL)
+        if json_match:
+            params = json.loads(json_match.group())
+            # Validate required field
+            if params.get("to"):
+                return params
+    except Exception as e:
+        logger.error(f"Failed to extract draft params: {e}")
+
+    return None
+
+
 def extract_date_context(query: str) -> Optional[str]:
     """
     Extract date references from query and convert to YYYY-MM-DD format.
@@ -462,6 +542,67 @@ async def ask_stream(request: AskStreamRequest):
             # Exclude current message to avoid duplication
             if conversation_history and conversation_history[-1].role == "user" and conversation_history[-1].content == request.question:
                 conversation_history = conversation_history[:-1]
+
+            # Check for email compose intent - handle as action, not search
+            if detect_compose_intent(request.question):
+                print("DETECTED COMPOSE INTENT - handling email draft")
+                yield f"data: {json.dumps({'type': 'routing', 'sources': ['gmail_draft'], 'reasoning': 'Email composition detected', 'latency_ms': 0})}\n\n"
+
+                draft_params = await extract_draft_params(request.question, conversation_history)
+                if draft_params:
+                    try:
+                        from api.services.google_auth import GoogleAccount
+
+                        # Determine account
+                        account_str = draft_params.get("account", "personal").lower()
+                        account_type = GoogleAccount.WORK if account_str == "work" else GoogleAccount.PERSONAL
+
+                        gmail = GmailService(account_type)
+                        draft = gmail.create_draft(
+                            to=draft_params["to"],
+                            subject=draft_params.get("subject", ""),
+                            body=draft_params.get("body", ""),
+                        )
+
+                        if draft:
+                            # Construct Gmail URL (same as API route)
+                            gmail_url = f"https://mail.google.com/mail/u/0/#drafts?compose={draft.draft_id}"
+
+                            response_text = f"I've created a draft email for you:\n\n"
+                            response_text += f"**To:** {draft.to}\n"
+                            response_text += f"**Subject:** {draft.subject}\n"
+                            response_text += f"**Account:** {draft.source_account}\n\n"
+                            response_text += f"[Open draft in Gmail]({gmail_url})\n\n"
+                            response_text += f"Review and send when ready."
+
+                            # Stream the response
+                            for chunk in response_text:
+                                yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
+                                await asyncio.sleep(0.01)
+
+                            # Save assistant response
+                            store.add_message(conversation_id, "assistant", response_text)
+
+                            # Send done signal
+                            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                            return
+                        else:
+                            error_msg = "Failed to create draft. Please try again."
+                            yield f"data: {json.dumps({'type': 'content', 'content': error_msg})}\n\n"
+                            store.add_message(conversation_id, "assistant", error_msg)
+                            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                            return
+                    except Exception as e:
+                        error_msg = f"Error creating draft: {str(e)}"
+                        logger.error(error_msg)
+                        yield f"data: {json.dumps({'type': 'content', 'content': error_msg})}\n\n"
+                        store.add_message(conversation_id, "assistant", error_msg)
+                        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                        return
+                else:
+                    # Couldn't extract params, fall through to normal flow
+                    # which will use Claude to ask for clarification
+                    print("Could not extract draft params, falling through to normal flow")
 
             # Expand follow-up queries with conversation context
             query_for_routing = request.question

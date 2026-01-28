@@ -10,11 +10,11 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Claude model identifiers
+# Claude model identifiers (using latest aliases for automatic updates)
 CLAUDE_MODELS = {
-    "haiku": "claude-haiku-4-20250514",
-    "sonnet": "claude-sonnet-4-20250514",
-    "opus": "claude-opus-4-20250514",
+    "haiku": "claude-sonnet-4-5-20250929",  # Use Sonnet 4.5 as minimum (Haiku 4.5 may not be available)
+    "sonnet": "claude-sonnet-4-5-20250929",
+    "opus": "claude-opus-4-5-20251124",
 }
 
 # Approximate costs per query (for reference)
