@@ -40,6 +40,7 @@ class SheetConfig:
     range: str
     timestamp_column: str
     outputs: dict
+    field_mappings: dict  # Maps column names to clean YAML keys
 
     @classmethod
     def from_dict(cls, data: dict) -> "SheetConfig":
@@ -50,6 +51,7 @@ class SheetConfig:
             range=data.get("range", "Sheet1"),
             timestamp_column=data.get("timestamp_column", "Timestamp"),
             outputs=data.get("outputs", {}),
+            field_mappings=data.get("field_mappings", {}),
         )
 
 
@@ -416,6 +418,123 @@ class GSheetSyncService:
         file_path.write_text(content, encoding="utf-8")
         logger.info(f"Appended to daily note: {note_path}")
 
+    def _create_journal_note(self, entry: JournalEntry, config: SheetConfig):
+        """
+        Create a standalone journal note with YAML frontmatter.
+
+        Each entry gets its own note file with typed frontmatter for Dataview queries.
+        """
+        journal_config = config.outputs.get("journal_notes", {})
+        if not journal_config.get("enabled", False):
+            return
+
+        folder = journal_config.get("folder", "Journal")
+
+        # Build the file path
+        note_path = f"{folder}/{entry.date_str}.md"
+        file_path = Path(self.vault_path) / note_path
+
+        # Check if already exists (don't overwrite)
+        if file_path.exists():
+            # Check if this entry is already in the file
+            content = file_path.read_text(encoding="utf-8")
+            if f"row_hash: {entry.row_hash}" in content:
+                logger.debug(f"Journal note already has this entry: {note_path}")
+                return
+
+        # Build YAML frontmatter with mapped fields
+        frontmatter = {
+            "date": entry.date_str,
+            "type": "journal",
+            "row_hash": entry.row_hash,
+            "synced_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        # Map fields to clean YAML keys
+        for column_name, value in entry.fields.items():
+            # Use field_mappings if available, otherwise auto-generate key
+            if column_name in config.field_mappings:
+                yaml_key = config.field_mappings[column_name]
+            else:
+                # Auto-generate: lowercase, replace spaces with underscores
+                yaml_key = column_name.lower().replace(" ", "_").replace("?", "").strip("_")
+
+            # Try to convert to appropriate type
+            parsed_value = self._parse_field_value(value)
+            frontmatter[yaml_key] = parsed_value
+
+        # Build the note content
+        lines = ["---"]
+        for key, value in frontmatter.items():
+            if isinstance(value, bool):
+                lines.append(f"{key}: {str(value).lower()}")
+            elif isinstance(value, (int, float)):
+                lines.append(f"{key}: {value}")
+            elif isinstance(value, list):
+                lines.append(f"{key}:")
+                for item in value:
+                    lines.append(f"  - {item}")
+            else:
+                # String - quote if it contains special chars
+                if any(c in str(value) for c in [':', '#', '{', '}', '[', ']', ',', '&', '*', '!', '|', '>', "'", '"', '%', '@', '`']):
+                    lines.append(f'{key}: "{value}"')
+                else:
+                    lines.append(f"{key}: {value}")
+        lines.append("---")
+        lines.append("")
+
+        # Add a simple body section
+        lines.append(f"# Journal Entry - {entry.date_str}")
+        lines.append("")
+
+        # Add readable summary
+        for column_name, value in entry.fields.items():
+            clean_label = column_name.rstrip("?").strip()
+            lines.append(f"**{clean_label}:** {value}")
+        lines.append("")
+
+        # Write to vault
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text("\n".join(lines), encoding="utf-8")
+        logger.info(f"Created journal note: {note_path}")
+
+    def _parse_field_value(self, value: str):
+        """
+        Parse a field value to appropriate Python type for YAML.
+
+        Handles: integers, floats, booleans, lists.
+        """
+        if not value:
+            return ""
+
+        # Check for boolean
+        lower_val = value.lower().strip()
+        if lower_val in ("yes", "true"):
+            return True
+        if lower_val in ("no", "false"):
+            return False
+
+        # Check for integer
+        try:
+            return int(value)
+        except ValueError:
+            pass
+
+        # Check for float
+        try:
+            return float(value)
+        except ValueError:
+            pass
+
+        # Check for "X-Y" range pattern (e.g., "3-4 drinks") - extract first number
+        range_match = re.match(r'^(\d+)-(\d+)', value)
+        if range_match:
+            # Return average or first number
+            return int(range_match.group(1))
+
+        # Return as string
+        return value
+
     def _sync_sheet(self, config: SheetConfig) -> dict:
         """
         Sync a single sheet.
@@ -457,6 +576,13 @@ class GSheetSyncService:
 
         # Update rolling document (includes all entries)
         self._update_rolling_document(config, new_entries)
+
+        # Create standalone journal notes with YAML frontmatter
+        for entry in new_entries:
+            try:
+                self._create_journal_note(entry, config)
+            except Exception as e:
+                logger.error(f"Failed to create journal note for {entry.date_str}: {e}")
 
         # Append to daily notes
         for entry in new_entries:

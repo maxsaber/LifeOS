@@ -27,6 +27,7 @@ class TestRowHash:
             range="Sheet1",
             timestamp_column="Timestamp",
             outputs={},
+            field_mappings={},
         )
 
         row = {"Timestamp": "1/28/2025 10:00:00", "Field1": "Value1"}
@@ -47,6 +48,7 @@ class TestRowHash:
             range="Sheet1",
             timestamp_column="Timestamp",
             outputs={},
+            field_mappings={},
         )
 
         row1 = {"Timestamp": "1/28/2025 10:00:00", "Field1": "Value1"}
@@ -69,6 +71,7 @@ class TestRowHash:
             range="Sheet1",
             timestamp_column="Timestamp",
             outputs={},
+            field_mappings={},
         )
 
         row = {"Timestamp": "1/28/2025 10:00:00", "Field1": "Value1"}
@@ -131,6 +134,7 @@ class TestRowParsing:
             range="Sheet1",
             timestamp_column="Timestamp",
             outputs={},
+            field_mappings={},
         )
 
         row = {
@@ -158,6 +162,7 @@ class TestRowParsing:
             range="Sheet1",
             timestamp_column="Timestamp",
             outputs={},
+            field_mappings={},
         )
 
         row = {"Field1": "Value1", "Field2": "Value2"}
@@ -178,6 +183,7 @@ class TestRowParsing:
             range="Sheet1",
             timestamp_column="Timestamp",
             outputs={},
+            field_mappings={},
         )
 
         row = {"Timestamp": "1/28/2025 10:00:00"}
@@ -432,6 +438,7 @@ Some notes here.
                         "create_if_missing": False,
                     }
                 },
+                field_mappings={},
             )
 
             entry = JournalEntry(
@@ -479,6 +486,7 @@ Some notes here.
                         "create_if_missing": False,
                     }
                 },
+                field_mappings={},
             )
 
             entry = JournalEntry(
@@ -532,6 +540,7 @@ tags:
                         "create_if_missing": False,
                     }
                 },
+                field_mappings={},
             )
 
             entry = JournalEntry(
