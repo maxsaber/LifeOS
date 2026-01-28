@@ -15,6 +15,7 @@ from api.services.calendar import (
     format_event_time,
 )
 from api.services.google_auth import GoogleAccount
+from api.services.meeting_prep import get_meeting_prep, MeetingPrep, RelatedNote
 
 router = APIRouter(prefix="/api/calendar", tags=["calendar"])
 
@@ -47,6 +48,46 @@ class SearchResponse(BaseModel):
     count: int
     query: Optional[str] = None
     attendee: Optional[str] = None
+
+
+class RelatedNoteResponse(BaseModel):
+    """A note related to a meeting."""
+    title: str
+    path: str
+    relevance: str  # "attendee", "past_meeting", "topic"
+    date: Optional[str] = None
+    snippet: Optional[str] = None
+
+
+class AttachmentResponse(BaseModel):
+    """A file attachment from the calendar event."""
+    title: str
+    url: str
+    mime_type: Optional[str] = None
+
+
+class MeetingPrepResponse(BaseModel):
+    """Preparation context for a single meeting."""
+    event_id: str
+    title: str
+    start_time: str
+    end_time: str
+    html_link: Optional[str] = None
+    attendees: list[str]
+    description: Optional[str] = None
+    location: Optional[str] = None
+    is_all_day: bool
+    source_account: str
+    related_notes: list[RelatedNoteResponse]
+    attachments: list[AttachmentResponse] = []
+    agenda_summary: Optional[str] = None
+
+
+class MeetingPrepListResponse(BaseModel):
+    """Response containing all meeting preps for a date."""
+    date: str
+    meetings: list[MeetingPrepResponse]
+    count: int
 
 
 def _event_to_response(event: CalendarEvent) -> EventResponse:
@@ -174,3 +215,95 @@ async def get_event(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch event: {e}")
+
+
+@router.get("/meeting-prep", response_model=MeetingPrepListResponse)
+async def get_meeting_prep_endpoint(
+    date: str = Query(
+        description="Date in YYYY-MM-DD format (defaults to today)",
+        default=None,
+    ),
+    include_all_day: bool = Query(
+        default=False,
+        description="Include all-day events",
+    ),
+    max_related_notes: int = Query(
+        default=4,
+        ge=1,
+        le=10,
+        description="Maximum related notes per meeting",
+    ),
+):
+    """
+    **Get meeting preparation context** for a specific date.
+
+    Returns calendar events with intelligent prep material:
+    - **People notes** for meeting attendees
+    - **Past meetings** with similar titles (recurring meeting history)
+    - **Related notes** mentioning meeting topics or attendees
+
+    Use this to:
+    - Prepare for today's meetings with relevant context
+    - Auto-populate daily note with meeting prep section
+    - Review what to discuss before a meeting
+
+    Fetches from BOTH work and personal calendars automatically.
+    """
+    # Default to today if no date provided
+    if date is None:
+        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    try:
+        result = get_meeting_prep(
+            date=date,
+            include_all_day=include_all_day,
+            max_related_notes=max_related_notes,
+        )
+
+        # Convert dataclasses to Pydantic models
+        meetings = []
+        for m in result.meetings:
+            related_notes = [
+                RelatedNoteResponse(
+                    title=n.title,
+                    path=n.path,
+                    relevance=n.relevance,
+                    date=n.date,
+                    snippet=n.snippet,
+                )
+                for n in m.related_notes
+            ]
+            attachments = [
+                AttachmentResponse(
+                    title=a.title,
+                    url=a.url,
+                    mime_type=a.mime_type,
+                )
+                for a in m.attachments
+            ]
+            meetings.append(MeetingPrepResponse(
+                event_id=m.event_id,
+                title=m.title,
+                start_time=m.start_time,
+                end_time=m.end_time,
+                html_link=m.html_link,
+                attendees=m.attendees,
+                description=m.description,
+                location=m.location,
+                is_all_day=m.is_all_day,
+                source_account=m.source_account,
+                related_notes=related_notes,
+                attachments=attachments,
+                agenda_summary=m.agenda_summary,
+            ))
+
+        return MeetingPrepListResponse(
+            date=result.date,
+            meetings=meetings,
+            count=result.count,
+        )
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get meeting prep: {e}")

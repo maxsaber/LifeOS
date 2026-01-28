@@ -20,6 +20,15 @@ LOCAL_TZ = ZoneInfo("America/Los_Angeles")
 
 
 @dataclass
+class CalendarAttachment:
+    """Represents a file attachment on a calendar event."""
+    file_url: str
+    title: str
+    mime_type: Optional[str] = None
+    icon_link: Optional[str] = None
+
+
+@dataclass
 class CalendarEvent:
     """Represents a calendar event."""
     event_id: str
@@ -33,6 +42,7 @@ class CalendarEvent:
     is_all_day: bool = False
     calendar_id: str = "primary"
     html_link: Optional[str] = None  # Google Calendar URL for this event
+    attachments: list[CalendarAttachment] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         """Convert to dict for indexing."""
@@ -323,6 +333,16 @@ class CalendarService:
             # Parse attendees
             attendees = parse_attendees(item.get("attendees"))
 
+            # Parse attachments (Google Drive files attached to event)
+            attachments = []
+            for att in item.get("attachments", []):
+                attachments.append(CalendarAttachment(
+                    file_url=att.get("fileUrl", ""),
+                    title=att.get("title", "Attachment"),
+                    mime_type=att.get("mimeType"),
+                    icon_link=att.get("iconLink"),
+                ))
+
             return CalendarEvent(
                 event_id=event_id,
                 title=title,
@@ -334,6 +354,7 @@ class CalendarService:
                 is_all_day=is_all_day,
                 source_account=self.account_type.value,
                 html_link=item.get("htmlLink"),
+                attachments=attachments,
             )
 
         except Exception as e:
