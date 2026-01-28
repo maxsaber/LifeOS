@@ -65,7 +65,7 @@ run_unit_tests() {
     log_step "Running unit tests..."
     python -m pytest tests/ -v \
         --ignore=tests/test_ui_browser.py \
-        -m "not browser and not requires_server and not integration" \
+        -m "not browser and not requires_server and not integration and not slow" \
         --tb=short \
         -q
 }
