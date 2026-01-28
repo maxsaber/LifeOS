@@ -129,7 +129,20 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
 
         time.sleep(STEP_DELAY)  # Let filesystem settle
 
-        # === Step 4: iMessage Sync ===
+        # === Step 4: Google Sheets Sync ===
+        # Syncs configured Google Sheets (e.g., daily journals) to vault
+        try:
+            logger.info("Nightly sync: Starting Google Sheets sync...")
+            from api.services.gsheet_sync import sync_gsheets
+            gsheet_stats = sync_gsheets()
+            logger.info(f"Nightly sync: Google Sheets sync completed: {gsheet_stats}")
+        except Exception as e:
+            logger.error(f"Nightly sync: Google Sheets sync failed: {e}")
+            failures.append(("Google Sheets sync", str(e)))
+
+        time.sleep(STEP_DELAY)  # Let APIs settle
+
+        # === Step 5: iMessage Sync ===
         # Exports new messages and joins with PersonEntity records
         try:
             logger.info("Nightly sync: Starting iMessage sync...")

@@ -1,0 +1,39 @@
+# Google Sheets to Obsidian Sync Configuration
+#
+# This file defines which Google Sheets should be synced to your Obsidian vault.
+# Sync runs nightly at 3 AM Eastern as part of the regular sync.
+#
+# Each sheet needs:
+#   - sheet_id: The Google Sheet ID (from the URL)
+#   - name: A friendly name for logging
+#   - account: "personal" or "work" (which Google account has access)
+#   - range: Sheet tab name (e.g., "Form Responses 1") or A1 notation
+#
+# To get the sheet_id from a Google Sheets URL:
+#   https://docs.google.com/spreadsheets/d/[SHEET_ID_HERE]/edit
+#
+# NOTE: After adding the spreadsheets.readonly scope, you'll need to
+# re-authenticate by deleting config/token-personal.json and restarting.
+
+sync_enabled: true
+
+sheets:
+  - sheet_id: "1tFihaD4CosKIjqFn67I1SmJ6Oi41R_9RXiXxrLQu3pk"
+    name: "Daily Journal"
+    account: "personal"
+    range: "Form Responses 1"  # Sheet tab name from Google Forms
+    timestamp_column: "Timestamp"  # Column with submission timestamp
+
+    outputs:
+      # Rolling document: all entries in one file, most recent first
+      rolling_document:
+        enabled: true
+        path: "Personal/Daily Journal Log.md"
+
+      # Daily notes: append to existing daily notes
+      daily_notes:
+        enabled: true
+        path_pattern: "Work/ML/Daily Notes/{date}.md"  # {date} = YYYY-MM-DD
+        section_header: "## Daily Journal"
+        insert_after: "## Meetings"  # Insert after this section
+        create_if_missing: false  # Only append to existing files

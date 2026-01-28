@@ -663,6 +663,57 @@ source .venv/bin/activate
 python -c "from api.services.gdoc_sync import sync_gdocs; print(sync_gdocs())"
 ```
 
+## Google Sheets Sync
+
+LifeOS can sync Google Sheets (e.g., form responses from Google Forms) to your vault. Useful for daily journals, habit tracking, or any structured data collection.
+
+### Prerequisites
+
+1. **Enable Google Sheets API** in your Google Cloud Console project
+2. The Sheets API scope is included in the default OAuth scopes
+
+### Configuration
+
+Edit `config/gsheet_sync.yaml`:
+
+```yaml
+sync_enabled: true
+
+sheets:
+  - sheet_id: "1ABC123..."  # From the Google Sheets URL
+    name: "Daily Journal"
+    account: "personal"
+    range: "Form Responses 1"  # Sheet tab name
+    timestamp_column: "Timestamp"
+
+    outputs:
+      rolling_document:
+        enabled: true
+        path: "Personal/Daily Journal Log.md"
+
+      daily_notes:
+        enabled: true
+        path_pattern: "Daily Notes/{date}.md"
+        section_header: "## Daily Journal"
+        insert_after: "## Meetings"
+        create_if_missing: false
+```
+
+### How It Works
+
+1. Reads all rows from the configured Google Sheet
+2. Tracks synced rows in SQLite (`data/gsheet_sync.db`) to avoid duplicates
+3. Creates/updates a **rolling document** with all entries (most recent first)
+4. Optionally **appends to daily notes** under a configurable section header
+5. Runs nightly at 3 AM Eastern alongside other sync operations
+
+### Manual Sync
+
+```bash
+source .venv/bin/activate
+python -c "from api.services.gsheet_sync import sync_gsheets; print(sync_gsheets())"
+```
+
 ## iMessage Integration
 
 LifeOS can query your iMessage/SMS history by reading from the macOS Messages database.
