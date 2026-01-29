@@ -378,15 +378,23 @@ class SourceEntityStore:
         """
         Link a source entity to a canonical person.
 
+        Automatically follows merge chain - if the person_id was merged into
+        another person, links to the surviving primary instead.
+
         Args:
             entity_id: Source entity ID
-            canonical_person_id: Canonical person ID
+            canonical_person_id: Canonical person ID (will be resolved through merge chain)
             confidence: Link confidence (0.0-1.0)
             status: Link status (auto, confirmed, rejected)
 
         Returns:
             True if updated, False if entity not found
         """
+        # Follow merge chain to get the canonical ID
+        from api.services.person_entity import get_person_entity_store
+        person_store = get_person_entity_store()
+        resolved_person_id = person_store.get_canonical_id(canonical_person_id)
+
         conn = self._get_connection()
         try:
             cursor = conn.execute("""
@@ -397,7 +405,7 @@ class SourceEntityStore:
                     linked_at = ?
                 WHERE id = ?
             """, (
-                canonical_person_id,
+                resolved_person_id,
                 confidence,
                 status,
                 datetime.now(timezone.utc).isoformat(),

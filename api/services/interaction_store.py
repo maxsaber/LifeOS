@@ -243,12 +243,20 @@ class InteractionStore:
         """
         Add a new interaction.
 
+        Automatically follows merge chain - if the person_id was merged into
+        another person, links to the surviving primary instead.
+
         Args:
             interaction: Interaction to add
 
         Returns:
             The added interaction
         """
+        # Follow merge chain to get the canonical person ID
+        from api.services.person_entity import get_person_entity_store
+        person_store = get_person_entity_store()
+        resolved_person_id = person_store.get_canonical_id(interaction.person_id)
+
         conn = self._get_connection()
         try:
             conn.execute(
@@ -259,7 +267,7 @@ class InteractionStore:
             """,
                 (
                     interaction.id,
-                    interaction.person_id,
+                    resolved_person_id,  # Use canonical ID
                     interaction.timestamp.isoformat(),
                     interaction.source_type,
                     interaction.title,
@@ -270,6 +278,8 @@ class InteractionStore:
                 ),
             )
             conn.commit()
+            # Update the interaction object with the resolved ID
+            interaction.person_id = resolved_person_id
             return interaction
         finally:
             conn.close()

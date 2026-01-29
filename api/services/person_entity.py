@@ -379,6 +379,9 @@ class PersonEntityStore:
     Provides CRUD operations and persistence to JSON file.
     """
 
+    # Path to merged IDs file (secondary_id -> primary_id mapping)
+    MERGED_IDS_PATH = Path(__file__).parent.parent.parent / "data" / "merged_person_ids.json"
+
     def __init__(self, storage_path: str = "./data/people_entities.json"):
         """
         Initialize the entity store.
@@ -391,7 +394,33 @@ class PersonEntityStore:
         self._email_index: dict[str, str] = {}  # email.lower() → entity ID
         self._name_index: dict[str, str] = {}  # canonical_name.lower() → entity ID
         self._phone_index: dict[str, str] = {}  # E.164 phone → entity ID
+        self._merged_ids: dict[str, str] = {}  # secondary_id -> primary_id
         self._load()
+        self._load_merged_ids()
+
+    def _load_merged_ids(self) -> None:
+        """Load the merged IDs mapping for durability."""
+        if self.MERGED_IDS_PATH.exists():
+            try:
+                with open(self.MERGED_IDS_PATH) as f:
+                    self._merged_ids = json.load(f)
+                if self._merged_ids:
+                    logger.info(f"Loaded {len(self._merged_ids)} merged ID mappings")
+            except Exception as e:
+                logger.warning(f"Failed to load merged IDs: {e}")
+
+    def get_canonical_id(self, person_id: str) -> str:
+        """
+        Get the canonical (primary) person ID, following merge chain if needed.
+
+        This ensures that if a person was merged into another, we always
+        return the surviving primary ID.
+        """
+        visited = set()
+        while person_id in self._merged_ids and person_id not in visited:
+            visited.add(person_id)
+            person_id = self._merged_ids[person_id]
+        return person_id
 
     def _load(self) -> None:
         """Load entities from disk."""
@@ -513,29 +542,40 @@ class PersonEntityStore:
         return False
 
     def get_by_id(self, entity_id: str) -> Optional[PersonEntity]:
-        """Get entity by ID."""
-        return self._entities.get(entity_id)
+        """
+        Get entity by ID, following merge chain if needed.
+
+        If this ID was merged into another person, returns the surviving
+        primary person instead.
+        """
+        # Follow merge chain to get canonical ID
+        canonical_id = self.get_canonical_id(entity_id)
+        return self._entities.get(canonical_id)
 
     def get_by_email(self, email: str) -> Optional[PersonEntity]:
-        """Get entity by email address (case-insensitive)."""
+        """Get entity by email address (case-insensitive), following merge chain."""
         entity_id = self._email_index.get(email.lower())
         if entity_id:
-            return self._entities.get(entity_id)
+            return self.get_by_id(entity_id)  # Uses canonical ID
         return None
 
     def get_by_phone(self, phone: str) -> Optional[PersonEntity]:
-        """Get entity by phone number (E.164 format)."""
+        """Get entity by phone number (E.164 format), following merge chain."""
         entity_id = self._phone_index.get(phone)
         if entity_id:
-            return self._entities.get(entity_id)
+            return self.get_by_id(entity_id)  # Uses canonical ID
         return None
 
     def get_by_name(self, name: str) -> Optional[PersonEntity]:
-        """Get entity by canonical name or alias (case-insensitive)."""
+        """Get entity by canonical name or alias (case-insensitive), following merge chain."""
         entity_id = self._name_index.get(name.lower())
         if entity_id:
-            return self._entities.get(entity_id)
+            return self.get_by_id(entity_id)  # Uses canonical ID
         return None
+
+    def reload_merged_ids(self) -> None:
+        """Reload merged IDs mapping from disk (call after a merge operation)."""
+        self._load_merged_ids()
 
     def search(self, query: str, limit: int = 20) -> list[PersonEntity]:
         """
