@@ -8,7 +8,8 @@ Requires wacli to be installed and authenticated:
 
 Syncs:
 1. WhatsApp contacts as SourceEntities (with phone numbers and names)
-2. Group memberships (for relationship discovery)
+2. WhatsApp messages as interactions (DMs and group chats)
+3. Group memberships (for relationship discovery)
 """
 import subprocess
 import json
@@ -304,9 +305,185 @@ def sync_whatsapp(dry_run: bool = True) -> dict:
     return stats
 
 
+def sync_whatsapp_messages(dry_run: bool = True) -> dict:
+    """
+    Sync WhatsApp messages from wacli.db to interactions.
+
+    Args:
+        dry_run: If True, don't actually insert
+
+    Returns:
+        Stats dict
+    """
+    stats = {
+        'messages_read': 0,
+        'interactions_created': 0,
+        'interactions_skipped': 0,
+        'persons_not_found': 0,
+        'errors': 0,
+    }
+
+    wacli_db_path = Path.home() / ".wacli" / "wacli.db"
+    if not wacli_db_path.exists():
+        logger.error(f"wacli database not found at {wacli_db_path}")
+        stats['error'] = "wacli database not found"
+        return stats
+
+    resolver = get_entity_resolver()
+    interaction_db = get_interaction_db_path()
+
+    # Connect to wacli database
+    wacli_conn = sqlite3.connect(str(wacli_db_path))
+    wacli_conn.row_factory = sqlite3.Row
+    wacli_cursor = wacli_conn.cursor()
+
+    # Connect to interaction database
+    int_conn = sqlite3.connect(interaction_db)
+    int_cursor = int_conn.cursor()
+
+    # Get existing WhatsApp interactions to avoid duplicates
+    int_cursor.execute("SELECT source_id FROM interactions WHERE source_type = 'whatsapp'")
+    existing_ids = {row[0] for row in int_cursor.fetchall()}
+    logger.info(f"Found {len(existing_ids)} existing WhatsApp interactions")
+
+    # Fetch messages from wacli (excluding messages from self)
+    wacli_cursor.execute("""
+        SELECT
+            m.msg_id,
+            m.chat_jid,
+            m.chat_name,
+            m.sender_jid,
+            m.sender_name,
+            m.ts,
+            m.from_me,
+            m.text,
+            m.display_text,
+            m.media_type
+        FROM messages m
+        WHERE m.from_me = 0
+        ORDER BY m.ts DESC
+    """)
+
+    messages = wacli_cursor.fetchall()
+    stats['messages_read'] = len(messages)
+    logger.info(f"Found {len(messages)} incoming WhatsApp messages")
+
+    batch_size = 500
+    batch = []
+
+    for msg in messages:
+        try:
+            msg_id = msg['msg_id']
+            source_id = f"whatsapp_{msg_id}"
+
+            # Skip if already exists
+            if source_id in existing_ids:
+                stats['interactions_skipped'] += 1
+                continue
+
+            sender_jid = msg['sender_jid']
+            sender_name = msg['sender_name']
+            chat_name = msg['chat_name']
+            timestamp = msg['ts']
+            text = msg['display_text'] or msg['text'] or ''
+            is_group = is_group_jid(msg['chat_jid'])
+
+            # Extract phone from sender JID
+            phone = extract_phone_from_jid(sender_jid)
+            if not phone:
+                stats['interactions_skipped'] += 1
+                continue
+
+            # Resolve to PersonEntity
+            result = resolver.resolve(
+                name=sender_name if sender_name else None,
+                phone=phone,
+                create_if_missing=False,  # Only link to existing people
+            )
+
+            if not result or not result.entity:
+                stats['persons_not_found'] += 1
+                continue
+
+            person_id = result.entity.id
+
+            # Parse timestamp
+            try:
+                if isinstance(timestamp, str):
+                    ts = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                else:
+                    ts = datetime.fromtimestamp(timestamp, tz=timezone.utc)
+            except Exception:
+                ts = datetime.now(timezone.utc)
+
+            # Create interaction record
+            interaction_id = str(uuid.uuid4())
+            title = f"WhatsApp {'group' if is_group else 'DM'}: {chat_name or sender_name or phone}"
+            snippet = text[:500] if text else ""
+
+            batch.append((
+                interaction_id,
+                person_id,
+                ts.isoformat(),
+                'whatsapp',
+                title,
+                snippet,
+                None,  # source_link
+                source_id,
+                datetime.now(timezone.utc).isoformat(),
+            ))
+
+            stats['interactions_created'] += 1
+
+            # Insert in batches
+            if len(batch) >= batch_size and not dry_run:
+                int_cursor.executemany("""
+                    INSERT INTO interactions (id, person_id, timestamp, source_type, title, snippet, source_link, source_id, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, batch)
+                int_conn.commit()
+                logger.info(f"Inserted batch of {len(batch)} interactions")
+                batch = []
+
+        except Exception as e:
+            logger.error(f"Error processing message {msg['msg_id']}: {e}")
+            stats['errors'] += 1
+
+    # Insert remaining batch
+    if batch and not dry_run:
+        int_cursor.executemany("""
+            INSERT INTO interactions (id, person_id, timestamp, source_type, title, snippet, source_link, source_id, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, batch)
+        int_conn.commit()
+        logger.info(f"Inserted final batch of {len(batch)} interactions")
+
+    wacli_conn.close()
+    int_conn.close()
+
+    # Log summary
+    logger.info(f"\n=== WhatsApp Message Sync Summary ===")
+    logger.info(f"Messages read: {stats['messages_read']}")
+    logger.info(f"Interactions created: {stats['interactions_created']}")
+    logger.info(f"Interactions skipped (duplicates): {stats['interactions_skipped']}")
+    logger.info(f"Persons not found: {stats['persons_not_found']}")
+    logger.info(f"Errors: {stats['errors']}")
+
+    if dry_run:
+        logger.info("\nDRY RUN - no changes made")
+
+    return stats
+
+
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Sync WhatsApp contacts to CRM via wacli')
+    parser = argparse.ArgumentParser(description='Sync WhatsApp contacts and messages to CRM via wacli')
     parser.add_argument('--execute', action='store_true', help='Actually apply changes')
+    parser.add_argument('--messages-only', action='store_true', help='Only sync messages, not contacts')
+    parser.add_argument('--contacts-only', action='store_true', help='Only sync contacts, not messages')
     args = parser.parse_args()
 
-    sync_whatsapp(dry_run=not args.execute)
+    if not args.messages_only:
+        sync_whatsapp(dry_run=not args.execute)
+
+    if not args.contacts_only:
+        sync_whatsapp_messages(dry_run=not args.execute)

@@ -6,7 +6,7 @@ This script updates:
 - email_count: number of gmail interactions
 - meeting_count: number of calendar interactions
 - mention_count: number of vault/granola interactions
-- message_count: number of imessage interactions
+- message_count: number of imessage + whatsapp interactions
 - last_seen: most recent interaction timestamp
 """
 import sqlite3
@@ -55,6 +55,7 @@ def sync_person_stats(dry_run: bool = True) -> dict:
                 'vault': 0,
                 'granola': 0,
                 'imessage': 0,
+                'whatsapp': 0,
                 'last_ts': None,
             }
         person_stats[person_id][source_type] = count
@@ -83,7 +84,7 @@ def sync_person_stats(dry_run: bool = True) -> dict:
         email_count = counts['gmail']
         meeting_count = counts['calendar']
         mention_count = counts['vault'] + counts['granola']
-        message_count = counts['imessage']
+        message_count = counts['imessage'] + counts['whatsapp']
         total = email_count + meeting_count + mention_count + message_count
         stats['total_interactions_counted'] += total
 

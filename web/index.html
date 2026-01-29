@@ -4722,6 +4722,10 @@
                             <div style="font-size: 0.75rem; color: var(--text-muted);">Meetings</div>
                         </div>
                         <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: 600; color: var(--crm-accent);">${person.message_count ? person.message_count.toLocaleString() : 0}</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted);">Messages</div>
+                        </div>
+                        <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; text-align: center;">
                             <div style="font-size: 1.5rem; font-weight: 600; color: var(--crm-accent);">${person.mention_count || 0}</div>
                             <div style="font-size: 0.75rem; color: var(--text-muted);">Mentions</div>
                         </div>
