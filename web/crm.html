@@ -357,6 +357,234 @@
             color: var(--text-primary);
         }
 
+        /* Split modal */
+        .split-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .split-modal.visible {
+            display: flex;
+        }
+
+        .split-modal-content {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1.5rem;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .split-modal-header {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .split-modal-section {
+            margin-bottom: 1rem;
+        }
+
+        .split-modal-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .split-source-list {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        .split-source-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .split-source-item:last-child {
+            border-bottom: none;
+        }
+
+        .split-source-item:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .split-source-item.selected {
+            background: rgba(0, 188, 212, 0.1);
+        }
+
+        .split-source-checkbox {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        .split-source-badge {
+            display: inline-block;
+            padding: 0.125rem 0.5rem;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+
+        .split-source-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .split-source-name {
+            font-size: 0.875rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .split-source-meta {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .split-target-section {
+            margin-top: 1rem;
+            padding-top: 1rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .split-target-options {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .split-target-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .split-target-option:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .split-target-option.selected {
+            background: rgba(0, 188, 212, 0.1);
+        }
+
+        .split-person-search {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            width: 100%;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+
+        .split-person-results {
+            max-height: 150px;
+            overflow-y: auto;
+            margin-top: 0.5rem;
+        }
+
+        .split-person-result {
+            padding: 0.5rem;
+            cursor: pointer;
+            border-radius: 6px;
+            font-size: 0.875rem;
+        }
+
+        .split-person-result:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .split-person-result.selected {
+            background: rgba(0, 188, 212, 0.2);
+        }
+
+        .split-new-name-input {
+            margin-top: 0.5rem;
+            padding: 0.5rem;
+            width: 100%;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+
+        .split-modal-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+            margin-top: 1.5rem;
+        }
+
+        .split-cancel-btn {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+
+        .split-confirm-btn {
+            padding: 0.5rem 1rem;
+            background: var(--people);
+            border: none;
+            border-radius: 6px;
+            color: var(--bg-primary);
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .split-confirm-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .split-btn {
+            padding: 0.25rem 0.5rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .split-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
         /* Merge modal */
         .merge-modal {
             display: none;
@@ -511,6 +739,40 @@
             gap: 1rem;
             padding: 1.5rem;
             border-bottom: 1px solid var(--border);
+        }
+
+        /* Compact header for graph mode */
+        .graph-mode .detail-header {
+            padding: 0.75rem 1.5rem;
+            align-items: center;
+        }
+
+        .graph-mode .detail-avatar {
+            width: 40px;
+            height: 40px;
+            font-size: 1rem;
+        }
+
+        .graph-mode .detail-company,
+        .graph-mode .detail-contact-quick,
+        .graph-mode .detail-tags,
+        .graph-mode .detail-actions {
+            display: none;
+        }
+
+        .graph-mode .detail-name {
+            font-size: 1.1rem;
+            margin-bottom: 0;
+        }
+
+        .graph-mode .detail-content {
+            padding: 0.5rem;
+        }
+
+        .graph-mode #tabGraph {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
         }
 
         .detail-avatar {
@@ -1186,9 +1448,148 @@
             cursor: pointer;
         }
 
+        .graph-slider-container {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-left: 1rem;
+        }
+
+        .graph-slider-container input[type="range"] {
+            width: 120px;
+            cursor: pointer;
+            accent-color: var(--people);
+        }
+
+        .graph-slider-container span {
+            min-width: 35px;
+            color: var(--text-primary);
+        }
+
+        .graph-degree-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-left: 1rem;
+        }
+
+        .graph-degree-toggle select {
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+
+        .graph-degree-toggle select:focus {
+            outline: none;
+            border-color: var(--people);
+        }
+
+        .graph-source-filter {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-left: 1rem;
+            position: relative;
+        }
+
+        .source-filter-dropdown {
+            position: relative;
+        }
+
+        .source-filter-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+
+        .source-filter-btn:hover {
+            border-color: var(--people);
+        }
+
+        .dropdown-arrow {
+            font-size: 0.6rem;
+            color: var(--text-secondary);
+        }
+
+        .source-filter-options {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 0.5rem;
+            margin-top: 0.25rem;
+            z-index: 200;
+            min-width: 160px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .source-filter-options.visible {
+            display: block;
+        }
+
+        .source-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.3rem 0.5rem;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.85rem;
+        }
+
+        .source-option:hover {
+            background: var(--bg-secondary);
+        }
+
+        .source-option input {
+            cursor: pointer;
+        }
+
+        .source-icon {
+            font-size: 0.9rem;
+        }
+
+        .edge-panel-section-title {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            margin-top: 0.75rem;
+            margin-bottom: 0.25rem;
+            border-top: 1px solid var(--border);
+            padding-top: 0.5rem;
+        }
+
+        .graph-wrapper {
+            position: relative;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
         .graph-container {
             width: 100%;
-            height: 400px;
+            flex: 1;
+            min-height: 400px;
             background: var(--bg-secondary);
             border-radius: 8px;
             overflow: hidden;
@@ -1239,13 +1640,21 @@
         }
 
         .graph-link {
-            stroke: var(--border);
-            stroke-opacity: 0.6;
+            /* Base styles - actual stroke/opacity set dynamically based on weight */
+            stroke-linecap: round;
+            cursor: pointer;
+            transition: stroke-width 0.15s, stroke-opacity 0.15s, stroke 0.15s;
         }
 
-        .graph-link.strong {
-            stroke: var(--people);
-            stroke-opacity: 0.8;
+        .graph-link:hover {
+            stroke-opacity: 1 !important;
+            stroke-width: 4px !important;
+        }
+
+        .graph-link.selected {
+            stroke: #ff6b6b !important;
+            stroke-opacity: 1 !important;
+            stroke-width: 4px !important;
         }
 
         .graph-tooltip {
@@ -1264,6 +1673,116 @@
 
         .graph-tooltip.visible {
             opacity: 1;
+        }
+
+        .edge-panel {
+            position: absolute;
+            top: 0.5rem;
+            right: 0.5rem;
+            width: 280px;
+            background: rgba(26, 26, 46, 0.95);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            z-index: 101;
+            display: none;
+        }
+
+        .edge-panel.visible {
+            display: block;
+        }
+
+        .edge-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 0.75rem;
+        }
+
+        .edge-panel-title {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+
+        .edge-panel-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 1.2rem;
+            padding: 0;
+            line-height: 1;
+        }
+
+        .edge-panel-close:hover {
+            color: var(--text-primary);
+        }
+
+        .edge-panel-people {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+            font-size: 0.85rem;
+        }
+
+        .edge-panel-person {
+            color: var(--people);
+            cursor: pointer;
+        }
+
+        .edge-panel-person:hover {
+            text-decoration: underline;
+        }
+
+        .edge-panel-connector {
+            color: var(--text-secondary);
+        }
+
+        .edge-panel-stat {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.4rem 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.8rem;
+        }
+
+        .edge-panel-stat:last-child {
+            border-bottom: none;
+        }
+
+        .edge-panel-stat-label {
+            color: var(--text-secondary);
+        }
+
+        .edge-panel-stat-value {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .edge-panel-contexts {
+            margin-top: 0.75rem;
+        }
+
+        .edge-panel-contexts-title {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.4rem;
+        }
+
+        .edge-panel-context-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.3rem;
+        }
+
+        .edge-panel-context-tag {
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.7rem;
         }
 
         .graph-legend {
@@ -1305,7 +1824,6 @@
             align-items: center;
             justify-content: space-between;
             margin-bottom: 0.75rem;
-            cursor: pointer;
         }
 
         .source-entities-title {
@@ -1947,9 +2465,12 @@
 
                         <!-- Source entities -->
                         <div class="source-entities-section">
-                            <div class="source-entities-header" onclick="toggleSourceEntities()">
-                                <div class="source-entities-title">Source Entities <span id="sourceEntitiesCount">(0)</span></div>
-                                <div class="source-entities-toggle" id="sourceEntitiesToggle">▶</div>
+                            <div class="source-entities-header">
+                                <div style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;" onclick="toggleSourceEntities()">
+                                    <div class="source-entities-title">Source Entities <span id="sourceEntitiesCount">(0)</span></div>
+                                    <div class="source-entities-toggle" id="sourceEntitiesToggle">▶</div>
+                                </div>
+                                <button class="split-btn" onclick="event.stopPropagation(); openSplitModal()">Split Sources</button>
                             </div>
                             <div class="source-entities-list" id="sourceEntitiesList"></div>
                         </div>
@@ -1975,9 +2496,111 @@
                                 <input type="checkbox" id="showLabels" checked onchange="toggleGraphLabels()">
                                 Show Labels
                             </label>
+                            <div class="graph-slider-container">
+                                <label for="edgeStrengthSlider">Edge Strength:</label>
+                                <input type="range" id="edgeStrengthSlider" min="0" max="100" value="15" oninput="updateEdgeVisibility(this.value)">
+                                <span id="edgeStrengthValue">15%</span>
+                            </div>
+                            <div class="graph-degree-toggle">
+                                <label>Show:</label>
+                                <select id="degreeFilter" onchange="updateDegreeFilter(this.value)">
+                                    <option value="all">1st & 2nd Degree</option>
+                                    <option value="first">1st Degree Only</option>
+                                </select>
+                            </div>
+                            <div class="graph-source-filter">
+                                <label>Sources:</label>
+                                <div class="source-filter-dropdown" id="sourceFilterDropdown">
+                                    <button class="source-filter-btn" onclick="toggleSourceFilter()">
+                                        <span id="sourceFilterLabel">All Sources</span>
+                                        <span class="dropdown-arrow">▼</span>
+                                    </button>
+                                    <div class="source-filter-options" id="sourceFilterOptions">
+                                        <label class="source-option">
+                                            <input type="checkbox" value="calendar" checked onchange="updateSourceFilter()">
+                                            <span class="source-icon">📅</span> Calendar
+                                        </label>
+                                        <label class="source-option">
+                                            <input type="checkbox" value="email" checked onchange="updateSourceFilter()">
+                                            <span class="source-icon">📧</span> Email
+                                        </label>
+                                        <label class="source-option">
+                                            <input type="checkbox" value="imessage" checked onchange="updateSourceFilter()">
+                                            <span class="source-icon">💬</span> iMessage
+                                        </label>
+                                        <label class="source-option">
+                                            <input type="checkbox" value="whatsapp" checked onchange="updateSourceFilter()">
+                                            <span class="source-icon">📱</span> WhatsApp
+                                        </label>
+                                        <label class="source-option">
+                                            <input type="checkbox" value="slack" checked onchange="updateSourceFilter()">
+                                            <span class="source-icon">💼</span> Slack
+                                        </label>
+                                        <label class="source-option">
+                                            <input type="checkbox" value="linkedin" checked onchange="updateSourceFilter()">
+                                            <span class="source-icon">🔗</span> LinkedIn
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div id="graphContainer" class="graph-container">
-                            <div class="loading">Loading graph...</div>
+                        <div class="graph-wrapper">
+                            <div id="graphContainer" class="graph-container">
+                                <div class="loading">Loading graph...</div>
+                            </div>
+                            <div id="edgePanel" class="edge-panel">
+                                <div class="edge-panel-header">
+                                    <div class="edge-panel-title">Connection Details</div>
+                                    <button class="edge-panel-close" onclick="closeEdgePanel()">&times;</button>
+                                </div>
+                                <div class="edge-panel-people">
+                                    <span class="edge-panel-person" id="edgePanelPersonA" onclick="navigateToEdgePerson('a')">Person A</span>
+                                    <span class="edge-panel-connector">&harr;</span>
+                                    <span class="edge-panel-person" id="edgePanelPersonB" onclick="navigateToEdgePerson('b')">Person B</span>
+                                </div>
+                                <div class="edge-panel-stat">
+                                    <span class="edge-panel-stat-label">Edge Weight</span>
+                                    <span class="edge-panel-stat-value" id="edgePanelWeight">0</span>
+                                </div>
+                                <div class="edge-panel-section-title">Source Breakdown</div>
+                                <div class="edge-panel-stat">
+                                    <span class="edge-panel-stat-label">📅 Calendar Events</span>
+                                    <span class="edge-panel-stat-value" id="edgePanelEvents">0</span>
+                                </div>
+                                <div class="edge-panel-stat">
+                                    <span class="edge-panel-stat-label">📧 Email Threads</span>
+                                    <span class="edge-panel-stat-value" id="edgePanelThreads">0</span>
+                                </div>
+                                <div class="edge-panel-stat">
+                                    <span class="edge-panel-stat-label">💬 iMessage</span>
+                                    <span class="edge-panel-stat-value" id="edgePanelMessages">0</span>
+                                </div>
+                                <div class="edge-panel-stat">
+                                    <span class="edge-panel-stat-label">📱 WhatsApp</span>
+                                    <span class="edge-panel-stat-value" id="edgePanelWhatsapp">0</span>
+                                </div>
+                                <div class="edge-panel-stat">
+                                    <span class="edge-panel-stat-label">💼 Slack DMs</span>
+                                    <span class="edge-panel-stat-value" id="edgePanelSlack">0</span>
+                                </div>
+                                <div class="edge-panel-stat">
+                                    <span class="edge-panel-stat-label">🔗 LinkedIn</span>
+                                    <span class="edge-panel-stat-value" id="edgePanelLinkedin">—</span>
+                                </div>
+                                <div class="edge-panel-section-title">Timing</div>
+                                <div class="edge-panel-stat">
+                                    <span class="edge-panel-stat-label">First Seen Together</span>
+                                    <span class="edge-panel-stat-value" id="edgePanelFirstSeen">—</span>
+                                </div>
+                                <div class="edge-panel-stat">
+                                    <span class="edge-panel-stat-label">Last Seen Together</span>
+                                    <span class="edge-panel-stat-value" id="edgePanelLastSeen">—</span>
+                                </div>
+                                <div class="edge-panel-contexts" id="edgePanelContexts">
+                                    <div class="edge-panel-contexts-title">Shared Contexts</div>
+                                    <div class="edge-panel-context-tags" id="edgePanelContextTags"></div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2000,6 +2623,55 @@
             <div class="merge-modal-actions">
                 <button class="merge-cancel-btn" onclick="closeMergeModal()">Cancel</button>
                 <button class="merge-confirm-btn" id="mergeConfirmBtn" onclick="confirmMerge()" disabled>Merge</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Split Modal -->
+    <div class="split-modal" id="splitModal">
+        <div class="split-modal-content">
+            <div class="split-modal-header">Split Sources</div>
+            <div class="split-modal-section">
+                <div class="split-modal-label">
+                    Select sources that don't belong to <strong id="splitFromPersonName"></strong>:
+                </div>
+                <div class="split-source-list" id="splitSourceList">
+                    <div class="loading">Loading sources...</div>
+                </div>
+            </div>
+            <div class="split-target-section">
+                <div class="split-modal-label">Move selected sources to:</div>
+                <div class="split-target-options">
+                    <label class="split-target-option" onclick="setSplitTarget('existing')">
+                        <input type="radio" name="splitTarget" value="existing">
+                        Existing person
+                    </label>
+                    <div id="splitExistingSection" style="display: none; margin-left: 1.5rem;">
+                        <input type="text" class="split-person-search" id="splitPersonSearch"
+                               placeholder="Search for person..." oninput="searchSplitTarget()">
+                        <div class="split-person-results" id="splitPersonResults"></div>
+                    </div>
+                    <label class="split-target-option" onclick="setSplitTarget('new')">
+                        <input type="radio" name="splitTarget" value="new">
+                        Create new person
+                    </label>
+                    <div id="splitNewSection" style="display: none; margin-left: 1.5rem;">
+                        <input type="text" class="split-new-name-input" id="splitNewPersonName"
+                               placeholder="Enter new person's name...">
+                    </div>
+                </div>
+            </div>
+            <div class="split-modal-section" style="margin-top: 1rem;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="splitCreateOverrides" checked>
+                    <span style="font-size: 0.875rem;">Create disambiguation rules to prevent future mis-linking</span>
+                </label>
+            </div>
+            <div class="split-modal-actions">
+                <button class="split-cancel-btn" onclick="closeSplitModal()">Cancel</button>
+                <button class="split-confirm-btn" id="splitConfirmBtn" onclick="confirmSplit()" disabled>
+                    Split <span id="splitCount">0</span> Sources
+                </button>
             </div>
         </div>
     </div>
@@ -2242,6 +2914,214 @@
                 btn.textContent = 'Merge';
             }
         }
+
+        // ===============================
+        // Split Modal Functions
+        // ===============================
+
+        let splitSourceEntities = [];
+        let selectedSplitSources = new Set();
+        let splitTargetType = null;  // 'existing' or 'new'
+        let splitTargetPersonId = null;
+        let splitFromPersonId = null;
+
+        async function openSplitModal() {
+            if (!selectedPersonId) return;
+
+            splitFromPersonId = selectedPersonId;
+            selectedSplitSources.clear();
+            splitTargetType = null;
+            splitTargetPersonId = null;
+
+            // Get person name
+            const person = people.find(p => p.id === selectedPersonId);
+            document.getElementById('splitFromPersonName').textContent = person?.canonical_name || 'this person';
+
+            // Show modal
+            document.getElementById('splitModal').classList.add('visible');
+            document.getElementById('splitSourceList').innerHTML = '<div class="loading">Loading sources...</div>';
+            updateSplitButton();
+
+            // Load source entities
+            try {
+                const data = await api(`/people/${selectedPersonId}/source-entities`);
+                splitSourceEntities = data.source_entities;
+                renderSplitSourceList();
+            } catch (error) {
+                console.error('Failed to load source entities:', error);
+                document.getElementById('splitSourceList').innerHTML =
+                    '<div style="padding: 1rem; color: var(--error);">Failed to load sources</div>';
+            }
+        }
+
+        function renderSplitSourceList() {
+            const listEl = document.getElementById('splitSourceList');
+
+            if (splitSourceEntities.length === 0) {
+                listEl.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No source entities found</div>';
+                return;
+            }
+
+            listEl.innerHTML = splitSourceEntities.map(se => `
+                <div class="split-source-item ${selectedSplitSources.has(se.id) ? 'selected' : ''}"
+                     onclick="toggleSplitSource('${se.id}')">
+                    <input type="checkbox" class="split-source-checkbox"
+                           ${selectedSplitSources.has(se.id) ? 'checked' : ''}
+                           onclick="event.stopPropagation(); toggleSplitSource('${se.id}')">
+                    <span class="split-source-badge">${se.source_type}</span>
+                    <div class="split-source-info">
+                        <div class="split-source-name">${escapeHtml(se.observed_name || se.observed_email || 'Unknown')}</div>
+                        <div class="split-source-meta">${escapeHtml(se.source_id_display || '')}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function toggleSplitSource(sourceId) {
+            if (selectedSplitSources.has(sourceId)) {
+                selectedSplitSources.delete(sourceId);
+            } else {
+                selectedSplitSources.add(sourceId);
+            }
+            renderSplitSourceList();
+            updateSplitButton();
+        }
+
+        function setSplitTarget(type) {
+            splitTargetType = type;
+            splitTargetPersonId = null;
+
+            // Update radio button states
+            document.querySelectorAll('.split-target-option').forEach(el => {
+                el.classList.remove('selected');
+            });
+            document.querySelector(`.split-target-option input[value="${type}"]`)?.closest('.split-target-option')?.classList.add('selected');
+
+            // Show/hide sections
+            document.getElementById('splitExistingSection').style.display = type === 'existing' ? 'block' : 'none';
+            document.getElementById('splitNewSection').style.display = type === 'new' ? 'block' : 'none';
+
+            updateSplitButton();
+        }
+
+        async function searchSplitTarget() {
+            const query = document.getElementById('splitPersonSearch').value.trim();
+            const resultsEl = document.getElementById('splitPersonResults');
+
+            if (query.length < 2) {
+                resultsEl.innerHTML = '';
+                return;
+            }
+
+            try {
+                const data = await api(`/people?q=${encodeURIComponent(query)}&limit=10`);
+                const filtered = data.people.filter(p => p.id !== splitFromPersonId);
+
+                if (filtered.length === 0) {
+                    resultsEl.innerHTML = '<div style="padding: 0.5rem; color: var(--text-secondary);">No matching people</div>';
+                    return;
+                }
+
+                resultsEl.innerHTML = filtered.map(p => `
+                    <div class="split-person-result ${splitTargetPersonId === p.id ? 'selected' : ''}"
+                         onclick="selectSplitTarget('${p.id}', '${escapeHtml(p.canonical_name)}')">
+                        ${escapeHtml(p.canonical_name)}
+                        ${p.company ? `<span style="color: var(--text-secondary);"> · ${escapeHtml(p.company)}</span>` : ''}
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Search failed:', error);
+            }
+        }
+
+        function selectSplitTarget(personId, personName) {
+            splitTargetPersonId = personId;
+            document.getElementById('splitPersonSearch').value = personName;
+            document.getElementById('splitPersonResults').innerHTML = '';
+            updateSplitButton();
+        }
+
+        function updateSplitButton() {
+            const btn = document.getElementById('splitConfirmBtn');
+            const countEl = document.getElementById('splitCount');
+
+            countEl.textContent = selectedSplitSources.size;
+
+            // Enable if we have sources selected AND a valid target
+            const hasTarget = (splitTargetType === 'existing' && splitTargetPersonId) ||
+                              (splitTargetType === 'new' && document.getElementById('splitNewPersonName').value.trim());
+            const hasSelection = selectedSplitSources.size > 0;
+
+            btn.disabled = !(hasSelection && hasTarget);
+        }
+
+        function closeSplitModal() {
+            document.getElementById('splitModal').classList.remove('visible');
+            splitSourceEntities = [];
+            selectedSplitSources.clear();
+            splitTargetType = null;
+            splitTargetPersonId = null;
+            splitFromPersonId = null;
+        }
+
+        async function confirmSplit() {
+            if (selectedSplitSources.size === 0) return;
+
+            const btn = document.getElementById('splitConfirmBtn');
+            btn.disabled = true;
+            btn.textContent = 'Splitting...';
+
+            try {
+                const requestBody = {
+                    from_person_id: splitFromPersonId,
+                    source_entity_ids: [...selectedSplitSources],
+                    create_overrides: document.getElementById('splitCreateOverrides').checked
+                };
+
+                if (splitTargetType === 'existing') {
+                    requestBody.to_person_id = splitTargetPersonId;
+                } else {
+                    requestBody.new_person_name = document.getElementById('splitNewPersonName').value.trim();
+                }
+
+                const result = await api('/people/split', {
+                    method: 'POST',
+                    body: JSON.stringify(requestBody)
+                });
+
+                console.log('Split completed:', result);
+
+                // Close modal and refresh
+                closeSplitModal();
+                await loadPeople();
+
+                // Reload the current person's details
+                await loadPersonDetail(splitFromPersonId || selectedPersonId);
+
+                // Show success message
+                alert(`Split complete! Moved ${result.source_entities_moved} sources and ${result.interactions_moved} interactions.` +
+                      (result.overrides_created > 0 ? ` Created ${result.overrides_created} disambiguation rules.` : ''));
+
+            } catch (error) {
+                console.error('Split failed:', error);
+                alert('Split failed: ' + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = 'Split <span id="splitCount">0</span> Sources';
+            }
+        }
+
+        // Listen for input changes on new person name field
+        document.addEventListener('DOMContentLoaded', () => {
+            const newNameInput = document.getElementById('splitNewPersonName');
+            if (newNameInput) {
+                newNameInput.addEventListener('input', updateSplitButton);
+            }
+        });
+
+        // ===============================
+        // End Split Modal Functions
+        // ===============================
 
         // Select a person
         async function selectPerson(personId, stayOnCurrentTab = false) {
@@ -3084,9 +3964,107 @@
         let graphSimulation = null;
         let graphSvg = null;
         let graphZoom = null;
-        let graphNodes = [];
-        let graphLinks = [];
+        let graphWeightRange = null;  // Stores min/max/range for edge filtering
+        let graphLinks = null;        // Stores link data for edge filtering
+        let graphNodes = null;        // Stores node data for degree filtering
+        let graphCenterId = null;     // Stores center node ID for edge filtering
         let showLabelsEnabled = true;
+        let currentZoomScale = 1;
+
+        // Preserved filter state (for node-to-node navigation)
+        let preservedEdgeStrength = null;
+        let preservedDegreeFilter = null;
+        let preservedSourceFilter = null;
+
+        // Source filter functions
+        function toggleSourceFilter() {
+            const options = document.getElementById('sourceFilterOptions');
+            options.classList.toggle('visible');
+
+            // Close on outside click
+            if (options.classList.contains('visible')) {
+                setTimeout(() => {
+                    document.addEventListener('click', closeSourceFilterOnOutsideClick);
+                }, 0);
+            }
+        }
+
+        function closeSourceFilterOnOutsideClick(e) {
+            const dropdown = document.getElementById('sourceFilterDropdown');
+            if (dropdown && !dropdown.contains(e.target)) {
+                document.getElementById('sourceFilterOptions').classList.remove('visible');
+                document.removeEventListener('click', closeSourceFilterOnOutsideClick);
+            }
+        }
+
+        function getSelectedSources() {
+            const checkboxes = document.querySelectorAll('#sourceFilterOptions input[type="checkbox"]');
+            const selected = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked) selected.push(cb.value);
+            });
+            return selected;
+        }
+
+        function updateSourceFilter() {
+            const selected = getSelectedSources();
+            const label = document.getElementById('sourceFilterLabel');
+
+            if (selected.length === 6) {
+                label.textContent = 'All Sources';
+            } else if (selected.length === 0) {
+                label.textContent = 'None';
+            } else if (selected.length <= 2) {
+                label.textContent = selected.join(', ');
+            } else {
+                label.textContent = `${selected.length} sources`;
+            }
+
+            applyGraphFilters();
+        }
+
+        function restoreSourceFilter(sources) {
+            const checkboxes = document.querySelectorAll('#sourceFilterOptions input[type="checkbox"]');
+            checkboxes.forEach(cb => {
+                cb.checked = sources.includes(cb.value);
+            });
+            updateSourceFilter();
+        }
+
+        // Calculate filtered edge weight based on selected sources
+        function calculateFilteredWeight(edge, selectedSources) {
+            let weight = 0;
+            if (selectedSources.includes('calendar')) {
+                weight += (edge.shared_events_count || 0) * 3;
+            }
+            if (selectedSources.includes('email')) {
+                weight += (edge.shared_threads_count || 0) * 2;
+            }
+            if (selectedSources.includes('imessage')) {
+                weight += (edge.shared_messages_count || 0) * 2;
+            }
+            if (selectedSources.includes('whatsapp')) {
+                weight += (edge.shared_whatsapp_count || 0) * 2;
+            }
+            if (selectedSources.includes('slack')) {
+                weight += (edge.shared_slack_count || 0);
+            }
+            if (selectedSources.includes('linkedin') && edge.is_linkedin_connection) {
+                weight += 10;
+            }
+            return weight;
+        }
+
+        // Check if edge has any signal from selected sources
+        function edgeHasSelectedSource(edge, selectedSources) {
+            if (selectedSources.includes('calendar') && (edge.shared_events_count || 0) > 0) return true;
+            if (selectedSources.includes('email') && (edge.shared_threads_count || 0) > 0) return true;
+            if (selectedSources.includes('imessage') && (edge.shared_messages_count || 0) > 0) return true;
+            if (selectedSources.includes('whatsapp') && (edge.shared_whatsapp_count || 0) > 0) return true;
+            if (selectedSources.includes('slack') && (edge.shared_slack_count || 0) > 0) return true;
+            if (selectedSources.includes('linkedin') && edge.is_linkedin_connection) return true;
+            return false;
+        }
 
         // Load graph visualization using 2-degree network
         async function loadGraph(personId) {
@@ -3112,12 +4090,19 @@
                     interactionCount: node.interaction_count
                 }));
 
-                // Transform edges from API format
+                // Transform edges from API format (include source breakdown for filtering)
                 const links = data.edges.map(edge => ({
                     source: edge.source,
                     target: edge.target,
                     weight: edge.weight,
-                    type: edge.type
+                    type: edge.type,
+                    // Source breakdown for multi-source filtering
+                    shared_events_count: edge.shared_events_count || 0,
+                    shared_threads_count: edge.shared_threads_count || 0,
+                    shared_messages_count: edge.shared_messages_count || 0,
+                    shared_whatsapp_count: edge.shared_whatsapp_count || 0,
+                    shared_slack_count: edge.shared_slack_count || 0,
+                    is_linkedin_connection: edge.is_linkedin_connection || false
                 }));
 
                 if (nodes.length === 1) {
@@ -3162,6 +4147,8 @@
 
             const width = container.clientWidth;
             const height = container.clientHeight || 400;
+            const centerX = width / 2;
+            const centerY = height / 2;
 
             // Create SVG
             const svg = d3.select(container)
@@ -3171,47 +4158,189 @@
 
             graphSvg = svg;
 
-            // Create zoom behavior
+            // Create group for zoomable content
+            const g = svg.append('g');
+
+            // Calculate max edge weight for normalization (needed for edge visibility)
+            const maxWeight = Math.max(1, ...links.map(l => l.weight));
+            const minWeight = Math.min(...links.map(l => l.weight));
+            const weightRange = Math.max(1, maxWeight - minWeight);
+
+            // Function to update label visibility based on zoom (edge visibility controlled by slider)
+            function updateLabelsForZoom(scale) {
+                currentZoomScale = scale;
+
+                // Update label visibility
+                if (showLabelsEnabled) {
+                    g.selectAll('.graph-node text')
+                        .style('display', d => {
+                            // Always show center node label
+                            if (d.degree === 0) return 'block';
+                            // Show 1st degree at scale >= 0.5
+                            if (d.degree === 1 && scale >= 0.5) return 'block';
+                            // Show 2nd degree only when zoomed in (scale >= 1.2)
+                            if (d.degree === 2 && scale >= 1.2) return 'block';
+                            return 'none';
+                        });
+                }
+            }
+
+            // Create zoom behavior with label visibility updates
             graphZoom = d3.zoom()
-                .scaleExtent([0.3, 3])
+                .scaleExtent([0.2, 4])
                 .on('zoom', (event) => {
                     g.attr('transform', event.transform);
+                    updateLabelsForZoom(event.transform.k);
                 });
 
             svg.call(graphZoom);
-
-            // Create group for zoomable content
-            const g = svg.append('g');
 
             // Add tooltip div
             const tooltip = d3.select(container)
                 .append('div')
                 .attr('class', 'graph-tooltip');
 
-            // Create force simulation
+            // Create force simulation - standard layout with strong repulsion
+            const nodeCount = nodes.length;
+            const spreadFactor = Math.max(1.5, Math.sqrt(nodeCount / 15));  // More aggressive spread
+
+            // Initialize node positions - center node fixed at center, others spread around
+            nodes.forEach(n => {
+                if (n.degree === 0) {
+                    // Center node goes exactly at center
+                    n.x = centerX;
+                    n.y = centerY;
+                    n.fx = centerX;  // Fix position so it doesn't move
+                    n.fy = centerY;
+                } else if (n.x === undefined) {
+                    // Other nodes spread around center
+                    n.x = centerX + (Math.random() - 0.5) * 200 * spreadFactor;
+                    n.y = centerY + (Math.random() - 0.5) * 200 * spreadFactor;
+                }
+            });
+
+            // Store data globally for the slider and degree filter
+            graphWeightRange = { min: minWeight, max: maxWeight, range: weightRange };
+            graphLinks = links;
+            graphNodes = nodes;
+            graphCenterId = centerId;
+
             graphSimulation = d3.forceSimulation(nodes)
                 .force('link', d3.forceLink(links)
                     .id(d => d.id)
                     .distance(d => {
-                        // Shorter distance for stronger connections
-                        return 80 + Math.max(0, 50 - d.weight * 5);
-                    }))
-                .force('charge', d3.forceManyBody()
-                    .strength(d => d.degree === 0 ? -400 : (d.degree === 1 ? -200 : -100)))
-                .force('center', d3.forceCenter(width / 2, height / 2))
-                .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 5));
+                        // Much longer distances for clear separation
+                        const sourceNode = typeof d.source === 'object' ? d.source : nodes.find(n => n.id === d.source);
+                        const targetNode = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
+                        const minDegree = Math.min(sourceNode?.degree ?? 1, targetNode?.degree ?? 1);
 
-            // Draw links
+                        // Large base distances scaled by network size
+                        if (minDegree === 0) return 180 * spreadFactor;  // Center to 1st degree
+                        return 120 * spreadFactor;                        // 1st to 2nd degree
+                    })
+                    .strength(0.05))  // Very weak links - let repulsion dominate
+                .force('charge', d3.forceManyBody()
+                    .strength(d => {
+                        // Strong repulsion for maximum separation
+                        if (d.degree === 0) return -1200 * spreadFactor;  // Center pushes hard
+                        if (d.degree === 1) return -600 * spreadFactor;   // 1st degree spread wide
+                        return -300 * spreadFactor;                        // 2nd degree spread
+                    })
+                    .distanceMax(800 * spreadFactor))
+                .force('center', d3.forceCenter(centerX, centerY))
+                .force('collision', d3.forceCollide()
+                    .radius(d => getNodeRadius(d) + 35 * spreadFactor)  // Large collision radius
+                    .strength(1.0))  // Maximum collision strength
+                .alphaDecay(0.03)   // Faster decay = settles quicker
+                .alphaMin(0.005)    // Higher minimum = stops sooner
+                .velocityDecay(0.7) // Higher friction = less jitter
+                .stop();  // Don't auto-start - wait until elements are created
+
+            // Stop simulation after it settles (with timeout as backup)
+            graphSimulation.on('end', () => {
+                console.log('Graph simulation settled');
+            });
+
+            // Backup: force stop after 5 seconds
+            setTimeout(() => {
+                if (graphSimulation) {
+                    graphSimulation.alpha(0).stop();
+                }
+            }, 5000);
+
+            // Helper to check if edge connects to center node
+            function isFirstDegreeEdge(d) {
+                const sourceId = typeof d.source === 'object' ? d.source.id : d.source;
+                const targetId = typeof d.target === 'object' ? d.target.id : d.target;
+                return sourceId === centerId || targetId === centerId;
+            }
+
+            // Draw links with distinctive first-degree edges
             const link = g.append('g')
+                .attr('class', 'graph-links')
                 .selectAll('line')
                 .data(links)
                 .join('line')
-                .attr('class', d => 'graph-link' + (d.weight > 5 ? ' strong' : ''))
-                .attr('stroke-width', d => Math.max(1, Math.min(4, d.weight / 2)))
-                .attr('stroke-opacity', d => Math.min(0.8, 0.2 + d.weight / 20));
+                .attr('class', d => 'graph-link' + (isFirstDegreeEdge(d) ? ' first-degree' : ''))
+                .attr('stroke', d => {
+                    if (isFirstDegreeEdge(d)) {
+                        // First-degree edges: bright cyan/teal gradient based on weight
+                        const normalizedWeight = (d.weight - minWeight) / weightRange;
+                        const r = Math.round(0 + normalizedWeight * 50);
+                        const g = Math.round(180 + normalizedWeight * 75);
+                        const b = Math.round(200 + normalizedWeight * 55);
+                        return `rgb(${r}, ${g}, ${b})`;
+                    } else {
+                        // Second-degree edges: muted blue/gray
+                        const normalizedWeight = (d.weight - minWeight) / weightRange;
+                        const r = Math.round(60 + normalizedWeight * 20);
+                        const g = Math.round(70 + normalizedWeight * 40);
+                        const b = Math.round(100 + normalizedWeight * 50);
+                        return `rgb(${r}, ${g}, ${b})`;
+                    }
+                })
+                .attr('stroke-width', d => {
+                    const normalizedWeight = (d.weight - minWeight) / weightRange;
+                    if (isFirstDegreeEdge(d)) {
+                        // First-degree: thicker (2 to 5px)
+                        return 2 + normalizedWeight * 3;
+                    } else {
+                        // Second-degree: visible but thinner (1 to 2.5px)
+                        return 1 + normalizedWeight * 1.5;
+                    }
+                })
+                .attr('stroke-opacity', d => {
+                    const normalizedWeight = (d.weight - minWeight) / weightRange;
+                    if (isFirstDegreeEdge(d)) {
+                        // First-degree: very visible (0.6 to 0.95)
+                        return 0.6 + normalizedWeight * 0.35;
+                    } else {
+                        // Second-degree: clearly visible (0.35 to 0.7)
+                        return 0.35 + normalizedWeight * 0.35;
+                    }
+                })
+                .attr('data-weight', d => d.weight);
+
+            // Add invisible hit areas for easier edge clicking (wider transparent lines)
+            const linkHitAreas = g.append('g')
+                .attr('class', 'graph-link-hit-areas')
+                .selectAll('line')
+                .data(links)
+                .join('line')
+                .attr('class', 'graph-link-hit')
+                .attr('stroke', 'transparent')
+                .attr('stroke-width', 15)  // Wide invisible hit area
+                .style('cursor', 'pointer')
+                .on('click', (event, d) => {
+                    event.stopPropagation();
+                    const sourceId = typeof d.source === 'object' ? d.source.id : d.source;
+                    const targetId = typeof d.target === 'object' ? d.target.id : d.target;
+                    showEdgeDetails(sourceId, targetId);
+                });
 
             // Draw nodes
             const node = g.append('g')
+                .attr('class', 'graph-nodes')
                 .selectAll('g')
                 .data(nodes)
                 .join('g')
@@ -3222,6 +4351,12 @@
                     .on('end', dragended))
                 .on('click', (event, d) => {
                     event.stopPropagation();
+                    // Save current filter values before navigating
+                    const slider = document.getElementById('edgeStrengthSlider');
+                    const degreeSelect = document.getElementById('degreeFilter');
+                    preservedEdgeStrength = slider ? parseInt(slider.value) : 0;
+                    preservedDegreeFilter = degreeSelect ? degreeSelect.value : 'all';
+                    preservedSourceFilter = getSelectedSources();
                     // Switch to this person's detail view, stay on Graph tab, and reload their graph
                     selectPerson(d.id, true);
                 })
@@ -3249,16 +4384,17 @@
             node.append('circle')
                 .attr('r', d => getNodeRadius(d))
                 .attr('fill', d => categoryColors[d.category] || categoryColors.unknown)
-                .attr('fill-opacity', d => d.degree === 2 ? 0.6 : 1)
+                .attr('fill-opacity', d => d.degree === 2 ? 0.7 : 1)
                 .attr('stroke', d => d.degree === 0 ? 'var(--accent)' : 'var(--bg-primary)')
                 .attr('stroke-width', d => d.degree === 0 ? 3 : 2);
 
-            // Node labels - show for center and first-degree, or high-strength second-degree
-            node.filter(d => d.degree <= 1 || d.strength > 0.5)
-                .append('text')
+            // Node labels - add to ALL nodes, visibility controlled by zoom
+            node.append('text')
                 .attr('dy', d => getNodeRadius(d) + 12)
-                .text(d => truncateName(d.name, d.degree === 0 ? 20 : 12))
-                .style('display', showLabelsEnabled ? 'block' : 'none');
+                .text(d => truncateName(d.name, d.degree === 0 ? 20 : 12));
+
+            // Apply initial label visibility based on current zoom
+            updateLabelsForZoom(currentZoomScale);
 
             // Update positions on tick
             graphSimulation.on('tick', () => {
@@ -3268,12 +4404,52 @@
                     .attr('x2', d => d.target.x)
                     .attr('y2', d => d.target.y);
 
+                linkHitAreas
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
                 node.attr('transform', d => `translate(${d.x},${d.y})`);
             });
 
-            // Drag functions
+            // Now start the simulation (elements are ready) with lower initial energy
+            graphSimulation.alpha(0.5).restart();  // Start calmer to reduce initial jitter
+
+            // Restore or reset the filters
+            const slider = document.getElementById('edgeStrengthSlider');
+            const degreeFilterEl = document.getElementById('degreeFilter');
+
+            // Use preserved values if available, otherwise reset to defaults
+            const edgeStrengthValue = preservedEdgeStrength !== null ? preservedEdgeStrength : 15;
+            const degreeFilterValue = preservedDegreeFilter !== null ? preservedDegreeFilter : 'all';
+            const sourceFilterValue = preservedSourceFilter !== null ? preservedSourceFilter : ['calendar', 'email', 'imessage', 'whatsapp', 'slack', 'linkedin'];
+
+            if (slider) {
+                slider.value = edgeStrengthValue;
+                document.getElementById('edgeStrengthValue').textContent = edgeStrengthValue + '%';
+            }
+
+            if (degreeFilterEl) {
+                degreeFilterEl.value = degreeFilterValue;
+            }
+
+            // Restore source filter checkboxes
+            restoreSourceFilter(sourceFilterValue);
+
+            // Clear preserved values after using them
+            preservedEdgeStrength = null;
+            preservedDegreeFilter = null;
+            preservedSourceFilter = null;
+
+            // Apply the filters after a short delay to let the graph settle
+            setTimeout(() => {
+                applyGraphFilters();
+            }, 100);
+
+            // Drag functions - gentler reanimation
             function dragstarted(event, d) {
-                if (!event.active) graphSimulation.alphaTarget(0.3).restart();
+                if (!event.active) graphSimulation.alphaTarget(0.1).restart();
                 d.fx = d.x;
                 d.fy = d.y;
             }
@@ -3285,8 +4461,9 @@
 
             function dragended(event, d) {
                 if (!event.active) graphSimulation.alphaTarget(0);
-                d.fx = null;
-                d.fy = null;
+                // Keep node fixed where user dropped it
+                // d.fx = null;
+                // d.fy = null;
             }
 
             // Add legend with degree explanations
@@ -3319,13 +4496,232 @@
             }
         }
 
+        // Edge panel state
+        let edgePanelData = { personAId: null, personBId: null };
+        let selectedEdgeKey = null;  // Track which edge is selected
+
+        // Show edge details panel
+        async function showEdgeDetails(sourceId, targetId) {
+            const panel = document.getElementById('edgePanel');
+
+            // Clear previous selection and highlight new one
+            if (graphSvg) {
+                graphSvg.selectAll('.graph-link').classed('selected', false);
+                // Find and highlight the clicked edge
+                graphSvg.selectAll('.graph-link').each(function(d) {
+                    const dSourceId = typeof d.source === 'object' ? d.source.id : d.source;
+                    const dTargetId = typeof d.target === 'object' ? d.target.id : d.target;
+                    if ((dSourceId === sourceId && dTargetId === targetId) ||
+                        (dSourceId === targetId && dTargetId === sourceId)) {
+                        d3.select(this).classed('selected', true);
+                    }
+                });
+            }
+            selectedEdgeKey = `${sourceId}:${targetId}`;
+
+            try {
+                const data = await api(`/relationship/${sourceId}/${targetId}`);
+                edgePanelData = { personAId: data.person_a_id, personBId: data.person_b_id };
+
+                // Update panel content
+                document.getElementById('edgePanelPersonA').textContent = data.person_a_name;
+                document.getElementById('edgePanelPersonB').textContent = data.person_b_name;
+                document.getElementById('edgePanelWeight').textContent = data.weight;
+
+                // Source breakdown
+                document.getElementById('edgePanelEvents').textContent = data.shared_events_count || 0;
+                document.getElementById('edgePanelThreads').textContent = data.shared_threads_count || 0;
+                document.getElementById('edgePanelMessages').textContent = data.shared_messages_count || 0;
+                document.getElementById('edgePanelWhatsapp').textContent = data.shared_whatsapp_count || 0;
+                document.getElementById('edgePanelSlack').textContent = data.shared_slack_count || 0;
+                document.getElementById('edgePanelLinkedin').textContent = data.is_linkedin_connection ? '✓ Connected' : '—';
+
+                // Format dates
+                const formatDate = (isoStr) => {
+                    if (!isoStr) return '—';
+                    const date = new Date(isoStr);
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                };
+                document.getElementById('edgePanelFirstSeen').textContent = formatDate(data.first_seen_together);
+                document.getElementById('edgePanelLastSeen').textContent = formatDate(data.last_seen_together);
+
+                // Shared contexts
+                const contextsContainer = document.getElementById('edgePanelContexts');
+                const tagsContainer = document.getElementById('edgePanelContextTags');
+                if (data.shared_contexts && data.shared_contexts.length > 0) {
+                    contextsContainer.style.display = 'block';
+                    tagsContainer.innerHTML = data.shared_contexts.map(ctx =>
+                        `<span class="edge-panel-context-tag">${escapeHtml(ctx)}</span>`
+                    ).join('');
+                } else {
+                    contextsContainer.style.display = 'none';
+                }
+
+                panel.classList.add('visible');
+            } catch (error) {
+                console.error('Failed to load edge details:', error);
+            }
+        }
+
+        // Close edge panel
+        function closeEdgePanel() {
+            document.getElementById('edgePanel').classList.remove('visible');
+            // Deselect edge
+            if (graphSvg) {
+                graphSvg.selectAll('.graph-link').classed('selected', false);
+            }
+            selectedEdgeKey = null;
+        }
+
+        // Navigate to person from edge panel
+        function navigateToEdgePerson(which) {
+            const personId = which === 'a' ? edgePanelData.personAId : edgePanelData.personBId;
+            if (personId) {
+                // Save current filter values
+                const slider = document.getElementById('edgeStrengthSlider');
+                const degreeSelect = document.getElementById('degreeFilter');
+                preservedEdgeStrength = slider ? parseInt(slider.value) : 0;
+                preservedDegreeFilter = degreeSelect ? degreeSelect.value : 'all';
+                preservedSourceFilter = getSelectedSources();
+
+                closeEdgePanel();
+                selectPerson(personId, true);
+            }
+        }
+
         // Toggle graph labels
         function toggleGraphLabels() {
             showLabelsEnabled = document.getElementById('showLabels').checked;
             if (graphSvg) {
-                graphSvg.selectAll('.graph-node text')
-                    .style('display', showLabelsEnabled ? 'block' : 'none');
+                if (!showLabelsEnabled) {
+                    // Hide all labels
+                    graphSvg.selectAll('.graph-node text')
+                        .style('display', 'none');
+                } else {
+                    // Re-apply zoom-based visibility
+                    graphSvg.selectAll('.graph-node text')
+                        .style('display', d => {
+                            if (d.degree === 0) return 'block';
+                            if (d.degree === 1 && currentZoomScale >= 0.5) return 'block';
+                            if (d.degree === 2 && currentZoomScale >= 1.2) return 'block';
+                            return 'none';
+                        });
+                }
             }
+        }
+
+        // Unified function to apply both filters together
+        function applyGraphFilters() {
+            if (!graphSvg || !graphWeightRange || !graphLinks || !graphNodes) return;
+
+            // Get current filter values
+            const slider = document.getElementById('edgeStrengthSlider');
+            const degreeSelect = document.getElementById('degreeFilter');
+            const thresholdPercent = slider ? parseInt(slider.value) : 15;
+            const showOnlyFirstDegree = degreeSelect ? (degreeSelect.value === 'first') : false;
+            const selectedSources = getSelectedSources();
+
+            // Calculate the weight threshold from the percentage
+            const threshold = graphWeightRange.min + (graphWeightRange.range * (thresholdPercent / 100));
+
+            // Get all elements
+            const linkElements = graphSvg.selectAll('.graph-link').nodes();
+            const linkHitElements = graphSvg.selectAll('.graph-link-hit').nodes();
+            const nodeElements = graphSvg.selectAll('.graph-node').nodes();
+
+            // Build node lookup by ID
+            const nodeById = {};
+            graphNodes.forEach(n => { nodeById[n.id] = n; });
+
+            // Step 1: Determine which first-degree nodes pass the edge strength and source filter
+            const visibleNodeIds = new Set();
+            visibleNodeIds.add(graphCenterId); // Center node always visible
+
+            // Track which edges pass the source filter
+            const edgePassesSourceFilter = new Map();
+
+            graphLinks.forEach((linkData, idx) => {
+                if (!linkData) return;
+
+                const sourceId = typeof linkData.source === 'object' ? linkData.source.id : linkData.source;
+                const targetId = typeof linkData.target === 'object' ? linkData.target.id : linkData.target;
+                const isFirstDegree = sourceId === graphCenterId || targetId === graphCenterId;
+
+                // Check if edge has signal from any selected source
+                const hasSelectedSource = edgeHasSelectedSource(linkData, selectedSources);
+                edgePassesSourceFilter.set(idx, hasSelectedSource);
+
+                // Calculate filtered weight for this edge
+                const filteredWeight = calculateFilteredWeight(linkData, selectedSources);
+
+                // First-degree edges with sufficient weight (from selected sources) make the OTHER node visible
+                if (isFirstDegree && hasSelectedSource && filteredWeight >= threshold) {
+                    visibleNodeIds.add(sourceId);
+                    visibleNodeIds.add(targetId);
+                }
+            });
+
+            // Step 2: If showing 2nd degree too, add second-degree nodes connected to visible first-degree
+            if (!showOnlyFirstDegree) {
+                const firstDegreeIds = new Set(visibleNodeIds);
+
+                graphLinks.forEach((linkData, idx) => {
+                    if (!linkData) return;
+                    if (!edgePassesSourceFilter.get(idx)) return; // Must pass source filter
+
+                    const sourceId = typeof linkData.source === 'object' ? linkData.source.id : linkData.source;
+                    const targetId = typeof linkData.target === 'object' ? linkData.target.id : linkData.target;
+                    const sourceNode = nodeById[sourceId];
+                    const targetNode = nodeById[targetId];
+
+                    // If one end is a visible first-degree node and other is second-degree, add the second-degree
+                    if (firstDegreeIds.has(sourceId) && targetNode && targetNode.degree === 2) {
+                        visibleNodeIds.add(targetId);
+                    }
+                    if (firstDegreeIds.has(targetId) && sourceNode && sourceNode.degree === 2) {
+                        visibleNodeIds.add(sourceId);
+                    }
+                });
+            }
+
+            // Step 3: Apply node visibility
+            nodeElements.forEach((el, i) => {
+                const nodeData = graphNodes[i];
+                if (!nodeData) return;
+
+                const isVisible = visibleNodeIds.has(nodeData.id);
+                el.style.display = isVisible ? 'block' : 'none';
+            });
+
+            // Step 4: Show edges only between visible nodes AND that pass source filter
+            linkElements.forEach((el, i) => {
+                const linkData = graphLinks[i];
+                if (!linkData) return;
+
+                const sourceId = typeof linkData.source === 'object' ? linkData.source.id : linkData.source;
+                const targetId = typeof linkData.target === 'object' ? linkData.target.id : linkData.target;
+                const bothVisible = visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId);
+                const passesSourceFilter = edgePassesSourceFilter.get(i);
+                const showEdge = bothVisible && passesSourceFilter;
+
+                el.style.display = showEdge ? 'block' : 'none';
+
+                // Also update hit area visibility
+                if (linkHitElements[i]) {
+                    linkHitElements[i].style.display = showEdge ? 'block' : 'none';
+                }
+            });
+        }
+
+        // Update edge visibility - wrapper that calls unified filter
+        function updateEdgeVisibility(thresholdPercent) {
+            document.getElementById('edgeStrengthValue').textContent = thresholdPercent + '%';
+            applyGraphFilters();
+        }
+
+        // Update degree filter - wrapper that calls unified filter
+        function updateDegreeFilter(value) {
+            applyGraphFilters();
         }
 
         // Helper to truncate name
@@ -3343,7 +4739,16 @@
 
             // Show/hide content
             document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
-            document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).style.display = 'block';
+            const tabContent = document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
+            tabContent.style.display = tabName === 'graph' ? 'flex' : 'block';
+
+            // Toggle graph mode (compact header)
+            const detailContent = document.getElementById('detailContent');
+            if (tabName === 'graph') {
+                detailContent.classList.add('graph-mode');
+            } else {
+                detailContent.classList.remove('graph-mode');
+            }
 
             // Load data if needed
             if (selectedPersonId) {
