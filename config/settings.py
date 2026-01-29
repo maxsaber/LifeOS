@@ -73,5 +73,12 @@ class Settings(BaseSettings):
         alias="SLACK_REDIRECT_URI"
     )
 
+    # CRM Owner (the user's person ID for relationship tracking)
+    my_person_id: str = Field(
+        default="3f41e143-719f-4dc9-a9f1-389b2db5b166",  # Nathan Ramia
+        alias="LIFEOS_MY_PERSON_ID",
+        description="Your PersonEntity ID for relationship tracking"
+    )
+
 
 settings = Settings()

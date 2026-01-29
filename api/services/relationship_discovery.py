@@ -77,11 +77,12 @@ def discover_from_calendar(
 
     cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
 
-    # Get all calendar interactions with source_id containing participant
+    # Get all calendar interactions with source_id containing participant AND timestamp
     query = """
         SELECT
             substr(source_id, 1, instr(source_id, ':') - 1) as event_id,
-            substr(source_id, instr(source_id, ':') + 1) as participant
+            substr(source_id, instr(source_id, ':') + 1) as participant,
+            timestamp
         FROM interactions
         WHERE source_type = 'calendar'
           AND source_id LIKE '%:%'
@@ -91,13 +92,19 @@ def discover_from_calendar(
     cursor = conn.execute(query, (cutoff.isoformat(),))
 
     # Group by event, resolving participants to person IDs
+    # Also track event timestamps
     event_attendees: dict[str, set[str]] = defaultdict(set)
+    event_timestamps: dict[str, str] = {}  # event_id -> timestamp
     for row in cursor:
         event_id = row['event_id']
         participant = row['participant']
+        timestamp = row['timestamp']
         person_id = resolve_participant(participant)
         if person_id:
             event_attendees[event_id].add(person_id)
+            # Keep the event timestamp (same for all participants)
+            if event_id not in event_timestamps:
+                event_timestamps[event_id] = timestamp
 
     conn.close()
 
@@ -105,7 +112,7 @@ def discover_from_calendar(
     event_attendees = {eid: list(pids) for eid, pids in event_attendees.items() if len(pids) >= 2}
     logger.info(f"Found {len(event_attendees)} calendar events with 2+ resolved attendees")
 
-    # Find pairs of people who share events
+    # Find pairs of people who share events, tracking dates
     pair_events: dict[tuple[str, str], list[str]] = defaultdict(list)
 
     for event_id, attendees in event_attendees.items():
@@ -114,8 +121,9 @@ def discover_from_calendar(
             continue
 
         # Create pairs from attendees
-        for i, person_a in enumerate(attendees):
-            for person_b in attendees[i + 1:]:
+        attendees_list = list(attendees)
+        for i, person_a in enumerate(attendees_list):
+            for person_b in attendees_list[i + 1:]:
                 # Normalize pair order
                 pair = (min(person_a, person_b), max(person_a, person_b))
                 pair_events[pair].append(event_id)
@@ -124,12 +132,32 @@ def discover_from_calendar(
     relationships = []
     for (person_a_id, person_b_id), events in pair_events.items():
         if len(events) >= min_shared_events:
+            # Get first and last event dates for this pair
+            event_dates = []
+            for event_id in events:
+                ts = event_timestamps.get(event_id)
+                if ts:
+                    try:
+                        dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                        event_dates.append(dt)
+                    except (ValueError, TypeError):
+                        pass
+
+            first_seen = min(event_dates) if event_dates else datetime.now(timezone.utc)
+            last_seen = max(event_dates) if event_dates else datetime.now(timezone.utc)
+
             existing = relationship_store.get_between(person_a_id, person_b_id)
 
             if existing:
                 # Update existing relationship
                 existing.shared_events_count = len(events)
-                existing.last_seen_together = datetime.now(timezone.utc)
+                # Extend date range if needed
+                if not existing.first_seen_together or first_seen < existing.first_seen_together:
+                    existing.first_seen_together = first_seen
+                if not existing.last_seen_together or last_seen > existing.last_seen_together:
+                    existing.last_seen_together = last_seen
+                if "calendar" not in existing.shared_contexts:
+                    existing.shared_contexts.append("calendar")
                 relationship_store.update(existing)
                 relationships.append(existing)
             else:
@@ -139,8 +167,8 @@ def discover_from_calendar(
                     person_b_id=person_b_id,
                     relationship_type=TYPE_COWORKER,
                     shared_events_count=len(events),
-                    first_seen_together=datetime.now(timezone.utc),
-                    last_seen_together=datetime.now(timezone.utc),
+                    first_seen_together=first_seen,
+                    last_seen_together=last_seen,
                     shared_contexts=["calendar"],
                 )
                 relationship_store.add(rel)
@@ -178,9 +206,9 @@ def discover_from_email_threads(
     cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
 
     # Group by email subject (title) to find shared threads
-    # This isn't perfect but catches most group emails
+    # Also track timestamps for date ranges
     query = """
-        SELECT title, person_id
+        SELECT title, person_id, timestamp
         FROM interactions
         WHERE source_type = 'gmail'
           AND timestamp >= ?
@@ -190,13 +218,17 @@ def discover_from_email_threads(
 
     cursor = conn.execute(query, (cutoff.isoformat(),))
 
-    # Build thread -> participants mapping
+    # Build thread -> participants mapping and track dates
     thread_participants: dict[str, set[str]] = defaultdict(set)
+    thread_dates: dict[str, list[str]] = defaultdict(list)
     for row in cursor:
         title = row['title']
         person_id = row['person_id']
+        timestamp = row['timestamp']
         if person_id:
             thread_participants[title].add(person_id)
+            if timestamp:
+                thread_dates[title].append(timestamp)
 
     conn.close()
 
@@ -217,11 +249,27 @@ def discover_from_email_threads(
     relationships = []
     for (person_a_id, person_b_id), threads in pair_threads.items():
         if len(threads) >= min_shared_threads:
+            # Get all dates from shared threads
+            all_dates = []
+            for thread_title in threads:
+                for ts in thread_dates.get(thread_title, []):
+                    try:
+                        dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+                        all_dates.append(dt)
+                    except (ValueError, TypeError):
+                        pass
+
+            first_seen = min(all_dates) if all_dates else datetime.now(timezone.utc)
+            last_seen = max(all_dates) if all_dates else datetime.now(timezone.utc)
+
             existing = relationship_store.get_between(person_a_id, person_b_id)
 
             if existing:
                 existing.shared_threads_count = len(threads)
-                existing.last_seen_together = datetime.now(timezone.utc)
+                if not existing.first_seen_together or first_seen < existing.first_seen_together:
+                    existing.first_seen_together = first_seen
+                if not existing.last_seen_together or last_seen > existing.last_seen_together:
+                    existing.last_seen_together = last_seen
                 if "gmail" not in existing.shared_contexts:
                     existing.shared_contexts.append("gmail")
                 relationship_store.update(existing)
@@ -232,8 +280,8 @@ def discover_from_email_threads(
                     person_b_id=person_b_id,
                     relationship_type=TYPE_INFERRED,
                     shared_threads_count=len(threads),
-                    first_seen_together=datetime.now(timezone.utc),
-                    last_seen_together=datetime.now(timezone.utc),
+                    first_seen_together=first_seen,
+                    last_seen_together=last_seen,
                     shared_contexts=["gmail"],
                 )
                 relationship_store.add(rel)
@@ -409,6 +457,284 @@ def discover_from_messaging_groups(
     return relationships
 
 
+def discover_from_imessage_direct(
+    days_back: int = DISCOVERY_WINDOW_DAYS,
+    min_messages: int = 1,
+) -> list[Relationship]:
+    """
+    Discover relationships from direct iMessage/SMS conversations with me.
+
+    Creates/updates relationships between ME and people I message directly.
+    The message count is the actual number of messages exchanged.
+
+    Args:
+        days_back: Days to look back
+        min_messages: Minimum messages to count
+
+    Returns:
+        List of updated relationships
+    """
+    import sqlite3
+    from config.settings import settings
+
+    my_person_id = settings.my_person_id
+    if not my_person_id:
+        logger.warning("MY_PERSON_ID not configured, skipping iMessage discovery")
+        return []
+
+    relationship_store = get_relationship_store()
+
+    db_path = get_interaction_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
+
+    # Count iMessage interactions per person AND get first/last dates
+    query = """
+        SELECT
+            person_id,
+            COUNT(*) as message_count,
+            MIN(timestamp) as first_message,
+            MAX(timestamp) as last_message
+        FROM interactions
+        WHERE source_type IN ('imessage', 'sms')
+          AND timestamp >= ?
+          AND person_id IS NOT NULL
+          AND person_id != ?
+        GROUP BY person_id
+        HAVING COUNT(*) >= ?
+    """
+
+    cursor = conn.execute(query, (cutoff.isoformat(), my_person_id, min_messages))
+
+    relationships = []
+    for row in cursor:
+        other_person_id = row['person_id']
+        message_count = row['message_count']
+        first_message = row['first_message']
+        last_message = row['last_message']
+
+        # Parse dates
+        first_seen = datetime.fromisoformat(first_message.replace('Z', '+00:00')) if first_message else datetime.now(timezone.utc)
+        last_seen = datetime.fromisoformat(last_message.replace('Z', '+00:00')) if last_message else datetime.now(timezone.utc)
+
+        # Normalize pair order (my_person_id vs other)
+        if my_person_id < other_person_id:
+            person_a_id, person_b_id = my_person_id, other_person_id
+        else:
+            person_a_id, person_b_id = other_person_id, my_person_id
+
+        existing = relationship_store.get_between(person_a_id, person_b_id)
+
+        if existing:
+            # Update existing relationship
+            existing.shared_messages_count = message_count
+            # Update dates only if they extend the range
+            if not existing.first_seen_together or first_seen < existing.first_seen_together:
+                existing.first_seen_together = first_seen
+            if not existing.last_seen_together or last_seen > existing.last_seen_together:
+                existing.last_seen_together = last_seen
+            if "imessage" not in existing.shared_contexts:
+                existing.shared_contexts.append("imessage")
+            relationship_store.update(existing)
+            relationships.append(existing)
+        else:
+            # Create new relationship
+            rel = Relationship(
+                person_a_id=person_a_id,
+                person_b_id=person_b_id,
+                relationship_type=TYPE_INFERRED,
+                shared_messages_count=message_count,
+                first_seen_together=first_seen,
+                last_seen_together=last_seen,
+                shared_contexts=["imessage"],
+            )
+            relationship_store.add(rel)
+            relationships.append(rel)
+
+    conn.close()
+
+    logger.info(f"Discovered/updated {len(relationships)} relationships from iMessage")
+    return relationships
+
+
+def discover_from_whatsapp_direct(
+    days_back: int = DISCOVERY_WINDOW_DAYS,
+    min_messages: int = 1,
+) -> list[Relationship]:
+    """
+    Discover relationships from direct WhatsApp conversations with me.
+
+    Creates/updates relationships between ME and people I message directly.
+
+    Args:
+        days_back: Days to look back
+        min_messages: Minimum messages to count
+
+    Returns:
+        List of updated relationships
+    """
+    import sqlite3
+    from config.settings import settings
+
+    my_person_id = settings.my_person_id
+    if not my_person_id:
+        logger.warning("MY_PERSON_ID not configured, skipping WhatsApp discovery")
+        return []
+
+    relationship_store = get_relationship_store()
+
+    db_path = get_interaction_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
+
+    # Count WhatsApp interactions per person (excluding groups) with dates
+    query = """
+        SELECT
+            person_id,
+            COUNT(*) as message_count,
+            MIN(timestamp) as first_message,
+            MAX(timestamp) as last_message
+        FROM interactions
+        WHERE source_type = 'whatsapp'
+          AND title NOT LIKE 'WhatsApp group:%'
+          AND timestamp >= ?
+          AND person_id IS NOT NULL
+          AND person_id != ?
+        GROUP BY person_id
+        HAVING COUNT(*) >= ?
+    """
+
+    cursor = conn.execute(query, (cutoff.isoformat(), my_person_id, min_messages))
+
+    relationships = []
+    for row in cursor:
+        other_person_id = row['person_id']
+        message_count = row['message_count']
+        first_message = row['first_message']
+        last_message = row['last_message']
+
+        # Parse dates
+        first_seen = datetime.fromisoformat(first_message.replace('Z', '+00:00')) if first_message else datetime.now(timezone.utc)
+        last_seen = datetime.fromisoformat(last_message.replace('Z', '+00:00')) if last_message else datetime.now(timezone.utc)
+
+        # Normalize pair order
+        if my_person_id < other_person_id:
+            person_a_id, person_b_id = my_person_id, other_person_id
+        else:
+            person_a_id, person_b_id = other_person_id, my_person_id
+
+        existing = relationship_store.get_between(person_a_id, person_b_id)
+
+        if existing:
+            existing.shared_whatsapp_count = message_count
+            if not existing.first_seen_together or first_seen < existing.first_seen_together:
+                existing.first_seen_together = first_seen
+            if not existing.last_seen_together or last_seen > existing.last_seen_together:
+                existing.last_seen_together = last_seen
+            if "whatsapp" not in existing.shared_contexts:
+                existing.shared_contexts.append("whatsapp")
+            relationship_store.update(existing)
+            relationships.append(existing)
+        else:
+            rel = Relationship(
+                person_a_id=person_a_id,
+                person_b_id=person_b_id,
+                relationship_type=TYPE_INFERRED,
+                shared_whatsapp_count=message_count,
+                first_seen_together=first_seen,
+                last_seen_together=last_seen,
+                shared_contexts=["whatsapp"],
+            )
+            relationship_store.add(rel)
+            relationships.append(rel)
+
+    conn.close()
+
+    logger.info(f"Discovered/updated {len(relationships)} relationships from WhatsApp")
+    return relationships
+
+
+def discover_linkedin_connections() -> list[Relationship]:
+    """
+    Mark relationships where the OTHER person is in my LinkedIn connections.
+
+    LinkedIn data is MY connection list, so is_linkedin_connection=True
+    means "I am connected to this person on LinkedIn".
+
+    Returns:
+        List of updated relationships
+    """
+    import sqlite3
+    from api.services.source_entity import get_crm_db_path
+    from config.settings import settings
+
+    my_person_id = settings.my_person_id
+    if not my_person_id:
+        logger.warning("MY_PERSON_ID not configured, skipping LinkedIn discovery")
+        return []
+
+    relationship_store = get_relationship_store()
+
+    # Query for all person IDs with LinkedIn source entities
+    # These are MY connections (from my LinkedIn export)
+    db_path = get_crm_db_path()
+    conn = sqlite3.connect(db_path)
+    cursor = conn.execute("""
+        SELECT DISTINCT canonical_person_id
+        FROM source_entities
+        WHERE source_type = 'linkedin'
+          AND canonical_person_id IS NOT NULL
+    """)
+
+    linkedin_connections: set[str] = {row[0] for row in cursor.fetchall()}
+    conn.close()
+
+    logger.info(f"Found {len(linkedin_connections)} LinkedIn connections")
+
+    # Create/update relationships between ME and my LinkedIn connections
+    relationships = []
+
+    for other_person_id in linkedin_connections:
+        if other_person_id == my_person_id:
+            continue  # Skip self
+
+        # Normalize pair order
+        if my_person_id < other_person_id:
+            person_a_id, person_b_id = my_person_id, other_person_id
+        else:
+            person_a_id, person_b_id = other_person_id, my_person_id
+
+        existing = relationship_store.get_between(person_a_id, person_b_id)
+
+        if existing:
+            if not existing.is_linkedin_connection:
+                existing.is_linkedin_connection = True
+                if "linkedin" not in existing.shared_contexts:
+                    existing.shared_contexts.append("linkedin")
+                relationship_store.update(existing)
+                relationships.append(existing)
+        else:
+            # Create new relationship
+            rel = Relationship(
+                person_a_id=person_a_id,
+                person_b_id=person_b_id,
+                relationship_type=TYPE_INFERRED,
+                is_linkedin_connection=True,
+                first_seen_together=datetime.now(timezone.utc),
+                last_seen_together=datetime.now(timezone.utc),
+                shared_contexts=["linkedin"],
+            )
+            relationship_store.add(rel)
+            relationships.append(rel)
+
+    logger.info(f"Updated {len(relationships)} relationships with LinkedIn flag")
+    return relationships
+
+
 def run_full_discovery(days_back: int = DISCOVERY_WINDOW_DAYS) -> dict:
     """
     Run all discovery methods and return statistics.
@@ -423,11 +749,14 @@ def run_full_discovery(days_back: int = DISCOVERY_WINDOW_DAYS) -> dict:
         "calendar": len(discover_from_calendar(days_back)),
         "email": len(discover_from_email_threads(days_back)),
         "vault": len(discover_from_vault_comments(days_back)),
-        "messaging": len(discover_from_messaging_groups(days_back)),
+        "messaging_groups": len(discover_from_messaging_groups(days_back)),
+        "imessage_direct": len(discover_from_imessage_direct(days_back)),
+        "whatsapp_direct": len(discover_from_whatsapp_direct(days_back)),
+        "linkedin": len(discover_linkedin_connections()),
     }
 
     total = sum(results.values())
-    logger.info(f"Full discovery complete: {total} relationships found")
+    logger.info(f"Full discovery complete: {total} relationships updated")
 
     return {
         "by_source": results,
