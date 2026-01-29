@@ -2698,10 +2698,66 @@
             return response.json();
         }
 
+        // ===============================
+        // URL Routing
+        // ===============================
+
+        // Parse URL to get person ID and tab
+        function parseUrl() {
+            const path = window.location.pathname;
+            const match = path.match(/^\/crm(?:\/([^\/]+))?(?:\/([^\/]+))?/);
+            if (!match) return { personId: null, tab: null };
+            return {
+                personId: match[1] || null,
+                tab: match[2] || null
+            };
+        }
+
+        // Update URL without reloading page
+        function updateUrl(personId, tab, replace = false) {
+            let path = '/crm';
+            if (personId) {
+                path += '/' + personId;
+                if (tab && tab !== 'overview') {
+                    path += '/' + tab;
+                }
+            }
+            const method = replace ? 'replaceState' : 'pushState';
+            history[method]({ personId, tab }, '', path);
+        }
+
+        // Handle browser back/forward navigation
+        window.addEventListener('popstate', async (event) => {
+            const { personId, tab } = parseUrl();
+            if (personId) {
+                selectedPersonId = personId;
+                renderPeopleList();
+                await loadPersonDetail(personId, false);
+                if (tab) {
+                    await switchTab(tab, true); // true = don't update URL
+                }
+            } else {
+                // No person selected - show empty state
+                selectedPersonId = null;
+                renderPeopleList();
+                document.getElementById('detailEmpty').style.display = 'flex';
+                document.getElementById('detailContent').style.display = 'none';
+            }
+        });
+
         // Initialize
         async function init() {
             await loadPeople();
             await loadStatistics();
+
+            // Restore state from URL
+            const { personId, tab } = parseUrl();
+            if (personId) {
+                await selectPerson(personId, false, true); // true = don't push to history
+                if (tab) {
+                    await switchTab(tab, true); // true = don't update URL
+                }
+            }
         }
 
         // Load people list
@@ -3124,10 +3180,16 @@
         // ===============================
 
         // Select a person
-        async function selectPerson(personId, stayOnCurrentTab = false) {
+        async function selectPerson(personId, stayOnCurrentTab = false, skipUrlUpdate = false) {
             selectedPersonId = personId;
             renderPeopleList();
             await loadPersonDetail(personId, stayOnCurrentTab);
+
+            // Update URL (unless called from popstate or initial load)
+            if (!skipUrlUpdate) {
+                const currentTab = document.querySelector('.tab.active')?.dataset.tab || 'overview';
+                updateUrl(personId, currentTab);
+            }
         }
 
         // Load person detail
@@ -3973,6 +4035,7 @@
         let graphContainer = null;    // Stores container element for rebuilding
         let showLabelsEnabled = true;
         let currentZoomScale = 1;
+        let isRenderingGraph = false; // Guard against infinite render loops
 
         // Preserved filter state (for node-to-node navigation)
         let preservedEdgeStrength = null;
@@ -4152,6 +4215,12 @@
 
         // Render D3 force-directed graph with degree-based styling
         function renderGraph(container, nodes, links, centerId) {
+            // Stop any existing simulation to prevent memory leaks
+            if (graphSimulation) {
+                graphSimulation.stop();
+                graphSimulation = null;
+            }
+
             container.innerHTML = '';
 
             const width = container.clientWidth;
@@ -4634,6 +4703,10 @@
         function applyGraphFilters() {
             if (!graphNodesAll || !graphLinksAll || !graphContainer) return;
 
+            // Prevent infinite loops from slider events during render
+            if (isRenderingGraph) return;
+            isRenderingGraph = true;
+
             // Get current filter values
             const slider = document.getElementById('edgeStrengthSlider');
             const degreeSelect = document.getElementById('degreeFilter');
@@ -4722,14 +4795,20 @@
 
             // Check if we have anything to show
             if (filteredNodes.length <= 1) {
+                // Stop any existing simulation before clearing
+                if (graphSimulation) {
+                    graphSimulation.stop();
+                }
                 graphContainer.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔗</div><p>No connections match current filters</p></div>';
                 graphSvg = null;
                 graphSimulation = null;
+                isRenderingGraph = false;
                 return;
             }
 
             // Rebuild the graph with only filtered data
             renderGraph(graphContainer, filteredNodes, filteredLinks, graphCenterId);
+            isRenderingGraph = false;
         }
 
         // Update edge visibility - wrapper that calls unified filter
@@ -4751,7 +4830,7 @@
         }
 
         // Switch tab
-        async function switchTab(tabName) {
+        async function switchTab(tabName, skipUrlUpdate = false) {
             // Update tab UI
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
@@ -4775,6 +4854,11 @@
                     await loadTimeline(selectedPersonId);
                 } else if (tabName === 'graph') {
                     await loadGraph(selectedPersonId);
+                }
+
+                // Update URL (unless called from popstate or initial load)
+                if (!skipUrlUpdate) {
+                    updateUrl(selectedPersonId, tabName);
                 }
             }
         }

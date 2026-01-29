@@ -567,9 +567,27 @@ async def root():
     return {"message": "LifeOS API", "version": "0.3.0"}
 
 
+@app.get("/chat")
+async def chat_page():
+    """Serve the chat UI (alias for root)."""
+    index_path = Path(__file__).parent.parent / "web" / "index.html"
+    if index_path.exists():
+        return FileResponse(str(index_path))
+    return {"message": "Chat page not found"}
+
+
 @app.get("/crm")
 async def crm_page():
     """Serve the CRM UI."""
+    crm_path = Path(__file__).parent.parent / "web" / "crm.html"
+    if crm_path.exists():
+        return FileResponse(str(crm_path))
+    return {"message": "CRM page not found"}
+
+
+@app.get("/crm/{path:path}")
+async def crm_page_with_path(path: str):
+    """Serve the CRM UI for any sub-path (client-side routing)."""
     crm_path = Path(__file__).parent.parent / "web" / "crm.html"
     if crm_path.exists():
         return FileResponse(str(crm_path))
