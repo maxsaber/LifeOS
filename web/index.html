@@ -1590,6 +1590,54 @@
             color: var(--text-muted);
         }
 
+        .crm-timeline-filters {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .crm-timeline-filter-btn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 0.375rem 0.75rem;
+            border-radius: 1rem;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .crm-timeline-filter-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .crm-timeline-filter-btn.active {
+            background: var(--crm-accent);
+            border-color: var(--crm-accent);
+            color: white;
+        }
+
+        .crm-timeline-load-more {
+            width: 100%;
+            padding: 0.75rem;
+            margin-top: 0.5rem;
+            background: var(--bg-secondary);
+            border: 1px dashed var(--border);
+            color: var(--text-secondary);
+            font-size: 0.8125rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .crm-timeline-load-more:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border-color: var(--crm-accent);
+        }
+
         .crm-timeline-day {
             margin-bottom: 1rem;
             background: var(--bg-secondary);
@@ -3985,8 +4033,21 @@
             document.getElementById('crmNetworkTab').style.display = tab === 'network' ? 'flex' : 'none';
 
             // Initialize network graph when switching to network tab
-            if (tab === 'network' && !networkInitialized) {
-                initNetworkGraph();
+            if (tab === 'network') {
+                if (!networkInitialized) {
+                    // Use setTimeout to ensure container is visible before getting dimensions
+                    setTimeout(() => initNetworkGraph(), 50);
+                } else {
+                    // Re-render with correct dimensions if already initialized
+                    setTimeout(() => {
+                        const container = document.getElementById('networkGraph');
+                        const rect = container.getBoundingClientRect();
+                        if (rect.width > 0 && rect.height > 0 && networkSvg) {
+                            networkSvg.attr('viewBox', [0, 0, rect.width, rect.height]);
+                            renderNetwork();
+                        }
+                    }, 50);
+                }
             }
         }
 
@@ -4009,14 +4070,18 @@
 
         async function initNetworkGraph() {
             const container = document.getElementById('networkGraph');
-            const rect = container.getBoundingClientRect();
+            let rect = container.getBoundingClientRect();
+
+            // If container is hidden, use fallback dimensions (will be updated on render)
+            const width = rect.width || 800;
+            const height = rect.height || 600;
 
             // Create SVG
             networkSvg = d3.select('#networkGraph')
                 .append('svg')
                 .attr('width', '100%')
                 .attr('height', '100%')
-                .attr('viewBox', [0, 0, rect.width, rect.height]);
+                .attr('viewBox', [0, 0, width, height]);
 
             // Add zoom behavior
             const zoom = d3.zoom()
@@ -4294,6 +4359,9 @@
             people: [],
             selectedPersonId: null,
             searchQuery: '',
+            timelineFilter: null, // null = all, or 'gmail', 'calendar', 'imessage', etc.
+            timelineDaysShown: 30, // Number of days currently shown
+            timelineData: null, // Cached timeline data for load more
             sortBy: 'interactions',
             showAll: false,
             reviewQueue: [],
@@ -4507,15 +4575,24 @@
         }
 
         // Load and render aggregated timeline for a person
-        async function loadPersonTimeline(personId) {
+        async function loadPersonTimeline(personId, sourceTypeFilter = null) {
             const container = document.getElementById('personTimeline');
             if (!container) return;
 
+            // Reset days shown when loading fresh
+            crmState.timelineDaysShown = 30;
+            crmState.timelineFilter = sourceTypeFilter;
+
             try {
-                const response = await fetch(`/api/crm/people/${personId}/timeline/aggregated?days_back=365&include_items=true&max_items_per_group=10`);
+                let url = `/api/crm/people/${personId}/timeline/aggregated?days_back=365&include_items=true&max_items_per_group=10`;
+                if (sourceTypeFilter) {
+                    url += `&source_type=${sourceTypeFilter}`;
+                }
+                const response = await fetch(url);
                 if (!response.ok) throw new Error('Failed to load timeline');
 
                 const data = await response.json();
+                crmState.timelineData = data; // Store for "load more"
                 renderPersonTimeline(container, data);
             } catch (error) {
                 console.error('Error loading timeline:', error);
@@ -4525,6 +4602,23 @@
                     </div>
                     <div class="crm-timeline-loading">Failed to load timeline</div>
                 `;
+            }
+        }
+
+        // Filter timeline by source type
+        function filterTimeline(sourceType) {
+            crmState.timelineFilter = sourceType;
+            if (crmState.selectedPersonId) {
+                loadPersonTimeline(crmState.selectedPersonId, sourceType);
+            }
+        }
+
+        // Load more timeline days
+        function loadMoreTimelineDays() {
+            crmState.timelineDaysShown += 30;
+            const container = document.getElementById('personTimeline');
+            if (container && crmState.timelineData) {
+                renderPersonTimeline(container, crmState.timelineData);
             }
         }
 
@@ -4561,15 +4655,48 @@
                 dateRangeText = `${data.date_range_start} to ${data.date_range_end}`;
             }
 
+            // Collect unique source types for filter buttons
+            const sourceTypes = new Set();
+            for (const day of data.days) {
+                for (const group of day.groups) {
+                    sourceTypes.add(group.source_type);
+                }
+            }
+
+            // Build filter buttons HTML
+            const activeFilter = crmState.timelineFilter;
+            let filterButtonsHtml = `
+                <button class="crm-timeline-filter-btn ${!activeFilter ? 'active' : ''}" onclick="filterTimeline(null)">All</button>
+            `;
+            const filterLabels = {
+                gmail: '📧 Email',
+                calendar: '📅 Calendar',
+                vault: '📝 Notes',
+                granola: '📝 Notes',
+                imessage: '💬 iMessage',
+                whatsapp: '💬 WhatsApp',
+                contacts: '📇 Contacts',
+                phone: '📞 Phone'
+            };
+            for (const type of sourceTypes) {
+                const label = filterLabels[type] || type;
+                filterButtonsHtml += `
+                    <button class="crm-timeline-filter-btn ${activeFilter === type ? 'active' : ''}" onclick="filterTimeline('${type}')">${label}</button>
+                `;
+            }
+
             let html = `
                 <div class="crm-timeline-header">
                     <h3>Timeline</h3>
                     <span class="crm-timeline-meta">${data.total_interactions.toLocaleString()} interactions</span>
                 </div>
+                <div class="crm-timeline-filters">
+                    ${filterButtonsHtml}
+                </div>
             `;
 
-            // Only show first 30 days to avoid performance issues
-            const daysToShow = data.days.slice(0, 30);
+            // Show days based on current limit
+            const daysToShow = data.days.slice(0, crmState.timelineDaysShown);
 
             for (const day of daysToShow) {
                 html += `
@@ -4621,12 +4748,13 @@
                 `;
             }
 
-            // Show "more days" message if there are more
-            if (data.days.length > 30) {
+            // Show "Load More" button if there are more days
+            if (data.days.length > crmState.timelineDaysShown) {
+                const remainingDays = data.days.length - crmState.timelineDaysShown;
                 html += `
-                    <div class="crm-timeline-loading" style="padding: 1rem;">
-                        ... and ${data.days.length - 30} more days
-                    </div>
+                    <button class="crm-timeline-load-more" onclick="loadMoreTimelineDays()">
+                        Load ${Math.min(30, remainingDays)} more days (${remainingDays} remaining)
+                    </button>
                 `;
             }
 
