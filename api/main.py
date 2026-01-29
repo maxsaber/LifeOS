@@ -30,7 +30,7 @@ from fastapi.exceptions import RequestValidationError
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from api.routes import search, ask, calendar, gmail, drive, people, chat, briefings, admin, conversations, memories, imessage
+from api.routes import search, ask, calendar, gmail, drive, people, chat, briefings, admin, conversations, memories, imessage, crm
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -283,6 +283,7 @@ app.include_router(admin.router)
 app.include_router(conversations.router)
 app.include_router(memories.router)
 app.include_router(imessage.router)
+app.include_router(crm.router)
 
 # Serve static files
 web_dir = Path(__file__).parent.parent / "web"
@@ -542,3 +543,12 @@ async def root():
     if index_path.exists():
         return FileResponse(str(index_path))
     return {"message": "LifeOS API", "version": "0.3.0"}
+
+
+@app.get("/crm")
+async def crm_page():
+    """Serve the CRM UI."""
+    crm_path = Path(__file__).parent.parent / "web" / "crm.html"
+    if crm_path.exists():
+        return FileResponse(str(crm_path))
+    return {"message": "CRM page not found"}

@@ -107,6 +107,10 @@ class Interaction:
             "calendar": "📅",
             "vault": "📝",
             "granola": "📝",
+            "imessage": "💬",
+            "whatsapp": "💬",
+            "contacts": "📇",
+            "phone": "📞",
         }
         return badges.get(self.source_type, "📄")
 

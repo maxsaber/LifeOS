@@ -65,5 +65,13 @@ class Settings(BaseSettings):
         description="Email address for sync failure alerts"
     )
 
+    # Slack Integration
+    slack_client_id: str = Field(default="", alias="SLACK_CLIENT_ID")
+    slack_client_secret: str = Field(default="", alias="SLACK_CLIENT_SECRET")
+    slack_redirect_uri: str = Field(
+        default="http://localhost:8000/api/crm/slack/callback",
+        alias="SLACK_REDIRECT_URI"
+    )
+
 
 settings = Settings()

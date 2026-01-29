@@ -8,6 +8,7 @@
     <title>LifeOS</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
     <style>
         :root {
             --bg-primary: #1a1a2e;
@@ -1354,6 +1355,926 @@
         .conversation-search-input::placeholder {
             color: var(--text-muted);
         }
+
+        /* CRM Page Styles */
+        :root {
+            --crm-accent: #00bcd4;
+            --crm-sidebar-width: 320px;
+            --crm-right-panel-width: 360px;
+        }
+
+        .page {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+
+        .page.active {
+            display: flex;
+        }
+
+        /* CRM Layout */
+        .crm-container {
+            display: flex;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-primary);
+        }
+
+        .crm-sidebar {
+            width: var(--crm-sidebar-width);
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .crm-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .crm-header-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .crm-header h2 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .crm-stats-badge {
+            background: var(--crm-accent);
+            color: white;
+            padding: 0.25rem 0.5rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .crm-search {
+            position: relative;
+        }
+
+        .crm-search-input {
+            width: 100%;
+            padding: 0.625rem 0.75rem 0.625rem 2rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            font-family: inherit;
+        }
+
+        .crm-search-input:focus {
+            outline: none;
+            border-color: var(--crm-accent);
+        }
+
+        .crm-search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .crm-search-icon {
+            position: absolute;
+            left: 0.625rem;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--text-muted);
+            pointer-events: none;
+        }
+
+        .crm-filters {
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .crm-people-list {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .crm-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-primary);
+            overflow: hidden;
+        }
+
+        .crm-detail-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-secondary);
+        }
+
+        .crm-detail-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+
+        .crm-right-panel {
+            width: var(--crm-right-panel-width);
+            background: var(--bg-secondary);
+            border-left: 1px solid var(--border);
+            display: none;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .crm-right-panel.visible {
+            display: flex;
+        }
+
+        .crm-panel-header {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .crm-panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        /* CRM Responsive */
+        @media (max-width: 1024px) {
+            .crm-right-panel {
+                position: absolute;
+                right: 0;
+                top: 0;
+                height: 100%;
+                z-index: 100;
+                box-shadow: -2px 0 8px rgba(0, 0, 0, 0.2);
+            }
+        }
+
+        @media (max-width: 768px) {
+            .crm-sidebar {
+                position: absolute;
+                left: 0;
+                top: 0;
+                height: 100%;
+                z-index: 99;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+                box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+            }
+
+            .crm-sidebar.visible {
+                transform: translateX(0);
+            }
+
+            .crm-main {
+                width: 100%;
+            }
+        }
+
+        /* CRM Empty State */
+        .crm-empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            color: var(--text-muted);
+            padding: 2rem;
+        }
+
+        .crm-empty-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .crm-empty-state h3 {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .crm-empty-state p {
+            font-size: 0.875rem;
+        }
+
+        /* CRM Timeline */
+        .crm-timeline {
+            margin-top: 1.5rem;
+        }
+
+        .crm-timeline-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+        }
+
+        .crm-timeline-header h3 {
+            font-size: 0.875rem;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        .crm-timeline-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .crm-timeline-day {
+            margin-bottom: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .crm-timeline-date {
+            padding: 0.75rem 1rem;
+            font-size: 0.8125rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .crm-timeline-date-count {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-weight: normal;
+        }
+
+        .crm-timeline-groups {
+            padding: 0.5rem;
+        }
+
+        .crm-timeline-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.625rem 0.75rem;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .crm-timeline-group:hover {
+            background: var(--bg-primary);
+        }
+
+        .crm-timeline-group-badge {
+            font-size: 1.25rem;
+            width: 2rem;
+            text-align: center;
+        }
+
+        .crm-timeline-group-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .crm-timeline-group-title {
+            font-size: 0.8125rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .crm-timeline-group-count {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            background: var(--bg-primary);
+            padding: 0.125rem 0.5rem;
+            border-radius: 999px;
+        }
+
+        .crm-timeline-group-preview {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-top: 0.25rem;
+        }
+
+        .crm-timeline-group-expand {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            transition: transform 0.2s;
+        }
+
+        .crm-timeline-group.expanded .crm-timeline-group-expand {
+            transform: rotate(180deg);
+        }
+
+        .crm-timeline-items {
+            display: none;
+            padding: 0.5rem 0.75rem 0.75rem 3rem;
+        }
+
+        .crm-timeline-group.expanded .crm-timeline-items {
+            display: block;
+        }
+
+        .crm-timeline-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            padding: 0.5rem 0;
+            border-top: 1px solid var(--border);
+            font-size: 0.8125rem;
+        }
+
+        .crm-timeline-item:first-child {
+            border-top: none;
+        }
+
+        .crm-timeline-item-title {
+            color: var(--text-primary);
+            flex: 1;
+        }
+
+        .crm-timeline-item-title a {
+            color: var(--crm-accent);
+            text-decoration: none;
+        }
+
+        .crm-timeline-item-title a:hover {
+            text-decoration: underline;
+        }
+
+        .crm-timeline-item-snippet {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+
+        .crm-timeline-loading {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        /* CRM Filter Controls */
+        .crm-filter-row {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .crm-sort-select {
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.8125rem;
+            font-family: inherit;
+            cursor: pointer;
+            flex: 1;
+            min-width: 120px;
+        }
+
+        .crm-sort-select:focus {
+            outline: none;
+            border-color: var(--crm-accent);
+        }
+
+        .crm-filter-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 0.8125rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+
+        .crm-filter-toggle:hover {
+            border-color: var(--crm-accent);
+            color: var(--text-primary);
+        }
+
+        .crm-filter-toggle.active {
+            background: var(--crm-accent);
+            border-color: var(--crm-accent);
+            color: white;
+        }
+
+        .crm-filter-toggle input {
+            display: none;
+        }
+
+        /* CRM Person Card */
+        .crm-person-card {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .crm-person-card:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .crm-person-card.active {
+            background: var(--bg-tertiary);
+            border-left: 3px solid var(--crm-accent);
+        }
+
+        .crm-person-avatar {
+            width: 40px;
+            height: 40px;
+            background: var(--bg-primary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            color: var(--crm-accent);
+            flex-shrink: 0;
+        }
+
+        .crm-person-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .crm-person-name {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .crm-person-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .crm-person-stats {
+            display: flex;
+            gap: 0.5rem;
+            font-size: 0.6875rem;
+            color: var(--text-muted);
+        }
+
+        .crm-person-stat {
+            display: flex;
+            align-items: center;
+            gap: 0.125rem;
+        }
+
+        /* Review Queue Button */
+        .crm-review-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 0.8125rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .crm-review-btn:hover {
+            border-color: var(--crm-accent);
+            color: var(--text-primary);
+        }
+
+        .crm-review-badge {
+            background: var(--warning);
+            color: white;
+            padding: 0.125rem 0.375rem;
+            border-radius: 10px;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        .crm-review-badge.empty {
+            display: none;
+        }
+
+        /* Review Queue Modal */
+        .review-modal {
+            max-width: 550px;
+        }
+
+        .review-progress {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 0;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1rem;
+        }
+
+        .review-progress-bar {
+            flex: 1;
+            height: 4px;
+            background: var(--bg-primary);
+            border-radius: 2px;
+            margin: 0 1rem;
+            overflow: hidden;
+        }
+
+        .review-progress-fill {
+            height: 100%;
+            background: var(--crm-accent);
+            transition: width 0.3s ease;
+        }
+
+        .review-item {
+            background: var(--bg-primary);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .review-source-info {
+            margin-bottom: 1rem;
+        }
+
+        .review-source-label {
+            font-size: 0.6875rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 0.25rem;
+        }
+
+        .review-source-name {
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .review-source-details {
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+        }
+
+        .review-source-type {
+            display: inline-block;
+            padding: 0.125rem 0.5rem;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            font-size: 0.6875rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+        }
+
+        .review-arrow {
+            text-align: center;
+            padding: 0.5rem 0;
+            color: var(--text-muted);
+            font-size: 1.25rem;
+        }
+
+        .review-match {
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            padding: 1rem;
+            border: 1px solid var(--border);
+        }
+
+        .review-match-label {
+            font-size: 0.6875rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 0.25rem;
+        }
+
+        .review-match-name {
+            font-size: 1rem;
+            font-weight: 500;
+            color: var(--crm-accent);
+        }
+
+        .review-confidence {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .review-confidence-bar {
+            flex: 1;
+            height: 6px;
+            background: var(--bg-primary);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .review-confidence-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .review-confidence-fill.low {
+            background: var(--error);
+        }
+
+        .review-confidence-fill.medium {
+            background: var(--warning);
+        }
+
+        .review-confidence-fill.high {
+            background: var(--success);
+        }
+
+        .review-confidence-text {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            min-width: 40px;
+        }
+
+        .review-actions {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .review-btn {
+            flex: 1;
+            padding: 0.75rem;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.375rem;
+        }
+
+        .review-btn-confirm {
+            background: var(--success);
+            border: none;
+            color: white;
+        }
+
+        .review-btn-confirm:hover {
+            filter: brightness(1.1);
+        }
+
+        .review-btn-reject {
+            background: transparent;
+            border: 1px solid var(--error);
+            color: var(--error);
+        }
+
+        .review-btn-reject:hover {
+            background: var(--error);
+            color: white;
+        }
+
+        .review-empty {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-muted);
+        }
+
+        .review-empty-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* CRM Loading State */
+        .crm-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--text-muted);
+        }
+
+        /* CRM Tabs */
+        .crm-tabs {
+            display: flex;
+            gap: 0;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-secondary);
+        }
+
+        .crm-tab {
+            padding: 0.75rem 1.25rem;
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .crm-tab:hover {
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+        }
+
+        .crm-tab.active {
+            color: var(--crm-accent);
+            border-bottom-color: var(--crm-accent);
+        }
+
+        /* Network Graph Container */
+        .network-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .network-controls {
+            display: flex;
+            gap: 1rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .network-control-group {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .network-control-label {
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+        }
+
+        .network-slider {
+            width: 120px;
+            height: 4px;
+            background: var(--bg-tertiary);
+            border-radius: 2px;
+            -webkit-appearance: none;
+            appearance: none;
+        }
+
+        .network-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--crm-accent);
+            cursor: pointer;
+        }
+
+        .network-slider::-moz-range-thumb {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--crm-accent);
+            cursor: pointer;
+            border: none;
+        }
+
+        .network-checkbox-group {
+            display: flex;
+            gap: 0.75rem;
+        }
+
+        .network-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .network-checkbox input {
+            width: 14px;
+            height: 14px;
+            accent-color: var(--crm-accent);
+        }
+
+        .network-reset-btn {
+            padding: 0.5rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.8125rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .network-reset-btn:hover {
+            border-color: var(--crm-accent);
+            background: var(--bg-primary);
+        }
+
+        .network-graph {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            background: var(--bg-primary);
+        }
+
+        .network-graph svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .network-node {
+            cursor: pointer;
+        }
+
+        .network-node:hover circle {
+            stroke: white;
+            stroke-width: 2px;
+        }
+
+        .network-node.selected circle {
+            stroke: var(--crm-accent);
+            stroke-width: 3px;
+        }
+
+        .network-node-label {
+            font-size: 10px;
+            fill: var(--text-primary);
+            text-anchor: middle;
+            pointer-events: none;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+        }
+
+        .network-link {
+            stroke: var(--border);
+            stroke-opacity: 0.6;
+        }
+
+        .network-tooltip {
+            position: absolute;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.8125rem;
+            color: var(--text-primary);
+            pointer-events: none;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .network-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: var(--text-muted);
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .network-empty-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
     </style>
 </head>
 <body>
@@ -1374,14 +2295,18 @@
         </div>
     </aside>
 
-    <!-- Main content -->
-    <div class="main">
+    <!-- Chat Page -->
+    <div id="chatPage" class="page active">
+        <div class="main">
         <header class="header">
             <div class="header-left">
                 <button class="menu-btn" id="menuBtn" onclick="toggleSidebar()">☰</button>
                 <span class="chat-title" id="chatTitle">New conversation</span>
             </div>
             <div class="header-right">
+                <a href="#/crm" class="remember-btn" style="text-decoration:none" title="People CRM" onclick="navigateToPage('crm'); return false;">
+                    <span>👥</span> CRM
+                </a>
                 <button class="remember-btn" onclick="openRememberModal()" title="Remember something">
                     <span>💭</span> Remember
                 </button>
@@ -1431,6 +2356,123 @@
                 <button class="send-btn" id="sendBtn" onclick="sendMessage()" title="Send message">➤</button>
             </div>
         </footer>
+        </div>
+    </div>
+
+    <!-- CRM Page -->
+    <div id="crmPage" class="page">
+        <div class="crm-container">
+            <!-- Left Sidebar: Filters + People List -->
+            <div class="crm-sidebar" id="crmSidebar">
+                <div class="crm-header">
+                    <div class="crm-header-top">
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <a href="#/" onclick="navigateToPage('chat'); return false;" style="color: var(--crm-accent); text-decoration: none; font-size: 1.25rem;" title="Back to chat">←</a>
+                            <h2>People</h2>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <button class="crm-review-btn" id="crmReviewBtn" onclick="openReviewQueueModal()" title="Review low-confidence matches">
+                                Review
+                                <span class="crm-review-badge" id="crmReviewBadge">0</span>
+                            </button>
+                            <span class="crm-stats-badge" id="crmStatsBadge">0</span>
+                        </div>
+                    </div>
+                    <div class="crm-search">
+                        <span class="crm-search-icon">🔍</span>
+                        <input
+                            type="text"
+                            class="crm-search-input"
+                            id="crmSearchInput"
+                            placeholder="Search people..."
+                            oninput="handleCrmSearch()"
+                        >
+                    </div>
+                </div>
+                <div class="crm-filters" id="crmFilters">
+                    <div class="crm-filter-row">
+                        <select class="crm-sort-select" id="crmSortSelect" onchange="handleCrmSortChange()">
+                            <option value="interactions">Most Active</option>
+                            <option value="name">Name A-Z</option>
+                            <option value="strength">Strongest</option>
+                            <option value="last_seen">Recent</option>
+                        </select>
+                        <label class="crm-filter-toggle" id="crmShowAllToggle">
+                            <input type="checkbox" id="crmShowAllCheckbox" onchange="handleCrmShowAllChange()">
+                            <span>Show all</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="crm-people-list" id="crmPeopleList">
+                    <div class="crm-loading">Loading people...</div>
+                </div>
+            </div>
+
+            <!-- Center Panel: Person Detail or Dashboard -->
+            <div class="crm-main" id="crmMain">
+                <!-- Tabs -->
+                <div class="crm-tabs">
+                    <button class="crm-tab active" data-tab="people" onclick="switchCrmTab('people')">People</button>
+                    <button class="crm-tab" data-tab="network" onclick="switchCrmTab('network')">Network</button>
+                </div>
+
+                <!-- People Tab Content -->
+                <div class="crm-tab-content" id="crmPeopleTab" style="flex: 1; display: flex; flex-direction: column;">
+                    <div class="crm-empty-state">
+                        <div class="crm-empty-icon">👥</div>
+                        <h3>Welcome to People CRM</h3>
+                        <p>Select a person from the list to view their details</p>
+                    </div>
+                </div>
+
+                <!-- Network Tab Content -->
+                <div class="crm-tab-content network-container" id="crmNetworkTab" style="display: none;">
+                    <div class="network-controls">
+                        <div class="network-control-group">
+                            <span class="network-control-label">Min Strength:</span>
+                            <input type="range" class="network-slider" id="networkStrengthSlider"
+                                   min="0" max="100" value="0" oninput="updateNetworkFilters()">
+                            <span id="networkStrengthValue">0%</span>
+                        </div>
+                        <div class="network-control-group">
+                            <span class="network-control-label">Categories:</span>
+                            <div class="network-checkbox-group">
+                                <label class="network-checkbox">
+                                    <input type="checkbox" id="networkCatWork" checked onchange="updateNetworkFilters()">
+                                    Work
+                                </label>
+                                <label class="network-checkbox">
+                                    <input type="checkbox" id="networkCatPersonal" checked onchange="updateNetworkFilters()">
+                                    Personal
+                                </label>
+                                <label class="network-checkbox">
+                                    <input type="checkbox" id="networkCatFamily" checked onchange="updateNetworkFilters()">
+                                    Family
+                                </label>
+                                <label class="network-checkbox">
+                                    <input type="checkbox" id="networkCatUnknown" checked onchange="updateNetworkFilters()">
+                                    Unknown
+                                </label>
+                            </div>
+                        </div>
+                        <button class="network-reset-btn" onclick="resetNetworkView()">Reset View</button>
+                    </div>
+                    <div class="network-graph" id="networkGraph">
+                        <!-- D3.js SVG will be inserted here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Contextual Panels (hidden by default) -->
+            <div class="crm-right-panel" id="crmRightPanel">
+                <div class="crm-panel-header">
+                    <h3>Context Panel</h3>
+                </div>
+                <div class="crm-panel-content" id="crmPanelContent">
+                    <!-- Contextual content will be added dynamically -->
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Remember Modal -->
@@ -1529,6 +2571,19 @@
             <div class="modal-footer">
                 <button class="modal-btn modal-btn-cancel" onclick="closeSaveVaultModal()">Cancel</button>
                 <button class="modal-btn modal-btn-save" id="saveVaultBtn" onclick="submitSaveVault()">Save to Vault</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Review Queue Modal -->
+    <div class="modal-overlay" id="reviewQueueModal">
+        <div class="modal review-modal">
+            <div class="modal-header">
+                <h3>Review Queue</h3>
+                <button class="modal-close" onclick="closeReviewQueueModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="reviewQueueBody">
+                <div class="crm-loading">Loading review queue...</div>
             </div>
         </div>
     </div>
@@ -2880,8 +3935,886 @@
             });
         }
 
+        // Page routing
+        function navigateToPage(page) {
+            // Hide all pages
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+
+            // Show the requested page
+            if (page === 'crm') {
+                document.getElementById('crmPage').classList.add('active');
+                window.location.hash = '/crm';
+                // Initialize CRM when navigating to it
+                if (typeof initCrm === 'function') {
+                    initCrm();
+                }
+            } else {
+                document.getElementById('chatPage').classList.add('active');
+                window.location.hash = '/';
+            }
+        }
+
+        function handleRouting() {
+            const hash = window.location.hash;
+
+            if (hash === '#/crm') {
+                navigateToPage('crm');
+            } else {
+                navigateToPage('chat');
+            }
+        }
+
+        // Handle hash changes
+        window.addEventListener('hashchange', handleRouting);
+
         // Initialize
         setStatus('', 'Ready');
+        handleRouting(); // Handle initial route
+
+        // ============================================
+        // CRM Tab Switching
+        // ============================================
+        function switchCrmTab(tab) {
+            // Update tab buttons
+            document.querySelectorAll('.crm-tab').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.tab === tab);
+            });
+
+            // Show/hide tab content
+            document.getElementById('crmPeopleTab').style.display = tab === 'people' ? 'flex' : 'none';
+            document.getElementById('crmNetworkTab').style.display = tab === 'network' ? 'flex' : 'none';
+
+            // Initialize network graph when switching to network tab
+            if (tab === 'network' && !networkInitialized) {
+                initNetworkGraph();
+            }
+        }
+
+        // ============================================
+        // D3.js Network Graph
+        // ============================================
+        let networkInitialized = false;
+        let networkSimulation = null;
+        let networkSvg = null;
+        let networkData = { nodes: [], edges: [] };
+        let selectedNetworkNode = null;
+
+        // Category colors
+        const categoryColors = {
+            work: '#3182ce',
+            personal: '#38a169',
+            family: '#d69e2e',
+            unknown: '#718096'
+        };
+
+        async function initNetworkGraph() {
+            const container = document.getElementById('networkGraph');
+            const rect = container.getBoundingClientRect();
+
+            // Create SVG
+            networkSvg = d3.select('#networkGraph')
+                .append('svg')
+                .attr('width', '100%')
+                .attr('height', '100%')
+                .attr('viewBox', [0, 0, rect.width, rect.height]);
+
+            // Add zoom behavior
+            const zoom = d3.zoom()
+                .scaleExtent([0.1, 4])
+                .on('zoom', (event) => {
+                    networkSvg.select('g.network-content').attr('transform', event.transform);
+                });
+
+            networkSvg.call(zoom);
+
+            // Double-click to reset view
+            networkSvg.on('dblclick.zoom', () => {
+                networkSvg.transition().duration(500).call(zoom.transform, d3.zoomIdentity);
+            });
+
+            // Create container group
+            networkSvg.append('g').attr('class', 'network-content');
+
+            // Create tooltip
+            const tooltip = d3.select('#networkGraph')
+                .append('div')
+                .attr('class', 'network-tooltip')
+                .style('display', 'none');
+
+            networkInitialized = true;
+
+            // Load initial data
+            await loadNetworkData();
+        }
+
+        async function loadNetworkData() {
+            const container = document.getElementById('networkGraph');
+
+            try {
+                // Build query params based on filters
+                const strengthSlider = document.getElementById('networkStrengthSlider');
+                const minStrength = strengthSlider ? parseInt(strengthSlider.value) / 100 : 0;
+
+                const params = new URLSearchParams();
+                if (minStrength > 0) params.append('min_strength', minStrength.toFixed(2));
+
+                const response = await fetch(`/api/crm/network?${params.toString()}`);
+                if (!response.ok) throw new Error('Failed to load network data');
+
+                networkData = await response.json();
+
+                // Filter by selected categories
+                const categories = getSelectedCategories();
+                networkData.nodes = networkData.nodes.filter(n => categories.includes(n.category));
+
+                // Filter edges to only include nodes that exist
+                const nodeIds = new Set(networkData.nodes.map(n => n.id));
+                networkData.edges = networkData.edges.filter(e =>
+                    nodeIds.has(e.source) && nodeIds.has(e.target)
+                );
+
+                renderNetwork();
+            } catch (error) {
+                console.error('Error loading network data:', error);
+                container.innerHTML = `
+                    <div class="network-empty">
+                        <div class="network-empty-icon">⚠️</div>
+                        <p>Failed to load network data</p>
+                    </div>
+                `;
+            }
+        }
+
+        function getSelectedCategories() {
+            const categories = [];
+            if (document.getElementById('networkCatWork')?.checked) categories.push('work');
+            if (document.getElementById('networkCatPersonal')?.checked) categories.push('personal');
+            if (document.getElementById('networkCatFamily')?.checked) categories.push('family');
+            if (document.getElementById('networkCatUnknown')?.checked) categories.push('unknown');
+            return categories;
+        }
+
+        function renderNetwork() {
+            const container = document.getElementById('networkGraph');
+            const rect = container.getBoundingClientRect();
+            const width = rect.width;
+            const height = rect.height;
+
+            if (networkData.nodes.length === 0) {
+                const content = networkSvg.select('g.network-content');
+                content.selectAll('*').remove();
+                container.querySelector('.network-empty')?.remove();
+                container.insertAdjacentHTML('beforeend', `
+                    <div class="network-empty">
+                        <div class="network-empty-icon">🔗</div>
+                        <p>No connections found.<br>Try adjusting the filters or adding more relationships.</p>
+                    </div>
+                `);
+                return;
+            }
+
+            // Remove any empty state
+            container.querySelector('.network-empty')?.remove();
+
+            // Get the content group
+            const content = networkSvg.select('g.network-content');
+            content.selectAll('*').remove();
+
+            // Create copy of data for D3 (it will mutate it)
+            const nodes = networkData.nodes.map(d => ({...d}));
+            const links = networkData.edges.map(d => ({
+                source: d.source,
+                target: d.target,
+                weight: d.weight,
+                type: d.type
+            }));
+
+            // Stop any existing simulation
+            if (networkSimulation) {
+                networkSimulation.stop();
+            }
+
+            // Create force simulation
+            networkSimulation = d3.forceSimulation(nodes)
+                .force('link', d3.forceLink(links)
+                    .id(d => d.id)
+                    .distance(100))
+                .force('charge', d3.forceManyBody().strength(-200))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 5));
+
+            // Create links
+            const link = content.append('g')
+                .attr('class', 'links')
+                .selectAll('line')
+                .data(links)
+                .join('line')
+                .attr('class', 'network-link')
+                .attr('stroke-width', d => Math.max(1, Math.min(5, d.weight / 5)))
+                .attr('stroke-opacity', d => Math.min(0.8, 0.2 + d.weight / 50));
+
+            // Create node groups
+            const node = content.append('g')
+                .attr('class', 'nodes')
+                .selectAll('g')
+                .data(nodes)
+                .join('g')
+                .attr('class', 'network-node')
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended));
+
+            // Add circles to nodes
+            node.append('circle')
+                .attr('r', d => getNodeRadius(d))
+                .attr('fill', d => categoryColors[d.category] || categoryColors.unknown);
+
+            // Add labels to high-strength nodes
+            node.filter(d => d.strength > 0.7)
+                .append('text')
+                .attr('class', 'network-node-label')
+                .attr('dy', d => getNodeRadius(d) + 12)
+                .text(d => d.name.split(' ')[0]); // First name only
+
+            // Add tooltips
+            const tooltip = d3.select('#networkGraph .network-tooltip');
+
+            node.on('mouseover', (event, d) => {
+                tooltip
+                    .style('display', 'block')
+                    .style('left', (event.offsetX + 10) + 'px')
+                    .style('top', (event.offsetY - 10) + 'px')
+                    .html(`
+                        <strong>${d.name}</strong><br>
+                        Category: ${d.category}<br>
+                        Strength: ${(d.strength * 100).toFixed(0)}%<br>
+                        Interactions: ${d.interaction_count}
+                    `);
+            })
+            .on('mouseout', () => {
+                tooltip.style('display', 'none');
+            })
+            .on('click', (event, d) => {
+                event.stopPropagation();
+                selectNetworkNode(d);
+            });
+
+            // Update positions on tick
+            networkSimulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                node.attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+
+            // Drag functions
+            function dragstarted(event, d) {
+                if (!event.active) networkSimulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+
+            function dragended(event, d) {
+                if (!event.active) networkSimulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+        }
+
+        function getNodeRadius(node) {
+            return 5 + node.strength * 20;
+        }
+
+        function selectNetworkNode(node) {
+            selectedNetworkNode = node;
+
+            // Update visual selection
+            d3.selectAll('.network-node').classed('selected', d => d.id === node.id);
+
+            // Show person detail (uses existing CRM function if available)
+            if (typeof showPersonDetail === 'function') {
+                showPersonDetail(node.id);
+            } else {
+                // Fallback: switch to people tab and highlight
+                switchCrmTab('people');
+            }
+        }
+
+        function updateNetworkFilters() {
+            // Update strength display
+            const slider = document.getElementById('networkStrengthSlider');
+            const valueDisplay = document.getElementById('networkStrengthValue');
+            if (slider && valueDisplay) {
+                valueDisplay.textContent = slider.value + '%';
+            }
+
+            // Reload data with new filters
+            if (networkInitialized) {
+                loadNetworkData();
+            }
+        }
+
+        function resetNetworkView() {
+            // Reset filters
+            document.getElementById('networkStrengthSlider').value = 0;
+            document.getElementById('networkStrengthValue').textContent = '0%';
+            document.getElementById('networkCatWork').checked = true;
+            document.getElementById('networkCatPersonal').checked = true;
+            document.getElementById('networkCatFamily').checked = true;
+            document.getElementById('networkCatUnknown').checked = true;
+
+            // Reset zoom
+            if (networkSvg) {
+                networkSvg.transition().duration(500).call(
+                    d3.zoom().transform,
+                    d3.zoomIdentity
+                );
+            }
+
+            // Reload data
+            loadNetworkData();
+        }
+
+        // =====================
+        // CRM People List Functionality
+        // =====================
+
+        // CRM State
+        const crmState = {
+            initialized: false,
+            people: [],
+            selectedPersonId: null,
+            searchQuery: '',
+            sortBy: 'interactions',
+            showAll: false,
+            reviewQueue: [],
+            reviewIndex: 0,
+            searchDebounce: null,
+        };
+
+        // Initialize CRM when page is shown
+        function initCrm() {
+            if (!crmState.initialized) {
+                crmState.initialized = true;
+                loadCrmPeople();
+                loadReviewQueueCount();
+            }
+        }
+
+        // Load people from API
+        async function loadCrmPeople() {
+            const peopleList = document.getElementById('crmPeopleList');
+            peopleList.innerHTML = '<div class="crm-loading">Loading people...</div>';
+
+            try {
+                const params = new URLSearchParams();
+                params.set('sort', crmState.sortBy);
+                params.set('limit', '200');
+
+                if (crmState.searchQuery) {
+                    params.set('q', crmState.searchQuery);
+                }
+
+                // By default, hide zero-interaction people unless showAll is enabled
+                if (!crmState.showAll) {
+                    params.set('has_interactions', 'true');
+                }
+
+                const response = await fetch(`/api/crm/people?${params.toString()}`);
+                if (!response.ok) throw new Error('Failed to load people');
+
+                const data = await response.json();
+                crmState.people = data.people || [];
+
+                renderCrmPeopleList();
+                document.getElementById('crmStatsBadge').textContent = data.total || crmState.people.length;
+            } catch (error) {
+                console.error('Error loading CRM people:', error);
+                peopleList.innerHTML = '<div class="crm-empty-state"><p>Failed to load people</p></div>';
+            }
+        }
+
+        // Render people list
+        function renderCrmPeopleList() {
+            const peopleList = document.getElementById('crmPeopleList');
+
+            if (crmState.people.length === 0) {
+                const emptyMessage = crmState.searchQuery
+                    ? 'No people match your search'
+                    : (crmState.showAll ? 'No people found' : 'No people with interactions found');
+                peopleList.innerHTML = `<div class="crm-empty-state"><p>${emptyMessage}</p></div>`;
+                return;
+            }
+
+            peopleList.innerHTML = crmState.people.map(person => {
+                const initials = getInitials(person.canonical_name || person.display_name || '?');
+                const isActive = person.id === crmState.selectedPersonId;
+
+                return `
+                    <div class="crm-person-card ${isActive ? 'active' : ''}" onclick="selectCrmPerson('${person.id}')">
+                        <div class="crm-person-avatar">${initials}</div>
+                        <div class="crm-person-info">
+                            <div class="crm-person-name">${escapeHtml(person.canonical_name || person.display_name)}</div>
+                            <div class="crm-person-meta">${escapeHtml(person.company || person.emails?.[0] || '')}</div>
+                            <div class="crm-person-stats">
+                                ${person.email_count ? `<span class="crm-person-stat" title="Emails">📧${person.email_count}</span>` : ''}
+                                ${person.meeting_count ? `<span class="crm-person-stat" title="Meetings">📅${person.meeting_count}</span>` : ''}
+                                ${person.mention_count ? `<span class="crm-person-stat" title="Mentions">📝${person.mention_count}</span>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Get initials from name
+        function getInitials(name) {
+            return name
+                .split(' ')
+                .map(part => part.charAt(0).toUpperCase())
+                .slice(0, 2)
+                .join('');
+        }
+
+        // Handle search input
+        function handleCrmSearch() {
+            clearTimeout(crmState.searchDebounce);
+            crmState.searchDebounce = setTimeout(() => {
+                crmState.searchQuery = document.getElementById('crmSearchInput').value.trim();
+                loadCrmPeople();
+            }, 300);
+        }
+
+        // Handle sort change
+        function handleCrmSortChange() {
+            crmState.sortBy = document.getElementById('crmSortSelect').value;
+            loadCrmPeople();
+        }
+
+        // Handle show all toggle
+        function handleCrmShowAllChange() {
+            const checkbox = document.getElementById('crmShowAllCheckbox');
+            crmState.showAll = checkbox.checked;
+            document.getElementById('crmShowAllToggle').classList.toggle('active', crmState.showAll);
+            loadCrmPeople();
+        }
+
+        // Select a person
+        async function selectCrmPerson(personId) {
+            crmState.selectedPersonId = personId;
+            renderCrmPeopleList(); // Update active state
+
+            const main = document.getElementById('crmMain');
+            main.innerHTML = '<div class="crm-loading">Loading...</div>';
+
+            try {
+                const response = await fetch(`/api/crm/people/${personId}`);
+                if (!response.ok) throw new Error('Failed to load person');
+
+                const person = await response.json();
+                renderCrmPersonDetail(person);
+            } catch (error) {
+                console.error('Error loading person:', error);
+                main.innerHTML = '<div class="crm-empty-state"><p>Failed to load person details</p></div>';
+            }
+        }
+
+        // Render person detail view
+        function renderCrmPersonDetail(person) {
+            const main = document.getElementById('crmMain');
+            const initials = getInitials(person.canonical_name || person.display_name || '?');
+
+            main.innerHTML = `
+                <div class="crm-detail-header">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <div class="crm-person-avatar" style="width: 56px; height: 56px; font-size: 1.25rem;">${initials}</div>
+                        <div>
+                            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">${escapeHtml(person.canonical_name || person.display_name)}</h2>
+                            <p style="color: var(--text-secondary); font-size: 0.875rem;">
+                                ${person.position ? escapeHtml(person.position) + ' at ' : ''}
+                                ${person.company ? escapeHtml(person.company) : ''}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="crm-detail-content">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                        <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: 600; color: var(--crm-accent);">${person.email_count || 0}</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted);">Emails</div>
+                        </div>
+                        <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: 600; color: var(--crm-accent);">${person.meeting_count || 0}</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted);">Meetings</div>
+                        </div>
+                        <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: 600; color: var(--crm-accent);">${person.mention_count || 0}</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted);">Mentions</div>
+                        </div>
+                        <div style="background: var(--bg-secondary); padding: 1rem; border-radius: 8px; text-align: center;">
+                            <div style="font-size: 1.5rem; font-weight: 600; color: var(--crm-accent);">${Math.round(person.relationship_strength * 100)}%</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted);">Strength</div>
+                        </div>
+                    </div>
+
+                    ${person.emails?.length ? `
+                    <div style="margin-bottom: 1.5rem;">
+                        <h3 style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;">Email</h3>
+                        ${person.emails.map(email => `<p style="font-size: 0.875rem; color: var(--text-primary);">${escapeHtml(email)}</p>`).join('')}
+                    </div>
+                    ` : ''}
+
+                    ${person.phone_numbers?.length ? `
+                    <div style="margin-bottom: 1.5rem;">
+                        <h3 style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;">Phone</h3>
+                        ${person.phone_numbers.map(phone => `<p style="font-size: 0.875rem; color: var(--text-primary);">${escapeHtml(phone)}</p>`).join('')}
+                    </div>
+                    ` : ''}
+
+                    ${person.notes ? `
+                    <div style="margin-bottom: 1.5rem;">
+                        <h3 style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;">Notes</h3>
+                        <p style="font-size: 0.875rem; color: var(--text-primary); white-space: pre-wrap;">${escapeHtml(person.notes)}</p>
+                    </div>
+                    ` : ''}
+
+                    ${person.tags?.length ? `
+                    <div style="margin-bottom: 1.5rem;">
+                        <h3 style="font-size: 0.875rem; color: var(--text-muted); margin-bottom: 0.5rem;">Tags</h3>
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            ${person.tags.map(tag => `<span style="background: var(--bg-tertiary); padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.75rem;">${escapeHtml(tag)}</span>`).join('')}
+                        </div>
+                    </div>
+                    ` : ''}
+
+                    <div class="crm-timeline" id="personTimeline">
+                        <div class="crm-timeline-loading">Loading timeline...</div>
+                    </div>
+                </div>
+            `;
+
+            // Load timeline after rendering the skeleton
+            loadPersonTimeline(person.id);
+        }
+
+        // Load and render aggregated timeline for a person
+        async function loadPersonTimeline(personId) {
+            const container = document.getElementById('personTimeline');
+            if (!container) return;
+
+            try {
+                const response = await fetch(`/api/crm/people/${personId}/timeline/aggregated?days_back=365&include_items=true&max_items_per_group=10`);
+                if (!response.ok) throw new Error('Failed to load timeline');
+
+                const data = await response.json();
+                renderPersonTimeline(container, data);
+            } catch (error) {
+                console.error('Error loading timeline:', error);
+                container.innerHTML = `
+                    <div class="crm-timeline-header">
+                        <h3>Timeline</h3>
+                    </div>
+                    <div class="crm-timeline-loading">Failed to load timeline</div>
+                `;
+            }
+        }
+
+        // Render aggregated timeline
+        function renderPersonTimeline(container, data) {
+            if (!data.days || data.days.length === 0) {
+                container.innerHTML = `
+                    <div class="crm-timeline-header">
+                        <h3>Timeline</h3>
+                    </div>
+                    <div class="crm-timeline-loading">No interactions found</div>
+                `;
+                return;
+            }
+
+            // Format source type for display
+            function formatSourceType(type) {
+                const names = {
+                    gmail: 'emails',
+                    calendar: 'meetings',
+                    vault: 'notes',
+                    granola: 'notes',
+                    imessage: 'messages',
+                    whatsapp: 'messages',
+                    contacts: 'contacts',
+                    phone: 'calls'
+                };
+                return names[type] || type;
+            }
+
+            // Build date range text
+            let dateRangeText = '';
+            if (data.date_range_start && data.date_range_end) {
+                dateRangeText = `${data.date_range_start} to ${data.date_range_end}`;
+            }
+
+            let html = `
+                <div class="crm-timeline-header">
+                    <h3>Timeline</h3>
+                    <span class="crm-timeline-meta">${data.total_interactions.toLocaleString()} interactions</span>
+                </div>
+            `;
+
+            // Only show first 30 days to avoid performance issues
+            const daysToShow = data.days.slice(0, 30);
+
+            for (const day of daysToShow) {
+                html += `
+                    <div class="crm-timeline-day">
+                        <div class="crm-timeline-date">
+                            <span>${escapeHtml(day.date_display)}</span>
+                            <span class="crm-timeline-date-count">${day.total_count} interaction${day.total_count !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div class="crm-timeline-groups">
+                `;
+
+                for (const group of day.groups) {
+                    const groupId = `timeline-group-${day.date}-${group.source_type}`;
+                    const hasItems = group.items && group.items.length > 0;
+
+                    html += `
+                        <div class="crm-timeline-group" id="${groupId}" onclick="toggleTimelineGroup('${groupId}')">
+                            <div class="crm-timeline-group-badge">${group.source_badge}</div>
+                            <div class="crm-timeline-group-info">
+                                <div class="crm-timeline-group-title">
+                                    <span>${group.count} ${formatSourceType(group.source_type)}</span>
+                                    <span class="crm-timeline-group-count">${group.count}</span>
+                                </div>
+                                ${group.preview ? `<div class="crm-timeline-group-preview">${escapeHtml(group.preview)}</div>` : ''}
+                            </div>
+                            ${hasItems ? '<div class="crm-timeline-group-expand">▼</div>' : ''}
+                        </div>
+                    `;
+
+                    if (hasItems) {
+                        html += `<div class="crm-timeline-items" id="${groupId}-items">`;
+                        for (const item of group.items) {
+                            html += `
+                                <div class="crm-timeline-item">
+                                    <div class="crm-timeline-item-title">
+                                        ${item.source_link ? `<a href="${escapeHtml(item.source_link)}" target="_blank">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
+                                        ${item.snippet ? `<div class="crm-timeline-item-snippet">${escapeHtml(item.snippet)}</div>` : ''}
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        html += '</div>';
+                    }
+                }
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Show "more days" message if there are more
+            if (data.days.length > 30) {
+                html += `
+                    <div class="crm-timeline-loading" style="padding: 1rem;">
+                        ... and ${data.days.length - 30} more days
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        // Toggle timeline group expansion
+        function toggleTimelineGroup(groupId) {
+            const group = document.getElementById(groupId);
+            if (group) {
+                group.classList.toggle('expanded');
+            }
+        }
+
+        // =====================
+        // Review Queue
+        // =====================
+
+        // Load review queue count for badge
+        async function loadReviewQueueCount() {
+            try {
+                const response = await fetch('/api/crm/review-queue?limit=1');
+                if (!response.ok) return;
+
+                const data = await response.json();
+                const badge = document.getElementById('crmReviewBadge');
+                const count = data.total_pending || 0;
+                badge.textContent = count;
+                badge.classList.toggle('empty', count === 0);
+            } catch (error) {
+                console.error('Error loading review queue count:', error);
+            }
+        }
+
+        // Open review queue modal
+        async function openReviewQueueModal() {
+            document.getElementById('reviewQueueModal').classList.add('visible');
+            await loadReviewQueue();
+        }
+
+        // Close review queue modal
+        function closeReviewQueueModal() {
+            document.getElementById('reviewQueueModal').classList.remove('visible');
+        }
+
+        // Load review queue
+        async function loadReviewQueue() {
+            const body = document.getElementById('reviewQueueBody');
+            body.innerHTML = '<div class="crm-loading">Loading review queue...</div>';
+
+            try {
+                const response = await fetch('/api/crm/review-queue?limit=50');
+                if (!response.ok) throw new Error('Failed to load review queue');
+
+                const data = await response.json();
+                crmState.reviewQueue = data.items || [];
+                crmState.reviewIndex = 0;
+
+                renderReviewQueueItem();
+            } catch (error) {
+                console.error('Error loading review queue:', error);
+                body.innerHTML = '<div class="review-empty"><p>Failed to load review queue</p></div>';
+            }
+        }
+
+        // Render current review queue item
+        function renderReviewQueueItem() {
+            const body = document.getElementById('reviewQueueBody');
+
+            if (crmState.reviewQueue.length === 0) {
+                body.innerHTML = `
+                    <div class="review-empty">
+                        <div class="review-empty-icon">✅</div>
+                        <p>No items to review</p>
+                        <p style="font-size: 0.75rem; margin-top: 0.5rem;">All matches have been confirmed or rejected.</p>
+                    </div>
+                `;
+                document.getElementById('crmReviewBadge').textContent = '0';
+                document.getElementById('crmReviewBadge').classList.add('empty');
+                return;
+            }
+
+            const item = crmState.reviewQueue[crmState.reviewIndex];
+            const total = crmState.reviewQueue.length;
+            const current = crmState.reviewIndex + 1;
+            const progress = (current / total) * 100;
+
+            // Determine confidence level for styling
+            let confidenceClass = 'low';
+            if (item.confidence >= 0.7) confidenceClass = 'high';
+            else if (item.confidence >= 0.5) confidenceClass = 'medium';
+
+            body.innerHTML = `
+                <div class="review-progress">
+                    <span>${current} of ${total}</span>
+                    <div class="review-progress-bar">
+                        <div class="review-progress-fill" style="width: ${progress}%"></div>
+                    </div>
+                    <span>${Math.round(progress)}%</span>
+                </div>
+
+                <div class="review-item">
+                    <div class="review-source-info">
+                        <div class="review-source-label">Source Entity</div>
+                        <div class="review-source-name">${escapeHtml(item.observed_name || 'Unknown')}</div>
+                        <div class="review-source-details">
+                            ${item.observed_email ? `<div>📧 ${escapeHtml(item.observed_email)}</div>` : ''}
+                            ${item.observed_phone ? `<div>📱 ${escapeHtml(item.observed_phone)}</div>` : ''}
+                        </div>
+                        <span class="review-source-type">${escapeHtml(item.source_type)}</span>
+                    </div>
+
+                    <div class="review-arrow">↓</div>
+
+                    <div class="review-match">
+                        <div class="review-match-label">Proposed Match</div>
+                        <div class="review-match-name">${escapeHtml(item.proposed_person_name)}</div>
+                        <div class="review-confidence">
+                            <span style="font-size: 0.75rem; color: var(--text-muted);">Confidence:</span>
+                            <div class="review-confidence-bar">
+                                <div class="review-confidence-fill ${confidenceClass}" style="width: ${item.confidence * 100}%"></div>
+                            </div>
+                            <span class="review-confidence-text">${Math.round(item.confidence * 100)}%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="review-actions">
+                    <button class="review-btn review-btn-reject" onclick="rejectReviewItem('${item.id}')">
+                        ✗ Reject
+                    </button>
+                    <button class="review-btn review-btn-confirm" onclick="confirmReviewItem('${item.id}')">
+                        ✓ Confirm
+                    </button>
+                </div>
+            `;
+        }
+
+        // Confirm review item
+        async function confirmReviewItem(entityId) {
+            try {
+                const response = await fetch(`/api/crm/review-queue/${entityId}/confirm`, {
+                    method: 'POST',
+                });
+                if (!response.ok) throw new Error('Failed to confirm');
+
+                advanceReviewQueue();
+            } catch (error) {
+                console.error('Error confirming review item:', error);
+                alert('Failed to confirm match');
+            }
+        }
+
+        // Reject review item
+        async function rejectReviewItem(entityId) {
+            try {
+                const response = await fetch(`/api/crm/review-queue/${entityId}/reject`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ create_new_person: false }),
+                });
+                if (!response.ok) throw new Error('Failed to reject');
+
+                advanceReviewQueue();
+            } catch (error) {
+                console.error('Error rejecting review item:', error);
+                alert('Failed to reject match');
+            }
+        }
+
+        // Advance to next review item
+        function advanceReviewQueue() {
+            // Remove current item from queue
+            crmState.reviewQueue.splice(crmState.reviewIndex, 1);
+
+            // Adjust index if needed
+            if (crmState.reviewIndex >= crmState.reviewQueue.length) {
+                crmState.reviewIndex = 0;
+            }
+
+            // Update badge
+            const badge = document.getElementById('crmReviewBadge');
+            badge.textContent = crmState.reviewQueue.length;
+            badge.classList.toggle('empty', crmState.reviewQueue.length === 0);
+
+            // Render next item
+            renderReviewQueueItem();
+        }
     </script>
 </body>
 </html>

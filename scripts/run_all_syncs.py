@@ -1,0 +1,326 @@
+#!/usr/bin/env python3
+"""
+Run all CRM data source syncs with health monitoring.
+
+This script should be run daily via launchd or cron. It:
+1. Syncs all configured data sources
+2. Records sync status and errors in sync_health.db
+3. Logs all output for debugging
+4. Exits with non-zero status if any critical sync fails
+
+Usage:
+    python scripts/run_all_syncs.py [--source SOURCE] [--dry-run] [--force]
+
+Options:
+    --source SOURCE   Run only this specific source
+    --dry-run         Don't actually sync, just report what would run
+    --force           Run even if sync was run recently
+"""
+import argparse
+import logging
+import subprocess
+import sys
+import traceback
+from datetime import datetime, timezone
+from pathlib import Path
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from api.services.sync_health import (
+    SYNC_SOURCES,
+    SyncStatus,
+    record_sync_start,
+    record_sync_complete,
+    record_sync_error,
+    get_sync_health,
+    get_sync_summary,
+    check_sync_health,
+)
+
+# Configure logging
+LOG_DIR = Path(__file__).parent.parent / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
+log_file = LOG_DIR / f"sync_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(log_file),
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Order of sync operations (dependencies first)
+SYNC_ORDER = [
+    "gmail",
+    "calendar",
+    "contacts",
+    "phone",
+    "whatsapp",
+    "imessage",
+    "person_stats",  # Must run after other syncs
+]
+
+# Scripts that can be run directly
+SYNC_SCRIPTS = {
+    "gmail": ("scripts/sync_gmail_calendar_interactions.py", ["--execute", "--source", "gmail"]),
+    "calendar": ("scripts/sync_gmail_calendar_interactions.py", ["--execute", "--source", "calendar"]),
+    "contacts": ("scripts/sync_contacts_csv.py", ["--execute"]),
+    "phone": ("scripts/sync_phone_calls.py", ["--execute"]),
+    "whatsapp": ("scripts/sync_whatsapp.py", ["--execute"]),
+    "imessage": ("scripts/sync_imessage_interactions.py", ["--execute"]),
+    "person_stats": ("scripts/sync_person_stats.py", ["--execute"]),
+}
+
+
+def run_sync(source: str, dry_run: bool = False) -> tuple[bool, dict]:
+    """
+    Run a single sync operation.
+
+    Returns:
+        Tuple of (success, stats_dict)
+    """
+    if source not in SYNC_SCRIPTS:
+        logger.warning(f"No script configured for source: {source}")
+        return False, {"error": f"No script for {source}"}
+
+    script_path, args = SYNC_SCRIPTS[source]
+    full_path = Path(__file__).parent.parent / script_path
+
+    if not full_path.exists():
+        logger.error(f"Script not found: {full_path}")
+        return False, {"error": f"Script not found: {script_path}"}
+
+    if dry_run:
+        logger.info(f"[DRY RUN] Would run: python {script_path} {' '.join(args)}")
+        return True, {"dry_run": True}
+
+    # Record sync start
+    run_id = record_sync_start(source)
+
+    try:
+        logger.info(f"Starting sync for {source}...")
+
+        # Build command
+        venv_python = Path(__file__).parent.parent / ".venv" / "bin" / "python"
+        if not venv_python.exists():
+            venv_python = sys.executable
+
+        cmd = [str(venv_python), str(full_path)] + args
+
+        # Run subprocess
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=1800,  # 30 minute timeout
+            cwd=str(Path(__file__).parent.parent),
+            env={
+                **dict(__import__('os').environ),
+                "PYTHONPATH": str(Path(__file__).parent.parent),
+            }
+        )
+
+        # Parse output for stats
+        stats = _parse_sync_output(result.stdout)
+
+        if result.returncode != 0:
+            error_msg = result.stderr or result.stdout or "Unknown error"
+            logger.error(f"Sync failed for {source}: {error_msg}")
+
+            record_sync_complete(
+                run_id,
+                SyncStatus.FAILED,
+                records_processed=stats.get("processed", 0),
+                records_created=stats.get("created", 0),
+                records_updated=stats.get("updated", 0),
+                errors=1,
+                error_message=error_msg[:500],
+            )
+
+            record_sync_error(
+                source,
+                error_msg[:1000],
+                error_type="subprocess_error",
+                context=f"Command: {' '.join(cmd)}"
+            )
+
+            return False, {"error": error_msg, **stats}
+
+        logger.info(f"Sync completed for {source}: {stats}")
+
+        record_sync_complete(
+            run_id,
+            SyncStatus.SUCCESS,
+            records_processed=stats.get("processed", 0),
+            records_created=stats.get("created", 0),
+            records_updated=stats.get("updated", 0),
+            errors=stats.get("errors", 0),
+        )
+
+        return True, stats
+
+    except subprocess.TimeoutExpired:
+        error_msg = f"Sync timed out after 30 minutes"
+        logger.error(f"Sync timeout for {source}")
+
+        record_sync_complete(
+            run_id,
+            SyncStatus.FAILED,
+            errors=1,
+            error_message=error_msg,
+        )
+
+        record_sync_error(source, error_msg, error_type="timeout")
+        return False, {"error": error_msg}
+
+    except Exception as e:
+        error_msg = str(e)
+        logger.error(f"Sync exception for {source}: {error_msg}")
+        logger.error(traceback.format_exc())
+
+        record_sync_complete(
+            run_id,
+            SyncStatus.FAILED,
+            errors=1,
+            error_message=error_msg[:500],
+        )
+
+        record_sync_error(
+            source,
+            error_msg,
+            error_type=type(e).__name__,
+            stack_trace=traceback.format_exc(),
+        )
+
+        return False, {"error": error_msg}
+
+
+def _parse_sync_output(output: str) -> dict:
+    """Parse sync script output for statistics."""
+    stats = {
+        "processed": 0,
+        "created": 0,
+        "updated": 0,
+        "errors": 0,
+    }
+
+    # Common patterns in sync outputs
+    import re
+
+    patterns = [
+        (r"(\d+)\s*(?:records?|items?|entities?)\s*(?:read|processed|found)", "processed"),
+        (r"(?:created|new)\s*[:\s]*(\d+)", "created"),
+        (r"(?:updated)\s*[:\s]*(\d+)", "updated"),
+        (r"(?:errors?)\s*[:\s]*(\d+)", "errors"),
+        (r"source.entities.created\s*[:\s]*(\d+)", "created"),
+        (r"source.entities.updated\s*[:\s]*(\d+)", "updated"),
+        (r"interactions.created\s*[:\s]*(\d+)", "created"),
+        (r"persons?.created\s*[:\s]*(\d+)", "created"),
+    ]
+
+    for pattern, key in patterns:
+        match = re.search(pattern, output, re.IGNORECASE)
+        if match:
+            stats[key] = max(stats[key], int(match.group(1)))
+
+    return stats
+
+
+def run_all_syncs(
+    sources: list[str] = None,
+    dry_run: bool = False,
+    force: bool = False,
+) -> dict:
+    """
+    Run all syncs in order.
+
+    Returns:
+        Summary dict with results
+    """
+    sources = sources or SYNC_ORDER
+    results = {}
+    failed = []
+
+    logger.info(f"Starting sync run for {len(sources)} sources...")
+    logger.info(f"Log file: {log_file}")
+
+    for source in sources:
+        if source not in SYNC_SOURCES:
+            logger.warning(f"Unknown source: {source}, skipping")
+            continue
+
+        # Check if recently synced (unless forced)
+        if not force and not dry_run:
+            health = get_sync_health(source)
+            if health.hours_since_sync is not None and health.hours_since_sync < 1:
+                logger.info(f"Skipping {source}: synced {health.hours_since_sync:.1f}h ago")
+                results[source] = {"skipped": True, "reason": "recently_synced"}
+                continue
+
+        success, stats = run_sync(source, dry_run=dry_run)
+        results[source] = {"success": success, **stats}
+
+        if not success:
+            failed.append(source)
+
+    # Log summary
+    logger.info("=" * 60)
+    logger.info("SYNC RUN COMPLETE")
+    logger.info(f"Total sources: {len(sources)}")
+    logger.info(f"Succeeded: {len(sources) - len(failed)}")
+    logger.info(f"Failed: {len(failed)}")
+    if failed:
+        logger.error(f"Failed sources: {', '.join(failed)}")
+    logger.info("=" * 60)
+
+    # Check overall health
+    is_healthy, health_msg = check_sync_health()
+    logger.info(f"Overall health: {health_msg}")
+
+    return {
+        "sources_run": len(sources),
+        "succeeded": len(sources) - len(failed),
+        "failed": len(failed),
+        "failed_sources": failed,
+        "results": results,
+        "is_healthy": is_healthy,
+        "health_message": health_msg,
+    }
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Run CRM data source syncs")
+    parser.add_argument("--source", help="Run only this specific source")
+    parser.add_argument("--dry-run", action="store_true", help="Don't actually sync")
+    parser.add_argument("--force", action="store_true", help="Run even if recently synced")
+    parser.add_argument("--status", action="store_true", help="Just show sync status")
+    args = parser.parse_args()
+
+    if args.status:
+        summary = get_sync_summary()
+        print(f"\nSync Health Summary:")
+        print(f"  Total sources: {summary['total_sources']}")
+        print(f"  Healthy: {summary['healthy']}")
+        print(f"  Stale: {summary['stale']} {summary['stale_sources']}")
+        print(f"  Failed: {summary['failed']} {summary['failed_sources']}")
+        print(f"  Never run: {summary['never_run']} {summary['never_run_sources']}")
+        print(f"  All healthy: {summary['all_healthy']}")
+        return 0 if summary['all_healthy'] else 1
+
+    sources = [args.source] if args.source else None
+    result = run_all_syncs(sources=sources, dry_run=args.dry_run, force=args.force)
+
+    # Exit with error if any sync failed
+    if result["failed"] > 0:
+        sys.exit(1)
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main() or 0)

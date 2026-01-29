@@ -68,6 +68,7 @@ class PersonEntity:
     meeting_count: int = 0
     email_count: int = 0
     mention_count: int = 0
+    message_count: int = 0  # iMessage/SMS count
 
     # Related content
     related_notes: list[str] = field(default_factory=list)
@@ -80,6 +81,15 @@ class PersonEntity:
     # Resolution metadata
     confidence_score: float = 1.0  # 0.0-1.0, how confident we are in merges
 
+    # CRM fields
+    tags: list[str] = field(default_factory=list)  # User-defined tags
+    notes: str = ""  # User notes about the person
+    source_entity_count: int = 0  # Count of linked SourceEntity records
+
+    # Relationship strength (computed, not stored - see relationship_metrics.py)
+    # Formula: (recency × 0.3) + (frequency × 0.4) + (diversity × 0.3)
+    _relationship_strength: Optional[float] = field(default=None, repr=False)
+
     def __post_init__(self):
         """Set display_name to canonical_name if not specified."""
         if not self.display_name and self.canonical_name:
@@ -89,6 +99,39 @@ class PersonEntity:
     def primary_email(self) -> Optional[str]:
         """Get the primary (first) email address."""
         return self.emails[0] if self.emails else None
+
+    @property
+    def relationship_strength(self) -> float:
+        """
+        Get computed relationship strength (0.0-1.0).
+
+        If not computed yet, returns 0.0. Use relationship_metrics.py
+        to compute and cache this value.
+        """
+        return self._relationship_strength if self._relationship_strength is not None else 0.0
+
+    @relationship_strength.setter
+    def relationship_strength(self, value: float) -> None:
+        """Set relationship strength."""
+        self._relationship_strength = max(0.0, min(1.0, value))
+
+    def add_tag(self, tag: str) -> bool:
+        """Add a tag if not already present."""
+        if not tag:
+            return False
+        tag = tag.strip().lower()
+        if tag not in self.tags:
+            self.tags.append(tag)
+            return True
+        return False
+
+    def remove_tag(self, tag: str) -> bool:
+        """Remove a tag if present."""
+        tag = tag.strip().lower()
+        if tag in self.tags:
+            self.tags.remove(tag)
+            return True
+        return False
 
     def has_email(self, email: str) -> bool:
         """Check if this person has a specific email (case-insensitive)."""
@@ -167,6 +210,7 @@ class PersonEntity:
         meeting_count = self.meeting_count + other.meeting_count
         email_count = self.email_count + other.email_count
         mention_count = self.mention_count + other.mention_count
+        message_count = self.message_count + other.message_count
 
         # Combine related notes
         related_notes = list(set(self.related_notes + other.related_notes))
@@ -194,6 +238,20 @@ class PersonEntity:
         # Confidence: average of both, slightly reduced for merge uncertainty
         confidence_score = (self.confidence_score + other.confidence_score) / 2 * 0.95
 
+        # Combine tags (unique)
+        tags = list(set(self.tags + other.tags))
+
+        # Notes: concatenate if both have content
+        notes = self.notes
+        if other.notes and other.notes != self.notes:
+            if notes:
+                notes = f"{notes}\n\n---\n\n{other.notes}"
+            else:
+                notes = other.notes
+
+        # Source entity count: sum
+        source_entity_count = self.source_entity_count + other.source_entity_count
+
         return PersonEntity(
             id=self.id,  # Keep original ID
             canonical_name=self.canonical_name,
@@ -210,11 +268,15 @@ class PersonEntity:
             meeting_count=meeting_count,
             email_count=email_count,
             mention_count=mention_count,
+            message_count=message_count,
             related_notes=related_notes,
             aliases=aliases,
             phone_numbers=phone_numbers,
             phone_primary=phone_primary,
             confidence_score=confidence_score,
+            tags=tags,
+            notes=notes,
+            source_entity_count=source_entity_count,
         )
 
     def to_dict(self) -> dict:
@@ -225,6 +287,11 @@ class PersonEntity:
             data["first_seen"] = self.first_seen.isoformat()
         if self.last_seen:
             data["last_seen"] = self.last_seen.isoformat()
+        # Remove private fields (they start with _)
+        data.pop("_relationship_strength", None)
+        # Add computed relationship_strength if available
+        if self._relationship_strength is not None:
+            data["relationship_strength"] = self._relationship_strength
         return data
 
     @classmethod
@@ -237,6 +304,14 @@ class PersonEntity:
         if data.get("last_seen") and isinstance(data["last_seen"], str):
             dt = datetime.fromisoformat(data["last_seen"])
             data["last_seen"] = _make_aware(dt)
+        # Handle relationship_strength -> _relationship_strength
+        if "relationship_strength" in data:
+            data["_relationship_strength"] = data.pop("relationship_strength")
+        # Handle legacy data without new fields
+        data.setdefault("tags", [])
+        data.setdefault("notes", "")
+        data.setdefault("source_entity_count", 0)
+        data.setdefault("message_count", 0)
         return cls(**data)
 
     @classmethod

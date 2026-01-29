@@ -1,0 +1,577 @@
+"""
+Relationship - Tracks connections between people.
+
+Relationships are discovered by analyzing shared contexts:
+- Shared calendar events
+- Shared email threads
+- Shared Slack channels
+- Co-mentions in notes
+"""
+import sqlite3
+import json
+import uuid
+import logging
+from dataclasses import dataclass, field, asdict
+from datetime import datetime, timezone
+from typing import Optional
+
+from api.services.source_entity import get_crm_db_path
+
+logger = logging.getLogger(__name__)
+
+
+def _make_aware(dt: Optional[datetime]) -> Optional[datetime]:
+    """Ensure datetime is timezone-aware (UTC if naive)."""
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+# Relationship types
+TYPE_COWORKER = "coworker"
+TYPE_FRIEND = "friend"
+TYPE_FAMILY = "family"
+TYPE_INFERRED = "inferred"  # Discovered through shared contexts
+
+
+@dataclass
+class Relationship:
+    """
+    A relationship between two people.
+
+    Relationships are bidirectional - if A knows B, B knows A.
+    The person_a_id is always lexicographically smaller than person_b_id
+    to ensure uniqueness.
+    """
+
+    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+
+    # Person IDs (canonical person IDs)
+    person_a_id: str = ""
+    person_b_id: str = ""
+
+    # Relationship metadata
+    relationship_type: str = TYPE_INFERRED
+    shared_contexts: list[str] = field(default_factory=list)  # vault paths, slack channels
+
+    # Interaction stats
+    shared_events_count: int = 0  # Calendar events together
+    shared_threads_count: int = 0  # Email threads together
+
+    # Timestamps
+    first_seen_together: Optional[datetime] = None
+    last_seen_together: Optional[datetime] = None
+    created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def __post_init__(self):
+        """Ensure person_a_id < person_b_id for uniqueness."""
+        if self.person_a_id > self.person_b_id:
+            self.person_a_id, self.person_b_id = self.person_b_id, self.person_a_id
+
+    def to_dict(self) -> dict:
+        """Convert to dict for JSON serialization."""
+        data = asdict(self)
+        if self.first_seen_together:
+            data["first_seen_together"] = self.first_seen_together.isoformat()
+        if self.last_seen_together:
+            data["last_seen_together"] = self.last_seen_together.isoformat()
+        if self.created_at:
+            data["created_at"] = self.created_at.isoformat()
+        if self.updated_at:
+            data["updated_at"] = self.updated_at.isoformat()
+        return data
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "Relationship":
+        """Create Relationship from dict."""
+        if data.get("first_seen_together") and isinstance(data["first_seen_together"], str):
+            data["first_seen_together"] = _make_aware(datetime.fromisoformat(data["first_seen_together"]))
+        if data.get("last_seen_together") and isinstance(data["last_seen_together"], str):
+            data["last_seen_together"] = _make_aware(datetime.fromisoformat(data["last_seen_together"]))
+        if data.get("created_at") and isinstance(data["created_at"], str):
+            data["created_at"] = _make_aware(datetime.fromisoformat(data["created_at"]))
+        if data.get("updated_at") and isinstance(data["updated_at"], str):
+            data["updated_at"] = _make_aware(datetime.fromisoformat(data["updated_at"]))
+        return cls(**data)
+
+    @classmethod
+    def from_row(cls, row: tuple) -> "Relationship":
+        """Create Relationship from SQLite row."""
+        # Row order: id, person_a_id, person_b_id, relationship_type, shared_contexts,
+        #            shared_events_count, shared_threads_count, first_seen_together,
+        #            last_seen_together, created_at, updated_at
+        first_seen = datetime.fromisoformat(row[7]) if row[7] else None
+        last_seen = datetime.fromisoformat(row[8]) if row[8] else None
+        created_at = datetime.fromisoformat(row[9]) if row[9] else datetime.now(timezone.utc)
+        updated_at = datetime.fromisoformat(row[10]) if row[10] else datetime.now(timezone.utc)
+
+        return cls(
+            id=row[0],
+            person_a_id=row[1],
+            person_b_id=row[2],
+            relationship_type=row[3] or TYPE_INFERRED,
+            shared_contexts=json.loads(row[4]) if row[4] else [],
+            shared_events_count=row[5] or 0,
+            shared_threads_count=row[6] or 0,
+            first_seen_together=_make_aware(first_seen),
+            last_seen_together=_make_aware(last_seen),
+            created_at=_make_aware(created_at),
+            updated_at=_make_aware(updated_at),
+        )
+
+    @property
+    def total_shared_interactions(self) -> int:
+        """Get total number of shared interactions."""
+        return self.shared_events_count + self.shared_threads_count
+
+    def involves(self, person_id: str) -> bool:
+        """Check if this relationship involves a specific person."""
+        return person_id == self.person_a_id or person_id == self.person_b_id
+
+    def other_person(self, person_id: str) -> Optional[str]:
+        """Get the other person in this relationship."""
+        if person_id == self.person_a_id:
+            return self.person_b_id
+        elif person_id == self.person_b_id:
+            return self.person_a_id
+        return None
+
+
+class RelationshipStore:
+    """
+    SQLite-backed storage for Relationship records.
+
+    Provides efficient queries for finding connections between people.
+    """
+
+    def __init__(self, db_path: Optional[str] = None):
+        """
+        Initialize the relationship store.
+
+        Args:
+            db_path: Path to SQLite database (default from settings)
+        """
+        self.db_path = db_path or get_crm_db_path()
+        self._init_db()
+
+    def _init_db(self):
+        """Create database tables if they don't exist."""
+        conn = sqlite3.connect(self.db_path)
+        try:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS relationships (
+                    id TEXT PRIMARY KEY,
+                    person_a_id TEXT NOT NULL,
+                    person_b_id TEXT NOT NULL,
+                    relationship_type TEXT,
+                    shared_contexts TEXT,
+                    shared_events_count INTEGER DEFAULT 0,
+                    shared_threads_count INTEGER DEFAULT 0,
+                    first_seen_together TIMESTAMP,
+                    last_seen_together TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(person_a_id, person_b_id)
+                )
+            """)
+
+            # Index for finding relationships by person
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_relationships_person_a
+                ON relationships(person_a_id)
+            """)
+
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_relationships_person_b
+                ON relationships(person_b_id)
+            """)
+
+            # Index for finding relationships by type
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_relationships_type
+                ON relationships(relationship_type)
+            """)
+
+            conn.commit()
+            logger.info(f"Initialized relationships database at {self.db_path}")
+        finally:
+            conn.close()
+
+    def _get_connection(self) -> sqlite3.Connection:
+        """Get a database connection."""
+        return sqlite3.connect(self.db_path)
+
+    def _normalize_ids(self, person_a_id: str, person_b_id: str) -> tuple[str, str]:
+        """Ensure person_a_id < person_b_id for uniqueness."""
+        if person_a_id > person_b_id:
+            return person_b_id, person_a_id
+        return person_a_id, person_b_id
+
+    def add(self, relationship: Relationship) -> Relationship:
+        """
+        Add a new relationship.
+
+        Args:
+            relationship: Relationship to add
+
+        Returns:
+            The added relationship
+        """
+        conn = self._get_connection()
+        try:
+            conn.execute("""
+                INSERT INTO relationships
+                (id, person_a_id, person_b_id, relationship_type, shared_contexts,
+                 shared_events_count, shared_threads_count, first_seen_together,
+                 last_seen_together, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                relationship.id,
+                relationship.person_a_id,
+                relationship.person_b_id,
+                relationship.relationship_type,
+                json.dumps(relationship.shared_contexts),
+                relationship.shared_events_count,
+                relationship.shared_threads_count,
+                relationship.first_seen_together.isoformat() if relationship.first_seen_together else None,
+                relationship.last_seen_together.isoformat() if relationship.last_seen_together else None,
+                relationship.created_at.isoformat(),
+                relationship.updated_at.isoformat(),
+            ))
+            conn.commit()
+            return relationship
+        finally:
+            conn.close()
+
+    def add_or_update(self, relationship: Relationship) -> tuple[Relationship, bool]:
+        """
+        Add relationship or update if already exists.
+
+        Args:
+            relationship: Relationship to add/update
+
+        Returns:
+            Tuple of (relationship, was_created)
+        """
+        existing = self.get_between(relationship.person_a_id, relationship.person_b_id)
+        if existing:
+            # Update existing - merge shared contexts and update counts
+            relationship.id = existing.id
+            relationship.created_at = existing.created_at
+
+            # Merge shared contexts
+            contexts = set(existing.shared_contexts)
+            contexts.update(relationship.shared_contexts)
+            relationship.shared_contexts = list(contexts)
+
+            # Keep earliest first_seen
+            if existing.first_seen_together:
+                if relationship.first_seen_together is None or existing.first_seen_together < relationship.first_seen_together:
+                    relationship.first_seen_together = existing.first_seen_together
+
+            self.update(relationship)
+            return relationship, False
+
+        return self.add(relationship), True
+
+    def update(self, relationship: Relationship) -> Relationship:
+        """
+        Update an existing relationship.
+
+        Args:
+            relationship: Relationship with updated data
+
+        Returns:
+            The updated relationship
+        """
+        relationship.updated_at = datetime.now(timezone.utc)
+        conn = self._get_connection()
+        try:
+            conn.execute("""
+                UPDATE relationships SET
+                    relationship_type = ?,
+                    shared_contexts = ?,
+                    shared_events_count = ?,
+                    shared_threads_count = ?,
+                    first_seen_together = ?,
+                    last_seen_together = ?,
+                    updated_at = ?
+                WHERE id = ?
+            """, (
+                relationship.relationship_type,
+                json.dumps(relationship.shared_contexts),
+                relationship.shared_events_count,
+                relationship.shared_threads_count,
+                relationship.first_seen_together.isoformat() if relationship.first_seen_together else None,
+                relationship.last_seen_together.isoformat() if relationship.last_seen_together else None,
+                relationship.updated_at.isoformat(),
+                relationship.id,
+            ))
+            conn.commit()
+            return relationship
+        finally:
+            conn.close()
+
+    def get_by_id(self, relationship_id: str) -> Optional[Relationship]:
+        """Get relationship by ID."""
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(
+                "SELECT * FROM relationships WHERE id = ?",
+                (relationship_id,)
+            )
+            row = cursor.fetchone()
+            if row:
+                return Relationship.from_row(row)
+            return None
+        finally:
+            conn.close()
+
+    def get_between(self, person_a_id: str, person_b_id: str) -> Optional[Relationship]:
+        """Get the relationship between two people."""
+        a_id, b_id = self._normalize_ids(person_a_id, person_b_id)
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(
+                "SELECT * FROM relationships WHERE person_a_id = ? AND person_b_id = ?",
+                (a_id, b_id)
+            )
+            row = cursor.fetchone()
+            if row:
+                return Relationship.from_row(row)
+            return None
+        finally:
+            conn.close()
+
+    def get_for_person(
+        self,
+        person_id: str,
+        relationship_type: Optional[str] = None,
+        limit: int = 100,
+    ) -> list[Relationship]:
+        """
+        Get all relationships for a person.
+
+        Args:
+            person_id: Canonical person ID
+            relationship_type: Optional filter by type
+            limit: Maximum results
+
+        Returns:
+            List of relationships
+        """
+        conn = self._get_connection()
+        try:
+            if relationship_type:
+                cursor = conn.execute("""
+                    SELECT * FROM relationships
+                    WHERE (person_a_id = ? OR person_b_id = ?)
+                      AND relationship_type = ?
+                    ORDER BY last_seen_together DESC
+                    LIMIT ?
+                """, (person_id, person_id, relationship_type, limit))
+            else:
+                cursor = conn.execute("""
+                    SELECT * FROM relationships
+                    WHERE person_a_id = ? OR person_b_id = ?
+                    ORDER BY last_seen_together DESC
+                    LIMIT ?
+                """, (person_id, person_id, limit))
+
+            return [Relationship.from_row(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
+    def get_connections(self, person_id: str, limit: int = 100) -> list[str]:
+        """
+        Get IDs of all people connected to a person.
+
+        Args:
+            person_id: Canonical person ID
+            limit: Maximum results
+
+        Returns:
+            List of connected person IDs
+        """
+        relationships = self.get_for_person(person_id, limit=limit)
+        connections = []
+        for rel in relationships:
+            other = rel.other_person(person_id)
+            if other:
+                connections.append(other)
+        return connections
+
+    def increment_shared_event(
+        self,
+        person_a_id: str,
+        person_b_id: str,
+        event_time: Optional[datetime] = None,
+        context: Optional[str] = None,
+    ) -> Relationship:
+        """
+        Increment the shared events count between two people.
+
+        Creates relationship if it doesn't exist.
+
+        Args:
+            person_a_id: First person ID
+            person_b_id: Second person ID
+            event_time: Time of the shared event
+            context: Optional context (e.g., calendar ID)
+
+        Returns:
+            Updated relationship
+        """
+        a_id, b_id = self._normalize_ids(person_a_id, person_b_id)
+        existing = self.get_between(a_id, b_id)
+
+        now = event_time or datetime.now(timezone.utc)
+        contexts = [context] if context else []
+
+        if existing:
+            existing.shared_events_count += 1
+            existing.last_seen_together = now
+            if context and context not in existing.shared_contexts:
+                existing.shared_contexts.append(context)
+            return self.update(existing)
+        else:
+            rel = Relationship(
+                person_a_id=a_id,
+                person_b_id=b_id,
+                shared_events_count=1,
+                first_seen_together=now,
+                last_seen_together=now,
+                shared_contexts=contexts,
+            )
+            return self.add(rel)
+
+    def increment_shared_thread(
+        self,
+        person_a_id: str,
+        person_b_id: str,
+        thread_time: Optional[datetime] = None,
+        context: Optional[str] = None,
+    ) -> Relationship:
+        """
+        Increment the shared threads count between two people.
+
+        Creates relationship if it doesn't exist.
+
+        Args:
+            person_a_id: First person ID
+            person_b_id: Second person ID
+            thread_time: Time of the shared thread
+            context: Optional context (e.g., thread ID)
+
+        Returns:
+            Updated relationship
+        """
+        a_id, b_id = self._normalize_ids(person_a_id, person_b_id)
+        existing = self.get_between(a_id, b_id)
+
+        now = thread_time or datetime.now(timezone.utc)
+        contexts = [context] if context else []
+
+        if existing:
+            existing.shared_threads_count += 1
+            existing.last_seen_together = now
+            if context and context not in existing.shared_contexts:
+                existing.shared_contexts.append(context)
+            return self.update(existing)
+        else:
+            rel = Relationship(
+                person_a_id=a_id,
+                person_b_id=b_id,
+                shared_threads_count=1,
+                first_seen_together=now,
+                last_seen_together=now,
+                shared_contexts=contexts,
+            )
+            return self.add(rel)
+
+    def delete(self, relationship_id: str) -> bool:
+        """Delete a relationship."""
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(
+                "DELETE FROM relationships WHERE id = ?",
+                (relationship_id,)
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        finally:
+            conn.close()
+
+    def delete_for_person(self, person_id: str) -> int:
+        """Delete all relationships involving a person."""
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(
+                "DELETE FROM relationships WHERE person_a_id = ? OR person_b_id = ?",
+                (person_id, person_id)
+            )
+            conn.commit()
+            return cursor.rowcount
+        finally:
+            conn.close()
+
+    def count(self) -> int:
+        """Get total number of relationships."""
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute("SELECT COUNT(*) FROM relationships")
+            return cursor.fetchone()[0]
+        finally:
+            conn.close()
+
+    def get_statistics(self) -> dict:
+        """Get aggregate statistics about relationships."""
+        conn = self._get_connection()
+        try:
+            total = conn.execute("SELECT COUNT(*) FROM relationships").fetchone()[0]
+
+            by_type = {}
+            cursor = conn.execute("""
+                SELECT relationship_type, COUNT(*) as count
+                FROM relationships
+                GROUP BY relationship_type
+            """)
+            for row in cursor.fetchall():
+                by_type[row[0] or "inferred"] = row[1]
+
+            # Average shared interactions
+            avg = conn.execute("""
+                SELECT AVG(shared_events_count + shared_threads_count)
+                FROM relationships
+            """).fetchone()[0] or 0
+
+            return {
+                "total_relationships": total,
+                "by_type": by_type,
+                "avg_shared_interactions": round(avg, 2),
+            }
+        finally:
+            conn.close()
+
+
+# Singleton instance
+_relationship_store: Optional[RelationshipStore] = None
+
+
+def get_relationship_store(db_path: Optional[str] = None) -> RelationshipStore:
+    """
+    Get or create the singleton RelationshipStore.
+
+    Args:
+        db_path: Path to SQLite database
+
+    Returns:
+        RelationshipStore instance
+    """
+    global _relationship_store
+    if _relationship_store is None:
+        _relationship_store = RelationshipStore(db_path)
+    return _relationship_store

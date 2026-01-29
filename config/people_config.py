@@ -83,7 +83,10 @@ class InteractionConfig:
     """Configuration for interaction tracking."""
 
     # Default time window for interaction queries
-    DEFAULT_WINDOW_DAYS: int = 90
+    DEFAULT_WINDOW_DAYS: int = 365
+
+    # Maximum time window allowed for timeline queries (10 years)
+    MAX_WINDOW_DAYS: int = 3650
 
     # Maximum interactions to return in a single query
     MAX_INTERACTIONS_PER_QUERY: int = 100
