@@ -12,8 +12,9 @@ A comprehensive Personal CRM system built on LifeOS, focused on **Network Manage
 4. [Storage Layer](#storage-layer)
 5. [Entity Resolution System](#entity-resolution-system)
 6. [Relationship Strength Scoring](#relationship-strength-scoring)
-7. [API Layer](#api-layer)
-8. [UI Components](#ui-components)
+7. [Multi-Source Relationship Tracking](#multi-source-relationship-tracking)
+8. [API Layer](#api-layer)
+9. [UI Components](#ui-components)
 
 ---
 
@@ -66,7 +67,8 @@ A comprehensive Personal CRM system built on LifeOS, focused on **Network Manage
 │  │                                                                     │        │
 │  │   - Relationship Strength Scoring                                   │        │
 │  │   - Connection Discovery (shared contexts, co-attendees)            │        │
-│  │   - Network Graph                                                   │        │
+│  │   - Multi-Source Edge Tracking (calendar, email, messaging, etc.)   │        │
+│  │   - Network Graph with Source Filtering                             │        │
 │  └─────────────────────────────────────────────────────────────────────┘        │
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
@@ -554,6 +556,99 @@ The EntityResolver uses a **three-pass algorithm** with weighted scoring:
 
 ---
 
+## Multi-Source Relationship Tracking
+
+### Relationship Edge Model
+
+Each relationship between two people tracks signals from multiple sources:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                     RELATIONSHIP (EDGE) DATA MODEL                               │
+│                     (api/services/relationship.py)                               │
+│                                                                                  │
+│  Core Fields:                                                                   │
+│  - person_a_id, person_b_id    (ordered pair, a < b)                           │
+│  - relationship_type           (friend, family, coworker, inferred)             │
+│  - shared_contexts             (["Work/ML/", "imessage", "linkedin"])           │
+│  - first_seen_together         (timestamp)                                      │
+│  - last_seen_together          (timestamp)                                      │
+│                                                                                  │
+│  Multi-Source Counts:                                                           │
+│  - shared_events_count         (calendar events together)                       │
+│  - shared_threads_count        (email threads together)                         │
+│  - shared_messages_count       (iMessage/SMS direct threads)                    │
+│  - shared_whatsapp_count       (WhatsApp direct threads)                        │
+│  - shared_slack_count          (Slack DM messages)                              │
+│  - is_linkedin_connection      (boolean: both have LinkedIn)                    │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Edge Weight Formula
+
+The edge weight for graph visualization is calculated from all sources:
+
+```
+edge_weight = (
+    shared_events_count  × 3  +     # Calendar (high signal)
+    shared_threads_count × 2  +     # Email threads
+    shared_messages_count × 2 +     # iMessage/SMS
+    shared_whatsapp_count × 2 +     # WhatsApp
+    shared_slack_count   × 1  +     # Slack DMs (weaker per-message)
+    (10 if is_linkedin_connection)  # LinkedIn connection bonus
+)
+```
+
+**Example Edge Weights:**
+- Coworker (high): 10 events × 3 + 20 threads × 2 + LinkedIn = 80
+- Friend (iMessage focus): 2 events × 3 + 50 messages × 2 = 106
+- LinkedIn-only connection: 10
+
+### Graph Source Filtering
+
+The network graph UI supports filtering edges by source type:
+
+| Control | Description |
+|---------|-------------|
+| Show Labels | Toggle node name labels |
+| Edge Strength | Filter by minimum edge weight (0-100%) |
+| Degree Filter | Show 1st degree only or 1st & 2nd degree |
+| Sources | Multi-select: Calendar, Email, iMessage, WhatsApp, Slack, LinkedIn |
+
+**Filter Behavior:**
+- Edge visible if ANY selected source has count > 0
+- Edge weight recalculated using only selected sources
+- Edge strength threshold applies to filtered weight
+- Filter state preserved when navigating between nodes
+
+### Edge Panel
+
+Click on an edge to see detailed source breakdown:
+
+| Field | Description |
+|-------|-------------|
+| Edge Weight | Computed weight from all sources |
+| 📅 Calendar Events | Shared calendar event count |
+| 📧 Email Threads | Shared email thread count |
+| 💬 iMessage | Shared iMessage/SMS count |
+| 📱 WhatsApp | Shared WhatsApp message count |
+| 💼 Slack DMs | Shared Slack DM count |
+| 🔗 LinkedIn | Connection status (✓ Connected or —) |
+| First/Last Seen | Timestamps of relationship |
+
+### Relationship Discovery by Source
+
+| Discovery Function | Source Field Updated | Data Source |
+|-------------------|---------------------|-------------|
+| `discover_from_calendar()` | `shared_events_count` | Calendar API events |
+| `discover_from_email_threads()` | `shared_threads_count` | Gmail API threads |
+| `discover_from_imessage_direct()` | `shared_messages_count` | macOS Messages.app |
+| `discover_from_whatsapp_direct()` | `shared_whatsapp_count` | wacli WhatsApp data |
+| `discover_linkedin_connections()` | `is_linkedin_connection` | LinkedIn source entities |
+
+---
+
 ## API Layer
 
 ### CRM API Endpoints
@@ -583,6 +678,17 @@ The EntityResolver uses a **three-pass algorithm** with weighted scoring:
 │  │                                                                          │    │
 │  │ GET /api/crm/people/{id}/strength-breakdown                              │    │
 │  │   Get detailed relationship strength components                          │    │
+│  │                                                                          │    │
+│  │ GET /api/crm/network                                                     │    │
+│  │   Get network graph data (nodes + edges with source breakdown)           │    │
+│  │   Query params: center_on, depth, min_strength, category                 │    │
+│  │   Edges include: shared_events_count, shared_threads_count,              │    │
+│  │                  shared_messages_count, shared_whatsapp_count,           │    │
+│  │                  shared_slack_count, is_linkedin_connection              │    │
+│  │                                                                          │    │
+│  │ GET /api/crm/relationship/{person_a_id}/{person_b_id}                    │    │
+│  │   Get detailed edge data between two people                              │    │
+│  │   Returns: all source counts, timestamps, shared contexts                │    │
 │  │                                                                          │    │
 │  └─────────────────────────────────────────────────────────────────────────┘    │
 │                                                                                  │
@@ -710,8 +816,9 @@ The EntityResolver uses a **three-pass algorithm** with weighted scoring:
 | `api/services/source_entity.py` | SourceEntity model and SQLite store |
 | `api/services/entity_resolver.py` | Three-pass resolution algorithm |
 | `api/services/interaction_store.py` | Interaction storage and queries |
+| `api/services/relationship.py` | Relationship model with multi-source tracking |
 | `api/services/relationship_metrics.py` | Strength scoring calculations |
-| `api/services/relationship_discovery.py` | Connection/overlap detection |
+| `api/services/relationship_discovery.py` | Connection/overlap detection, source discovery |
 | `api/services/pending_link.py` | Link confirmation workflow |
 
 ### Sync Scripts
@@ -832,20 +939,34 @@ uv run python scripts/create_relationship.py \
 
 ---
 
-## Future Enhancements (Planned)
+## Implemented Features
 
-### Phase 5: Relationship Visualization
+### Network Graph Visualization (Complete)
 - D3.js force-directed network graph
 - Click nodes to view person details
-- Filter by relationship type
-- Zoom/pan controls
+- Zoom/pan controls with mouse wheel
+- Edge strength filtering (0-100%)
+- Degree filtering (1st only vs 1st & 2nd)
+- Multi-source edge filtering (Calendar, Email, iMessage, WhatsApp, Slack, LinkedIn)
+- Click edges to view relationship details
+- Filter state preserved when navigating
 
-### Phase 6: Polish & Performance
+### Multi-Source Relationship Tracking (Complete)
+- Edge weight calculated from all sources
+- Source breakdown in edge panel
+- Discovery functions for each source type
+- LinkedIn connection detection
+
+---
+
+## Future Enhancements (Planned)
+
+### Performance Optimization
 - Query caching
 - Database index optimization
 - E2E Playwright tests
 
-### Phase 7: Interesting Facts Extraction
+### Interesting Facts Extraction
 - LLM-based extraction from interactions
 - Store facts: family, hobbies, dietary prefs, etc.
 - Display on person detail page
