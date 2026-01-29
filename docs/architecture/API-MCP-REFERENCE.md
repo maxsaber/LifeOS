@@ -255,6 +255,64 @@ Detailed edge data between two people.
 
 Dashboard stats (counts by category, source, strength distribution).
 
+### GET /api/crm/people/{id}/source-entities
+
+Get all source entities linked to a person (for split modal).
+
+**Response:**
+```json
+{
+  "person_id": "uuid",
+  "person_name": "Name",
+  "total_count": 175,
+  "source_entities": [
+    {
+      "id": "uuid",
+      "source_type": "gmail",
+      "source_id": "message-id",
+      "observed_name": "Name",
+      "observed_email": "email@example.com",
+      "link_status": "auto|confirmed|rejected"
+    }
+  ]
+}
+```
+
+### POST /api/crm/people/split
+
+Split source entities from one person to another.
+
+**Request:**
+```json
+{
+  "from_person_id": "uuid",
+  "to_person_id": "uuid",           // OR
+  "new_person_name": "New Person",  // Create new person
+  "source_entity_ids": ["uuid1", "uuid2"],
+  "create_overrides": true          // Create disambiguation rules
+}
+```
+
+**Response:**
+```json
+{
+  "status": "completed",
+  "from_person_id": "uuid",
+  "to_person_id": "uuid",
+  "source_entities_moved": 5,
+  "interactions_moved": 10,
+  "overrides_created": 2
+}
+```
+
+### GET /api/crm/link-overrides
+
+List disambiguation rules that prevent future entity mis-linking.
+
+### DELETE /api/crm/link-overrides/{id}
+
+Delete a link override rule.
+
 ### GET /api/crm/data-health
 
 Data coverage and sync health report.

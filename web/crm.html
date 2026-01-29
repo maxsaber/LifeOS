@@ -4130,7 +4130,9 @@
 
         // Get node radius based on degree and strength
         function getNodeRadius(node) {
-            const baseRadius = 8 + node.strength * 15;
+            // Normalize strength to 0-1 (API returns 0-100 scale)
+            const normalizedStrength = (node.strength || 0) / 100;
+            const baseRadius = 8 + normalizedStrength * 15;
             // Center node (degree 0) is largest, first-degree normal, second-degree smaller
             if (node.degree === 0) {
                 return baseRadius * 1.5;  // Center person is 50% larger
@@ -4384,7 +4386,7 @@
                         <strong>${escapeHtml(d.name)}</strong><br>
                         ${degreeLabel}<br>
                         Category: ${d.category || 'unknown'}<br>
-                        Strength: ${Math.round((d.strength || 0) * 100)}%<br>
+                        Strength: ${Math.round(d.strength || 0)}%<br>
                         Interactions: ${d.interactionCount || 0}
                     `);
                     tooltip.classed('visible', true);
