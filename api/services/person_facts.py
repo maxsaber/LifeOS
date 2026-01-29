@@ -100,7 +100,17 @@ class PersonFact:
 
     @classmethod
     def from_row(cls, row: tuple) -> "PersonFact":
-        """Create PersonFact from SQLite row."""
+        """Create PersonFact from SQLite row.
+
+        Column order (after migration):
+        0: id, 1: person_id, 2: category, 3: key, 4: value, 5: confidence,
+        6: source_interaction_id, 7: extracted_at, 8: confirmed_by_user,
+        9: created_at, 10: source_quote, 11: source_link
+        """
+        # Handle both old schema (10 columns) and new schema (12 columns)
+        source_quote = row[10] if len(row) > 10 else None
+        source_link = row[11] if len(row) > 11 else None
+
         return cls(
             id=row[0],
             person_id=row[1],
@@ -109,11 +119,11 @@ class PersonFact:
             value=row[4],
             confidence=row[5] or 0.5,
             source_interaction_id=row[6],
-            source_quote=row[7],
-            source_link=row[8],
-            extracted_at=_make_aware(datetime.fromisoformat(row[9])) if row[9] else datetime.now(timezone.utc),
-            confirmed_by_user=bool(row[10]),
-            created_at=_make_aware(datetime.fromisoformat(row[11])) if row[11] else datetime.now(timezone.utc),
+            source_quote=source_quote,
+            source_link=source_link,
+            extracted_at=_make_aware(datetime.fromisoformat(row[7])) if row[7] else datetime.now(timezone.utc),
+            confirmed_by_user=bool(row[8]),
+            created_at=_make_aware(datetime.fromisoformat(row[9])) if row[9] else datetime.now(timezone.utc),
         )
 
 
