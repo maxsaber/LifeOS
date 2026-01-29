@@ -265,6 +265,222 @@
             border-radius: 4px;
         }
 
+        /* Multi-select checkbox */
+        .person-checkbox {
+            width: 18px;
+            height: 18px;
+            border: 2px solid var(--border);
+            border-radius: 4px;
+            background: transparent;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: all 0.2s;
+        }
+
+        .person-checkbox:hover {
+            border-color: var(--people);
+        }
+
+        .person-checkbox.checked {
+            background: var(--people);
+            border-color: var(--people);
+        }
+
+        .person-checkbox.checked::after {
+            content: '✓';
+            color: white;
+            font-size: 0.75rem;
+            font-weight: bold;
+        }
+
+        /* Merge toolbar */
+        .merge-toolbar {
+            display: none;
+            padding: 0.75rem 1rem;
+            background: var(--bg-tertiary);
+            border-bottom: 1px solid var(--border);
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .merge-toolbar.visible {
+            display: flex;
+        }
+
+        .merge-toolbar-info {
+            font-size: 0.875rem;
+            color: var(--text-primary);
+        }
+
+        .merge-toolbar-info strong {
+            color: var(--people);
+        }
+
+        .merge-toolbar-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .merge-btn {
+            padding: 0.5rem 1rem;
+            background: var(--people);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .merge-btn:hover {
+            background: var(--people-hover);
+        }
+
+        .clear-selection-btn {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .clear-selection-btn:hover {
+            border-color: var(--text-secondary);
+            color: var(--text-primary);
+        }
+
+        /* Merge modal */
+        .merge-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .merge-modal.visible {
+            display: flex;
+        }
+
+        .merge-modal-content {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+
+        .merge-modal-header {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .merge-modal-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .merge-modal-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .merge-primary-select {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .merge-person-option {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            background: var(--bg-tertiary);
+            border: 2px solid transparent;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .merge-person-option:hover {
+            border-color: var(--border);
+        }
+
+        .merge-person-option.selected {
+            border-color: var(--people);
+            background: rgba(0, 188, 212, 0.1);
+        }
+
+        .merge-person-option .person-avatar {
+            width: 32px;
+            height: 32px;
+            font-size: 0.75rem;
+        }
+
+        .merge-person-details {
+            flex: 1;
+        }
+
+        .merge-person-name {
+            font-weight: 500;
+            font-size: 0.875rem;
+        }
+
+        .merge-person-meta {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .merge-modal-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+            margin-top: 1.5rem;
+        }
+
+        .merge-cancel-btn {
+            padding: 0.625rem 1.25rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            cursor: pointer;
+        }
+
+        .merge-confirm-btn {
+            padding: 0.625rem 1.25rem;
+            background: var(--people);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .merge-confirm-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         /* Right panel - Person detail */
         .detail-panel {
             flex: 1;
@@ -1599,6 +1815,15 @@
                 <div class="filter-chip" data-filter="family" onclick="setFilter('family')">Family</div>
                 <div class="filter-chip" data-filter="pending" onclick="setFilter('pending')">Pending <span class="pending-badge" id="pendingBadge" style="display:none">0</span></div>
             </div>
+            <div class="merge-toolbar" id="mergeToolbar">
+                <div class="merge-toolbar-info">
+                    <strong id="selectedCount">0</strong> people selected
+                </div>
+                <div class="merge-toolbar-actions">
+                    <button class="clear-selection-btn" onclick="clearSelection()">Clear</button>
+                    <button class="merge-btn" onclick="openMergeModal()">Merge Selected</button>
+                </div>
+            </div>
             <div class="people-list" id="peopleList">
                 <div class="loading">Loading people...</div>
             </div>
@@ -1760,6 +1985,25 @@
         </div>
     </div>
 
+    <!-- Merge Modal -->
+    <div class="merge-modal" id="mergeModal">
+        <div class="merge-modal-content">
+            <div class="merge-modal-header">Merge People</div>
+            <div class="merge-modal-section">
+                <div class="merge-modal-label">Select the primary record (this person will be kept):</div>
+                <div class="merge-primary-select" id="mergePrimarySelect"></div>
+            </div>
+            <div class="merge-modal-section">
+                <div class="merge-modal-label">The following will be merged into the primary:</div>
+                <ul id="mergeSecondaryList" style="color: var(--text-secondary); font-size: 0.875rem; padding-left: 1.25rem;"></ul>
+            </div>
+            <div class="merge-modal-actions">
+                <button class="merge-cancel-btn" onclick="closeMergeModal()">Cancel</button>
+                <button class="merge-confirm-btn" id="mergeConfirmBtn" onclick="confirmMerge()" disabled>Merge</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script>
         // State
@@ -1767,6 +2011,8 @@
         let selectedPersonId = null;
         let currentFilter = 'all';
         let searchQuery = '';
+        let selectedForMerge = new Set();  // IDs selected for merge
+        let mergePrimaryId = null;  // Primary person for merge
 
         // API helpers
         async function api(path, options = {}) {
@@ -1843,6 +2089,8 @@
             listEl.innerHTML = people.map(person => `
                 <div class="person-card ${person.id === selectedPersonId ? 'selected' : ''}"
                      onclick="selectPerson('${person.id}')">
+                    <div class="person-checkbox ${selectedForMerge.has(person.id) ? 'checked' : ''}"
+                         onclick="event.stopPropagation(); toggleMergeSelection('${person.id}')"></div>
                     <div class="person-avatar">${getInitials(person.canonical_name)}</div>
                     <div class="person-info">
                         <div class="person-name">${escapeHtml(person.canonical_name)}</div>
@@ -1853,6 +2101,146 @@
                     </div>
                 </div>
             `).join('');
+
+            updateMergeToolbar();
+        }
+
+        // Toggle merge selection for a person
+        function toggleMergeSelection(personId) {
+            if (selectedForMerge.has(personId)) {
+                selectedForMerge.delete(personId);
+            } else {
+                selectedForMerge.add(personId);
+            }
+            renderPeopleList();
+        }
+
+        // Update merge toolbar visibility and count
+        function updateMergeToolbar() {
+            const toolbar = document.getElementById('mergeToolbar');
+            const countEl = document.getElementById('selectedCount');
+            const count = selectedForMerge.size;
+
+            countEl.textContent = count;
+
+            if (count >= 2) {
+                toolbar.classList.add('visible');
+            } else {
+                toolbar.classList.remove('visible');
+            }
+        }
+
+        // Clear all merge selections
+        function clearSelection() {
+            selectedForMerge.clear();
+            mergePrimaryId = null;
+            renderPeopleList();
+        }
+
+        // Open merge modal
+        function openMergeModal() {
+            if (selectedForMerge.size < 2) return;
+
+            const modal = document.getElementById('mergeModal');
+            const selectEl = document.getElementById('mergePrimarySelect');
+            const secondaryListEl = document.getElementById('mergeSecondaryList');
+
+            // Get selected people details
+            const selectedPeople = people.filter(p => selectedForMerge.has(p.id));
+
+            // Render primary selection options
+            selectEl.innerHTML = selectedPeople.map(person => `
+                <div class="merge-person-option ${mergePrimaryId === person.id ? 'selected' : ''}"
+                     onclick="selectMergePrimary('${person.id}')">
+                    <div class="person-avatar">${getInitials(person.canonical_name)}</div>
+                    <div class="merge-person-details">
+                        <div class="merge-person-name">${escapeHtml(person.canonical_name)}</div>
+                        <div class="merge-person-meta">
+                            ${person.email_count || 0} emails, ${person.meeting_count || 0} meetings, ${person.message_count || 0} messages
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            updateMergeSecondaryList();
+
+            modal.classList.add('visible');
+        }
+
+        // Select primary person for merge
+        function selectMergePrimary(personId) {
+            mergePrimaryId = personId;
+
+            // Update selection UI
+            document.querySelectorAll('.merge-person-option').forEach(el => {
+                el.classList.remove('selected');
+            });
+            event.currentTarget.classList.add('selected');
+
+            updateMergeSecondaryList();
+
+            // Enable confirm button
+            document.getElementById('mergeConfirmBtn').disabled = false;
+        }
+
+        // Update secondary list in modal
+        function updateMergeSecondaryList() {
+            const secondaryListEl = document.getElementById('mergeSecondaryList');
+            const selectedPeople = people.filter(p => selectedForMerge.has(p.id) && p.id !== mergePrimaryId);
+
+            if (mergePrimaryId) {
+                secondaryListEl.innerHTML = selectedPeople.map(p => `
+                    <li>${escapeHtml(p.canonical_name)}</li>
+                `).join('');
+            } else {
+                secondaryListEl.innerHTML = '<li style="color: var(--text-muted);">Select a primary record above</li>';
+            }
+        }
+
+        // Close merge modal
+        function closeMergeModal() {
+            document.getElementById('mergeModal').classList.remove('visible');
+            mergePrimaryId = null;
+            document.getElementById('mergeConfirmBtn').disabled = true;
+        }
+
+        // Confirm and execute merge
+        async function confirmMerge() {
+            if (!mergePrimaryId || selectedForMerge.size < 2) return;
+
+            const secondaryIds = [...selectedForMerge].filter(id => id !== mergePrimaryId);
+
+            try {
+                const btn = document.getElementById('mergeConfirmBtn');
+                btn.disabled = true;
+                btn.textContent = 'Merging...';
+
+                const result = await api('/people/merge', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        primary_id: mergePrimaryId,
+                        secondary_ids: secondaryIds
+                    })
+                });
+
+                console.log('Merge completed:', result);
+
+                // Close modal and refresh
+                closeMergeModal();
+                clearSelection();
+                await loadPeople();
+
+                // Show success (select the merged person)
+                selectPerson(mergePrimaryId);
+
+            } catch (error) {
+                console.error('Merge failed:', error);
+                alert('Merge failed: ' + error.message);
+            } finally {
+                const btn = document.getElementById('mergeConfirmBtn');
+                btn.disabled = false;
+                btn.textContent = 'Merge';
+            }
         }
 
         // Select a person
@@ -1923,7 +2311,7 @@
             // Quick stats cards
             document.getElementById('statEmails').textContent = person.email_count || 0;
             document.getElementById('statMeetings').textContent = person.meeting_count || 0;
-            document.getElementById('statMessages').textContent = person.mention_count || 0;
+            document.getElementById('statMessages').textContent = person.message_count || 0;
             document.getElementById('statNotes').textContent = person.notes ? 1 : 0;
 
             // Heat map calendar - load from timeline or generate empty
@@ -1957,9 +2345,10 @@
             // Notes
             document.getElementById('notesArea').value = person.notes || '';
 
-            // Source entities
+            // Source entities - use the count field, not array length (array may not be fully loaded)
             const sourceEntities = person.source_entities || [];
-            document.getElementById('sourceEntitiesCount').textContent = `(${sourceEntities.length})`;
+            const sourceEntityCount = person.source_entity_count || sourceEntities.length;
+            document.getElementById('sourceEntitiesCount').textContent = `(${sourceEntityCount.toLocaleString()})`;
             const listEl = document.getElementById('sourceEntitiesList');
 
             if (sourceEntities.length > 0) {

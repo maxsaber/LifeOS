@@ -53,10 +53,16 @@ SYNC_SOURCES = {
         "frequency": "daily",
     },
     "person_stats": {
-        "description": "Update person statistics and relationship strength",
+        "description": "Update person interaction counts",
         "script": "scripts/sync_person_stats.py",
         "frequency": "daily",
         "depends_on": ["gmail", "calendar", "imessage", "phone"],  # Must run after interaction syncs
+    },
+    "strengths": {
+        "description": "Recalculate relationship strengths for all people",
+        "script": "scripts/sync_strengths.py",
+        "frequency": "daily",
+        "depends_on": ["person_stats"],  # Must run after stats update
     },
 }
 

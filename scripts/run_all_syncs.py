@@ -63,6 +63,7 @@ SYNC_ORDER = [
     "whatsapp",
     "imessage",
     "person_stats",  # Must run after other syncs
+    "strengths",  # Must run after person_stats
 ]
 
 # Scripts that can be run directly
@@ -74,6 +75,7 @@ SYNC_SCRIPTS = {
     "whatsapp": ("scripts/sync_whatsapp.py", ["--execute"]),
     "imessage": ("scripts/sync_imessage_interactions.py", ["--execute"]),
     "person_stats": ("scripts/sync_person_stats.py", ["--execute"]),
+    "strengths": ("scripts/sync_strengths.py", ["--execute"]),
 }
 
 

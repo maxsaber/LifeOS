@@ -305,6 +305,12 @@ class PersonUpdateRequest(BaseModel):
     category: Optional[str] = None
 
 
+class PersonMergeRequest(BaseModel):
+    """Request for merging people."""
+    primary_id: str = Field(..., description="ID of the person to keep (survivor)")
+    secondary_ids: list[str] = Field(..., description="IDs of people to merge into primary")
+
+
 class LinkConfirmRequest(BaseModel):
     """Request for confirming or rejecting a link."""
     create_new_person: bool = Field(
@@ -611,6 +617,83 @@ async def update_person(person_id: str, request: PersonUpdateRequest):
     person_store.save()
 
     return _person_to_detail_response(person, include_related=True)
+
+
+class PersonMergeResponse(BaseModel):
+    """Response for merge operation."""
+    status: str
+    primary_id: str
+    merged_ids: list[str]
+    stats: dict
+
+
+@router.post("/people/merge", response_model=PersonMergeResponse)
+async def merge_people(request: PersonMergeRequest):
+    """
+    Merge multiple people into a single record.
+
+    The primary person survives, and all secondary people are merged into it.
+    This operation:
+    - Merges emails, phones, aliases from all secondaries into primary
+    - Updates all interactions to point to primary
+    - Updates all source entities to point to primary
+    - Updates all facts to point to primary
+    - Records the merge for durability (prevents re-creation of duplicates)
+    - Deletes the secondary records
+
+    The merge is durable - merged IDs are tracked so entity resolution
+    won't recreate duplicates from future syncs.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+    from scripts.merge_people import merge_people as do_merge, load_merged_ids, save_merged_ids
+
+    person_store = get_person_entity_store()
+    source_store = get_source_entity_store()
+
+    # Validate primary exists
+    primary = person_store.get_by_id(request.primary_id)
+    if not primary:
+        raise HTTPException(status_code=404, detail=f"Primary person '{request.primary_id}' not found")
+
+    # Validate all secondaries exist
+    for sec_id in request.secondary_ids:
+        secondary = person_store.get_by_id(sec_id)
+        if not secondary:
+            raise HTTPException(status_code=404, detail=f"Secondary person '{sec_id}' not found")
+        if sec_id == request.primary_id:
+            raise HTTPException(status_code=400, detail="Cannot merge a person into itself")
+
+    # Perform merges
+    total_stats = {
+        'interactions_updated': 0,
+        'source_entities_updated': 0,
+        'facts_updated': 0,
+        'emails_merged': 0,
+        'phones_merged': 0,
+        'aliases_added': 0,
+    }
+
+    merged_ids = []
+    for sec_id in request.secondary_ids:
+        try:
+            stats = do_merge(request.primary_id, sec_id, dry_run=False)
+            merged_ids.append(sec_id)
+            for key in total_stats:
+                total_stats[key] += stats.get(key, 0)
+        except Exception as e:
+            logger.error(f"Failed to merge {sec_id} into {request.primary_id}: {e}")
+            raise HTTPException(status_code=500, detail=f"Merge failed for {sec_id}: {str(e)}")
+
+    logger.info(f"Merged {len(merged_ids)} people into {request.primary_id}: {merged_ids}")
+
+    return PersonMergeResponse(
+        status="completed",
+        primary_id=request.primary_id,
+        merged_ids=merged_ids,
+        stats=total_stats,
+    )
 
 
 @router.get("/people/{person_id}/timeline", response_model=TimelineResponse)
