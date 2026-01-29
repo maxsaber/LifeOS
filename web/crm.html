@@ -1,0 +1,2524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>LifeOS CRM</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <style>
+        :root {
+            --bg-primary: #1a1a2e;
+            --bg-secondary: #16213e;
+            --bg-tertiary: #0f3460;
+            --text-primary: #eaeaea;
+            --text-secondary: #a0a0a0;
+            --text-muted: #6a6a8a;
+            --accent: #e94560;
+            --accent-hover: #ff6b6b;
+            --border: #2a2a4e;
+            --success: #4caf50;
+            --warning: #ff9800;
+            --error: #f44336;
+            --people: #00bcd4;
+            --people-hover: #26c6da;
+            --sidebar-width: 320px;
+            --header-height: 56px;
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            display: flex;
+            flex-direction: column;
+            padding-top: var(--safe-top);
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 1rem;
+            height: var(--header-height);
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .header-left h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .header-left a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+        }
+
+        .header-left a:hover {
+            color: var(--text-primary);
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .stats-display {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .stat-item .value {
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        /* Main layout */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Left panel - People list */
+        .people-list-panel {
+            width: var(--sidebar-width);
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+
+        .search-bar {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--people);
+        }
+
+        .search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .filters {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            border-bottom: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+
+        .filter-chip {
+            padding: 0.375rem 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .filter-chip:hover {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .filter-chip.active {
+            background: var(--people);
+            border-color: var(--people);
+            color: white;
+        }
+
+        .people-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+
+        .person-card {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-bottom: 0.25rem;
+        }
+
+        .person-card:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .person-card.selected {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--people);
+        }
+
+        .person-avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--people) 0%, var(--people-hover) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            font-weight: 600;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .person-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .person-name {
+            font-size: 0.875rem;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .person-company {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .person-strength {
+            width: 32px;
+            height: 4px;
+            background: var(--bg-primary);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .person-strength-bar {
+            height: 100%;
+            background: var(--people);
+            border-radius: 2px;
+            transition: width 0.3s;
+        }
+
+        .source-badges {
+            display: flex;
+            gap: 0.25rem;
+        }
+
+        .source-badge {
+            font-size: 0.625rem;
+            padding: 0.125rem 0.25rem;
+            background: var(--bg-primary);
+            border-radius: 4px;
+        }
+
+        /* Right panel - Person detail */
+        .detail-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: var(--bg-primary);
+        }
+
+        .detail-empty {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            color: var(--text-muted);
+        }
+
+        .detail-empty-icon {
+            font-size: 3rem;
+            opacity: 0.5;
+        }
+
+        .detail-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .detail-avatar {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, var(--people) 0%, var(--people-hover) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 600;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .detail-title {
+            flex: 1;
+        }
+
+        .detail-name {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .detail-company {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .detail-contact-quick {
+            display: flex;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+        }
+
+        .detail-contact-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.375rem 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.75rem;
+            transition: all 0.2s;
+        }
+
+        .detail-contact-link:hover {
+            background: var(--people);
+            border-color: var(--people);
+            color: white;
+        }
+
+        .detail-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.375rem;
+            margin-top: 0.5rem;
+        }
+
+        .detail-tag-chip {
+            padding: 0.25rem 0.625rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+
+        .detail-tag-chip .remove-tag {
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            line-height: 1;
+        }
+
+        .detail-tag-chip .remove-tag:hover {
+            color: var(--error);
+        }
+
+        .detail-tag-add {
+            padding: 0.25rem 0.625rem;
+            background: transparent;
+            border: 1px dashed var(--border);
+            border-radius: 12px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .detail-tag-add:hover {
+            border-color: var(--people);
+            color: var(--people);
+        }
+
+        .detail-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .edit-btn {
+            padding: 0.5rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .edit-btn:hover {
+            background: var(--people);
+            border-color: var(--people);
+            color: white;
+        }
+
+        .detail-strength-container {
+            text-align: right;
+        }
+
+        .detail-strength-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-bottom: 0.25rem;
+        }
+
+        .detail-strength-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--people);
+        }
+
+        /* Tabs */
+        .detail-tabs {
+            display: flex;
+            border-bottom: 1px solid var(--border);
+            padding: 0 1rem;
+        }
+
+        .tab {
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .tab:hover {
+            color: var(--text-primary);
+        }
+
+        .tab.active {
+            color: var(--people);
+            border-bottom-color: var(--people);
+        }
+
+        .detail-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem 1.5rem;
+        }
+
+        /* Overview tab */
+        .info-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .info-section-title {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 0.75rem;
+        }
+
+        /* Relationship strength breakdown */
+        .strength-breakdown {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .strength-bar-main {
+            width: 100%;
+            height: 8px;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+        }
+
+        .strength-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--people) 0%, var(--people-hover) 100%);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+
+        .strength-components {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .strength-component {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .strength-component-icon {
+            font-size: 1rem;
+        }
+
+        .strength-component-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .strength-component-label {
+            font-size: 0.625rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .strength-component-value {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* Quick stats cards */
+        .stats-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 0.75rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .stat-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+            transition: all 0.2s;
+        }
+
+        .stat-card:hover {
+            background: var(--bg-tertiary);
+            transform: translateY(-2px);
+        }
+
+        .stat-card-icon {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--people);
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-card-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Heat map calendar */
+        .heatmap-container {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .heatmap-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .heatmap-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .heatmap-legend {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            font-size: 0.625rem;
+            color: var(--text-muted);
+        }
+
+        .heatmap-legend-item {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: repeat(13, 1fr);
+            gap: 3px;
+        }
+
+        .heatmap-day {
+            aspect-ratio: 1;
+            background: var(--bg-tertiary);
+            border-radius: 2px;
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .heatmap-day:hover {
+            transform: scale(1.15);
+            z-index: 1;
+        }
+
+        .heatmap-day[data-level="0"] { background: var(--bg-tertiary); }
+        .heatmap-day[data-level="1"] { background: rgba(0, 188, 212, 0.3); }
+        .heatmap-day[data-level="2"] { background: rgba(0, 188, 212, 0.5); }
+        .heatmap-day[data-level="3"] { background: rgba(0, 188, 212, 0.7); }
+        .heatmap-day[data-level="4"] { background: var(--people); }
+
+        .heatmap-tooltip {
+            position: absolute;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-primary);
+            pointer-events: none;
+            z-index: 100;
+            white-space: nowrap;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .heatmap-day:hover .heatmap-tooltip {
+            opacity: 1;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 0.75rem;
+        }
+
+        .info-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+        }
+
+        .info-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .info-value {
+            font-size: 0.875rem;
+            color: var(--text-primary);
+        }
+
+        .info-value a {
+            color: var(--people);
+            text-decoration: none;
+        }
+
+        .info-value a:hover {
+            text-decoration: underline;
+        }
+
+        .tags-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .tag {
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .notes-area {
+            width: 100%;
+            min-height: 100px;
+            padding: 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            resize: vertical;
+        }
+
+        .notes-area:focus {
+            outline: none;
+            border-color: var(--people);
+        }
+
+        /* Timeline tab */
+        .timeline-filters {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .timeline-filter-chip {
+            padding: 0.375rem 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .timeline-filter-chip:hover {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .timeline-filter-chip.active {
+            background: var(--people);
+            border-color: var(--people);
+            color: white;
+        }
+
+        .timeline {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .timeline-item {
+            display: flex;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .timeline-item:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--people);
+        }
+
+        .timeline-badge {
+            width: 32px;
+            height: 32px;
+            background: var(--bg-tertiary);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        .timeline-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .timeline-title {
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .timeline-title a {
+            color: var(--text-primary);
+            text-decoration: none;
+        }
+
+        .timeline-title a:hover {
+            color: var(--people);
+            text-decoration: underline;
+        }
+
+        .timeline-snippet {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .timeline-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .timeline-source-badge {
+            display: inline-block;
+            padding: 0.125rem 0.375rem;
+            background: var(--bg-primary);
+            border-radius: 4px;
+            font-size: 0.625rem;
+            margin-left: 0.5rem;
+        }
+
+        /* Connections tab */
+        .connection-card {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.75rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .connection-card:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .connection-avatar {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--people) 0%, var(--people-hover) 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .connection-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .connection-name {
+            font-size: 0.875rem;
+            font-weight: 500;
+        }
+
+        .connection-company {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .connection-stats {
+            text-align: right;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* Graph visualization */
+        .graph-controls {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+
+        .graph-btn {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            transition: background 0.2s;
+        }
+
+        .graph-btn:hover {
+            background: var(--people);
+        }
+
+        .graph-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .graph-toggle input {
+            cursor: pointer;
+        }
+
+        .graph-container {
+            width: 100%;
+            height: 400px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .graph-container svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .graph-node {
+            cursor: pointer;
+        }
+
+        .graph-node circle {
+            stroke: var(--bg-primary);
+            stroke-width: 2px;
+            transition: r 0.2s;
+        }
+
+        .graph-node:hover circle {
+            stroke: var(--people);
+            stroke-width: 3px;
+        }
+
+        .graph-node.selected circle {
+            stroke: var(--accent);
+            stroke-width: 3px;
+        }
+
+        .graph-node text {
+            fill: var(--text-primary);
+            font-size: 10px;
+            text-anchor: middle;
+            pointer-events: none;
+        }
+
+        .graph-link {
+            stroke: var(--border);
+            stroke-opacity: 0.6;
+        }
+
+        .graph-link.strong {
+            stroke: var(--people);
+            stroke-opacity: 0.8;
+        }
+
+        .graph-tooltip {
+            position: absolute;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.75rem;
+            color: var(--text-primary);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 100;
+        }
+
+        .graph-tooltip.visible {
+            opacity: 1;
+        }
+
+        .graph-legend {
+            position: absolute;
+            bottom: 0.5rem;
+            right: 0.5rem;
+            background: rgba(26, 26, 46, 0.9);
+            border-radius: 6px;
+            padding: 0.5rem;
+            font-size: 0.75rem;
+        }
+
+        .graph-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .graph-legend-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .graph-legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        /* Source entities section */
+        .source-entities-section {
+            border-top: 1px solid var(--border);
+            margin-top: 1rem;
+            padding-top: 1rem;
+        }
+
+        .source-entities-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+            cursor: pointer;
+        }
+
+        .source-entities-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .source-entities-toggle {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .source-entities-list {
+            display: none;
+        }
+
+        .source-entities-list.expanded {
+            display: block;
+        }
+
+        .source-entity-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            font-size: 0.75rem;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            margin-bottom: 0.25rem;
+        }
+
+        .source-entity-badge {
+            font-size: 0.875rem;
+        }
+
+        .source-entity-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .source-entity-name {
+            color: var(--text-primary);
+        }
+
+        .source-entity-meta {
+            color: var(--text-muted);
+        }
+
+        .source-entity-status {
+            padding: 0.125rem 0.375rem;
+            border-radius: 4px;
+            font-size: 0.625rem;
+            text-transform: uppercase;
+        }
+
+        .source-entity-status.confirmed {
+            background: var(--success);
+            color: white;
+        }
+
+        .source-entity-status.auto {
+            background: var(--warning);
+            color: white;
+        }
+
+        /* Pending links badge */
+        .pending-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 18px;
+            height: 18px;
+            padding: 0 0.375rem;
+            background: var(--warning);
+            border-radius: 9px;
+            font-size: 0.625rem;
+            font-weight: 600;
+            color: white;
+        }
+
+        /* Button styles */
+        .btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: var(--people);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--people-hover);
+        }
+
+        .btn-secondary {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg-primary);
+        }
+
+        /* Loading state */
+        .loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--text-muted);
+        }
+
+        .loading::after {
+            content: '';
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--border);
+            border-top-color: var(--people);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-left: 0.5rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Empty state */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        .empty-state-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.5;
+        }
+
+        /* Quick Facts section */
+        .quick-facts-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .quick-facts-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .quick-facts-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .extract-facts-btn {
+            padding: 0.375rem 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+
+        .extract-facts-btn:hover {
+            background: var(--people);
+            border-color: var(--people);
+            color: white;
+        }
+
+        .extract-facts-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .extract-facts-btn.extracting::after {
+            content: '';
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--border);
+            border-top-color: var(--people);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .facts-categories {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .facts-category {
+            display: flex;
+            flex-direction: column;
+            gap: 0.375rem;
+        }
+
+        .facts-category-header {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .facts-category-icon {
+            font-size: 0.875rem;
+        }
+
+        .facts-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.375rem;
+        }
+
+        .fact-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.375rem 0.625rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.75rem;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .fact-chip:hover {
+            background: var(--bg-primary);
+            border-color: var(--people);
+        }
+
+        .fact-chip.unconfirmed {
+            border-style: dashed;
+        }
+
+        .fact-chip.unconfirmed::before {
+            content: '';
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            width: 8px;
+            height: 8px;
+            background: var(--warning);
+            border-radius: 50%;
+        }
+
+        .fact-key {
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+
+        .fact-value {
+            color: var(--text-primary);
+        }
+
+        .fact-confidence {
+            width: 4px;
+            height: 12px;
+            border-radius: 2px;
+            margin-left: 0.25rem;
+        }
+
+        .fact-confidence.high { background: var(--success); }
+        .fact-confidence.medium { background: var(--warning); }
+        .fact-confidence.low { background: var(--error); }
+
+        .fact-actions {
+            display: none;
+            gap: 0.25rem;
+            margin-left: 0.25rem;
+        }
+
+        .fact-chip:hover .fact-actions {
+            display: flex;
+        }
+
+        .fact-action-btn {
+            background: none;
+            border: none;
+            padding: 0;
+            cursor: pointer;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            opacity: 0.7;
+        }
+
+        .fact-action-btn:hover {
+            opacity: 1;
+        }
+
+        .fact-action-btn.confirm:hover {
+            color: var(--success);
+        }
+
+        .fact-action-btn.delete:hover {
+            color: var(--error);
+        }
+
+        .facts-empty {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            padding: 0.5rem 0;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+            }
+
+            .people-list-panel {
+                width: 100%;
+                height: 50%;
+            }
+
+            .detail-panel {
+                height: 50%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-left">
+            <h1>👥 CRM</h1>
+            <a href="/">← Back to Chat</a>
+        </div>
+        <div class="header-right">
+            <div class="stats-display">
+                <div class="stat-item">
+                    <span>People:</span>
+                    <span class="value" id="totalPeople">-</span>
+                </div>
+                <div class="stat-item">
+                    <span>Pending:</span>
+                    <span class="value" id="pendingLinks">-</span>
+                </div>
+            </div>
+            <button class="btn btn-secondary" onclick="refreshData()">↻ Refresh</button>
+        </div>
+    </header>
+
+    <div class="main-container">
+        <div class="people-list-panel">
+            <div class="search-bar">
+                <input type="text" class="search-input" id="searchInput" placeholder="Search people..." oninput="handleSearch()">
+            </div>
+            <div class="filters">
+                <div class="filter-chip active" data-filter="all" onclick="setFilter('all')">All</div>
+                <div class="filter-chip" data-filter="work" onclick="setFilter('work')">Work</div>
+                <div class="filter-chip" data-filter="personal" onclick="setFilter('personal')">Personal</div>
+                <div class="filter-chip" data-filter="family" onclick="setFilter('family')">Family</div>
+                <div class="filter-chip" data-filter="pending" onclick="setFilter('pending')">Pending <span class="pending-badge" id="pendingBadge" style="display:none">0</span></div>
+            </div>
+            <div class="people-list" id="peopleList">
+                <div class="loading">Loading people...</div>
+            </div>
+        </div>
+
+        <div class="detail-panel" id="detailPanel">
+            <div class="detail-empty" id="detailEmpty">
+                <div class="detail-empty-icon">👤</div>
+                <p>Select a person to view details</p>
+            </div>
+            <div id="detailContent" style="display:none">
+                <div class="detail-header">
+                    <div class="detail-avatar" id="detailAvatar">JD</div>
+                    <div class="detail-title">
+                        <div class="detail-name" id="detailName">John Doe</div>
+                        <div class="detail-company" id="detailCompany">Acme Corp · Software Engineer</div>
+                        <div class="detail-contact-quick" id="detailContactQuick"></div>
+                        <div class="detail-tags" id="detailTagsChips"></div>
+                    </div>
+                    <div class="detail-actions">
+                        <button class="edit-btn" onclick="editPerson()">✏️ Edit</button>
+                    </div>
+                </div>
+
+                <div class="detail-tabs">
+                    <div class="tab active" data-tab="overview" onclick="switchTab('overview')">Overview</div>
+                    <div class="tab" data-tab="timeline" onclick="switchTab('timeline')">Timeline</div>
+                    <div class="tab" data-tab="connections" onclick="switchTab('connections')">Connections</div>
+                    <div class="tab" data-tab="graph" onclick="switchTab('graph')">Graph</div>
+                </div>
+
+                <div class="detail-content">
+                    <div id="tabOverview" class="tab-content">
+                        <!-- Quick Facts section -->
+                        <div class="quick-facts-section">
+                            <div class="quick-facts-header">
+                                <div class="quick-facts-title">Quick Facts</div>
+                                <button class="extract-facts-btn" id="extractFactsBtn" onclick="extractFacts()">
+                                    <span>Extract Facts</span>
+                                </button>
+                            </div>
+                            <div class="facts-categories" id="factsContainer">
+                                <div class="facts-empty">No facts extracted yet. Click "Extract Facts" to analyze interactions.</div>
+                            </div>
+                        </div>
+
+                        <!-- Relationship strength breakdown -->
+                        <div class="strength-breakdown">
+                            <div class="info-section-title" style="margin-bottom: 0.75rem;">Relationship Strength</div>
+                            <div class="strength-bar-main">
+                                <div class="strength-bar-fill" id="strengthBarFill" style="width: 0%"></div>
+                            </div>
+                            <div class="strength-components" id="strengthComponents"></div>
+                        </div>
+
+                        <!-- Quick stats cards -->
+                        <div class="stats-cards">
+                            <div class="stat-card">
+                                <div class="stat-card-icon">📧</div>
+                                <div class="stat-card-value" id="statEmails">0</div>
+                                <div class="stat-card-label">Emails</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-card-icon">📅</div>
+                                <div class="stat-card-value" id="statMeetings">0</div>
+                                <div class="stat-card-label">Meetings</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-card-icon">💬</div>
+                                <div class="stat-card-value" id="statMessages">0</div>
+                                <div class="stat-card-label">Messages</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-card-icon">📝</div>
+                                <div class="stat-card-value" id="statNotes">0</div>
+                                <div class="stat-card-label">Notes</div>
+                            </div>
+                        </div>
+
+                        <!-- Heat map calendar -->
+                        <div class="heatmap-container">
+                            <div class="heatmap-header">
+                                <div class="heatmap-title">90-Day Interaction History</div>
+                                <div class="heatmap-legend">
+                                    <span>Less</span>
+                                    <div class="heatmap-legend-item" style="background: var(--bg-tertiary)"></div>
+                                    <div class="heatmap-legend-item" style="background: rgba(0, 188, 212, 0.3)"></div>
+                                    <div class="heatmap-legend-item" style="background: rgba(0, 188, 212, 0.5)"></div>
+                                    <div class="heatmap-legend-item" style="background: rgba(0, 188, 212, 0.7)"></div>
+                                    <div class="heatmap-legend-item" style="background: var(--people)"></div>
+                                    <span>More</span>
+                                </div>
+                            </div>
+                            <div class="heatmap-grid" id="heatmapGrid"></div>
+                        </div>
+
+                        <!-- Contact information -->
+                        <div class="info-section">
+                            <div class="info-section-title">Contact Information</div>
+                            <div class="info-grid" id="contactInfo"></div>
+                        </div>
+
+                        <!-- Notes -->
+                        <div class="info-section">
+                            <div class="info-section-title">Notes</div>
+                            <textarea class="notes-area" id="notesArea" placeholder="Add notes about this person..." onchange="saveNotes()"></textarea>
+                        </div>
+
+                        <!-- Source entities -->
+                        <div class="source-entities-section">
+                            <div class="source-entities-header" onclick="toggleSourceEntities()">
+                                <div class="source-entities-title">Source Entities <span id="sourceEntitiesCount">(0)</span></div>
+                                <div class="source-entities-toggle" id="sourceEntitiesToggle">▶</div>
+                            </div>
+                            <div class="source-entities-list" id="sourceEntitiesList"></div>
+                        </div>
+                    </div>
+
+                    <div id="tabTimeline" class="tab-content" style="display:none">
+                        <div class="timeline-filters">
+                            <div class="timeline-filter-chip active" data-source="all" onclick="filterTimeline('all')">All</div>
+                            <div class="timeline-filter-chip" data-source="email" onclick="filterTimeline('email')">📧 Email</div>
+                            <div class="timeline-filter-chip" data-source="calendar" onclick="filterTimeline('calendar')">📅 Calendar</div>
+                            <div class="timeline-filter-chip" data-source="drive" onclick="filterTimeline('drive')">📄 Drive</div>
+                            <div class="timeline-filter-chip" data-source="message" onclick="filterTimeline('message')">💬 Message</div>
+                        </div>
+                        <div class="timeline" id="timelineContainer">
+                            <div class="loading">Loading timeline...</div>
+                        </div>
+                    </div>
+
+                    <div id="tabConnections" class="tab-content" style="display:none">
+                        <div id="connectionsContainer">
+                            <div class="loading">Loading connections...</div>
+                        </div>
+                    </div>
+
+                    <div id="tabGraph" class="tab-content" style="display:none">
+                        <div class="graph-controls">
+                            <button class="graph-btn" onclick="resetGraphZoom()">Reset Zoom</button>
+                            <label class="graph-toggle">
+                                <input type="checkbox" id="showLabels" checked onchange="toggleGraphLabels()">
+                                Show Labels
+                            </label>
+                        </div>
+                        <div id="graphContainer" class="graph-container">
+                            <div class="loading">Loading graph...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script>
+        // State
+        let people = [];
+        let selectedPersonId = null;
+        let currentFilter = 'all';
+        let searchQuery = '';
+
+        // API helpers
+        async function api(path, options = {}) {
+            const response = await fetch(`/api/crm${path}`, {
+                headers: { 'Content-Type': 'application/json' },
+                ...options
+            });
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status}`);
+            }
+            return response.json();
+        }
+
+        // Initialize
+        async function init() {
+            await loadPeople();
+            await loadStatistics();
+        }
+
+        // Load people list
+        async function loadPeople() {
+            const listEl = document.getElementById('peopleList');
+            listEl.innerHTML = '<div class="loading">Loading people...</div>';
+
+            try {
+                const params = new URLSearchParams();
+                if (searchQuery) params.set('q', searchQuery);
+                if (currentFilter !== 'all' && currentFilter !== 'pending') {
+                    params.set('category', currentFilter);
+                }
+                if (currentFilter === 'pending') {
+                    params.set('has_pending', 'true');
+                }
+                params.set('sort', 'last_seen');
+                params.set('limit', '100');
+
+                const data = await api(`/people?${params}`);
+                people = data.people;
+                renderPeopleList();
+            } catch (error) {
+                console.error('Failed to load people:', error);
+                listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><p>Failed to load people</p></div>';
+            }
+        }
+
+        // Load statistics
+        async function loadStatistics() {
+            try {
+                const data = await api('/statistics');
+                document.getElementById('totalPeople').textContent = data.total_people;
+                document.getElementById('pendingLinks').textContent = data.pending_links_count;
+
+                const badge = document.getElementById('pendingBadge');
+                if (data.pending_links_count > 0) {
+                    badge.textContent = data.pending_links_count;
+                    badge.style.display = 'inline-flex';
+                } else {
+                    badge.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('Failed to load statistics:', error);
+            }
+        }
+
+        // Render people list
+        function renderPeopleList() {
+            const listEl = document.getElementById('peopleList');
+
+            if (people.length === 0) {
+                listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">👥</div><p>No people found</p></div>';
+                return;
+            }
+
+            listEl.innerHTML = people.map(person => `
+                <div class="person-card ${person.id === selectedPersonId ? 'selected' : ''}"
+                     onclick="selectPerson('${person.id}')">
+                    <div class="person-avatar">${getInitials(person.canonical_name)}</div>
+                    <div class="person-info">
+                        <div class="person-name">${escapeHtml(person.canonical_name)}</div>
+                        <div class="person-company">${escapeHtml(person.company || '')}</div>
+                    </div>
+                    <div class="person-strength">
+                        <div class="person-strength-bar" style="width: ${(person.relationship_strength || 0) * 100}%"></div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Select a person
+        async function selectPerson(personId) {
+            selectedPersonId = personId;
+            renderPeopleList();
+            await loadPersonDetail(personId);
+        }
+
+        // Load person detail
+        async function loadPersonDetail(personId) {
+            const emptyEl = document.getElementById('detailEmpty');
+            const contentEl = document.getElementById('detailContent');
+
+            emptyEl.style.display = 'none';
+            contentEl.style.display = 'flex';
+            contentEl.style.flexDirection = 'column';
+            contentEl.style.height = '100%';
+
+            try {
+                const person = await api(`/people/${personId}`);
+                renderPersonDetail(person);
+
+                // Load timeline for the active tab
+                if (document.querySelector('.tab.active').dataset.tab === 'timeline') {
+                    await loadTimeline(personId);
+                } else if (document.querySelector('.tab.active').dataset.tab === 'connections') {
+                    await loadConnections(personId);
+                }
+            } catch (error) {
+                console.error('Failed to load person detail:', error);
+            }
+        }
+
+        // Render person detail
+        function renderPersonDetail(person) {
+            document.getElementById('detailAvatar').textContent = getInitials(person.canonical_name);
+            document.getElementById('detailName').textContent = person.canonical_name;
+            document.getElementById('detailCompany').textContent = [person.company, person.position].filter(Boolean).join(' · ');
+
+            // Quick contact links in header
+            const quickContactEl = document.getElementById('detailContactQuick');
+            let quickContactHtml = '';
+            if (person.emails && person.emails.length > 0) {
+                quickContactHtml += `<a href="mailto:${person.emails[0]}" class="detail-contact-link">📧 ${escapeHtml(person.emails[0])}</a>`;
+            }
+            if (person.phone_numbers && person.phone_numbers.length > 0) {
+                quickContactHtml += `<a href="tel:${person.phone_numbers[0]}" class="detail-contact-link">📞 ${escapeHtml(person.phone_numbers[0])}</a>`;
+            }
+            quickContactEl.innerHTML = quickContactHtml;
+
+            // Editable tags in header
+            renderEditableTags(person.tags || []);
+
+            // Load Quick Facts
+            loadFacts(person.id);
+
+            // Relationship strength breakdown
+            renderStrengthBreakdown(person);
+
+            // Quick stats cards
+            document.getElementById('statEmails').textContent = person.email_count || 0;
+            document.getElementById('statMeetings').textContent = person.meeting_count || 0;
+            document.getElementById('statMessages').textContent = person.mention_count || 0;
+            document.getElementById('statNotes').textContent = person.notes ? 1 : 0;
+
+            // Heat map calendar - load from timeline or generate empty
+            loadAndRenderHeatMap(person.id);
+
+            // Contact info (all emails, phones, LinkedIn)
+            const contactEl = document.getElementById('contactInfo');
+            let contactHtml = '';
+
+            if (person.emails && person.emails.length > 0) {
+                contactHtml += `<div class="info-item"><div class="info-label">Email${person.emails.length > 1 ? 's' : ''}</div><div class="info-value">${person.emails.map(e => `<a href="mailto:${e}">${escapeHtml(e)}</a>`).join('<br>')}</div></div>`;
+            }
+            if (person.phone_numbers && person.phone_numbers.length > 0) {
+                contactHtml += `<div class="info-item"><div class="info-label">Phone${person.phone_numbers.length > 1 ? 's' : ''}</div><div class="info-value">${person.phone_numbers.map(p => `<a href="tel:${p}">${escapeHtml(p)}</a>`).join('<br>')}</div></div>`;
+            }
+            if (person.linkedin_url) {
+                contactHtml += `<div class="info-item"><div class="info-label">LinkedIn</div><div class="info-value"><a href="${person.linkedin_url}" target="_blank">View Profile</a></div></div>`;
+            }
+            if (person.category) {
+                contactHtml += `<div class="info-item"><div class="info-label">Category</div><div class="info-value">${escapeHtml(person.category)}</div></div>`;
+            }
+            if (person.first_seen) {
+                contactHtml += `<div class="info-item"><div class="info-label">First Seen</div><div class="info-value">${formatDate(person.first_seen)}</div></div>`;
+            }
+            if (person.last_seen) {
+                contactHtml += `<div class="info-item"><div class="info-label">Last Seen</div><div class="info-value">${formatDate(person.last_seen)}</div></div>`;
+            }
+
+            contactEl.innerHTML = contactHtml || '<div class="info-item"><div class="info-value">No contact info</div></div>';
+
+            // Notes
+            document.getElementById('notesArea').value = person.notes || '';
+
+            // Source entities
+            const sourceEntities = person.source_entities || [];
+            document.getElementById('sourceEntitiesCount').textContent = `(${sourceEntities.length})`;
+            const listEl = document.getElementById('sourceEntitiesList');
+
+            if (sourceEntities.length > 0) {
+                listEl.innerHTML = sourceEntities.map(se => `
+                    <div class="source-entity-item">
+                        <span class="source-entity-badge">${se.source_badge}</span>
+                        <div class="source-entity-info">
+                            <div class="source-entity-name">${escapeHtml(se.observed_name || se.observed_email || 'Unknown')}</div>
+                            <div class="source-entity-meta">${se.source_type} · ${formatDate(se.observed_at)}</div>
+                        </div>
+                        <span class="source-entity-status ${se.link_status}">${se.link_status}</span>
+                    </div>
+                `).join('');
+            } else {
+                listEl.innerHTML = '<div class="empty-state"><p>No source entities</p></div>';
+            }
+        }
+
+        // Render editable tags
+        function renderEditableTags(tags) {
+            const container = document.getElementById('detailTagsChips');
+            let html = tags.map(tag => `
+                <span class="detail-tag-chip">
+                    ${escapeHtml(tag)}
+                    <span class="remove-tag" onclick="removeTag('${escapeHtml(tag)}')">×</span>
+                </span>
+            `).join('');
+            html += `<span class="detail-tag-add" onclick="addTag()">+ Add tag</span>`;
+            container.innerHTML = html;
+        }
+
+        // Add tag
+        async function addTag() {
+            const tag = prompt('Enter tag name:');
+            if (!tag || !selectedPersonId) return;
+
+            try {
+                const person = await api(`/people/${selectedPersonId}`);
+                const tags = person.tags || [];
+                if (!tags.includes(tag)) {
+                    tags.push(tag);
+                    await api(`/people/${selectedPersonId}`, {
+                        method: 'PATCH',
+                        body: JSON.stringify({ tags })
+                    });
+                    await loadPersonDetail(selectedPersonId);
+                }
+            } catch (error) {
+                console.error('Failed to add tag:', error);
+            }
+        }
+
+        // Remove tag
+        async function removeTag(tag) {
+            if (!selectedPersonId) return;
+
+            try {
+                const person = await api(`/people/${selectedPersonId}`);
+                const tags = (person.tags || []).filter(t => t !== tag);
+                await api(`/people/${selectedPersonId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ tags })
+                });
+                await loadPersonDetail(selectedPersonId);
+            } catch (error) {
+                console.error('Failed to remove tag:', error);
+            }
+        }
+
+        // Render relationship strength breakdown
+        function renderStrengthBreakdown(person) {
+            const strength = person.relationship_strength || 0;
+            document.getElementById('strengthBarFill').style.width = `${strength * 100}%`;
+
+            // Calculate components (mock calculation based on available data)
+            const components = [
+                { icon: '📧', label: 'Emails', value: Math.min(1, (person.email_count || 0) / 50).toFixed(2) },
+                { icon: '📅', label: 'Meetings', value: Math.min(1, (person.meeting_count || 0) / 20).toFixed(2) },
+                { icon: '🕐', label: 'Recency', value: calculateRecencyScore(person.last_seen) },
+                { icon: '📊', label: 'Frequency', value: Math.min(1, (person.email_count + person.meeting_count) / 100).toFixed(2) }
+            ];
+
+            const componentsEl = document.getElementById('strengthComponents');
+            componentsEl.innerHTML = components.map(c => `
+                <div class="strength-component">
+                    <div class="strength-component-icon">${c.icon}</div>
+                    <div class="strength-component-info">
+                        <div class="strength-component-label">${c.label}</div>
+                        <div class="strength-component-value">${c.value}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Calculate recency score
+        function calculateRecencyScore(lastSeen) {
+            if (!lastSeen) return '0.00';
+            const now = new Date();
+            const last = new Date(lastSeen);
+            const daysDiff = (now - last) / (1000 * 60 * 60 * 24);
+
+            if (daysDiff < 7) return '1.00';
+            if (daysDiff < 30) return '0.75';
+            if (daysDiff < 90) return '0.50';
+            if (daysDiff < 180) return '0.25';
+            return '0.10';
+        }
+
+        // Load and render heat map
+        async function loadAndRenderHeatMap(personId) {
+            const grid = document.getElementById('heatmapGrid');
+
+            try {
+                // Fetch timeline data to build heat map
+                const data = await api(`/people/${personId}/timeline?limit=200`);
+                const items = data.items || [];
+
+                // Build interaction history from timeline
+                const interactionMap = {};
+                items.forEach(item => {
+                    const date = new Date(item.timestamp).toDateString();
+                    interactionMap[date] = (interactionMap[date] || 0) + 1;
+                });
+
+                renderHeatMap(interactionMap);
+            } catch (error) {
+                console.error('Failed to load heat map:', error);
+                renderHeatMap({});
+            }
+        }
+
+        // Render heat map
+        function renderHeatMap(interactionMap) {
+            const grid = document.getElementById('heatmapGrid');
+            const days = 90;
+            const today = new Date();
+
+            // Generate grid for last 90 days
+            let html = '';
+            for (let i = days - 1; i >= 0; i--) {
+                const date = new Date(today);
+                date.setDate(date.getDate() - i);
+                const dateStr = date.toDateString();
+                const count = interactionMap[dateStr] || 0;
+
+                // Calculate level (0-4)
+                let level = 0;
+                if (count > 0) level = 1;
+                if (count >= 3) level = 2;
+                if (count >= 6) level = 3;
+                if (count >= 10) level = 4;
+
+                html += `<div class="heatmap-day" data-level="${level}" title="${date.toLocaleDateString()}: ${count} interactions"></div>`;
+            }
+
+            grid.innerHTML = html;
+        }
+
+        // Edit person (placeholder)
+        function editPerson() {
+            alert('Edit functionality coming soon!');
+        }
+
+        // Load timeline
+        async function loadTimeline(personId) {
+            const container = document.getElementById('timelineContainer');
+            container.innerHTML = '<div class="loading">Loading timeline...</div>';
+
+            try {
+                const data = await api(`/people/${personId}/timeline?limit=100`);
+                timelineData = data.items || [];
+                renderTimeline();
+            } catch (error) {
+                console.error('Failed to load timeline:', error);
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><p>Failed to load timeline</p></div>';
+            }
+        }
+
+        // Render timeline with current filter
+        function renderTimeline() {
+            const container = document.getElementById('timelineContainer');
+
+            // Filter items
+            let items = timelineData;
+            if (timelineFilter !== 'all') {
+                items = timelineData.filter(item => {
+                    const sourceType = (item.source_type || '').toLowerCase();
+                    return sourceType.includes(timelineFilter);
+                });
+            }
+
+            if (items.length === 0) {
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📅</div><p>No interactions found</p></div>';
+                return;
+            }
+
+            container.innerHTML = items.map(item => `
+                <div class="timeline-item">
+                    <div class="timeline-badge">${item.source_badge || '📄'}</div>
+                    <div class="timeline-content">
+                        <div class="timeline-title">
+                            ${item.source_link ? `<a href="${item.source_link}" target="_blank">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
+                        </div>
+                        ${item.snippet ? `<div class="timeline-snippet">${escapeHtml(item.snippet)}</div>` : ''}
+                        <div class="timeline-meta">
+                            ${formatDate(item.timestamp)}
+                            <span class="timeline-source-badge">${escapeHtml(item.source_type || 'Unknown')}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Filter timeline
+        function filterTimeline(source) {
+            timelineFilter = source;
+
+            // Update UI
+            document.querySelectorAll('.timeline-filter-chip').forEach(c => c.classList.remove('active'));
+            document.querySelector(`[data-source="${source}"]`).classList.add('active');
+
+            renderTimeline();
+        }
+
+        // Quick Facts state
+        let factsData = [];
+
+        // Load facts for a person
+        async function loadFacts(personId) {
+            const container = document.getElementById('factsContainer');
+
+            try {
+                const data = await api(`/people/${personId}/facts`);
+                factsData = data.facts || [];
+                renderFacts(data.by_category || {});
+            } catch (error) {
+                console.error('Failed to load facts:', error);
+                container.innerHTML = '<div class="facts-empty">Failed to load facts.</div>';
+            }
+        }
+
+        // Render facts grouped by category
+        function renderFacts(byCategory) {
+            const container = document.getElementById('factsContainer');
+
+            const categoryOrder = ['family', 'work', 'background', 'interests', 'preferences', 'dates', 'topics', 'travel'];
+            const categoryIcons = {
+                'family': String.fromCodePoint(0x1F468, 0x200D, 0x1F469, 0x200D, 0x1F467),  // family emoji
+                'preferences': String.fromCodePoint(0x2699, 0xFE0F),  // gear
+                'background': String.fromCodePoint(0x1F3E0),  // house
+                'interests': String.fromCodePoint(0x1F3AF),  // target
+                'dates': String.fromCodePoint(0x1F4C5),  // calendar
+                'work': String.fromCodePoint(0x1F4BC),  // briefcase
+                'topics': String.fromCodePoint(0x1F4AC),  // speech bubble
+                'travel': String.fromCodePoint(0x2708, 0xFE0F),  // airplane
+            };
+
+            // Check if we have any facts
+            const hasAnyFacts = Object.values(byCategory).some(facts => facts && facts.length > 0);
+
+            if (!hasAnyFacts) {
+                container.innerHTML = '<div class="facts-empty">No facts extracted yet. Click "Extract Facts" to analyze interactions.</div>';
+                return;
+            }
+
+            let html = '';
+            for (const category of categoryOrder) {
+                const facts = byCategory[category];
+                if (!facts || facts.length === 0) continue;
+
+                const icon = categoryIcons[category] || '';
+                const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
+
+                html += `
+                    <div class="facts-category">
+                        <div class="facts-category-header">
+                            <span class="facts-category-icon">${icon}</span>
+                            <span>${categoryName}</span>
+                        </div>
+                        <div class="facts-list">
+                            ${facts.map(fact => renderFactChip(fact)).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        // Render a single fact chip
+        function renderFactChip(fact) {
+            const confidenceClass = fact.confidence >= 0.8 ? 'high' : (fact.confidence >= 0.5 ? 'medium' : 'low');
+            const unconfirmedClass = fact.confirmed_by_user ? '' : 'unconfirmed';
+            const keyDisplay = fact.key.replace(/_/g, ' ');
+
+            return `
+                <div class="fact-chip ${unconfirmedClass}" title="${keyDisplay}: ${escapeHtml(fact.value)} (${Math.round(fact.confidence * 100)}% confidence)">
+                    <span class="fact-key">${escapeHtml(keyDisplay)}:</span>
+                    <span class="fact-value">${escapeHtml(fact.value)}</span>
+                    <div class="fact-confidence ${confidenceClass}"></div>
+                    <div class="fact-actions">
+                        ${!fact.confirmed_by_user ? `<button class="fact-action-btn confirm" onclick="confirmFact('${fact.id}'); event.stopPropagation();" title="Confirm">✓</button>` : ''}
+                        <button class="fact-action-btn delete" onclick="deleteFact('${fact.id}'); event.stopPropagation();" title="Delete">×</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Extract facts using LLM
+        async function extractFacts() {
+            if (!selectedPersonId) return;
+
+            const btn = document.getElementById('extractFactsBtn');
+            btn.disabled = true;
+            btn.classList.add('extracting');
+            btn.innerHTML = '<span>Extracting...</span>';
+
+            try {
+                const data = await api(`/people/${selectedPersonId}/facts/extract`, { method: 'POST' });
+
+                if (data.status === 'no_interactions') {
+                    alert('No interactions found to extract facts from.');
+                } else {
+                    // Reload facts to show updated list
+                    await loadFacts(selectedPersonId);
+                }
+            } catch (error) {
+                console.error('Failed to extract facts:', error);
+                alert('Failed to extract facts. Please try again.');
+            } finally {
+                btn.disabled = false;
+                btn.classList.remove('extracting');
+                btn.innerHTML = '<span>Extract Facts</span>';
+            }
+        }
+
+        // Confirm a fact
+        async function confirmFact(factId) {
+            if (!selectedPersonId) return;
+
+            try {
+                await api(`/people/${selectedPersonId}/facts/${factId}/confirm`, { method: 'POST' });
+                await loadFacts(selectedPersonId);
+            } catch (error) {
+                console.error('Failed to confirm fact:', error);
+            }
+        }
+
+        // Delete a fact
+        async function deleteFact(factId) {
+            if (!selectedPersonId) return;
+
+            if (!confirm('Are you sure you want to delete this fact?')) return;
+
+            try {
+                await api(`/people/${selectedPersonId}/facts/${factId}`, { method: 'DELETE' });
+                await loadFacts(selectedPersonId);
+            } catch (error) {
+                console.error('Failed to delete fact:', error);
+            }
+        }
+
+        // Load connections
+        async function loadConnections(personId) {
+            const container = document.getElementById('connectionsContainer');
+            container.innerHTML = '<div class="loading">Loading connections...</div>';
+
+            try {
+                const data = await api(`/people/${personId}/connections?limit=50`);
+
+                if (data.connections.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔗</div><p>No connections found</p></div>';
+                    return;
+                }
+
+                container.innerHTML = data.connections.map(conn => `
+                    <div class="connection-card" onclick="selectPerson('${conn.person_id}')">
+                        <div class="connection-avatar">${getInitials(conn.name)}</div>
+                        <div class="connection-info">
+                            <div class="connection-name">${escapeHtml(conn.name)}</div>
+                            <div class="connection-company">${escapeHtml(conn.company || '')}</div>
+                        </div>
+                        <div class="connection-stats">
+                            ${conn.shared_events_count > 0 ? `${conn.shared_events_count} events` : ''}
+                            ${conn.shared_threads_count > 0 ? ` · ${conn.shared_threads_count} threads` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load connections:', error);
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><p>Failed to load connections</p></div>';
+            }
+        }
+
+        // Timeline state
+        let timelineData = [];
+        let timelineFilter = 'all';
+
+        // Graph visualization state
+        let graphSimulation = null;
+        let graphSvg = null;
+        let graphZoom = null;
+        let graphNodes = [];
+        let graphLinks = [];
+        let showLabelsEnabled = true;
+
+        // Load graph visualization
+        async function loadGraph(personId) {
+            const container = document.getElementById('graphContainer');
+            container.innerHTML = '<div class="loading">Loading graph...</div>';
+
+            try {
+                const data = await api(`/people/${personId}/connections?limit=30`);
+
+                // Get person details for center node
+                const personData = await api(`/people/${personId}`);
+
+                // Build graph data
+                const nodes = [{
+                    id: personId,
+                    name: personData.canonical_name,
+                    company: personData.company,
+                    isCenter: true,
+                    strength: 1.0
+                }];
+
+                const links = [];
+                const nodeIds = new Set([personId]);
+
+                for (const conn of data.connections) {
+                    if (!nodeIds.has(conn.person_id)) {
+                        nodes.push({
+                            id: conn.person_id,
+                            name: conn.name,
+                            company: conn.company,
+                            isCenter: false,
+                            strength: Math.min(1, (conn.shared_events_count + conn.shared_threads_count) / 10)
+                        });
+                        nodeIds.add(conn.person_id);
+                    }
+                    links.push({
+                        source: personId,
+                        target: conn.person_id,
+                        sharedEvents: conn.shared_events_count,
+                        sharedThreads: conn.shared_threads_count,
+                        contexts: conn.shared_contexts || []
+                    });
+                }
+
+                if (nodes.length === 1) {
+                    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔗</div><p>No connections to visualize</p></div>';
+                    return;
+                }
+
+                graphNodes = nodes;
+                graphLinks = links;
+
+                renderGraph(container, nodes, links, personId);
+
+            } catch (error) {
+                console.error('Failed to load graph:', error);
+                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><p>Failed to load graph</p></div>';
+            }
+        }
+
+        // Render D3 force-directed graph
+        function renderGraph(container, nodes, links, centerId) {
+            container.innerHTML = '';
+
+            const width = container.clientWidth;
+            const height = container.clientHeight || 400;
+
+            // Create SVG
+            const svg = d3.select(container)
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+
+            graphSvg = svg;
+
+            // Create zoom behavior
+            graphZoom = d3.zoom()
+                .scaleExtent([0.3, 3])
+                .on('zoom', (event) => {
+                    g.attr('transform', event.transform);
+                });
+
+            svg.call(graphZoom);
+
+            // Create group for zoomable content
+            const g = svg.append('g');
+
+            // Add tooltip div
+            const tooltip = d3.select(container)
+                .append('div')
+                .attr('class', 'graph-tooltip');
+
+            // Create force simulation
+            graphSimulation = d3.forceSimulation(nodes)
+                .force('link', d3.forceLink(links)
+                    .id(d => d.id)
+                    .distance(100))
+                .force('charge', d3.forceManyBody()
+                    .strength(-200))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(40));
+
+            // Draw links
+            const link = g.append('g')
+                .selectAll('line')
+                .data(links)
+                .join('line')
+                .attr('class', d => {
+                    const total = d.sharedEvents + d.sharedThreads;
+                    return 'graph-link' + (total > 5 ? ' strong' : '');
+                })
+                .attr('stroke-width', d => Math.max(1, Math.min(4, (d.sharedEvents + d.sharedThreads) / 2)));
+
+            // Draw nodes
+            const node = g.append('g')
+                .selectAll('g')
+                .data(nodes)
+                .join('g')
+                .attr('class', d => 'graph-node' + (d.id === centerId ? ' selected' : ''))
+                .call(d3.drag()
+                    .on('start', dragstarted)
+                    .on('drag', dragged)
+                    .on('end', dragended))
+                .on('click', (event, d) => {
+                    if (d.id !== centerId) {
+                        selectPerson(d.id);
+                    }
+                })
+                .on('mouseenter', (event, d) => {
+                    tooltip.html(`
+                        <strong>${escapeHtml(d.name)}</strong>
+                        ${d.company ? '<br>' + escapeHtml(d.company) : ''}
+                    `);
+                    tooltip.classed('visible', true);
+                })
+                .on('mousemove', (event) => {
+                    tooltip
+                        .style('left', (event.offsetX + 10) + 'px')
+                        .style('top', (event.offsetY - 10) + 'px');
+                })
+                .on('mouseleave', () => {
+                    tooltip.classed('visible', false);
+                });
+
+            // Node circles
+            node.append('circle')
+                .attr('r', d => d.isCenter ? 25 : 12 + d.strength * 8)
+                .attr('fill', d => d.isCenter ? 'var(--accent)' : 'var(--people)');
+
+            // Node labels
+            node.append('text')
+                .attr('dy', d => d.isCenter ? 40 : 25)
+                .text(d => truncateName(d.name, 15))
+                .style('display', showLabelsEnabled ? 'block' : 'none');
+
+            // Update positions on tick
+            graphSimulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+
+                node.attr('transform', d => `translate(${d.x},${d.y})`);
+            });
+
+            // Drag functions
+            function dragstarted(event, d) {
+                if (!event.active) graphSimulation.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            }
+
+            function dragged(event, d) {
+                d.fx = event.x;
+                d.fy = event.y;
+            }
+
+            function dragended(event, d) {
+                if (!event.active) graphSimulation.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
+            }
+
+            // Add legend
+            const legend = d3.select(container)
+                .append('div')
+                .attr('class', 'graph-legend');
+
+            legend.html(`
+                <div class="graph-legend-item">
+                    <div class="graph-legend-color" style="background: var(--accent)"></div>
+                    <span>Selected Person</span>
+                </div>
+                <div class="graph-legend-item">
+                    <div class="graph-legend-color" style="background: var(--people)"></div>
+                    <span>Connection</span>
+                </div>
+            `);
+        }
+
+        // Reset graph zoom
+        function resetGraphZoom() {
+            if (graphSvg && graphZoom) {
+                graphSvg.transition()
+                    .duration(300)
+                    .call(graphZoom.transform, d3.zoomIdentity);
+            }
+        }
+
+        // Toggle graph labels
+        function toggleGraphLabels() {
+            showLabelsEnabled = document.getElementById('showLabels').checked;
+            if (graphSvg) {
+                graphSvg.selectAll('.graph-node text')
+                    .style('display', showLabelsEnabled ? 'block' : 'none');
+            }
+        }
+
+        // Helper to truncate name
+        function truncateName(name, maxLen) {
+            if (!name) return '';
+            if (name.length <= maxLen) return name;
+            return name.substring(0, maxLen - 1) + '…';
+        }
+
+        // Switch tab
+        async function switchTab(tabName) {
+            // Update tab UI
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+
+            // Show/hide content
+            document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+            document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`).style.display = 'block';
+
+            // Load data if needed
+            if (selectedPersonId) {
+                if (tabName === 'timeline') {
+                    await loadTimeline(selectedPersonId);
+                } else if (tabName === 'connections') {
+                    await loadConnections(selectedPersonId);
+                } else if (tabName === 'graph') {
+                    await loadGraph(selectedPersonId);
+                }
+            }
+        }
+
+        // Toggle source entities
+        function toggleSourceEntities() {
+            const list = document.getElementById('sourceEntitiesList');
+            const toggle = document.getElementById('sourceEntitiesToggle');
+
+            if (list.classList.contains('expanded')) {
+                list.classList.remove('expanded');
+                toggle.textContent = '▶';
+            } else {
+                list.classList.add('expanded');
+                toggle.textContent = '▼';
+            }
+        }
+
+        // Save notes
+        async function saveNotes() {
+            if (!selectedPersonId) return;
+
+            const notes = document.getElementById('notesArea').value;
+
+            try {
+                await api(`/people/${selectedPersonId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ notes })
+                });
+            } catch (error) {
+                console.error('Failed to save notes:', error);
+            }
+        }
+
+        // Set filter
+        function setFilter(filter) {
+            currentFilter = filter;
+
+            // Update UI
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            document.querySelector(`[data-filter="${filter}"]`).classList.add('active');
+
+            loadPeople();
+        }
+
+        // Handle search
+        let searchTimeout;
+        function handleSearch() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                searchQuery = document.getElementById('searchInput').value;
+                loadPeople();
+            }, 300);
+        }
+
+        // Refresh data
+        async function refreshData() {
+            await loadPeople();
+            await loadStatistics();
+            if (selectedPersonId) {
+                await loadPersonDetail(selectedPersonId);
+            }
+        }
+
+        // Utility functions
+        function getInitials(name) {
+            if (!name) return '?';
+            const parts = name.split(' ').filter(p => p.length > 0);
+            if (parts.length === 0) return '?';
+            if (parts.length === 1) return parts[0][0].toUpperCase();
+            return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+        }
+
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return 'Never';
+            const date = new Date(dateStr);
+            const now = new Date();
+            const diff = now - date;
+
+            if (diff < 60000) return 'Just now';
+            if (diff < 3600000) return Math.floor(diff / 60000) + 'm ago';
+            if (diff < 86400000 && date.toDateString() === now.toDateString()) {
+                return Math.floor(diff / 3600000) + 'h ago';
+            }
+
+            const yesterday = new Date(now);
+            yesterday.setDate(yesterday.getDate() - 1);
+            if (date.toDateString() === yesterday.toDateString()) {
+                return 'Yesterday';
+            }
+
+            return date.toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined
+            });
+        }
+
+        // Initialize on load
+        init();
+    </script>
+</body>
+</html>
