@@ -9,8 +9,9 @@ LifeOS is a self-hosted RAG (Retrieval-Augmented Generation) system that provide
 **Key Features:**
 - **Semantic + Keyword Search** — Hybrid search (vector + BM25) across Obsidian notes with recency bias
 - **Google Suite Integration** — Calendar, Gmail, Drive with multi-account support
+- **Slack Integration** — Index DMs and channels for semantic search and CRM interactions
 - **iMessage History** — Query your text message conversations (requires Full Disk Access)
-- **People Intelligence** — Entity resolution linking contacts across vault, email, calendar, LinkedIn, and iMessage
+- **People Intelligence** — Entity resolution linking contacts across vault, email, calendar, LinkedIn, Slack, and iMessage
 - **Stakeholder Briefings** — Generate context about people before meetings
 - **Local LLM Routing** — Ollama + Llama 3.2 routes queries to relevant data sources
 - **Streaming Chat** — Claude-powered synthesis with source citations
@@ -51,10 +52,10 @@ LifeOS is a self-hosted RAG (Retrieval-Augmented Generation) system that provide
 │  │  │ Vault   │ │ Gmail   │ │Calendar │ │  Drive  │ │iMessage │          │  │
 │  │  │(Obsidian)│ │         │ │         │ │         │ │         │          │  │
 │  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘          │  │
-│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐                                  │  │
-│  │  │ People  │ │ Actions │ │Memories │                                  │  │
-│  │  │(Entity) │ │ (Tasks) │ │         │                                  │  │
-│  │  └─────────┘ └─────────┘ └─────────┘                                  │  │
+│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐                      │  │
+│  │  │ People  │ │ Actions │ │Memories │ │  Slack  │                      │  │
+│  │  │(Entity) │ │ (Tasks) │ │         │ │  (DMs)  │                      │  │
+│  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘                      │  │
 │  └────────────────────────────────────────────────────────────────────────┘  │
 │                                                                               │
 │  ┌────────────────────────────────────────────────────────────────────────┐  │
@@ -64,7 +65,7 @@ LifeOS is a self-hosted RAG (Retrieval-Augmented Generation) system that provide
 │                                                                               │
 │  ┌────────────────────────────────────────────────────────────────────────┐  │
 │  │                       Nightly Sync (3 AM Eastern)                      │  │
-│  │   Vault Reindex → LinkedIn → Gmail → Calendar → GDocs → iMessage      │  │
+│  │   Vault → People → GDocs → iMessage → Slack (incremental)            │  │
 │  └────────────────────────────────────────────────────────────────────────┘  │
 └──────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -79,15 +80,15 @@ LifeOS is a self-hosted RAG (Retrieval-Augmented Generation) system that provide
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
 │  │  NIGHTLY SYNC (3:00 AM Eastern)                                     │    │
 │  │                                                                      │    │
-│  │  Step 1          Step 2           Step 3          Step 4            │    │
-│  │  ┌──────────┐   ┌──────────┐    ┌──────────┐   ┌──────────┐         │    │
-│  │  │  Vault   │──▶│ People   │──▶ │  GDocs   │──▶│ iMessage │         │    │
-│  │  │ Reindex  │   │   Sync   │    │   Sync   │   │   Sync   │         │    │
-│  │  └────┬─────┘   └────┬─────┘    └────┬─────┘   └────┬─────┘         │    │
-│  │       │              │               │              │                │    │
-│  │       ▼              ▼               ▼              ▼                │    │
-│  │   ChromaDB      PersonEntity      Vault        imessage.db          │    │
-│  │   BM25 Index    Interactions                   PersonEntity         │    │
+│  │  Step 1      Step 2       Step 3      Step 4       Step 5           │    │
+│  │  ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐  ┌────────┐         │    │
+│  │  │ Vault  │─▶│ People │─▶│ GDocs  │─▶│iMessage│─▶│ Slack  │         │    │
+│  │  │Reindex │  │  Sync  │  │  Sync  │  │  Sync  │  │  Sync  │         │    │
+│  │  └───┬────┘  └───┬────┘  └───┬────┘  └───┬────┘  └───┬────┘         │    │
+│  │      │           │           │           │           │               │    │
+│  │      ▼           ▼           ▼           ▼           ▼               │    │
+│  │  ChromaDB   PersonEntity   Vault    imessage.db  ChromaDB           │    │
+│  │  BM25 Index Interactions            PersonEntity lifeos_slack       │    │
 │  └─────────────────────────────────────────────────────────────────────┘    │
 │                                                                              │
 │  ┌─────────────────────────────────────────────────────────────────────┐    │
@@ -533,6 +534,7 @@ The local LLM (Llama 3.2 3B via Ollama) routes queries to appropriate data sourc
 | `gmail` | Email messages and correspondence | "What did John email about?" |
 | `drive` | Google Drive files and spreadsheets | "Find the Q4 budget spreadsheet" |
 | `imessage` | iMessage/SMS conversation history | "What did I text Sarah about dinner?" |
+| `slack` | Slack DMs and channel messages | "What did John say in Slack about the project?" |
 | `people` | Stakeholder profiles and context | "Tell me about Alex before my meeting" |
 | `actions` | Open tasks and commitments | "What are my open action items?" |
 | `memories` | User-saved memories and notes | "What did I want to remember about the project?" |
@@ -737,6 +739,59 @@ Ask natural language questions like:
 - "Show me my recent messages with John"
 - "Did Sarah confirm dinner plans?"
 
+## Slack Integration
+
+LifeOS indexes your Slack DMs and channel messages for semantic search and CRM interactions.
+
+### Prerequisites
+
+1. **Slack App**: Create a Slack app at [api.slack.com/apps](https://api.slack.com/apps)
+2. **User Token Scopes**: Configure the following OAuth User Token Scopes:
+   - `users:read`, `users:read.email` — User info
+   - `channels:read`, `channels:history` — Public channels
+   - `im:read`, `im:history` — DMs
+   - `mpim:read`, `mpim:history` — Group DMs
+   - `groups:read`, `groups:history` — Private channels
+3. **Install to Workspace**: Install the app to your workspace to get a user token
+
+### Configuration
+
+Add to `.env`:
+```bash
+SLACK_USER_TOKEN=xoxp-...        # User OAuth token
+SLACK_TEAM_ID=T02F5DW71LY        # Your workspace ID
+```
+
+Enable in `config/crm_settings.yaml`:
+```yaml
+sources:
+  slack:
+    enabled: true
+    sync_dms: true
+    sync_channels: false  # Start with DMs only
+```
+
+### How It Works
+
+1. **Vector Index**: Slack messages are indexed in ChromaDB (`lifeos_slack` collection)
+2. **Semantic Search**: Query messages by meaning, not just keywords
+3. **CRM Integration**: Slack users become SourceEntities, DM conversations create Interactions
+4. **Nightly Sync**: Incremental sync runs at 3 AM Eastern (Step 6)
+
+### API Endpoints
+
+- `GET /api/slack/status` — Integration status and index statistics
+- `POST /api/slack/search` — Semantic search across Slack messages
+- `GET /api/slack/conversations` — List DMs and channels
+- `POST /api/slack/sync` — Trigger full or incremental sync
+
+### Querying Messages
+
+Ask natural language questions like:
+- "What did John say about the project in Slack?"
+- "Find Slack messages about the quarterly review"
+- "What were my recent DMs with the team?"
+
 ## People & Entity Resolution
 
 LifeOS maintains a unified view of people across all data sources using the PersonEntity system.
@@ -750,6 +805,7 @@ LifeOS maintains a unified view of people across all data sources using the Pers
 | Google Calendar | Event attendees |
 | LinkedIn Export | Professional connections (CSV import) |
 | iMessage | Phone contacts |
+| Slack | Workspace users and DM conversations |
 | Phone Contacts | Contact names and numbers |
 
 ### Entity Resolution
@@ -795,20 +851,25 @@ LifeOS runs automated sync operations at **3 AM Eastern** daily.
 ### Sync Operations (in order)
 
 1. **Vault Reindex** — Full reindex of all Obsidian notes
-2. **LinkedIn Sync** — Import connections from CSV (if updated)
-3. **Gmail Sync** — Fetch recent emails for people context
-4. **Calendar Sync** — Update calendar event index
-5. **Google Docs Sync** — Sync configured docs to vault
-6. **iMessage Sync** — Export new messages from macOS Messages
+2. **People v2 Sync** — LinkedIn + Gmail + Calendar → PersonEntity
+3. **Google Docs Sync** — Sync configured docs to vault
+4. **iMessage Sync** — Export new messages from macOS Messages
+5. **Google Sheets Sync** — Sync form responses to vault notes
+6. **Slack Sync** — Incremental sync of DMs and channels to ChromaDB
 
 ### Manual Trigger
 
-To run all sync operations manually:
+To run individual sync operations manually:
 
 ```bash
-# Individual syncs
+# iMessage sync
 python -c "from api.services.imessage import sync_and_join_imessages; sync_and_join_imessages()"
+
+# Google Docs sync
 python -c "from api.services.gdoc_sync import sync_gdocs; sync_gdocs()"
+
+# Slack sync (incremental)
+python -c "from api.services.slack_sync import run_slack_sync; run_slack_sync(full=False)"
 
 # Or restart server to trigger startup sync
 ./scripts/server.sh restart

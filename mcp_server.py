@@ -97,6 +97,11 @@ CURATED_ENDPOINTS = {
         "description": "Create a draft email in Gmail. Provide 'to' (recipient), 'subject', and 'body'. Optional: 'cc', 'bcc', 'html' (bool), 'account' (personal/work). Returns draft_id and gmail_url to open the draft directly in Gmail for review before sending.",
         "method": "POST"
     },
+    "/api/slack/search": {
+        "name": "lifeos_slack_search",
+        "description": "Search Slack messages semantically. Searches DMs, group DMs, and channels you have access to. Returns messages with sender, channel, and timestamp. Useful for finding what someone said about a topic or recalling conversations.",
+        "method": "POST"
+    },
 }
 
 
@@ -312,6 +317,16 @@ class LifeOSMCPServer:
                     "direction": {"type": "string", "description": "Filter by direction: 'sent' or 'received'"},
                     "max_results": {"type": "integer", "description": "Maximum results (1-200)", "default": 50}
                 }
+            },
+            "lifeos_slack_search": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search query for Slack messages (semantic search)"},
+                    "top_k": {"type": "integer", "description": "Number of results to return (1-50)", "default": 20},
+                    "channel_id": {"type": "string", "description": "Filter by specific channel ID"},
+                    "user_id": {"type": "string", "description": "Filter by specific user ID"}
+                },
+                "required": ["query"]
             }
         }
 
@@ -511,6 +526,24 @@ class LifeOSMCPServer:
                     msg_text = msg_text[:150] + "..."
                 msg_text = msg_text.replace("\n", " ").strip()
                 text += f"- **{timestamp}** {direction} {msg_text}\n"
+            return text
+
+        elif tool_name == "lifeos_slack_search":
+            results = data.get("results", [])
+            if not results:
+                return "No Slack messages found."
+            text = f"Found {len(results)} Slack messages:\n\n"
+            for r in results[:20]:
+                channel = r.get("channel_name", "Unknown channel")
+                user = r.get("user_name", "Unknown user")
+                timestamp = r.get("timestamp", "")[:16].replace("T", " ")
+                content = r.get("content", "")
+                # Truncate long messages
+                if len(content) > 200:
+                    content = content[:200] + "..."
+                content = content.replace("\n", " ").strip()
+                text += f"- **{timestamp}** in {channel}\n"
+                text += f"  {user}: {content}\n\n"
             return text
 
         # Default: return formatted JSON

@@ -30,6 +30,10 @@ SLACK_CLIENT_ID = os.getenv("SLACK_CLIENT_ID", "")
 SLACK_CLIENT_SECRET = os.getenv("SLACK_CLIENT_SECRET", "")
 SLACK_REDIRECT_URI = os.getenv("SLACK_REDIRECT_URI", "http://localhost:8000/api/crm/slack/callback")
 
+# Direct token configuration (preferred for personal use)
+SLACK_USER_TOKEN = os.getenv("SLACK_USER_TOKEN", "")
+SLACK_TEAM_ID = os.getenv("SLACK_TEAM_ID", "")
+
 # OAuth scopes required for CRM functionality
 SLACK_SCOPES = [
     "users:read",           # Read user profiles
@@ -198,9 +202,18 @@ class SlackClient:
 
     BASE_URL = "https://slack.com/api"
 
-    def __init__(self, token_store: Optional[SlackTokenStore] = None):
+    def __init__(self, token_store: Optional[SlackTokenStore] = None, token: Optional[str] = None):
+        """
+        Initialize Slack client.
+
+        Args:
+            token_store: Optional token store for OAuth-based tokens
+            token: Optional direct token (overrides token store)
+        """
         self.token_store = token_store or SlackTokenStore()
+        self._direct_token = token
         self._http_client: Optional[httpx.Client] = None
+        self._user_cache: dict[str, SlackUser] = {}
 
     @property
     def http_client(self) -> httpx.Client:
@@ -215,13 +228,22 @@ class SlackClient:
             self._http_client.close()
             self._http_client = None
 
+    def _get_token(self, workspace_id: str = "default") -> Optional[str]:
+        """Get token from direct token, env var, or token store."""
+        # Priority: direct token > env var > token store
+        if self._direct_token:
+            return self._direct_token
+        if SLACK_USER_TOKEN:
+            return SLACK_USER_TOKEN
+        return self.token_store.get_token(workspace_id)
+
     def is_configured(self) -> bool:
-        """Check if Slack OAuth is configured."""
-        return bool(SLACK_CLIENT_ID and SLACK_CLIENT_SECRET)
+        """Check if Slack is configured (either OAuth or direct token)."""
+        return bool(SLACK_USER_TOKEN or (SLACK_CLIENT_ID and SLACK_CLIENT_SECRET))
 
     def is_connected(self, workspace_id: str = "default") -> bool:
-        """Check if we have a valid token for workspace."""
-        return self.token_store.get_token(workspace_id) is not None
+        """Check if we have a valid token."""
+        return self._get_token(workspace_id) is not None
 
     def get_oauth_url(self, state: Optional[str] = None) -> str:
         """Generate OAuth authorization URL."""
@@ -272,27 +294,60 @@ class SlackClient:
         self,
         method: str,
         workspace_id: str = "default",
+        max_retries: int = 3,
         **kwargs,
     ) -> dict:
-        """Make authenticated Slack API call."""
-        token = self.token_store.get_token(workspace_id)
+        """
+        Make authenticated Slack API call with rate limit handling.
+
+        Args:
+            method: Slack API method name
+            workspace_id: Workspace ID
+            max_retries: Maximum retries on rate limit
+            **kwargs: API parameters
+
+        Returns:
+            API response dict
+        """
+        import time
+
+        token = self._get_token(workspace_id)
         if not token:
-            raise SlackAPIError(f"No token for workspace {workspace_id}")
+            raise SlackAPIError(f"No token available for workspace {workspace_id}")
 
-        response = self.http_client.post(
-            f"{self.BASE_URL}/{method}",
-            headers={"Authorization": f"Bearer {token}"},
-            json=kwargs if kwargs else None,
-        )
-        data = response.json()
+        retry_delay = 2  # Start with 2 seconds
 
-        if not data.get("ok"):
+        for attempt in range(max_retries + 1):
+            response = self.http_client.post(
+                f"{self.BASE_URL}/{method}",
+                headers={"Authorization": f"Bearer {token}"},
+                json=kwargs if kwargs else None,
+            )
+            data = response.json()
+
+            if data.get("ok"):
+                return data
+
             error = data.get("error", "Unknown API error")
+
+            # Handle rate limiting with exponential backoff
+            if error == "ratelimited":
+                if attempt < max_retries:
+                    retry_after = int(response.headers.get("Retry-After", retry_delay))
+                    logger.warning(f"Rate limited, waiting {retry_after}s (attempt {attempt + 1}/{max_retries + 1})")
+                    time.sleep(retry_after)
+                    retry_delay *= 2  # Exponential backoff
+                    continue
+                else:
+                    raise SlackAPIError("Rate limit exceeded after retries")
+
+            # Handle auth errors
             if error == "token_revoked" or error == "invalid_auth":
-                self.token_store.remove_token(workspace_id)
+                if not self._direct_token and not SLACK_USER_TOKEN:
+                    self.token_store.remove_token(workspace_id)
             raise SlackAPIError(error)
 
-        return data
+        raise SlackAPIError("Max retries exceeded")
 
     def list_users(self, workspace_id: str = "default") -> list[SlackUser]:
         """List all users in workspace."""
@@ -352,27 +407,79 @@ class SlackClient:
         except SlackAPIError:
             return None
 
-    def list_channels(self, workspace_id: str = "default") -> list[SlackChannel]:
-        """List all accessible channels."""
+    def list_channels(self, workspace_id: str = "default", include_dms: bool = True) -> list[SlackChannel]:
+        """
+        List all accessible channels with pagination.
+
+        Args:
+            workspace_id: Workspace ID
+            include_dms: If True, include DMs (im, mpim). If False, only regular channels.
+
+        Returns:
+            List of SlackChannel objects
+        """
+        import time
+
         channels = []
+        cursor = None
 
-        # Public channels
-        data = self._api_call(
-            "conversations.list",
-            workspace_id,
-            types="public_channel,private_channel,mpim,im",
-            limit=1000,
-        )
+        # Determine types to fetch
+        # Note: Slack API returns different results for different type combinations
+        # We need to query DMs separately for best results
+        types_list = ["public_channel", "private_channel"]
+        if include_dms:
+            types_list.extend(["im", "mpim"])
 
-        for channel in data.get("channels", []):
-            channels.append(SlackChannel(
-                channel_id=channel["id"],
-                name=channel.get("name", channel.get("user", "DM")),
-                is_private=channel.get("is_private", False),
-                is_im=channel.get("is_im", False),
-                is_mpim=channel.get("is_mpim", False),
-                member_count=channel.get("num_members", 0),
-            ))
+        token = self._get_token(workspace_id)
+        if not token:
+            raise SlackAPIError(f"No token available for workspace {workspace_id}")
+
+        retry_delay = 2
+        max_retries = 3
+
+        while True:
+            params = {
+                "types": ",".join(types_list),
+                "limit": 200,  # Max per request
+            }
+            if cursor:
+                params["cursor"] = cursor
+
+            # Use GET with params for conversations.list (more reliable)
+            for attempt in range(max_retries + 1):
+                response = self.http_client.get(
+                    f"{self.BASE_URL}/conversations.list",
+                    headers={"Authorization": f"Bearer {token}"},
+                    params=params,
+                )
+                data = response.json()
+
+                if data.get("ok"):
+                    break
+
+                error = data.get("error", "Unknown API error")
+                if error == "ratelimited" and attempt < max_retries:
+                    retry_after = int(response.headers.get("Retry-After", retry_delay))
+                    logger.warning(f"Rate limited on conversations.list, waiting {retry_after}s")
+                    time.sleep(retry_after)
+                    retry_delay *= 2
+                    continue
+
+                raise SlackAPIError(error)
+
+            for channel in data.get("channels", []):
+                channels.append(SlackChannel(
+                    channel_id=channel["id"],
+                    name=channel.get("name", channel.get("user", "DM")),
+                    is_private=channel.get("is_private", False),
+                    is_im=channel.get("is_im", False),
+                    is_mpim=channel.get("is_mpim", False),
+                    member_count=channel.get("num_members", 0),
+                ))
+
+            cursor = data.get("response_metadata", {}).get("next_cursor")
+            if not cursor:
+                break
 
         return channels
 
@@ -384,7 +491,7 @@ class SlackClient:
         oldest: Optional[datetime] = None,
         latest: Optional[datetime] = None,
     ) -> list[SlackMessage]:
-        """Get message history for a channel."""
+        """Get message history for a channel (single page)."""
         params = {"channel": channel_id, "limit": limit}
 
         if oldest:
@@ -412,6 +519,74 @@ class SlackClient:
             ))
 
         return messages
+
+    def get_all_channel_history(
+        self,
+        channel_id: str,
+        workspace_id: str = "default",
+        oldest: Optional[datetime] = None,
+        latest: Optional[datetime] = None,
+        max_messages: int = 10000,
+    ) -> list[SlackMessage]:
+        """
+        Get full message history for a channel with pagination.
+
+        Args:
+            channel_id: Channel ID to fetch history for
+            workspace_id: Workspace ID
+            oldest: Only fetch messages after this time
+            latest: Only fetch messages before this time
+            max_messages: Maximum messages to fetch (safety limit)
+
+        Returns:
+            List of SlackMessage objects
+        """
+        all_messages = []
+        cursor = None
+
+        while len(all_messages) < max_messages:
+            params = {"channel": channel_id, "limit": 200}
+
+            if oldest:
+                params["oldest"] = str(oldest.timestamp())
+            if latest:
+                params["latest"] = str(latest.timestamp())
+            if cursor:
+                params["cursor"] = cursor
+
+            data = self._api_call("conversations.history", workspace_id, **params)
+
+            for msg in data.get("messages", []):
+                if msg.get("type") != "message":
+                    continue
+
+                ts = float(msg["ts"])
+                all_messages.append(SlackMessage(
+                    ts=msg["ts"],
+                    channel_id=channel_id,
+                    user_id=msg.get("user", ""),
+                    text=msg.get("text", ""),
+                    timestamp=datetime.fromtimestamp(ts, tz=timezone.utc),
+                    thread_ts=msg.get("thread_ts"),
+                    reply_count=msg.get("reply_count", 0),
+                    reactions=msg.get("reactions", []),
+                ))
+
+            cursor = data.get("response_metadata", {}).get("next_cursor")
+            if not cursor:
+                break
+
+        return all_messages
+
+    def get_user_cached(self, user_id: str, workspace_id: str = "default") -> Optional[SlackUser]:
+        """Get user with caching to reduce API calls."""
+        if user_id in self._user_cache:
+            return self._user_cache[user_id]
+
+        user = self.get_user(user_id, workspace_id)
+        if user:
+            self._user_cache[user_id] = user
+        return user
 
 
 class SlackAPIError(Exception):
@@ -514,3 +689,13 @@ def get_slack_client() -> SlackClient:
     if _slack_client is None:
         _slack_client = SlackClient()
     return _slack_client
+
+
+def get_workspace_id() -> str:
+    """Get the configured workspace ID from env or default."""
+    return SLACK_TEAM_ID or "default"
+
+
+def is_slack_enabled() -> bool:
+    """Check if Slack integration is enabled and configured."""
+    return bool(SLACK_USER_TOKEN)

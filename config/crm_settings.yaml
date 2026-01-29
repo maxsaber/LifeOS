@@ -74,8 +74,10 @@ sources:
       - work
 
   slack:
-    enabled: false
-    # Add Slack OAuth configuration when enabling
+    enabled: true
+    sync_dms: true
+    sync_channels: false  # Start with DMs only
+    sync_interval_minutes: 60
 
   imessage:
     enabled: true

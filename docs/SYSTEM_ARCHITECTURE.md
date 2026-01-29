@@ -14,11 +14,12 @@ LifeOS is a personal knowledge management system that indexes your Obsidian vaul
 |---------|----------|------------|-----------|
 | **ChromaDB Server** | Continuous (boot) | HTTP requests | Vector data |
 | **Launchd API Service** | Continuous (boot) | All data | API logs |
-| **Nightly Sync** | Daily 3:00 AM ET | Vault, Gmail, Calendar, LinkedIn, iMessages | ChromaDB, BM25, Vault, PersonEntity |
+| **Nightly Sync** | Daily 3:00 AM ET | Vault, Gmail, Calendar, LinkedIn, iMessages, Slack | ChromaDB, BM25, Vault, PersonEntity |
 | **Calendar Indexer** | 8 AM, 12 PM, 3 PM ET | Google Calendar (personal + work) | ChromaDB (`lifeos_calendar`) |
 | **Vault File Watcher** | Continuous (event-based) | Vault filesystem | ChromaDB, BM25 |
 | **Granola Processor** | Every 5 minutes | `Granola/` folder | Vault (classified files) |
 | **Omi Processor** | Every 5 minutes | `Omi/Events/` folder | Vault (classified files) |
+| **Slack Sync** | Nightly (Step 6) | Slack API (DMs, channels) | ChromaDB (`lifeos_slack`), PersonEntity |
 
 ---
 
@@ -73,6 +74,8 @@ LifeOS is a personal knowledge management system that indexes your Obsidian vaul
 | 2 | People v2 Sync | LinkedIn CSV, Gmail (24h), Calendar (24h) | PersonEntity, InteractionStore |
 | 3 | Google Docs Sync | Configured Google Docs | Vault markdown files |
 | 4 | iMessage Sync | macOS Messages DB | `data/imessage.db`, PersonEntity |
+| 5 | Google Sheets Sync | Configured Google Sheets | Vault journal notes |
+| 6 | Slack Sync | Slack API (DMs, channels) | ChromaDB (`lifeos_slack`), SourceEntity, Interactions |
 
 **Error Handling**: Each step catches exceptions independently and continues to next step.
 
@@ -156,10 +159,11 @@ Configure `LIFEOS_ALERT_EMAIL` in `.env` to receive notifications.
 | Store | Location | Purpose | Updated By |
 |-------|----------|---------|------------|
 | **ChromaDB** | `data/chromadb/` | Vector embeddings for semantic search | Nightly reindex, File watcher, Calendar indexer |
+| **ChromaDB (Slack)** | `lifeos_slack` collection | Slack message vectors | Nightly Slack sync |
 | **BM25 Index** | `data/chromadb/bm25_index.db` | Keyword-based search | Nightly reindex, File watcher |
 | **Vault** | `~/Notes 2025/` (configurable) | Primary knowledge base (Markdown) | User, Granola, Omi, GDoc Sync |
-| **PersonEntity** | In-memory + persistence | Resolved people identities | People v2 sync, iMessage sync |
-| **InteractionStore** | In-memory + persistence | Tracked interactions per person | People v2 sync |
+| **PersonEntity** | In-memory + persistence | Resolved people identities | People v2 sync, iMessage sync, Slack sync |
+| **InteractionStore** | In-memory + persistence | Tracked interactions per person | People v2 sync, Slack sync |
 | **iMessage Store** | `data/imessage.db` | Local message export cache | iMessage sync |
 | **LinkedIn CSV** | `data/LinkedInConnections.csv` | Contacts source (manual export) | External (user) |
 
@@ -213,7 +217,9 @@ Query → Name Expansion → [Vector Search + BM25 Search] → RRF Fusion → Bo
 03:01          └─ Step 2: People v2 sync (LinkedIn + Gmail + Calendar)
 03:02          └─ Step 3: Google Docs sync (configured docs → vault)
 03:03          └─ Step 4: iMessage sync (macOS Messages → local store)
-03:04          Nightly sync complete
+03:04          └─ Step 5: Google Sheets sync (form responses → vault)
+03:05          └─ Step 6: Slack sync (incremental → ChromaDB + Interactions)
+03:06          Nightly sync complete
 
 08:00          Calendar sync (Google Calendar → ChromaDB)
 12:00          Calendar sync
@@ -258,6 +264,13 @@ Query → Name Expansion → [Vector Search + BM25 Search] → RRF Fusion → Bo
 - `GET /api/imessage/statistics` - Message database statistics
 - `GET /api/imessage/person/{entity_id}` - Messages with a specific person
 
+### Slack
+- `GET /api/slack/status` - Integration status and index statistics
+- `POST /api/slack/search` - Semantic search across Slack messages
+- `GET /api/slack/conversations` - List DMs and channels
+- `POST /api/slack/sync` - Trigger full or incremental sync
+- `GET /api/slack/channels/{channel_id}/messages` - Get live messages from a channel
+
 ---
 
 ## Environment Variables
@@ -271,6 +284,8 @@ Query → Name Expansion → [Vector Search + BM25 Search] → RRF Fusion → Bo
 | `LIFEOS_ALERT_EMAIL` | Email for sync failure alerts | None (disabled) |
 | `ANTHROPIC_API_KEY` | Claude API key | Required |
 | `OLLAMA_HOST` | Local LLM endpoint | `http://localhost:11434` |
+| `SLACK_USER_TOKEN` | Slack user OAuth token (xoxp-...) | None (disabled) |
+| `SLACK_TEAM_ID` | Slack workspace ID | None |
 
 ---
 

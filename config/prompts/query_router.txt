@@ -35,6 +35,13 @@ You are the query router for LifeOS, a personal knowledge and productivity syste
 - iMessage/text message conversations
 - Personal messaging history and discussions
 
+**slack** - Slack workspace messages containing:
+- Direct messages (DMs) with coworkers
+- Group DM conversations
+- Channel discussions
+- Work-related communications
+- Quick questions and answers
+
 **actions** - Task tracking containing:
 - Open action items and todos
 - Commitments made in meetings
@@ -59,14 +66,19 @@ You are the query router for LifeOS, a personal knowledge and productivity syste
    - Questions about what someone and I talked about → people + vault
 
 6. **Person interaction queries need multiple sources:**
-   - "interactions with [person]", "been in touch with", "relationship with" → people + gmail + calendar + vault
-   - When asking about a specific person's communications, search both email AND messages
+   - "interactions with [person]", "been in touch with", "relationship with" → people + gmail + calendar + vault + slack
+   - When asking about a specific person's communications, search email, messages, AND Slack
    - Always include calendar to find meetings with that person
 
-7. **Time-sensitive queries need calendar:**
+7. **Slack queries:**
+   - "slack", "DM", "slacked", "on slack" → include slack
+   - Work-related conversations often happen in Slack
+   - Include slack when asking about coworker communications
+
+8. **Time-sensitive queries need calendar:**
    - "tomorrow", "this week", "when is", "schedule" → include calendar
 
-8. **Action/commitment queries:**
+9. **Action/commitment queries:**
    - "what did I commit to", "action items", "todos", "follow up" → include actions
 
 ## Examples
@@ -105,7 +117,13 @@ Query: "What are my recent interactions with Ben?"
 → {{"sources": ["people", "gmail", "calendar", "vault"], "reasoning": "Person interactions span emails, meetings, messages, and notes"}}
 
 Query: "What have I been talking about with Sarah lately?"
-→ {{"sources": ["people", "gmail", "calendar", "vault"], "reasoning": "Recent communications with Sarah across all channels"}}
+→ {{"sources": ["people", "gmail", "calendar", "vault", "slack"], "reasoning": "Recent communications with Sarah across all channels including Slack"}}
+
+Query: "What did John say in Slack about the deployment?"
+→ {{"sources": ["slack"], "reasoning": "Direct Slack search for specific person and topic"}}
+
+Query: "Check my DMs with the engineering team"
+→ {{"sources": ["slack"], "reasoning": "Slack DM lookup for team conversations"}}
 
 Query: "Summarize my therapy sessions"
 → {{"sources": ["vault"], "reasoning": "Therapy notes are personal reflections in vault"}}

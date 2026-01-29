@@ -911,6 +911,48 @@ async def ask_stream(request: AskStreamRequest):
                     extra_context.append({"source": "gmail", "content": email_text})
                     print(f"  Total: {len(all_messages)} emails from both accounts")
 
+            # Handle slack queries - search Slack DMs and channels
+            if "slack" in routing_result.sources:
+                print("SEARCHING SLACK...")
+                try:
+                    from api.services.slack_indexer import get_slack_indexer
+                    from api.services.slack_integration import is_slack_enabled
+
+                    if is_slack_enabled():
+                        slack_indexer = get_slack_indexer()
+                        slack_results = slack_indexer.search(
+                            query=request.question,
+                            top_k=10,
+                        )
+
+                        if slack_results:
+                            slack_text = "\n\n### Slack Messages\n\n"
+                            for msg in slack_results:
+                                channel_name = msg.get("channel_name", "Unknown")
+                                user_name = msg.get("user_name", "Unknown")
+                                timestamp = msg.get("timestamp", "")
+                                content = msg.get("content", "")
+
+                                # Parse timestamp for display
+                                try:
+                                    dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                                    date_str = dt.strftime("%Y-%m-%d %H:%M")
+                                except:
+                                    date_str = timestamp[:10] if timestamp else ""
+
+                                slack_text += f"**{channel_name}** - {user_name} ({date_str}):\n"
+                                slack_text += f"  {content[:500]}{'...' if len(content) > 500 else ''}\n\n"
+
+                            extra_context.append({"source": "slack", "content": slack_text})
+                            print(f"  Found {len(slack_results)} Slack messages")
+                        else:
+                            print("  No Slack messages found")
+                    else:
+                        print("  Slack not enabled")
+                except Exception as e:
+                    print(f"  Slack search error: {e}")
+                    logger.error(f"Slack search failed: {e}")
+
             # Handle vault queries (always include as fallback)
             if "vault" in routing_result.sources or not routing_result.sources or not extra_context:
                 # Use hybrid search (vector + BM25 keyword) for better keyword matching
@@ -1095,6 +1137,12 @@ async def ask_stream(request: AskStreamRequest):
                     sources.insert(0, {  # Put at beginning since it's most relevant
                         'file_name': f"💬 Text Messages ({msg_count} messages)",
                         'source_type': 'imessage',
+                    })
+                # Add Slack source
+                elif ctx.get("source") == "slack":
+                    sources.insert(0, {
+                        'file_name': "💬 Slack Messages",
+                        'source_type': 'slack',
                     })
 
             # Send sources to client

@@ -18,7 +18,7 @@ from api.services.model_selector import classify_query_complexity
 logger = logging.getLogger(__name__)
 
 # Valid data sources
-VALID_SOURCES = {"vault", "calendar", "gmail", "drive", "people", "actions"}
+VALID_SOURCES = {"vault", "calendar", "gmail", "drive", "people", "actions", "slack"}
 
 # Load router prompt from file
 PROMPT_FILE = Path(__file__).parent.parent.parent / "config" / "prompts" / "query_router.txt"
@@ -300,6 +300,19 @@ class QueryRouter:
             sources.add("calendar")
             # Also search gmail for email communications
             sources.add("gmail")
+            # Also search slack for DM communications
+            sources.add("slack")
+
+        # Slack keywords
+        slack_keywords = [
+            "slack", "dm ", "dms", "direct message",
+            "slack message", "slack conversation",
+            "on slack", "in slack", "said in slack",
+            "slacked", "slacking"
+        ]
+        if any(kw in query_lower for kw in slack_keywords):
+            sources.add("slack")
+            reasons.append("slack keywords")
 
         # Action keywords
         action_keywords = [

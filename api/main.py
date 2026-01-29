@@ -16,6 +16,10 @@ server instances with different code versions.
 
 See CLAUDE.md for full instructions for AI coding agents.
 """
+# Load environment variables from .env file first, before any imports
+from dotenv import load_dotenv
+load_dotenv()
+
 import logging
 import threading
 from contextlib import asynccontextmanager
@@ -30,7 +34,7 @@ from fastapi.exceptions import RequestValidationError
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from api.routes import search, ask, calendar, gmail, drive, people, chat, briefings, admin, conversations, memories, imessage, crm
+from api.routes import search, ask, calendar, gmail, drive, people, chat, briefings, admin, conversations, memories, imessage, crm, slack
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -152,6 +156,23 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
         except Exception as e:
             logger.error(f"Nightly sync: iMessage sync failed: {e}")
             failures.append(("iMessage sync", str(e)))
+
+        time.sleep(STEP_DELAY)  # Let APIs settle
+
+        # === Step 6: Slack Sync ===
+        # Indexes Slack DMs and creates interactions for CRM
+        try:
+            from api.services.slack_integration import is_slack_enabled
+            if is_slack_enabled():
+                logger.info("Nightly sync: Starting Slack sync...")
+                from api.services.slack_sync import run_slack_sync
+                slack_stats = run_slack_sync(full=False)  # Incremental sync
+                logger.info(f"Nightly sync: Slack sync completed: {slack_stats}")
+            else:
+                logger.info("Nightly sync: Slack not enabled, skipping")
+        except Exception as e:
+            logger.error(f"Nightly sync: Slack sync failed: {e}")
+            failures.append(("Slack sync", str(e)))
 
         # Collect processor failures from the last 24 hours
         try:
@@ -284,6 +305,7 @@ app.include_router(conversations.router)
 app.include_router(memories.router)
 app.include_router(imessage.router)
 app.include_router(crm.router)
+app.include_router(slack.router)
 
 # Serve static files
 web_dir = Path(__file__).parent.parent / "web"
