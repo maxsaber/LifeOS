@@ -410,9 +410,10 @@ def _person_to_detail_response(
     )
 
     if include_related:
-        # Add source entities
+        # Add source entities (limit to 100 most recent for performance)
+        # The full count is available in source_entity_count
         source_store = get_source_entity_store()
-        source_entities = source_store.get_for_person(person.id)
+        source_entities = source_store.get_for_person(person.id, limit=100)
         response.source_entities = [_source_entity_to_response(e) for e in source_entities]
 
         # Add pending links
@@ -453,6 +454,8 @@ async def list_people(
     Supports searching by name/email, filtering by category/source,
     and sorting by interactions, last_seen, name, or relationship strength.
     """
+    start_time = time.time()
+
     person_store = get_person_entity_store()
     pending_store = get_pending_link_store()
 
@@ -532,13 +535,18 @@ async def list_people(
     has_more = offset + limit < total
     people = people[offset:offset + limit]
 
-    return PersonListResponse(
+    result = PersonListResponse(
         people=[_person_to_detail_response(p, include_related=False) for p in people],
         count=len(people),
         total=total,
         offset=offset,
         has_more=has_more,
     )
+
+    elapsed = (time.time() - start_time) * 1000
+    logger.info(f"list_people(q={q}, category={category}, limit={limit}) took {elapsed:.1f}ms ({total} total, {len(people)} returned)")
+
+    return result
 
 
 @router.get("/people/{person_id}", response_model=PersonDetailResponse)
@@ -623,6 +631,8 @@ async def get_person_timeline(
 
     Returns emails, meetings, notes, and other interactions in timeline format.
     """
+    start_time = time.time()
+
     person_store = get_person_entity_store()
     person = person_store.get_by_id(person_id)
 
@@ -639,6 +649,9 @@ async def get_person_timeline(
 
     has_more = len(interactions) > offset + limit
     interactions = interactions[offset:offset + limit]
+
+    elapsed = (time.time() - start_time) * 1000
+    logger.info(f"timeline({person_id}) took {elapsed:.1f}ms ({len(interactions)} interactions, {days_back} days)")
 
     return TimelineResponse(
         items=[
@@ -839,6 +852,8 @@ async def get_person_connections(
     """
     Get related people with relationship scores.
     """
+    start_time = time.time()
+
     person_store = get_person_entity_store()
     person = person_store.get_by_id(person_id)
 
@@ -875,6 +890,9 @@ async def get_person_connections(
         key=lambda c: c.shared_events_count + c.shared_threads_count,
         reverse=True
     )
+
+    elapsed = (time.time() - start_time) * 1000
+    logger.info(f"connections({person_id}) took {elapsed:.1f}ms ({len(connections)} connections)")
 
     return ConnectionsResponse(
         connections=connections,
@@ -928,6 +946,8 @@ async def get_person_facts(person_id: str):
 
     Returns facts grouped by category for easy display.
     """
+    start_time = time.time()
+
     person_store = get_person_entity_store()
     person = person_store.get_by_id(person_id)
 
@@ -946,6 +966,9 @@ async def get_person_facts(person_id: str):
         if fact_resp.category not in by_category:
             by_category[fact_resp.category] = []
         by_category[fact_resp.category].append(fact_resp)
+
+    elapsed = (time.time() - start_time) * 1000
+    logger.info(f"facts({person_id}) took {elapsed:.1f}ms ({len(fact_responses)} facts)")
 
     return PersonFactsResponse(
         facts=fact_responses,
@@ -1100,6 +1123,8 @@ async def get_pending_links(
     """
     List pending entity links awaiting confirmation.
     """
+    start_time = time.time()
+
     pending_store = get_pending_link_store()
     source_store = get_source_entity_store()
     person_store = get_person_entity_store()
@@ -1111,6 +1136,9 @@ async def get_pending_links(
         source_entity = source_store.get_by_id(link.source_entity_id)
         proposed_person = person_store.get_by_id(link.proposed_canonical_id)
         links.append(_pending_link_to_response(link, source_entity, proposed_person))
+
+    elapsed = (time.time() - start_time) * 1000
+    logger.info(f"pending_links() took {elapsed:.1f}ms ({len(links)} links)")
 
     return PendingLinksResponse(
         links=links,
@@ -1236,8 +1264,14 @@ async def discover_connections(
     If person_id is provided, finds suggestions for that person.
     Otherwise, finds people with potential connections.
     """
+    start_time = time.time()
+
     if person_id:
         suggestions = get_suggested_connections(person_id, limit=limit)
+
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"discover({person_id}) took {elapsed:.1f}ms ({len(suggestions)} suggestions)")
+
         return DiscoverResponse(
             suggestions=[
                 SuggestedConnectionResponse(
@@ -1259,12 +1293,15 @@ async def discover_connections(
 
         people = person_store.get_all()
 
+        # Get all people with relationships in one query (avoid N+1)
+        people_with_rels = rel_store.get_people_with_relationships()
+
         # Score by source diversity / relationship count
         scored = []
         for person in people:
-            rel_count = len(rel_store.get_for_person(person.id, limit=1))
+            has_relationships = person.id in people_with_rels
             source_count = len(person.sources)
-            if source_count > 1 and rel_count == 0:
+            if source_count > 1 and not has_relationships:
                 scored.append({
                     "person_id": person.id,
                     "name": person.canonical_name,
@@ -1276,6 +1313,9 @@ async def discover_connections(
 
         scored.sort(key=lambda x: x["score"], reverse=True)
         scored = scored[:limit]
+
+        elapsed = (time.time() - start_time) * 1000
+        logger.info(f"discover() took {elapsed:.1f}ms ({len(scored)} suggestions)")
 
         return DiscoverResponse(
             suggestions=[
@@ -1382,6 +1422,8 @@ async def get_crm_statistics():
     """
     Get comprehensive CRM statistics.
     """
+    start_time = time.time()
+
     person_store = get_person_entity_store()
     source_store = get_source_entity_store()
     pending_store = get_pending_link_store()
@@ -1391,6 +1433,9 @@ async def get_crm_statistics():
     source_stats = source_store.get_statistics()
     pending_stats = pending_store.get_statistics()
     rel_stats = rel_store.get_statistics()
+
+    elapsed = (time.time() - start_time) * 1000
+    logger.info(f"statistics() took {elapsed:.1f}ms")
 
     return StatisticsResponse(
         total_people=person_stats.get("total_entities", 0),
@@ -1442,15 +1487,18 @@ async def get_network_graph(
         if not center_person:
             raise HTTPException(status_code=404, detail=f"Person '{center_on}' not found")
 
-        # BFS traversal with degree tracking
+        # BFS traversal with degree tracking - use batch queries
         node_degrees[center_on] = 0  # Center is degree 0
         current_level: set[str] = {center_on}
 
         for current_depth in range(1, depth + 1):
+            if not current_level:
+                break
+            # Batch query for all people at this level
+            level_relationships = rel_store.get_for_people_batch(current_level)
             next_level: set[str] = set()
             for person_id in current_level:
-                relationships = rel_store.get_for_person(person_id, limit=100)
-                for rel in relationships:
+                for rel in level_relationships.get(person_id, []):
                     other_id = rel.other_person(person_id)
                     if other_id and other_id not in node_degrees:
                         next_level.add(other_id)
@@ -1461,9 +1509,12 @@ async def get_network_graph(
         all_people = person_store.get_all()
         node_degrees = {p.id: 1 for p in all_people}
 
+    # Get all people in one pass (avoid N+1 lookups)
+    all_people_dict = {p.id: p for p in person_store.get_all()}
+
     # Filter by category and strength, then build nodes
     for person_id, degree in node_degrees.items():
-        person = person_store.get_by_id(person_id)
+        person = all_people_dict.get(person_id)
         if not person:
             continue
 
@@ -1487,29 +1538,29 @@ async def get_network_graph(
     # Build a set of valid node IDs after filtering
     valid_node_ids = {n.id for n in nodes}
 
-    # Get edges between valid nodes
+    # Get all edges in one query instead of per-node queries
+    all_relationships = rel_store.get_all_relationships(limit=10000)
     seen_edges: set[tuple[str, str]] = set()
-    for node in nodes:
-        relationships = rel_store.get_for_person(node.id, limit=100)
-        for rel in relationships:
-            other_id = rel.other_person(node.id)
-            if other_id not in valid_node_ids:
-                continue
 
-            # Create consistent edge key (smaller ID first)
-            edge_key = (min(node.id, other_id), max(node.id, other_id))
-            if edge_key in seen_edges:
-                continue
-            seen_edges.add(edge_key)
+    for rel in all_relationships:
+        # Both people must be in valid nodes
+        if rel.person_a_id not in valid_node_ids or rel.person_b_id not in valid_node_ids:
+            continue
 
-            weight = rel.shared_events_count + rel.shared_threads_count
+        # Create consistent edge key (smaller ID first)
+        edge_key = (min(rel.person_a_id, rel.person_b_id), max(rel.person_a_id, rel.person_b_id))
+        if edge_key in seen_edges:
+            continue
+        seen_edges.add(edge_key)
 
-            edges.append(NetworkEdge(
-                source=rel.person_a_id,
-                target=rel.person_b_id,
-                weight=weight,
-                type=rel.relationship_type,
-            ))
+        weight = rel.shared_events_count + rel.shared_threads_count
+
+        edges.append(NetworkEdge(
+            source=rel.person_a_id,
+            target=rel.person_b_id,
+            weight=weight,
+            type=rel.relationship_type,
+        ))
 
     elapsed = (time.time() - start_time) * 1000
     logger.info(f"network_graph(center={center_on}, depth={depth}) took {elapsed:.1f}ms ({len(nodes)} nodes, {len(edges)} edges)")
@@ -1887,6 +1938,8 @@ async def get_review_queue(
 
     Default shows matches with confidence < 0.85 (85%).
     """
+    start_time = time.time()
+
     source_store = get_source_entity_store()
     person_store = get_person_entity_store()
 
@@ -1920,6 +1973,9 @@ async def get_review_queue(
                     reason=entity.link_status,
                     created_at=entity.observed_at.isoformat() if entity.observed_at else None,
                 ))
+
+    elapsed = (time.time() - start_time) * 1000
+    logger.info(f"review_queue() took {elapsed:.1f}ms ({len(items)} items)")
 
     return ReviewQueueResponse(
         items=items,

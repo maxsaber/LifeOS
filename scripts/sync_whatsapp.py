@@ -50,6 +50,41 @@ def normalize_phone(phone: str) -> str:
     return ""
 
 
+def extract_phone_from_jid(jid: str) -> str:
+    """
+    Extract phone number from WhatsApp JID.
+
+    JID format: {phone}@s.whatsapp.net for individuals
+                {groupid}@g.us for groups
+
+    Args:
+        jid: WhatsApp JID string
+
+    Returns:
+        E.164 formatted phone number or empty string
+    """
+    if not jid or is_group_jid(jid):
+        return ""
+    # Extract the part before @
+    phone_part = jid.split('@')[0] if '@' in jid else jid
+    return normalize_phone(phone_part)
+
+
+def is_group_jid(jid: str) -> bool:
+    """
+    Check if JID is a group chat.
+
+    Args:
+        jid: WhatsApp JID string
+
+    Returns:
+        True if group JID, False otherwise
+    """
+    if not jid:
+        return False
+    return '@g.us' in jid
+
+
 def run_wacli(args: list, timeout: int = 300) -> dict | list | None:
     """
     Run wacli command and return JSON output.

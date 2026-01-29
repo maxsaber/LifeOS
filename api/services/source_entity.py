@@ -469,31 +469,49 @@ class SourceEntityStore:
         self,
         canonical_person_id: str,
         source_type: Optional[str] = None,
+        limit: Optional[int] = None,
     ) -> list[SourceEntity]:
         """
-        Get all source entities linked to a canonical person.
+        Get source entities linked to a canonical person.
 
         Args:
             canonical_person_id: Canonical person ID
             source_type: Optional filter by source type
+            limit: Maximum number of entities to return (None for all)
 
         Returns:
-            List of source entities
+            List of source entities, most recent first
         """
         conn = self._get_connection()
         try:
             if source_type:
-                cursor = conn.execute("""
-                    SELECT * FROM source_entities
-                    WHERE canonical_person_id = ? AND source_type = ?
-                    ORDER BY observed_at DESC
-                """, (canonical_person_id, source_type))
+                if limit:
+                    cursor = conn.execute("""
+                        SELECT * FROM source_entities
+                        WHERE canonical_person_id = ? AND source_type = ?
+                        ORDER BY observed_at DESC
+                        LIMIT ?
+                    """, (canonical_person_id, source_type, limit))
+                else:
+                    cursor = conn.execute("""
+                        SELECT * FROM source_entities
+                        WHERE canonical_person_id = ? AND source_type = ?
+                        ORDER BY observed_at DESC
+                    """, (canonical_person_id, source_type))
             else:
-                cursor = conn.execute("""
-                    SELECT * FROM source_entities
-                    WHERE canonical_person_id = ?
-                    ORDER BY observed_at DESC
-                """, (canonical_person_id,))
+                if limit:
+                    cursor = conn.execute("""
+                        SELECT * FROM source_entities
+                        WHERE canonical_person_id = ?
+                        ORDER BY observed_at DESC
+                        LIMIT ?
+                    """, (canonical_person_id, limit))
+                else:
+                    cursor = conn.execute("""
+                        SELECT * FROM source_entities
+                        WHERE canonical_person_id = ?
+                        ORDER BY observed_at DESC
+                    """, (canonical_person_id,))
 
             return [SourceEntity.from_row(row) for row in cursor.fetchall()]
         finally:

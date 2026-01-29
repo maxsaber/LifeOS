@@ -1778,6 +1778,105 @@
             font-size: 0.875rem;
         }
 
+        /* CRM Skeleton Loading States */
+        .crm-skeleton {
+            background: linear-gradient(90deg, var(--bg-secondary) 25%, var(--bg-tertiary) 50%, var(--bg-secondary) 75%);
+            background-size: 200% 100%;
+            animation: crm-skeleton-loading 1.5s infinite;
+            border-radius: 4px;
+        }
+
+        @keyframes crm-skeleton-loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        .crm-skeleton-text {
+            height: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .crm-skeleton-text.short {
+            width: 40%;
+        }
+
+        .crm-skeleton-text.medium {
+            width: 70%;
+        }
+
+        .crm-skeleton-stat {
+            height: 3.5rem;
+            border-radius: 8px;
+        }
+
+        .crm-skeleton-section {
+            margin-bottom: 1.5rem;
+        }
+
+        .crm-section-loading {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .crm-section-loading .spinner {
+            width: 1rem;
+            height: 1rem;
+            border: 2px solid var(--border);
+            border-top-color: var(--crm-accent);
+            border-radius: 50%;
+            animation: crm-spin 0.8s linear infinite;
+        }
+
+        @keyframes crm-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .crm-section-loading.slow {
+            color: var(--warning, #f59e0b);
+        }
+
+        .crm-section-error {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1.5rem;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            text-align: center;
+        }
+
+        .crm-section-error .error-icon {
+            font-size: 1.5rem;
+            opacity: 0.5;
+        }
+
+        .crm-retry-btn {
+            padding: 0.5rem 1rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.8125rem;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .crm-retry-btn:hover {
+            background: var(--crm-accent);
+            border-color: var(--crm-accent);
+            color: white;
+        }
+
         /* CRM Filter Controls */
         .crm-filter-row {
             display: flex;
@@ -4515,14 +4614,16 @@
             loadCrmPeople();
         }
 
-        // Select a person
+        // Select a person with progressive loading
         async function selectCrmPerson(personId) {
             crmState.selectedPersonId = personId;
             renderCrmPeopleList(); // Update active state
 
-            const main = document.getElementById('crmMain');
-            main.innerHTML = '<div class="crm-loading">Loading...</div>';
+            // 1. Immediately show header with name from list (instant feedback)
+            const personFromList = crmState.people.find(p => p.id === personId);
+            renderPersonHeaderWithSkeletons(personFromList || { id: personId });
 
+            // 2. Load full person data in background
             try {
                 const response = await fetch(`/api/crm/people/${personId}`);
                 if (!response.ok) throw new Error('Failed to load person');
@@ -4531,8 +4632,65 @@
                 renderCrmPersonDetail(person);
             } catch (error) {
                 console.error('Error loading person:', error);
-                main.innerHTML = '<div class="crm-empty-state"><p>Failed to load person details</p></div>';
+                // Show error but keep the header visible
+                const contentArea = document.getElementById('crmDetailContent');
+                if (contentArea) {
+                    contentArea.innerHTML = `
+                        <div class="crm-section-error">
+                            <div class="error-icon">!</div>
+                            <div>Failed to load person details</div>
+                            <button class="crm-retry-btn" onclick="selectCrmPerson('${personId}')">Retry</button>
+                        </div>
+                    `;
+                }
             }
+        }
+
+        // Render person header immediately with skeleton placeholders for content
+        function renderPersonHeaderWithSkeletons(person) {
+            const main = document.getElementById('crmMain');
+            const name = person.canonical_name || person.display_name || 'Loading...';
+            const initials = getInitials(name);
+            const company = person.company || '';
+            const position = person.position || '';
+
+            main.innerHTML = `
+                <div class="crm-detail-header">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <div class="crm-person-avatar" style="width: 56px; height: 56px; font-size: 1.25rem;">${initials}</div>
+                        <div>
+                            <h2 style="font-size: 1.25rem; margin-bottom: 0.25rem;">${escapeHtml(name)}</h2>
+                            <p style="color: var(--text-secondary); font-size: 0.875rem;">
+                                ${position ? escapeHtml(position) + ' at ' : ''}
+                                ${company ? escapeHtml(company) : ''}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="crm-detail-content" id="crmDetailContent">
+                    <!-- Skeleton stats grid -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                        <div class="crm-skeleton crm-skeleton-stat"></div>
+                        <div class="crm-skeleton crm-skeleton-stat"></div>
+                        <div class="crm-skeleton crm-skeleton-stat"></div>
+                        <div class="crm-skeleton crm-skeleton-stat"></div>
+                    </div>
+
+                    <!-- Skeleton contact info -->
+                    <div class="crm-skeleton-section">
+                        <div class="crm-skeleton crm-skeleton-text short"></div>
+                        <div class="crm-skeleton crm-skeleton-text medium"></div>
+                    </div>
+
+                    <!-- Timeline loading placeholder -->
+                    <div class="crm-timeline" id="personTimeline">
+                        <div class="crm-section-loading">
+                            <div class="spinner"></div>
+                            <span>Loading timeline...</span>
+                        </div>
+                    </div>
+                </div>
+            `;
         }
 
         // Render person detail view
@@ -4604,16 +4762,19 @@
                     ` : ''}
 
                     <div class="crm-timeline" id="personTimeline">
-                        <div class="crm-timeline-loading">Loading timeline...</div>
+                        <div class="crm-section-loading">
+                            <div class="spinner"></div>
+                            <span>Loading timeline...</span>
+                        </div>
                     </div>
                 </div>
             `;
 
-            // Load timeline after rendering the skeleton
+            // Load timeline after rendering (non-blocking)
             loadPersonTimeline(person.id);
         }
 
-        // Load and render aggregated timeline for a person
+        // Load and render aggregated timeline for a person with timeout handling
         // Performance: days_back=90 for fast initial load (vs 365 before)
         async function loadPersonTimeline(personId, sourceTypeFilter = null, daysBack = 90) {
             const container = document.getElementById('personTimeline');
@@ -4624,6 +4785,40 @@
             crmState.timelineFilter = sourceTypeFilter;
             crmState.timelineDaysBack = daysBack;
 
+            // Show initial loading state
+            container.innerHTML = `
+                <div class="crm-section-loading" id="timelineLoadingState">
+                    <div class="spinner"></div>
+                    <span>Loading timeline...</span>
+                </div>
+            `;
+
+            // Set up timeout handlers for slow loading feedback
+            let slowTimeout, failTimeout;
+            const loadingState = document.getElementById('timelineLoadingState');
+
+            slowTimeout = setTimeout(() => {
+                if (loadingState) {
+                    loadingState.classList.add('slow');
+                    loadingState.querySelector('span').textContent = 'Taking longer than expected...';
+                }
+            }, 10000); // 10 seconds
+
+            failTimeout = setTimeout(() => {
+                if (loadingState) {
+                    container.innerHTML = `
+                        <div class="crm-timeline-header">
+                            <h3>Timeline</h3>
+                        </div>
+                        <div class="crm-section-error">
+                            <div class="error-icon">!</div>
+                            <div>Timeline is taking too long to load</div>
+                            <button class="crm-retry-btn" onclick="loadPersonTimeline('${personId}', ${sourceTypeFilter ? `'${sourceTypeFilter}'` : 'null'}, ${daysBack})">Retry</button>
+                        </div>
+                    `;
+                }
+            }, 30000); // 30 seconds
+
             try {
                 // Fetch 90 days with items (was 365, caused slow loads)
                 let url = `/api/crm/people/${personId}/timeline/aggregated?days_back=${daysBack}&include_items=true&max_items_per_group=10`;
@@ -4631,18 +4826,31 @@
                     url += `&source_type=${sourceTypeFilter}`;
                 }
                 const response = await fetch(url);
+
+                // Clear timeouts on success
+                clearTimeout(slowTimeout);
+                clearTimeout(failTimeout);
+
                 if (!response.ok) throw new Error('Failed to load timeline');
 
                 const data = await response.json();
                 crmState.timelineData = data; // Store for "load more"
                 renderPersonTimeline(container, data);
             } catch (error) {
+                // Clear timeouts on error
+                clearTimeout(slowTimeout);
+                clearTimeout(failTimeout);
+
                 console.error('Error loading timeline:', error);
                 container.innerHTML = `
                     <div class="crm-timeline-header">
                         <h3>Timeline</h3>
                     </div>
-                    <div class="crm-timeline-loading">Failed to load timeline</div>
+                    <div class="crm-section-error">
+                        <div class="error-icon">!</div>
+                        <div>Failed to load timeline</div>
+                        <button class="crm-retry-btn" onclick="loadPersonTimeline('${personId}', ${sourceTypeFilter ? `'${sourceTypeFilter}'` : 'null'}, ${daysBack})">Retry</button>
+                    </div>
                 `;
             }
         }

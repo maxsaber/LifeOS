@@ -200,7 +200,7 @@ class TestInteractionStore:
         person_id = "person-abc"
 
         # Add interactions at different times
-        for i, days_ago in enumerate([1, 5, 30, 100]):
+        for i, days_ago in enumerate([1, 5, 30, 500]):
             interaction = Interaction(
                 id=str(uuid.uuid4()),
                 person_id=person_id,
@@ -210,9 +210,9 @@ class TestInteractionStore:
             )
             temp_store.add(interaction)
 
-        # Default window (90 days)
+        # Default window (365 days)
         results = temp_store.get_for_person(person_id)
-        assert len(results) == 3  # Excludes 100 days ago
+        assert len(results) == 3  # Excludes 500 days ago
 
         # Custom window
         results = temp_store.get_for_person(person_id, days_back=10)

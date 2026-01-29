@@ -527,6 +527,86 @@ class RelationshipStore:
         finally:
             conn.close()
 
+    def get_people_with_relationships(self) -> set[str]:
+        """
+        Get all person IDs that have at least one relationship.
+
+        Returns:
+            Set of person IDs with relationships
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute("""
+                SELECT DISTINCT person_a_id FROM relationships
+                UNION
+                SELECT DISTINCT person_b_id FROM relationships
+            """)
+            return {row[0] for row in cursor.fetchall()}
+        finally:
+            conn.close()
+
+    def get_for_people_batch(self, person_ids: set[str]) -> dict[str, list["Relationship"]]:
+        """
+        Get all relationships for multiple people in a single query.
+
+        This is much more efficient than calling get_for_person() in a loop.
+
+        Args:
+            person_ids: Set of person IDs to fetch relationships for
+
+        Returns:
+            Dict mapping person_id to list of their relationships
+        """
+        if not person_ids:
+            return {}
+
+        conn = self._get_connection()
+        try:
+            # Create placeholders for IN clause
+            placeholders = ",".join("?" * len(person_ids))
+            ids_list = list(person_ids)
+
+            cursor = conn.execute(f"""
+                SELECT * FROM relationships
+                WHERE person_a_id IN ({placeholders})
+                   OR person_b_id IN ({placeholders})
+                ORDER BY last_seen_together DESC
+            """, ids_list + ids_list)
+
+            # Group relationships by person
+            result: dict[str, list[Relationship]] = {pid: [] for pid in person_ids}
+            for row in cursor.fetchall():
+                rel = Relationship.from_row(row)
+                if rel.person_a_id in person_ids:
+                    result[rel.person_a_id].append(rel)
+                if rel.person_b_id in person_ids:
+                    result[rel.person_b_id].append(rel)
+
+            return result
+        finally:
+            conn.close()
+
+    def get_all_relationships(self, limit: int = 10000) -> list["Relationship"]:
+        """
+        Get all relationships.
+
+        Args:
+            limit: Maximum relationships to return
+
+        Returns:
+            List of all relationships
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute("""
+                SELECT * FROM relationships
+                ORDER BY last_seen_together DESC
+                LIMIT ?
+            """, (limit,))
+            return [Relationship.from_row(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
     def get_statistics(self) -> dict:
         """Get aggregate statistics about relationships."""
         conn = self._get_connection()

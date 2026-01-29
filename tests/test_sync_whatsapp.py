@@ -98,7 +98,8 @@ class TestRunWacli:
 
         result = run_wacli(["chats", "list"])
 
-        assert result == {"success": True, "data": []}
+        # run_wacli extracts the "data" field from the response
+        assert result == []
         mock_run.assert_called_once()
 
     @patch("scripts.sync_whatsapp.subprocess.run")

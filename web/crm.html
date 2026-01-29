@@ -931,58 +931,6 @@
             margin-left: 0.5rem;
         }
 
-        /* Connections tab */
-        .connection-card {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.75rem;
-            background: var(--bg-secondary);
-            border-radius: 8px;
-            margin-bottom: 0.5rem;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-
-        .connection-card:hover {
-            background: var(--bg-tertiary);
-        }
-
-        .connection-avatar {
-            width: 36px;
-            height: 36px;
-            background: linear-gradient(135deg, var(--people) 0%, var(--people-hover) 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: white;
-            flex-shrink: 0;
-        }
-
-        .connection-info {
-            flex: 1;
-            min-width: 0;
-        }
-
-        .connection-name {
-            font-size: 0.875rem;
-            font-weight: 500;
-        }
-
-        .connection-company {
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-        }
-
-        .connection-stats {
-            text-align: right;
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-
         /* Graph visualization */
         .graph-controls {
             display: flex;
@@ -1061,6 +1009,17 @@
             font-size: 10px;
             text-anchor: middle;
             pointer-events: none;
+        }
+
+        /* Degree-based node styling */
+        .graph-node.degree-0 text {
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .graph-node.degree-2 text {
+            font-size: 9px;
+            fill: var(--text-secondary);
         }
 
         .graph-link {
@@ -1667,7 +1626,6 @@
                 <div class="detail-tabs">
                     <div class="tab active" data-tab="overview" onclick="switchTab('overview')">Overview</div>
                     <div class="tab" data-tab="timeline" onclick="switchTab('timeline')">Timeline</div>
-                    <div class="tab" data-tab="connections" onclick="switchTab('connections')">Connections</div>
                     <div class="tab" data-tab="graph" onclick="switchTab('graph')">Graph</div>
                 </div>
 
@@ -1785,12 +1743,6 @@
                         </div>
                     </div>
 
-                    <div id="tabConnections" class="tab-content" style="display:none">
-                        <div id="connectionsContainer">
-                            <div class="loading">Loading connections...</div>
-                        </div>
-                    </div>
-
                     <div id="tabGraph" class="tab-content" style="display:none">
                         <div class="graph-controls">
                             <button class="graph-btn" onclick="resetGraphZoom()">Reset Zoom</button>
@@ -1904,14 +1856,14 @@
         }
 
         // Select a person
-        async function selectPerson(personId) {
+        async function selectPerson(personId, stayOnCurrentTab = false) {
             selectedPersonId = personId;
             renderPeopleList();
-            await loadPersonDetail(personId);
+            await loadPersonDetail(personId, stayOnCurrentTab);
         }
 
         // Load person detail
-        async function loadPersonDetail(personId) {
+        async function loadPersonDetail(personId, stayOnCurrentTab = false) {
             // Clear any date filter when loading a new person
             window.timelineDateFilter = null;
 
@@ -1923,15 +1875,19 @@
             contentEl.style.flexDirection = 'column';
             contentEl.style.height = '100%';
 
+            // Remember current tab if we should stay on it
+            const currentTab = document.querySelector('.tab.active')?.dataset.tab || 'overview';
+
             try {
                 const person = await api(`/people/${personId}`);
                 renderPersonDetail(person);
 
-                // Load timeline for the active tab
-                if (document.querySelector('.tab.active').dataset.tab === 'timeline') {
+                // Load data for the active tab
+                const activeTab = stayOnCurrentTab ? currentTab : document.querySelector('.tab.active')?.dataset.tab;
+                if (activeTab === 'timeline') {
                     await loadTimeline(personId);
-                } else if (document.querySelector('.tab.active').dataset.tab === 'connections') {
-                    await loadConnections(personId);
+                } else if (activeTab === 'graph') {
+                    await loadGraph(personId);
                 }
             } catch (error) {
                 console.error('Failed to load person detail:', error);
@@ -2731,38 +2687,6 @@
             }
         }
 
-        // Load connections
-        async function loadConnections(personId) {
-            const container = document.getElementById('connectionsContainer');
-            container.innerHTML = '<div class="loading">Loading connections...</div>';
-
-            try {
-                const data = await api(`/people/${personId}/connections?limit=50`);
-
-                if (data.connections.length === 0) {
-                    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔗</div><p>No connections found</p></div>';
-                    return;
-                }
-
-                container.innerHTML = data.connections.map(conn => `
-                    <div class="connection-card" onclick="selectPerson('${conn.person_id}')">
-                        <div class="connection-avatar">${getInitials(conn.name)}</div>
-                        <div class="connection-info">
-                            <div class="connection-name">${escapeHtml(conn.name)}</div>
-                            <div class="connection-company">${escapeHtml(conn.company || '')}</div>
-                        </div>
-                        <div class="connection-stats">
-                            ${conn.shared_events_count > 0 ? `${conn.shared_events_count} events` : ''}
-                            ${conn.shared_threads_count > 0 ? ` · ${conn.shared_threads_count} threads` : ''}
-                        </div>
-                    </div>
-                `).join('');
-            } catch (error) {
-                console.error('Failed to load connections:', error);
-                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><p>Failed to load connections</p></div>';
-            }
-        }
-
         // Timeline state
         let timelineData = [];
         let timelineFilter = 'all';
@@ -2775,48 +2699,37 @@
         let graphLinks = [];
         let showLabelsEnabled = true;
 
-        // Load graph visualization
+        // Load graph visualization using 2-degree network
         async function loadGraph(personId) {
             const container = document.getElementById('graphContainer');
             container.innerHTML = '<div class="loading">Loading graph...</div>';
 
             try {
-                const data = await api(`/people/${personId}/connections?limit=30`);
+                // Use the network endpoint with depth=2 for second-degree connections
+                const data = await api(`/network?center_on=${personId}&depth=2`);
 
-                // Get person details for center node
-                const personData = await api(`/people/${personId}`);
-
-                // Build graph data
-                const nodes = [{
-                    id: personId,
-                    name: personData.canonical_name,
-                    company: personData.company,
-                    isCenter: true,
-                    strength: 1.0
-                }];
-
-                const links = [];
-                const nodeIds = new Set([personId]);
-
-                for (const conn of data.connections) {
-                    if (!nodeIds.has(conn.person_id)) {
-                        nodes.push({
-                            id: conn.person_id,
-                            name: conn.name,
-                            company: conn.company,
-                            isCenter: false,
-                            strength: Math.min(1, (conn.shared_events_count + conn.shared_threads_count) / 10)
-                        });
-                        nodeIds.add(conn.person_id);
-                    }
-                    links.push({
-                        source: personId,
-                        target: conn.person_id,
-                        sharedEvents: conn.shared_events_count,
-                        sharedThreads: conn.shared_threads_count,
-                        contexts: conn.shared_contexts || []
-                    });
+                if (!data.nodes || data.nodes.length === 0) {
+                    container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔗</div><p>No connections to visualize</p></div>';
+                    return;
                 }
+
+                // Transform nodes from API format
+                const nodes = data.nodes.map(node => ({
+                    id: node.id,
+                    name: node.name,
+                    category: node.category,
+                    degree: node.degree,  // 0 = center, 1 = first-degree, 2 = second-degree
+                    strength: node.strength,
+                    interactionCount: node.interaction_count
+                }));
+
+                // Transform edges from API format
+                const links = data.edges.map(edge => ({
+                    source: edge.source,
+                    target: edge.target,
+                    weight: edge.weight,
+                    type: edge.type
+                }));
 
                 if (nodes.length === 1) {
                     container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔗</div><p>No connections to visualize</p></div>';
@@ -2834,7 +2747,27 @@
             }
         }
 
-        // Render D3 force-directed graph
+        // Get node radius based on degree and strength
+        function getNodeRadius(node) {
+            const baseRadius = 8 + node.strength * 15;
+            // Center node (degree 0) is largest, first-degree normal, second-degree smaller
+            if (node.degree === 0) {
+                return baseRadius * 1.5;  // Center person is 50% larger
+            } else if (node.degree === 2) {
+                return baseRadius * 0.7;  // Second-degree is 30% smaller
+            }
+            return baseRadius;
+        }
+
+        // Category colors for nodes
+        const categoryColors = {
+            work: '#4f46e5',      // Indigo
+            personal: '#10b981',  // Emerald
+            family: '#f59e0b',    // Amber
+            unknown: '#6b7280'    // Gray
+        };
+
+        // Render D3 force-directed graph with degree-based styling
         function renderGraph(container, nodes, links, centerId) {
             container.innerHTML = '';
 
@@ -2870,42 +2803,47 @@
             graphSimulation = d3.forceSimulation(nodes)
                 .force('link', d3.forceLink(links)
                     .id(d => d.id)
-                    .distance(100))
+                    .distance(d => {
+                        // Shorter distance for stronger connections
+                        return 80 + Math.max(0, 50 - d.weight * 5);
+                    }))
                 .force('charge', d3.forceManyBody()
-                    .strength(-200))
+                    .strength(d => d.degree === 0 ? -400 : (d.degree === 1 ? -200 : -100)))
                 .force('center', d3.forceCenter(width / 2, height / 2))
-                .force('collision', d3.forceCollide().radius(40));
+                .force('collision', d3.forceCollide().radius(d => getNodeRadius(d) + 5));
 
             // Draw links
             const link = g.append('g')
                 .selectAll('line')
                 .data(links)
                 .join('line')
-                .attr('class', d => {
-                    const total = d.sharedEvents + d.sharedThreads;
-                    return 'graph-link' + (total > 5 ? ' strong' : '');
-                })
-                .attr('stroke-width', d => Math.max(1, Math.min(4, (d.sharedEvents + d.sharedThreads) / 2)));
+                .attr('class', d => 'graph-link' + (d.weight > 5 ? ' strong' : ''))
+                .attr('stroke-width', d => Math.max(1, Math.min(4, d.weight / 2)))
+                .attr('stroke-opacity', d => Math.min(0.8, 0.2 + d.weight / 20));
 
             // Draw nodes
             const node = g.append('g')
                 .selectAll('g')
                 .data(nodes)
                 .join('g')
-                .attr('class', d => 'graph-node' + (d.id === centerId ? ' selected' : ''))
+                .attr('class', d => `graph-node degree-${d.degree}` + (d.degree === 0 ? ' selected' : ''))
                 .call(d3.drag()
                     .on('start', dragstarted)
                     .on('drag', dragged)
                     .on('end', dragended))
                 .on('click', (event, d) => {
-                    if (d.id !== centerId) {
-                        selectPerson(d.id);
-                    }
+                    event.stopPropagation();
+                    // Switch to this person's detail view, stay on Graph tab, and reload their graph
+                    selectPerson(d.id, true);
                 })
                 .on('mouseenter', (event, d) => {
+                    const degreeLabel = d.degree === 0 ? 'Center' : (d.degree === 1 ? '1st degree' : '2nd degree');
                     tooltip.html(`
-                        <strong>${escapeHtml(d.name)}</strong>
-                        ${d.company ? '<br>' + escapeHtml(d.company) : ''}
+                        <strong>${escapeHtml(d.name)}</strong><br>
+                        ${degreeLabel}<br>
+                        Category: ${d.category || 'unknown'}<br>
+                        Strength: ${Math.round((d.strength || 0) * 100)}%<br>
+                        Interactions: ${d.interactionCount || 0}
                     `);
                     tooltip.classed('visible', true);
                 })
@@ -2918,15 +2856,19 @@
                     tooltip.classed('visible', false);
                 });
 
-            // Node circles
+            // Node circles with degree-based styling
             node.append('circle')
-                .attr('r', d => d.isCenter ? 25 : 12 + d.strength * 8)
-                .attr('fill', d => d.isCenter ? 'var(--accent)' : 'var(--people)');
+                .attr('r', d => getNodeRadius(d))
+                .attr('fill', d => categoryColors[d.category] || categoryColors.unknown)
+                .attr('fill-opacity', d => d.degree === 2 ? 0.6 : 1)
+                .attr('stroke', d => d.degree === 0 ? 'var(--accent)' : 'var(--bg-primary)')
+                .attr('stroke-width', d => d.degree === 0 ? 3 : 2);
 
-            // Node labels
-            node.append('text')
-                .attr('dy', d => d.isCenter ? 40 : 25)
-                .text(d => truncateName(d.name, 15))
+            // Node labels - show for center and first-degree, or high-strength second-degree
+            node.filter(d => d.degree <= 1 || d.strength > 0.5)
+                .append('text')
+                .attr('dy', d => getNodeRadius(d) + 12)
+                .text(d => truncateName(d.name, d.degree === 0 ? 20 : 12))
                 .style('display', showLabelsEnabled ? 'block' : 'none');
 
             // Update positions on tick
@@ -2958,19 +2900,23 @@
                 d.fy = null;
             }
 
-            // Add legend
+            // Add legend with degree explanations
             const legend = d3.select(container)
                 .append('div')
                 .attr('class', 'graph-legend');
 
             legend.html(`
                 <div class="graph-legend-item">
-                    <div class="graph-legend-color" style="background: var(--accent)"></div>
-                    <span>Selected Person</span>
+                    <div class="graph-legend-color" style="background: var(--accent); border: 2px solid var(--accent);"></div>
+                    <span>Center (Selected)</span>
                 </div>
                 <div class="graph-legend-item">
-                    <div class="graph-legend-color" style="background: var(--people)"></div>
-                    <span>Connection</span>
+                    <div class="graph-legend-color" style="background: ${categoryColors.work};"></div>
+                    <span>1st Degree</span>
+                </div>
+                <div class="graph-legend-item">
+                    <div class="graph-legend-color" style="background: ${categoryColors.unknown}; opacity: 0.6;"></div>
+                    <span>2nd Degree</span>
                 </div>
             `);
         }
@@ -3014,8 +2960,6 @@
             if (selectedPersonId) {
                 if (tabName === 'timeline') {
                     await loadTimeline(selectedPersonId);
-                } else if (tabName === 'connections') {
-                    await loadConnections(selectedPersonId);
                 } else if (tabName === 'graph') {
                     await loadGraph(selectedPersonId);
                 }
