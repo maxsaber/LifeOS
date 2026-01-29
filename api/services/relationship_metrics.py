@@ -2,12 +2,15 @@
 Relationship Metrics - Compute relationship strength scores.
 
 Relationship strength is computed using the formula:
-    strength = (recency × 0.3) + (frequency × 0.4) + (diversity × 0.3)
+    strength = (recency × RECENCY_WEIGHT) + (frequency × FREQUENCY_WEIGHT) + (diversity × DIVERSITY_WEIGHT)
 
 Where:
-- recency: max(0, 1 - days_since_last/90)
-- frequency: min(1, interactions_90d/20)
+- recency: max(0, 1 - days_since_last/RECENCY_WINDOW_DAYS)
+- frequency: min(1, weighted_interactions/FREQUENCY_TARGET)
 - diversity: unique_sources / total_sources
+
+Interaction weights are applied per source_type (e.g., imessage=1.5, gmail=0.8).
+See config/relationship_weights.py for all weights.
 """
 import logging
 from datetime import datetime, timedelta, timezone
@@ -17,16 +20,20 @@ from api.services.person_entity import PersonEntity, get_person_entity_store
 from api.services.interaction_store import get_interaction_store
 from api.services.source_entity import get_source_entity_store, SOURCE_TYPES
 
+# Import weights from centralized config
+from config.relationship_weights import (
+    RECENCY_WEIGHT,
+    FREQUENCY_WEIGHT,
+    DIVERSITY_WEIGHT,
+    RECENCY_WINDOW_DAYS,
+    FREQUENCY_TARGET,
+    FREQUENCY_WINDOW_DAYS,
+    get_interaction_weight,
+    compute_weighted_interaction_count,
+    INTERACTION_TYPE_WEIGHTS,
+)
+
 logger = logging.getLogger(__name__)
-
-# Weights for relationship strength calculation
-RECENCY_WEIGHT = 0.3
-FREQUENCY_WEIGHT = 0.4
-DIVERSITY_WEIGHT = 0.3
-
-# Parameters
-RECENCY_WINDOW_DAYS = 90  # Days after which recency score is 0
-FREQUENCY_TARGET = 20  # Number of interactions in 90 days for max frequency score
 
 
 def compute_recency_score(last_seen: Optional[datetime]) -> float:
@@ -60,7 +67,7 @@ def compute_recency_score(last_seen: Optional[datetime]) -> float:
     return max(0.0, 1.0 - (days_since / RECENCY_WINDOW_DAYS))
 
 
-def compute_frequency_score(interaction_count: int) -> float:
+def compute_frequency_score(interaction_count: float) -> float:
     """
     Compute frequency score (0.0-1.0).
 
@@ -68,7 +75,7 @@ def compute_frequency_score(interaction_count: int) -> float:
     FREQUENCY_TARGET in the 90-day window.
 
     Args:
-        interaction_count: Number of interactions in the window
+        interaction_count: Number of interactions (can be weighted, so float)
 
     Returns:
         Frequency score between 0.0 and 1.0
@@ -77,6 +84,28 @@ def compute_frequency_score(interaction_count: int) -> float:
         return 0.0
 
     return min(1.0, interaction_count / FREQUENCY_TARGET)
+
+
+def compute_weighted_frequency_score(interactions_by_type: dict[str, int]) -> float:
+    """
+    Compute frequency score with interaction type weighting.
+
+    Different interaction types are weighted differently:
+    - imessage/whatsapp: 1.5 (direct personal contact)
+    - phone_call: 2.0 (high effort synchronous)
+    - slack: 1.2 (work DM)
+    - calendar: 1.0 (meetings)
+    - gmail: 0.8 (often passive/CC)
+    - vault: 0.7 (mentioned in notes)
+
+    Args:
+        interactions_by_type: Dict mapping source_type to count
+
+    Returns:
+        Frequency score between 0.0 and 1.0
+    """
+    weighted_count = compute_weighted_interaction_count(interactions_by_type)
+    return compute_frequency_score(weighted_count)
 
 
 def compute_diversity_score(sources: list[str]) -> float:
@@ -102,18 +131,18 @@ def compute_diversity_score(sources: list[str]) -> float:
 
 def compute_relationship_strength(
     last_seen: Optional[datetime],
-    interaction_count: int,
+    interaction_count: float,  # Changed to float to support weighted counts
     sources: list[str],
 ) -> float:
     """
     Compute overall relationship strength score.
 
     Uses the formula:
-        strength = (recency × 0.3) + (frequency × 0.4) + (diversity × 0.3)
+        strength = (recency × RECENCY_WEIGHT) + (frequency × FREQUENCY_WEIGHT) + (diversity × DIVERSITY_WEIGHT)
 
     Args:
         last_seen: Last interaction timestamp
-        interaction_count: Number of interactions in 90-day window
+        interaction_count: Number of interactions in window (weighted or raw)
         sources: List of source types used
 
     Returns:
@@ -132,11 +161,43 @@ def compute_relationship_strength(
     return round(strength, 3)
 
 
+def compute_relationship_strength_weighted(
+    last_seen: Optional[datetime],
+    interactions_by_type: dict[str, int],
+    sources: list[str],
+) -> float:
+    """
+    Compute relationship strength with interaction type weighting.
+
+    This is the preferred method as it weights different interaction types.
+
+    Args:
+        last_seen: Last interaction timestamp
+        interactions_by_type: Dict mapping source_type to count
+        sources: List of source types used
+
+    Returns:
+        Relationship strength between 0.0 and 1.0
+    """
+    recency = compute_recency_score(last_seen)
+    frequency = compute_weighted_frequency_score(interactions_by_type)
+    diversity = compute_diversity_score(sources)
+
+    strength = (
+        recency * RECENCY_WEIGHT +
+        frequency * FREQUENCY_WEIGHT +
+        diversity * DIVERSITY_WEIGHT
+    )
+
+    return round(strength, 3)
+
+
 def compute_strength_for_person(person: PersonEntity) -> float:
     """
     Compute relationship strength for a PersonEntity.
 
-    Fetches interaction data from stores and computes the score.
+    Fetches interaction data from stores and computes the score
+    using weighted interaction counts by type.
 
     Args:
         person: PersonEntity to compute strength for
@@ -146,27 +207,23 @@ def compute_strength_for_person(person: PersonEntity) -> float:
     """
     interaction_store = get_interaction_store()
 
-    # Get interactions in the window
-    interactions = interaction_store.get_for_person(
+    # Get interaction counts by type
+    interactions_by_type = interaction_store.get_interaction_counts(
         person.id,
-        days_back=RECENCY_WINDOW_DAYS,
-        limit=1000,  # High limit to get accurate count
+        days_back=FREQUENCY_WINDOW_DAYS,
     )
 
     # Get source types from interactions
-    sources = list(set(i.source_type for i in interactions))
+    sources = list(interactions_by_type.keys())
 
     # Also include sources from the person's source list
     sources.extend(person.sources)
     sources = list(set(sources))
 
-    # Get interaction count
-    interaction_count = len(interactions)
-
-    # Compute and return strength
-    return compute_relationship_strength(
+    # Compute and return strength using weighted method
+    return compute_relationship_strength_weighted(
         last_seen=person.last_seen,
-        interaction_count=interaction_count,
+        interactions_by_type=interactions_by_type,
         sources=sources,
     )
 
@@ -246,20 +303,22 @@ def get_strength_breakdown(person: PersonEntity) -> dict:
     """
     interaction_store = get_interaction_store()
 
-    interactions = interaction_store.get_for_person(
+    # Get interaction counts by type for weighted calculation
+    interactions_by_type = interaction_store.get_interaction_counts(
         person.id,
-        days_back=RECENCY_WINDOW_DAYS,
-        limit=1000,
+        days_back=FREQUENCY_WINDOW_DAYS,
     )
 
-    sources = list(set(i.source_type for i in interactions))
+    sources = list(interactions_by_type.keys())
     sources.extend(person.sources)
     sources = list(set(sources))
 
-    interaction_count = len(interactions)
+    # Calculate raw and weighted counts
+    raw_interaction_count = sum(interactions_by_type.values())
+    weighted_interaction_count = compute_weighted_interaction_count(interactions_by_type)
 
     recency_score = compute_recency_score(person.last_seen)
-    frequency_score = compute_frequency_score(interaction_count)
+    frequency_score = compute_weighted_frequency_score(interactions_by_type)
     diversity_score = compute_diversity_score(sources)
 
     days_since_last = None
@@ -270,30 +329,43 @@ def get_strength_breakdown(person: PersonEntity) -> dict:
             last_seen = last_seen.replace(tzinfo=timezone.utc)
         days_since_last = (now - last_seen).days
 
+    # Build weighted breakdown for each source type
+    interaction_weights_detail = {}
+    for source_type, count in interactions_by_type.items():
+        weight = get_interaction_weight(source_type)
+        interaction_weights_detail[source_type] = {
+            "count": count,
+            "weight": weight,
+            "weighted_count": round(count * weight, 2),
+        }
+
     return {
-        "overall_strength": compute_relationship_strength(
+        "overall_strength": compute_relationship_strength_weighted(
             person.last_seen,
-            interaction_count,
+            interactions_by_type,
             sources,
         ),
         "recency": {
             "score": recency_score,
             "weight": RECENCY_WEIGHT,
-            "weighted_score": recency_score * RECENCY_WEIGHT,
+            "weighted_score": round(recency_score * RECENCY_WEIGHT, 4),
             "last_seen": person.last_seen.isoformat() if person.last_seen else None,
             "days_since_last": days_since_last,
+            "window_days": RECENCY_WINDOW_DAYS,
         },
         "frequency": {
             "score": frequency_score,
             "weight": FREQUENCY_WEIGHT,
-            "weighted_score": frequency_score * FREQUENCY_WEIGHT,
-            "interaction_count": interaction_count,
+            "weighted_score": round(frequency_score * FREQUENCY_WEIGHT, 4),
+            "raw_interaction_count": raw_interaction_count,
+            "weighted_interaction_count": round(weighted_interaction_count, 2),
             "target": FREQUENCY_TARGET,
+            "interactions_by_type": interaction_weights_detail,
         },
         "diversity": {
             "score": diversity_score,
             "weight": DIVERSITY_WEIGHT,
-            "weighted_score": diversity_score * DIVERSITY_WEIGHT,
+            "weighted_score": round(diversity_score * DIVERSITY_WEIGHT, 4),
             "sources_used": sources,
             "total_sources": len(SOURCE_TYPES),
         },

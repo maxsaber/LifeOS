@@ -2,8 +2,21 @@
 People System Configuration for LifeOS.
 
 Maps email domains to vault contexts and normalizes company names for entity resolution.
+
+Note: Entity resolution weights are now in config/relationship_weights.py
 """
 from typing import Optional
+
+# Import entity resolution weights from centralized config
+from config.relationship_weights import (
+    NAME_SIMILARITY_WEIGHT,
+    CONTEXT_BOOST_POINTS,
+    RECENCY_BOOST_POINTS,
+    RECENCY_BOOST_THRESHOLD_DAYS,
+    DISAMBIGUATION_THRESHOLD,
+    MIN_MATCH_SCORE,
+    ENTITY_CACHE_TTL_SECONDS,
+)
 
 
 # Domain → Vault Context Map
@@ -58,24 +71,29 @@ COMPANY_NORMALIZATION: dict[str, dict] = {
 
 
 # Entity Resolution Configuration
+# Note: All weights are now imported from config/relationship_weights.py
 class EntityResolutionConfig:
-    """Configuration for entity resolution algorithm."""
+    """
+    Configuration for entity resolution algorithm.
 
-    # Fuzzy matching thresholds
-    NAME_SIMILARITY_WEIGHT: float = 0.4  # Weight for name similarity score (0-1)
-    CONTEXT_BOOST_POINTS: int = 30       # Points added when domain matches vault context
-    RECENCY_BOOST_POINTS: int = 10       # Points added for recently seen people
-    RECENCY_THRESHOLD_DAYS: int = 30     # Days to consider "recent"
+    All weights are imported from config/relationship_weights.py for centralized management.
+    This class provides a convenient interface for accessing them.
+    """
+
+    # Fuzzy matching thresholds (imported from relationship_weights.py)
+    NAME_SIMILARITY_WEIGHT: float = NAME_SIMILARITY_WEIGHT
+    CONTEXT_BOOST_POINTS: int = CONTEXT_BOOST_POINTS
+    RECENCY_BOOST_POINTS: int = RECENCY_BOOST_POINTS
+    RECENCY_THRESHOLD_DAYS: int = RECENCY_BOOST_THRESHOLD_DAYS
 
     # Disambiguation threshold
-    # If top two candidates score within this many points, create separate entities
-    DISAMBIGUATION_THRESHOLD: int = 15
+    DISAMBIGUATION_THRESHOLD: int = DISAMBIGUATION_THRESHOLD
 
     # Minimum score to consider a match
-    MIN_MATCH_SCORE: float = 40.0
+    MIN_MATCH_SCORE: float = MIN_MATCH_SCORE
 
     # Cache settings
-    QUERY_CACHE_TTL_SECONDS: int = 1800  # 30 minutes
+    QUERY_CACHE_TTL_SECONDS: int = ENTITY_CACHE_TTL_SECONDS
 
 
 # Interaction Log Configuration

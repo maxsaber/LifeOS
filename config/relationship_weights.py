@@ -1,0 +1,127 @@
+"""
+Relationship and Entity Resolution Weights Configuration.
+
+Central configuration for all weights used in:
+- Relationship strength calculation
+- Entity resolution scoring
+- Interaction type weighting
+
+Edit this file to tune relationship scoring behavior.
+"""
+
+# =============================================================================
+# RELATIONSHIP STRENGTH WEIGHTS
+# =============================================================================
+# Formula: strength = (recency × RECENCY_WEIGHT) + (frequency × FREQUENCY_WEIGHT) + (diversity × DIVERSITY_WEIGHT)
+
+RECENCY_WEIGHT = 0.3      # How much recent contact matters
+FREQUENCY_WEIGHT = 0.4    # How much total interaction volume matters
+DIVERSITY_WEIGHT = 0.3    # How much multi-channel communication matters
+
+# Parameters for component scores
+RECENCY_WINDOW_DAYS = 90      # Days after which recency score drops to 0
+FREQUENCY_TARGET = 20         # Interactions in 90 days for max frequency score (before weighting)
+FREQUENCY_WINDOW_DAYS = 90    # Window for counting interactions
+
+
+# =============================================================================
+# INTERACTION TYPE WEIGHTS
+# =============================================================================
+# Weight applied to each interaction when calculating frequency score.
+# Higher weight = interaction counts more toward relationship strength.
+#
+# Rationale:
+# - Direct 1:1 communication (DM, text, call) weighted highest
+# - Synchronous communication (meetings, calls) weighted high
+# - Asynchronous communication (email) weighted medium
+# - Passive inclusion (being mentioned, CC'd) weighted lower
+#
+# Note: Currently we only have source_type. Future: add subtype for To/CC, 1:1/group.
+
+INTERACTION_TYPE_WEIGHTS: dict[str, float] = {
+    # Direct messaging (high intimacy, intentional contact)
+    "imessage": 1.5,          # Personal text message
+    "whatsapp": 1.5,          # Personal messaging app
+    "signal": 1.5,            # Secure personal messaging
+    "slack": 1.2,             # Work DM (slightly less personal than text)
+
+    # Voice/Video (highest effort, synchronous)
+    "phone_call": 2.0,        # Voice call - high effort
+    "phone": 2.0,             # Phone call (alternate name)
+    "facetime": 2.0,          # Video call - high effort
+
+    # Calendar (meetings - synchronous but often group)
+    "calendar": 1.0,          # Default meeting weight
+    # Future: calendar_1on1: 1.5, calendar_small_group: 1.0, calendar_large_meeting: 0.5
+
+    # Email (async, often broadcast/CC)
+    "gmail": 0.8,             # Email - often CC'd or mass
+    # Future: gmail_to: 1.0, gmail_cc: 0.3, gmail_sent: 1.2
+
+    # Written content (you wrote about them - shows they're on your mind)
+    "vault": 0.7,             # Mentioned in your notes
+    "granola": 0.8,           # Meeting notes (AI-generated)
+
+    # Contact sources (static, not interactions)
+    "linkedin": 0.3,          # LinkedIn connection (passive)
+    "contacts": 0.2,          # In your contacts (very passive)
+    "phone_contacts": 0.2,    # Same as contacts
+}
+
+# Default weight for unknown interaction types
+DEFAULT_INTERACTION_WEIGHT = 1.0
+
+
+# =============================================================================
+# ENTITY RESOLUTION WEIGHTS
+# =============================================================================
+# Used when matching source entities to canonical person entities
+
+# Fuzzy name matching
+NAME_SIMILARITY_WEIGHT = 0.4      # Weight for fuzzy name match score (0-1 scaled to 0-40)
+
+# Context boosting
+CONTEXT_BOOST_POINTS = 30         # Points added when email domain matches vault context
+RECENCY_BOOST_POINTS = 10         # Points added for recently seen people
+RECENCY_BOOST_THRESHOLD_DAYS = 30 # Days to consider someone "recently seen"
+
+# Disambiguation
+DISAMBIGUATION_THRESHOLD = 15     # If top two candidates within this score, it's ambiguous
+MIN_MATCH_SCORE = 40.0           # Minimum score to consider a valid match
+
+# Cache settings
+ENTITY_CACHE_TTL_SECONDS = 1800  # 30 minutes
+
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+def get_interaction_weight(source_type: str) -> float:
+    """
+    Get the weight for an interaction type.
+
+    Args:
+        source_type: The source type (e.g., "gmail", "imessage", "calendar")
+
+    Returns:
+        Weight multiplier for this interaction type
+    """
+    return INTERACTION_TYPE_WEIGHTS.get(source_type, DEFAULT_INTERACTION_WEIGHT)
+
+
+def compute_weighted_interaction_count(interactions_by_type: dict[str, int]) -> float:
+    """
+    Compute weighted interaction count from a breakdown by type.
+
+    Args:
+        interactions_by_type: Dict mapping source_type to count
+
+    Returns:
+        Weighted sum of interactions
+    """
+    total = 0.0
+    for source_type, count in interactions_by_type.items():
+        weight = get_interaction_weight(source_type)
+        total += count * weight
+    return total
