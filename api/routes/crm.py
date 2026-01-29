@@ -234,6 +234,7 @@ class NetworkNode(BaseModel):
     category: str = "unknown"
     strength: float = 0.0
     interaction_count: int = 0
+    degree: int = 1  # 0 = center, 1 = first-degree, 2 = second-degree, etc.
 
 
 class NetworkEdge(BaseModel):
@@ -265,6 +266,8 @@ class PersonFactResponse(BaseModel):
     value: str
     confidence: float = 0.5
     source_interaction_id: Optional[str] = None
+    source_quote: Optional[str] = None  # Verbatim quote proving this fact
+    source_link: Optional[str] = None  # Deep link to source (Gmail, Calendar, Obsidian)
     extracted_at: Optional[str] = None
     confirmed_by_user: bool = False
     created_at: Optional[str] = None
@@ -873,6 +876,8 @@ def _fact_to_response(fact: PersonFact) -> PersonFactResponse:
         value=fact.value,
         confidence=fact.confidence,
         source_interaction_id=fact.source_interaction_id,
+        source_quote=fact.source_quote,
+        source_link=fact.source_link,
         extracted_at=fact.extracted_at.isoformat() if fact.extracted_at else None,
         confirmed_by_user=fact.confirmed_by_user,
         created_at=fact.created_at.isoformat() if fact.created_at else None,
@@ -918,7 +923,15 @@ async def extract_person_facts(person_id: str):
     """
     Trigger fact extraction for a person.
 
-    Analyzes recent interactions and extracts structured facts using LLM.
+    Analyzes ALL interactions using strategic sampling and extracts
+    structured facts using LLM with strict evidence requirements.
+
+    For contacts with many interactions (e.g., 49K), the extractor
+    strategically samples:
+    - Recent 100 interactions
+    - Random sample of 100 from history
+    - All calendar/meeting events
+    - All vault/notes mentions
     """
     person_store = get_person_entity_store()
     person = person_store.get_by_id(person_id)
@@ -926,12 +939,12 @@ async def extract_person_facts(person_id: str):
     if not person:
         raise HTTPException(status_code=404, detail=f"Person '{person_id}' not found")
 
-    # Get interactions for the person
+    # Get ALL interactions for the person (extractor will sample strategically)
     interaction_store = get_interaction_store()
     interactions = interaction_store.get_for_person(
         person_id,
-        days_back=365,  # Look back further for fact extraction
-        limit=50,
+        days_back=3650,  # Look back 10 years for full history
+        limit=100000,  # No practical limit - let extractor sample
     )
 
     if not interactions:
@@ -941,7 +954,7 @@ async def extract_person_facts(person_id: str):
             facts=[],
         )
 
-    # Convert to dict format expected by extractor
+    # Convert to dict format expected by extractor (include source_link)
     interaction_dicts = [
         {
             "id": i.id,
@@ -949,6 +962,7 @@ async def extract_person_facts(person_id: str):
             "title": i.title,
             "snippet": i.snippet,
             "timestamp": i.timestamp.isoformat() if i.timestamp else "",
+            "source_link": i.source_link,
         }
         for i in interactions
     ]
@@ -1369,6 +1383,12 @@ async def get_network_graph(
 
     If center_on is provided, only returns people within 'depth' hops
     of the center person. Otherwise, returns all people and relationships.
+
+    Each node includes a 'degree' field:
+    - 0 = center person
+    - 1 = first-degree connection (direct connection to center)
+    - 2 = second-degree connection (connection of connection)
+    - etc.
     """
     person_store = get_person_entity_store()
     rel_store = get_relationship_store()
@@ -1376,37 +1396,36 @@ async def get_network_graph(
     # Build the graph
     nodes: list[NetworkNode] = []
     edges: list[NetworkEdge] = []
-    node_ids: set[str] = set()
+    # Map person_id -> degree (distance from center)
+    node_degrees: dict[str, int] = {}
 
     if center_on:
-        # BFS to find people within depth hops of center
+        # BFS to find people within depth hops of center, tracking degree
         center_person = person_store.get_by_id(center_on)
         if not center_person:
             raise HTTPException(status_code=404, detail=f"Person '{center_on}' not found")
 
-        # BFS traversal
-        visited: set[str] = {center_on}
+        # BFS traversal with degree tracking
+        node_degrees[center_on] = 0  # Center is degree 0
         current_level: set[str] = {center_on}
 
-        for _ in range(depth):
+        for current_depth in range(1, depth + 1):
             next_level: set[str] = set()
             for person_id in current_level:
                 relationships = rel_store.get_for_person(person_id, limit=100)
                 for rel in relationships:
                     other_id = rel.other_person(person_id)
-                    if other_id and other_id not in visited:
+                    if other_id and other_id not in node_degrees:
                         next_level.add(other_id)
-                        visited.add(other_id)
+                        node_degrees[other_id] = current_depth
             current_level = next_level
-
-        node_ids = visited
     else:
-        # Get all people
+        # Get all people (no center, all are degree 1)
         all_people = person_store.get_all()
-        node_ids = {p.id for p in all_people}
+        node_degrees = {p.id: 1 for p in all_people}
 
     # Filter by category and strength, then build nodes
-    for person_id in node_ids:
+    for person_id, degree in node_degrees.items():
         person = person_store.get_by_id(person_id)
         if not person:
             continue
@@ -1425,6 +1444,7 @@ async def get_network_graph(
             category=person.category,
             strength=person.relationship_strength,
             interaction_count=interaction_count,
+            degree=degree,
         ))
 
     # Build a set of valid node IDs after filtering

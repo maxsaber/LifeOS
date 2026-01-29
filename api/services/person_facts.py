@@ -27,6 +27,7 @@ FACT_CATEGORIES = {
     "work": "💼",
     "topics": "💬",
     "travel": "✈️",
+    "summary": "📊",  # Relationship summaries
 }
 
 
@@ -52,14 +53,17 @@ class PersonFact:
     A single fact about a person.
 
     Facts are extracted from interactions and stored for quick reference.
+    Each fact must have a source quote as evidence.
     """
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     person_id: str = ""
-    category: str = ""  # family, preferences, background, interests, dates, work, topics, travel
+    category: str = ""  # family, preferences, background, interests, dates, work, topics, travel, summary
     key: str = ""  # e.g., "spouse_name", "birthday", "hometown"
     value: str = ""  # The actual fact value
     confidence: float = 0.5  # 0.0-1.0
     source_interaction_id: Optional[str] = None  # For attribution
+    source_quote: Optional[str] = None  # Verbatim quote proving this fact
+    source_link: Optional[str] = None  # Deep link to source (Gmail, Calendar, Obsidian)
     extracted_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     confirmed_by_user: bool = False
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
@@ -74,6 +78,8 @@ class PersonFact:
             "value": self.value,
             "confidence": self.confidence,
             "source_interaction_id": self.source_interaction_id,
+            "source_quote": self.source_quote,
+            "source_link": self.source_link,
             "extracted_at": self.extracted_at.isoformat() if self.extracted_at else None,
             "confirmed_by_user": self.confirmed_by_user,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -103,9 +109,11 @@ class PersonFact:
             value=row[4],
             confidence=row[5] or 0.5,
             source_interaction_id=row[6],
-            extracted_at=_make_aware(datetime.fromisoformat(row[7])) if row[7] else datetime.now(timezone.utc),
-            confirmed_by_user=bool(row[8]),
-            created_at=_make_aware(datetime.fromisoformat(row[9])) if row[9] else datetime.now(timezone.utc),
+            source_quote=row[7],
+            source_link=row[8],
+            extracted_at=_make_aware(datetime.fromisoformat(row[9])) if row[9] else datetime.now(timezone.utc),
+            confirmed_by_user=bool(row[10]),
+            created_at=_make_aware(datetime.fromisoformat(row[11])) if row[11] else datetime.now(timezone.utc),
         )
 
 
@@ -132,6 +140,8 @@ class PersonFactStore:
                     value TEXT NOT NULL,
                     confidence REAL DEFAULT 0.5,
                     source_interaction_id TEXT,
+                    source_quote TEXT,
+                    source_link TEXT,
                     extracted_at TEXT,
                     confirmed_by_user INTEGER DEFAULT 0,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
@@ -151,6 +161,17 @@ class PersonFactStore:
                 ON person_facts(category)
             """)
 
+            # Migrate existing table: add source_quote and source_link columns if missing
+            try:
+                conn.execute("ALTER TABLE person_facts ADD COLUMN source_quote TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
+            try:
+                conn.execute("ALTER TABLE person_facts ADD COLUMN source_link TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
             conn.commit()
             logger.info(f"Initialized person_facts table in {self.db_path}")
         finally:
@@ -167,8 +188,8 @@ class PersonFactStore:
             conn.execute("""
                 INSERT INTO person_facts
                 (id, person_id, category, key, value, confidence, source_interaction_id,
-                 extracted_at, confirmed_by_user, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 source_quote, source_link, extracted_at, confirmed_by_user, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 fact.id,
                 fact.person_id,
@@ -177,6 +198,8 @@ class PersonFactStore:
                 fact.value,
                 fact.confidence,
                 fact.source_interaction_id,
+                fact.source_quote,
+                fact.source_link,
                 fact.extracted_at.isoformat() if fact.extracted_at else None,
                 1 if fact.confirmed_by_user else 0,
                 fact.created_at.isoformat() if fact.created_at else None,
@@ -216,12 +239,15 @@ class PersonFactStore:
                     conn.execute("""
                         UPDATE person_facts
                         SET value = ?, confidence = ?, source_interaction_id = ?,
+                            source_quote = ?, source_link = ?,
                             extracted_at = ?, confirmed_by_user = ?
                         WHERE id = ?
                     """, (
                         fact.value,
                         fact.confidence,
                         fact.source_interaction_id,
+                        fact.source_quote,
+                        fact.source_link,
                         fact.extracted_at.isoformat() if fact.extracted_at else None,
                         1 if fact.confirmed_by_user else 0,
                         existing_id,
@@ -236,8 +262,8 @@ class PersonFactStore:
                 conn.execute("""
                     INSERT INTO person_facts
                     (id, person_id, category, key, value, confidence, source_interaction_id,
-                     extracted_at, confirmed_by_user, created_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     source_quote, source_link, extracted_at, confirmed_by_user, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     fact.id,
                     fact.person_id,
@@ -246,6 +272,8 @@ class PersonFactStore:
                     fact.value,
                     fact.confidence,
                     fact.source_interaction_id,
+                    fact.source_quote,
+                    fact.source_link,
                     fact.extracted_at.isoformat() if fact.extracted_at else None,
                     1 if fact.confirmed_by_user else 0,
                     fact.created_at.isoformat() if fact.created_at else None,
@@ -348,7 +376,19 @@ class PersonFactStore:
 class PersonFactExtractor:
     """
     Extracts facts from interactions using LLM analysis.
+
+    Key improvements:
+    - Strategic sampling for large interaction sets
+    - Stricter extraction requiring verbatim quotes as evidence
+    - Relationship summary generation
+    - Source link preservation for navigation
     """
+
+    # Sampling configuration
+    MAX_INTERACTIONS_PER_BATCH = 100
+    RECENT_SAMPLE_SIZE = 100
+    RANDOM_SAMPLE_SIZE = 100
+    PRIORITY_SOURCE_TYPES = {"calendar", "vault", "granola"}  # Always include these
 
     def __init__(self, fact_store: Optional[PersonFactStore] = None):
         """Initialize extractor."""
@@ -367,10 +407,16 @@ class PersonFactExtractor:
         """
         Extract facts from a person's interactions.
 
+        Uses strategic sampling for large interaction sets:
+        - Recent 100 interactions
+        - Random sample of 100 from history
+        - All calendar/meeting events
+        - All vault/notes mentions
+
         Args:
             person_id: The person's ID
             person_name: The person's name
-            interactions: List of interaction records (with title, snippet, source_type, id)
+            interactions: List of interaction records (with title, snippet, source_type, id, source_link)
 
         Returns:
             List of extracted PersonFact objects
@@ -379,91 +425,206 @@ class PersonFactExtractor:
             logger.info(f"No interactions to extract facts from for {person_name}")
             return []
 
-        # Build interaction text for prompt
-        interaction_text = self._format_interactions(interactions)
+        # Strategic sampling for large interaction sets
+        sampled_interactions = self._sample_interactions(interactions)
+        logger.info(
+            f"Sampling {len(sampled_interactions)} from {len(interactions)} interactions for {person_name}"
+        )
 
-        # Build the extraction prompt
-        prompt = self._build_extraction_prompt(person_name, interaction_text)
+        # Build interaction lookup for source attribution
+        interaction_lookup = {i.get("id"): i for i in sampled_interactions if i.get("id")}
 
-        # Call LLM
-        try:
-            response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=2048,
-                messages=[{"role": "user", "content": prompt}]
-            )
+        # Process in batches if needed
+        all_facts = []
+        batches = self._create_batches(sampled_interactions, self.MAX_INTERACTIONS_PER_BATCH)
 
-            response_text = response.content[0].text
-            logger.debug(f"LLM response for {person_name}: {response_text[:500]}...")
+        for batch_idx, batch in enumerate(batches):
+            logger.info(f"Processing batch {batch_idx + 1}/{len(batches)} for {person_name}")
 
-            # Parse response
-            facts = self._parse_facts_response(response_text, person_id, interactions)
+            # Format interactions for this batch
+            interaction_text = self._format_interactions(batch)
 
-            # Save facts to store
-            saved_facts = []
-            for fact in facts:
-                saved_fact = self.fact_store.upsert(fact)
-                saved_facts.append(saved_fact)
+            # Build the extraction prompt
+            prompt = self._build_extraction_prompt(person_name, interaction_text)
 
-            logger.info(f"Extracted {len(saved_facts)} facts for {person_name}")
-            return saved_facts
+            try:
+                response = self.client.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=4096,
+                    messages=[{"role": "user", "content": prompt}]
+                )
 
-        except Exception as e:
-            logger.error(f"Failed to extract facts for {person_name}: {e}")
-            raise
+                response_text = response.content[0].text
+                logger.debug(f"LLM response for {person_name} batch {batch_idx + 1}: {response_text[:500]}...")
+
+                # Parse response with source attribution
+                facts = self._parse_facts_response(response_text, person_id, batch, interaction_lookup)
+                all_facts.extend(facts)
+
+            except Exception as e:
+                logger.error(f"Failed to extract facts for {person_name} batch {batch_idx + 1}: {e}")
+                # Continue with other batches
+
+        # Generate relationship summaries if we have enough data
+        if len(interactions) >= 10:
+            try:
+                summaries = self._generate_relationship_summaries(person_id, person_name, sampled_interactions)
+                all_facts.extend(summaries)
+            except Exception as e:
+                logger.error(f"Failed to generate summaries for {person_name}: {e}")
+
+        # Deduplicate and save facts
+        saved_facts = []
+        seen_keys = set()
+        for fact in all_facts:
+            key = (fact.category, fact.key)
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+
+            saved_fact = self.fact_store.upsert(fact)
+            saved_facts.append(saved_fact)
+
+        logger.info(f"Extracted {len(saved_facts)} facts for {person_name}")
+        return saved_facts
+
+    def _sample_interactions(self, interactions: list) -> list:
+        """
+        Strategic sampling of interactions for analysis.
+
+        Ensures we cover:
+        - Recent activity (last 100)
+        - Historical breadth (random 100 from older)
+        - All high-value sources (calendar, vault, granola)
+        """
+        import random
+
+        if len(interactions) <= self.MAX_INTERACTIONS_PER_BATCH * 2:
+            return interactions
+
+        # Sort by timestamp (most recent first)
+        sorted_interactions = sorted(
+            interactions,
+            key=lambda x: x.get("timestamp", ""),
+            reverse=True
+        )
+
+        sampled = []
+        sampled_ids = set()
+
+        # 1. Add all priority source types (calendar events, vault notes)
+        for interaction in sorted_interactions:
+            if interaction.get("source_type") in self.PRIORITY_SOURCE_TYPES:
+                if interaction.get("id") not in sampled_ids:
+                    sampled.append(interaction)
+                    sampled_ids.add(interaction.get("id"))
+
+        # 2. Add recent interactions
+        for interaction in sorted_interactions[:self.RECENT_SAMPLE_SIZE]:
+            if interaction.get("id") not in sampled_ids:
+                sampled.append(interaction)
+                sampled_ids.add(interaction.get("id"))
+
+        # 3. Add random sample from historical interactions
+        historical = [
+            i for i in sorted_interactions[self.RECENT_SAMPLE_SIZE:]
+            if i.get("id") not in sampled_ids
+        ]
+        if historical:
+            sample_size = min(self.RANDOM_SAMPLE_SIZE, len(historical))
+            random_sample = random.sample(historical, sample_size)
+            for interaction in random_sample:
+                sampled.append(interaction)
+                sampled_ids.add(interaction.get("id"))
+
+        # Sort final sample by timestamp
+        sampled.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+
+        return sampled
+
+    def _create_batches(self, interactions: list, batch_size: int) -> list[list]:
+        """Split interactions into batches for processing."""
+        return [
+            interactions[i:i + batch_size]
+            for i in range(0, len(interactions), batch_size)
+        ]
 
     def _format_interactions(self, interactions: list) -> str:
-        """Format interactions for the prompt."""
+        """Format interactions for the prompt with full context."""
         lines = []
-        for i, interaction in enumerate(interactions[:50], 1):  # Limit to 50
+        for i, interaction in enumerate(interactions, 1):
             source_type = interaction.get("source_type", "unknown")
             title = interaction.get("title", "Untitled")
             snippet = interaction.get("snippet", "")
             timestamp = interaction.get("timestamp", "")
+            interaction_id = interaction.get("id", "")
 
-            line = f"[{i}] [{source_type}] {timestamp}: {title}"
+            line = f"[{i}] ID:{interaction_id} [{source_type}] {timestamp}: {title}"
             if snippet:
-                line += f"\n    {snippet[:200]}"
+                # Include more of the snippet for better context
+                line += f"\n    Content: {snippet[:500]}"
             lines.append(line)
 
         return "\n\n".join(lines)
 
     def _build_extraction_prompt(self, person_name: str, interaction_text: str) -> str:
-        """Build the LLM prompt for fact extraction."""
-        return f"""Analyze these interactions about {person_name} and extract personal facts.
+        """Build the strict LLM prompt for fact extraction."""
+        return f"""Analyze these interactions about {person_name} and extract ONLY facts that are EXPLICITLY stated.
+
+CRITICAL RULES:
+1. DO NOT infer or assume facts - only extract what is directly stated
+2. Each fact MUST have a verbatim quote from the source as evidence
+3. If you cannot provide a direct quote, DO NOT include the fact
+4. Set confidence to 0.9+ ONLY if the fact is explicit; lower if somewhat implied
 
 Return ONLY valid JSON with this structure (no markdown, no explanation):
 {{
   "facts": [
-    {{"category": "family", "key": "spouse_name", "value": "Sarah", "confidence": 0.9}},
-    {{"category": "interests", "key": "hobby", "value": "hiking", "confidence": 0.7}}
+    {{
+      "category": "family",
+      "key": "spouse_name",
+      "value": "Sarah",
+      "quote": "My wife Sarah and I went hiking",
+      "source_id": "abc123",
+      "confidence": 0.95
+    }}
   ]
 }}
 
 Categories and example keys:
-- family: spouse_name, children_count, child_names, parent_names, sibling_names
-- preferences: food_preference, communication_style, meeting_preference
-- background: hometown, alma_mater, previous_companies, nationality
-- interests: hobby, sport, music_taste, book_genre, favorite_team
-- dates: birthday, anniversary, started_job
-- work: current_role, expertise, projects, team_size, reports_to
-- topics: frequent_discussion_topics, concerns, goals
-- travel: visited_countries, planned_trips, favorite_destination
+- family: spouse_name, children_count, child_names, parent_names, sibling_names, pet_name
+- preferences: food_preference, communication_style, meeting_preference, schedule_preference
+- background: hometown, alma_mater, previous_companies, nationality, languages
+- interests: hobby, sport, music_taste, book_genre, favorite_team, creative_pursuits
+- dates: birthday, anniversary, started_job, important_dates
+- work: current_role, company, expertise, projects, team_size, reports_to
+- topics: frequent_discussion_topics, concerns, goals, current_focus
+- travel: visited_countries, planned_trips, favorite_destination, travel_style
 
-Rules:
-- Only include facts you're confident about based on the interactions
-- Set confidence between 0.5 (inferred) and 1.0 (explicitly stated)
+EXTRACTION RULES:
+- Only include facts with clear textual evidence from the interactions
+- The "quote" field MUST contain the exact text that proves this fact
+- The "source_id" field should match the ID shown in the interaction (e.g., "ID:abc123")
+- Values should be concise (1-10 words)
 - Use lowercase snake_case for keys
-- Values should be concise (1-5 words when possible)
-- Don't make up facts - only extract what's clearly mentioned or strongly implied
+- Reject any fact you cannot directly quote from the text
+- Prefer explicit statements over inferences
+
+Example of GOOD extraction:
+- Text says "I'm taking my daughter Emma to soccer practice"
+- Fact: {{"category": "family", "key": "daughter_name", "value": "Emma", "quote": "my daughter Emma", "confidence": 0.95}}
+
+Example of BAD extraction (DO NOT do this):
+- Text mentions attending a tech conference
+- BAD Fact: {{"category": "interests", "key": "hobby", "value": "technology"}} <- No quote, too inferential
 
 Interactions:
 {interaction_text}"""
 
     def _parse_facts_response(
-        self, response_text: str, person_id: str, interactions: list
+        self, response_text: str, person_id: str, interactions: list, interaction_lookup: dict
     ) -> list[PersonFact]:
-        """Parse the LLM response into PersonFact objects."""
+        """Parse the LLM response into PersonFact objects with source attribution."""
         facts = []
 
         # Try to extract JSON from response
@@ -484,13 +645,12 @@ Interactions:
                 logger.warning("No 'facts' key in response")
                 return facts
 
-            # Get first interaction ID for attribution (simplified)
-            source_id = interactions[0].get("id") if interactions else None
-
             for fact_data in data["facts"]:
                 category = fact_data.get("category", "").lower()
                 key = fact_data.get("key", "")
                 value = fact_data.get("value", "")
+                quote = fact_data.get("quote", "")
+                source_id = fact_data.get("source_id", "")
                 confidence = float(fact_data.get("confidence", 0.5))
 
                 # Validate category
@@ -502,8 +662,34 @@ Interactions:
                 if not key or not value:
                     continue
 
+                # Require quote for high-confidence facts
+                if confidence >= 0.8 and not quote:
+                    logger.warning(f"Rejecting high-confidence fact without quote: {key}")
+                    confidence = 0.6  # Downgrade confidence
+
                 # Clamp confidence
                 confidence = max(0.0, min(1.0, confidence))
+
+                # Find source interaction for link
+                source_link = None
+                source_interaction_id = None
+                if source_id:
+                    interaction = interaction_lookup.get(source_id)
+                    if interaction:
+                        source_link = interaction.get("source_link")
+                        source_interaction_id = source_id
+                    else:
+                        # Try to find by partial match
+                        for int_id, interaction in interaction_lookup.items():
+                            if source_id in int_id or int_id in source_id:
+                                source_link = interaction.get("source_link")
+                                source_interaction_id = int_id
+                                break
+
+                # If no source found, use first interaction as fallback
+                if not source_interaction_id and interactions:
+                    source_interaction_id = interactions[0].get("id")
+                    source_link = interactions[0].get("source_link")
 
                 fact = PersonFact(
                     person_id=person_id,
@@ -511,7 +697,9 @@ Interactions:
                     key=key,
                     value=str(value),
                     confidence=confidence,
-                    source_interaction_id=source_id,
+                    source_interaction_id=source_interaction_id,
+                    source_quote=quote if quote else None,
+                    source_link=source_link,
                 )
                 facts.append(fact)
 
@@ -522,6 +710,145 @@ Interactions:
             logger.error(f"Error parsing facts: {e}")
 
         return facts
+
+    def _generate_relationship_summaries(
+        self, person_id: str, person_name: str, interactions: list
+    ) -> list[PersonFact]:
+        """
+        Generate relationship summary facts.
+
+        Creates high-level insights about:
+        - Relationship trajectory
+        - Key themes
+        - Major events
+        - Communication style
+        """
+        # Format a condensed view of interactions for summary
+        summary_text = self._format_interactions_for_summary(interactions)
+
+        prompt = f"""Analyze these interactions with {person_name} and provide relationship insights.
+
+Return ONLY valid JSON with this structure (no markdown, no explanation):
+{{
+  "summaries": [
+    {{
+      "key": "relationship_trajectory",
+      "value": "Started as professional contact, evolved to close friend over 2 years",
+      "evidence": "First interaction was a work meeting in 2022, recent interactions include personal topics"
+    }},
+    {{
+      "key": "key_themes",
+      "value": "Technology, hiking, family updates",
+      "evidence": "Recurring mentions of tech projects, outdoor activities, and family events"
+    }},
+    {{
+      "key": "major_events",
+      "value": "Collaborated on Project X, attended their wedding",
+      "evidence": "Multiple references to working together on Project X, invitation to wedding in 2023"
+    }},
+    {{
+      "key": "communication_style",
+      "value": "Informal, emoji-heavy, quick responses",
+      "evidence": "Most messages are casual in tone with frequent emoji usage"
+    }}
+  ]
+}}
+
+Summary keys to generate:
+- relationship_trajectory: How the relationship has evolved over time
+- key_themes: Recurring topics in conversations (3-5 themes)
+- major_events: Important shared experiences or milestones
+- communication_style: How you typically interact
+
+Rules:
+- Base summaries on patterns across multiple interactions
+- Keep values concise but informative (10-30 words)
+- The evidence field should describe what interactions support this summary
+- Only include summaries you can support with evidence
+
+Interactions:
+{summary_text}"""
+
+        try:
+            response = self.client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=2048,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            response_text = response.content[0].text
+
+            # Handle markdown code blocks
+            if "```json" in response_text:
+                json_start = response_text.find("```json") + 7
+                json_end = response_text.find("```", json_start)
+                response_text = response_text[json_start:json_end].strip()
+            elif "```" in response_text:
+                json_start = response_text.find("```") + 3
+                json_end = response_text.find("```", json_start)
+                response_text = response_text[json_start:json_end].strip()
+
+            data = json.loads(response_text)
+            summaries = []
+
+            for summary_data in data.get("summaries", []):
+                key = summary_data.get("key", "")
+                value = summary_data.get("value", "")
+                evidence = summary_data.get("evidence", "")
+
+                if not key or not value:
+                    continue
+
+                fact = PersonFact(
+                    person_id=person_id,
+                    category="summary",
+                    key=key,
+                    value=value,
+                    confidence=0.8,  # Summaries are synthesized, so moderate confidence
+                    source_quote=evidence,
+                    source_interaction_id=interactions[0].get("id") if interactions else None,
+                    source_link=interactions[0].get("source_link") if interactions else None,
+                )
+                summaries.append(fact)
+
+            return summaries
+
+        except Exception as e:
+            logger.error(f"Failed to generate summaries for {person_name}: {e}")
+            return []
+
+    def _format_interactions_for_summary(self, interactions: list) -> str:
+        """Format interactions in a condensed way for summary generation."""
+        lines = []
+
+        # Group by year/month for temporal context
+        by_period: dict[str, list] = {}
+        for interaction in interactions:
+            timestamp = interaction.get("timestamp", "")
+            if timestamp:
+                period = timestamp[:7]  # YYYY-MM
+            else:
+                period = "unknown"
+
+            if period not in by_period:
+                by_period[period] = []
+            by_period[period].append(interaction)
+
+        # Format grouped interactions
+        for period in sorted(by_period.keys(), reverse=True):
+            period_interactions = by_period[period]
+            lines.append(f"\n--- {period} ({len(period_interactions)} interactions) ---")
+
+            for interaction in period_interactions[:20]:  # Limit per period
+                source_type = interaction.get("source_type", "")
+                title = interaction.get("title", "")
+                snippet = interaction.get("snippet", "")[:200] if interaction.get("snippet") else ""
+
+                lines.append(f"[{source_type}] {title}")
+                if snippet:
+                    lines.append(f"  {snippet}")
+
+        return "\n".join(lines[:200])  # Limit total lines
 
 
 # Singleton instances

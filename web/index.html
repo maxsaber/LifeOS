@@ -1667,16 +1667,19 @@
         }
 
         .crm-timeline-group {
+            border-radius: 6px;
+        }
+
+        .crm-timeline-group-header {
             display: flex;
             align-items: center;
             gap: 0.75rem;
             padding: 0.625rem 0.75rem;
-            border-radius: 6px;
             cursor: pointer;
             transition: background 0.2s;
         }
 
-        .crm-timeline-group:hover {
+        .crm-timeline-group-header:hover {
             background: var(--bg-primary);
         }
 
@@ -2279,6 +2282,15 @@
         .network-node.selected circle {
             stroke: var(--crm-accent);
             stroke-width: 3px;
+        }
+
+        .network-node.degree-0 circle {
+            stroke: var(--crm-accent);
+            stroke-width: 3px;
+        }
+
+        .network-node.degree-2 circle {
+            opacity: 0.6;
         }
 
         .network-node-label {
@@ -4059,6 +4071,7 @@
         let networkSvg = null;
         let networkData = { nodes: [], edges: [] };
         let selectedNetworkNode = null;
+        let networkCenterPersonId = null;  // Person ID to center the graph on
 
         // Category colors
         const categoryColors = {
@@ -4112,8 +4125,13 @@
             await loadNetworkData();
         }
 
-        async function loadNetworkData() {
+        async function loadNetworkData(centerOnPersonId = null) {
             const container = document.getElementById('networkGraph');
+
+            // Update center person if provided
+            if (centerOnPersonId !== null) {
+                networkCenterPersonId = centerOnPersonId;
+            }
 
             try {
                 // Build query params based on filters
@@ -4122,6 +4140,12 @@
 
                 const params = new URLSearchParams();
                 if (minStrength > 0) params.append('min_strength', minStrength.toFixed(2));
+
+                // Add center_on and depth for second-degree connections
+                if (networkCenterPersonId) {
+                    params.append('center_on', networkCenterPersonId);
+                    params.append('depth', '2');  // Include second-degree connections
+                }
 
                 const response = await fetch(`/api/crm/network?${params.toString()}`);
                 if (!response.ok) throw new Error('Failed to load network data');
@@ -4224,7 +4248,7 @@
                 .selectAll('g')
                 .data(nodes)
                 .join('g')
-                .attr('class', 'network-node')
+                .attr('class', d => `network-node degree-${d.degree}`)
                 .call(d3.drag()
                     .on('start', dragstarted)
                     .on('drag', dragged)
@@ -4233,7 +4257,8 @@
             // Add circles to nodes
             node.append('circle')
                 .attr('r', d => getNodeRadius(d))
-                .attr('fill', d => categoryColors[d.category] || categoryColors.unknown);
+                .attr('fill', d => categoryColors[d.category] || categoryColors.unknown)
+                .attr('fill-opacity', d => d.degree === 2 ? 0.5 : 1);
 
             // Add labels to high-strength nodes
             node.filter(d => d.strength > 0.7)
@@ -4246,12 +4271,14 @@
             const tooltip = d3.select('#networkGraph .network-tooltip');
 
             node.on('mouseover', (event, d) => {
+                const degreeLabel = d.degree === 0 ? 'Center' : (d.degree === 1 ? '1st degree' : '2nd degree');
                 tooltip
                     .style('display', 'block')
                     .style('left', (event.offsetX + 10) + 'px')
                     .style('top', (event.offsetY - 10) + 'px')
                     .html(`
                         <strong>${d.name}</strong><br>
+                        ${degreeLabel}<br>
                         Category: ${d.category}<br>
                         Strength: ${(d.strength * 100).toFixed(0)}%<br>
                         Interactions: ${d.interaction_count}
@@ -4296,7 +4323,14 @@
         }
 
         function getNodeRadius(node) {
-            return 5 + node.strength * 20;
+            const baseRadius = 5 + node.strength * 20;
+            // Center node (degree 0) is largest, first-degree normal, second-degree smaller
+            if (node.degree === 0) {
+                return baseRadius * 1.5;  // Center person is 50% larger
+            } else if (node.degree === 2) {
+                return baseRadius * 0.7;  // Second-degree is 30% smaller
+            }
+            return baseRadius;
         }
 
         function selectNetworkNode(node) {
@@ -4305,13 +4339,13 @@
             // Update visual selection
             d3.selectAll('.network-node').classed('selected', d => d.id === node.id);
 
-            // Show person detail (uses existing CRM function if available)
-            if (typeof showPersonDetail === 'function') {
-                showPersonDetail(node.id);
-            } else {
-                // Fallback: switch to people tab and highlight
-                switchCrmTab('people');
+            // Update the detail panel with this person's info
+            if (typeof selectCrmPerson === 'function') {
+                selectCrmPerson(node.id);
             }
+
+            // Re-center the graph on this person to show their connections
+            loadNetworkData(node.id);
         }
 
         function updateNetworkFilters() {
@@ -4337,6 +4371,10 @@
             document.getElementById('networkCatFamily').checked = true;
             document.getElementById('networkCatUnknown').checked = true;
 
+            // Reset center person
+            networkCenterPersonId = null;
+            selectedNetworkNode = null;
+
             // Reset zoom
             if (networkSvg) {
                 networkSvg.transition().duration(500).call(
@@ -4345,7 +4383,7 @@
                 );
             }
 
-            // Reload data
+            // Reload data without center
             loadNetworkData();
         }
 
@@ -4713,17 +4751,18 @@
                     const hasItems = group.items && group.items.length > 0;
 
                     html += `
-                        <div class="crm-timeline-group" id="${groupId}" onclick="toggleTimelineGroup('${groupId}')">
-                            <div class="crm-timeline-group-badge">${group.source_badge}</div>
-                            <div class="crm-timeline-group-info">
-                                <div class="crm-timeline-group-title">
-                                    <span>${group.count} ${formatSourceType(group.source_type)}</span>
-                                    <span class="crm-timeline-group-count">${group.count}</span>
+                        <div class="crm-timeline-group" id="${groupId}">
+                            <div class="crm-timeline-group-header" onclick="toggleTimelineGroup('${groupId}')">
+                                <div class="crm-timeline-group-badge">${group.source_badge}</div>
+                                <div class="crm-timeline-group-info">
+                                    <div class="crm-timeline-group-title">
+                                        <span>${group.count} ${formatSourceType(group.source_type)}</span>
+                                        <span class="crm-timeline-group-count">${group.count}</span>
+                                    </div>
+                                    ${group.preview ? `<div class="crm-timeline-group-preview">${escapeHtml(group.preview)}</div>` : ''}
                                 </div>
-                                ${group.preview ? `<div class="crm-timeline-group-preview">${escapeHtml(group.preview)}</div>` : ''}
+                                ${hasItems ? '<div class="crm-timeline-group-expand">▼</div>' : ''}
                             </div>
-                            ${hasItems ? '<div class="crm-timeline-group-expand">▼</div>' : ''}
-                        </div>
                     `;
 
                     if (hasItems) {
@@ -4740,6 +4779,7 @@
                         }
                         html += '</div>';
                     }
+                    html += '</div>'; // Close crm-timeline-group
                 }
 
                 html += `

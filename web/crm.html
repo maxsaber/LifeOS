@@ -579,20 +579,21 @@
             color: var(--text-muted);
         }
 
-        /* Heat map calendar */
+        /* Heat map calendar - GitHub contribution style */
         .heatmap-container {
             background: var(--bg-secondary);
             border: 1px solid var(--border);
             border-radius: 8px;
             padding: 1rem;
             margin-bottom: 1.5rem;
+            overflow-x: auto;
         }
 
         .heatmap-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 0.75rem;
+            margin-bottom: 0.5rem;
         }
 
         .heatmap-title {
@@ -604,60 +605,129 @@
         .heatmap-legend {
             display: flex;
             align-items: center;
-            gap: 0.375rem;
+            gap: 0.25rem;
             font-size: 0.625rem;
             color: var(--text-muted);
         }
 
         .heatmap-legend-item {
-            width: 12px;
-            height: 12px;
+            width: 10px;
+            height: 10px;
             border-radius: 2px;
+        }
+
+        .heatmap-months {
+            display: flex;
+            padding-left: 24px;
+            margin-bottom: 4px;
+            font-size: 0.625rem;
+            color: var(--text-muted);
+        }
+
+        .heatmap-month-label {
+            flex: 1;
+            text-align: left;
+            min-width: 0;
+        }
+
+        .heatmap-body {
+            display: flex;
+            gap: 2px;
+        }
+
+        .heatmap-weekdays {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            margin-right: 4px;
+            font-size: 0.5625rem;
+            color: var(--text-muted);
+        }
+
+        .heatmap-weekday {
+            height: 10px;
+            line-height: 10px;
+            width: 20px;
+            text-align: right;
+        }
+
+        .heatmap-weekday:nth-child(even) {
+            visibility: hidden;
         }
 
         .heatmap-grid {
-            display: grid;
-            grid-template-columns: repeat(13, 1fr);
-            gap: 3px;
+            display: flex;
+            gap: 2px;
+        }
+
+        .heatmap-week {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
         }
 
         .heatmap-day {
-            aspect-ratio: 1;
+            width: 10px;
+            height: 10px;
             background: var(--bg-tertiary);
             border-radius: 2px;
             cursor: pointer;
-            transition: all 0.2s;
-            position: relative;
+            transition: all 0.15s;
         }
 
         .heatmap-day:hover {
-            transform: scale(1.15);
-            z-index: 1;
+            transform: scale(1.3);
+            z-index: 10;
         }
 
         .heatmap-day[data-level="0"] { background: var(--bg-tertiary); }
-        .heatmap-day[data-level="1"] { background: rgba(0, 188, 212, 0.3); }
-        .heatmap-day[data-level="2"] { background: rgba(0, 188, 212, 0.5); }
-        .heatmap-day[data-level="3"] { background: rgba(0, 188, 212, 0.7); }
-        .heatmap-day[data-level="4"] { background: var(--people); }
+        .heatmap-day[data-level="1"] { background: rgba(0, 188, 212, 0.25); }
+        .heatmap-day[data-level="2"] { background: rgba(0, 188, 212, 0.45); }
+        .heatmap-day[data-level="3"] { background: rgba(0, 188, 212, 0.65); }
+        .heatmap-day[data-level="4"] { background: rgba(0, 188, 212, 0.85); }
+        .heatmap-day[data-level="5"] { background: var(--people); }
 
+        /* Floating tooltip */
         .heatmap-tooltip {
-            position: absolute;
+            position: fixed;
             background: var(--bg-primary);
             border: 1px solid var(--border);
             border-radius: 6px;
-            padding: 0.5rem;
+            padding: 0.625rem 0.75rem;
             font-size: 0.75rem;
             color: var(--text-primary);
             pointer-events: none;
-            z-index: 100;
+            z-index: 1000;
             white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             opacity: 0;
-            transition: opacity 0.2s;
+            transition: opacity 0.15s;
         }
 
-        .heatmap-day:hover .heatmap-tooltip {
+        .heatmap-tooltip.visible {
             opacity: 1;
+        }
+
+        .heatmap-tooltip-date {
+            font-weight: 600;
+            margin-bottom: 0.375rem;
+            color: var(--text-primary);
+        }
+
+        .heatmap-tooltip-item {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            margin-bottom: 0.125rem;
+            color: var(--text-secondary);
+        }
+
+        .heatmap-tooltip-total {
+            margin-top: 0.375rem;
+            padding-top: 0.375rem;
+            border-top: 1px solid var(--border);
+            font-weight: 600;
+            color: var(--people);
         }
 
         .info-grid {
@@ -756,6 +826,35 @@
             display: flex;
             flex-direction: column;
             gap: 0.5rem;
+        }
+
+        .timeline-date-filter {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.625rem 0.875rem;
+            background: rgba(0, 188, 212, 0.1);
+            border: 1px solid rgba(0, 188, 212, 0.3);
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            font-size: 0.8125rem;
+            color: var(--people);
+        }
+
+        .timeline-date-filter button {
+            background: transparent;
+            border: 1px solid var(--people);
+            color: var(--people);
+            padding: 0.25rem 0.625rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.2s;
+        }
+
+        .timeline-date-filter button:hover {
+            background: var(--people);
+            color: white;
         }
 
         .timeline-item {
@@ -1391,6 +1490,106 @@
             padding: 0.5rem 0;
         }
 
+        /* Fact source quote - shown on hover */
+        .fact-quote {
+            display: none;
+            margin-top: 0.375rem;
+            padding: 0.5rem;
+            background: var(--bg-primary);
+            border-left: 2px solid var(--people);
+            border-radius: 0 4px 4px 0;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            font-style: italic;
+            line-height: 1.4;
+        }
+
+        .fact-item:hover .fact-quote {
+            display: block;
+        }
+
+        .fact-quote::before {
+            content: '"';
+            color: var(--people);
+            font-size: 0.875rem;
+        }
+
+        .fact-quote::after {
+            content: '"';
+            color: var(--people);
+            font-size: 0.875rem;
+        }
+
+        /* Clickable source link */
+        .fact-source-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            color: var(--people);
+            text-decoration: none;
+            font-size: 0.65rem;
+            padding: 0.125rem 0.375rem;
+            background: rgba(0, 188, 212, 0.1);
+            border-radius: 3px;
+            transition: all 0.15s;
+            margin-left: 0.375rem;
+        }
+
+        .fact-source-link:hover {
+            background: rgba(0, 188, 212, 0.2);
+            color: var(--people-hover);
+        }
+
+        .fact-source-link-icon {
+            font-size: 0.625rem;
+        }
+
+        /* Confidence indicator */
+        .fact-confidence {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.625rem;
+            color: var(--text-muted);
+        }
+
+        .fact-confidence-bar {
+            width: 30px;
+            height: 3px;
+            background: var(--bg-primary);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .fact-confidence-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.3s;
+        }
+
+        .fact-confidence-fill.high {
+            background: var(--success);
+        }
+
+        .fact-confidence-fill.medium {
+            background: var(--warning);
+        }
+
+        .fact-confidence-fill.low {
+            background: var(--error);
+        }
+
+        /* Summary facts have distinct styling */
+        .facts-category.summary .fact-item {
+            background: linear-gradient(90deg, rgba(0, 188, 212, 0.05) 0%, transparent 100%);
+            padding: 0.5rem;
+            margin: 0.25rem 0;
+        }
+
+        .facts-category.summary .fact-text {
+            font-size: 0.75rem;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .main-container {
@@ -1523,19 +1722,33 @@
                         <!-- Heat map calendar -->
                         <div class="heatmap-container">
                             <div class="heatmap-header">
-                                <div class="heatmap-title">90-Day Interaction History</div>
+                                <div class="heatmap-title">365-Day Interaction History</div>
                                 <div class="heatmap-legend">
                                     <span>Less</span>
                                     <div class="heatmap-legend-item" style="background: var(--bg-tertiary)"></div>
-                                    <div class="heatmap-legend-item" style="background: rgba(0, 188, 212, 0.3)"></div>
-                                    <div class="heatmap-legend-item" style="background: rgba(0, 188, 212, 0.5)"></div>
-                                    <div class="heatmap-legend-item" style="background: rgba(0, 188, 212, 0.7)"></div>
+                                    <div class="heatmap-legend-item" style="background: rgba(0, 188, 212, 0.25)"></div>
+                                    <div class="heatmap-legend-item" style="background: rgba(0, 188, 212, 0.45)"></div>
+                                    <div class="heatmap-legend-item" style="background: rgba(0, 188, 212, 0.65)"></div>
+                                    <div class="heatmap-legend-item" style="background: rgba(0, 188, 212, 0.85)"></div>
                                     <div class="heatmap-legend-item" style="background: var(--people)"></div>
                                     <span>More</span>
                                 </div>
                             </div>
-                            <div class="heatmap-grid" id="heatmapGrid"></div>
+                            <div class="heatmap-months" id="heatmapMonths"></div>
+                            <div class="heatmap-body">
+                                <div class="heatmap-weekdays">
+                                    <div class="heatmap-weekday">Sun</div>
+                                    <div class="heatmap-weekday">Mon</div>
+                                    <div class="heatmap-weekday">Tue</div>
+                                    <div class="heatmap-weekday">Wed</div>
+                                    <div class="heatmap-weekday">Thu</div>
+                                    <div class="heatmap-weekday">Fri</div>
+                                    <div class="heatmap-weekday">Sat</div>
+                                </div>
+                                <div class="heatmap-grid" id="heatmapGrid"></div>
+                            </div>
                         </div>
+                        <div class="heatmap-tooltip" id="heatmapTooltip"></div>
 
                         <!-- Contact information -->
                         <div class="info-section">
@@ -1699,6 +1912,9 @@
 
         // Load person detail
         async function loadPersonDetail(personId) {
+            // Clear any date filter when loading a new person
+            window.timelineDateFilter = null;
+
             const emptyEl = document.getElementById('detailEmpty');
             const contentEl = document.getElementById('detailContent');
 
@@ -1896,54 +2112,274 @@
             return '0.10';
         }
 
+        // Heatmap data store for tooltips
+        let heatmapData = {};
+
+        // Source type badges mapping
+        const SOURCE_BADGES = {
+            'imessage': { badge: String.fromCodePoint(0x1F4AC), label: 'iMessages' },
+            'gmail': { badge: String.fromCodePoint(0x1F4E7), label: 'Emails' },
+            'calendar': { badge: String.fromCodePoint(0x1F4C5), label: 'Meetings' },
+            'slack': { badge: String.fromCodePoint(0x1F4DD), label: 'Slack' },
+            'linkedin': { badge: String.fromCodePoint(0x1F465), label: 'LinkedIn' },
+            'vault': { badge: String.fromCodePoint(0x1F4C4), label: 'Notes' },
+            'whatsapp': { badge: String.fromCodePoint(0x1F4F1), label: 'WhatsApp' },
+            'signal': { badge: String.fromCodePoint(0x1F510), label: 'Signal' }
+        };
+
         // Load and render heat map
         async function loadAndRenderHeatMap(personId) {
             const grid = document.getElementById('heatmapGrid');
+            const monthsContainer = document.getElementById('heatmapMonths');
 
             try {
-                // Fetch timeline data to build heat map
-                const data = await api(`/people/${personId}/timeline?limit=200`);
-                const items = data.items || [];
+                // Use aggregated timeline endpoint for efficient data loading
+                const data = await api(`/people/${personId}/timeline/aggregated?days_back=365`);
+                const days = data.days || [];
 
-                // Build interaction history from timeline
-                const interactionMap = {};
-                items.forEach(item => {
-                    const date = new Date(item.timestamp).toDateString();
-                    interactionMap[date] = (interactionMap[date] || 0) + 1;
+                // Build interaction history with source breakdown
+                heatmapData = {};
+                days.forEach(day => {
+                    const dateKey = day.date;
+                    heatmapData[dateKey] = { total: day.total_count, sources: {} };
+                    (day.groups || []).forEach(group => {
+                        const sourceType = (group.source_type || 'unknown').toLowerCase();
+                        heatmapData[dateKey].sources[sourceType] = group.count;
+                    });
                 });
 
-                renderHeatMap(interactionMap);
+                renderHeatMap();
             } catch (error) {
                 console.error('Failed to load heat map:', error);
-                renderHeatMap({});
+                heatmapData = {};
+                renderHeatMap();
             }
         }
 
-        // Render heat map
-        function renderHeatMap(interactionMap) {
+        // Render heat map in GitHub contribution graph style
+        function renderHeatMap() {
             const grid = document.getElementById('heatmapGrid');
-            const days = 90;
+            const monthsContainer = document.getElementById('heatmapMonths');
             const today = new Date();
+            today.setHours(0, 0, 0, 0);
 
-            // Generate grid for last 90 days
-            let html = '';
-            for (let i = days - 1; i >= 0; i--) {
-                const date = new Date(today);
-                date.setDate(date.getDate() - i);
-                const dateStr = date.toDateString();
-                const count = interactionMap[dateStr] || 0;
+            // Calculate start date (go back ~52 weeks, starting from Sunday)
+            const endDate = new Date(today);
+            const startDate = new Date(today);
+            startDate.setDate(startDate.getDate() - 364);
 
-                // Calculate level (0-4)
-                let level = 0;
-                if (count > 0) level = 1;
-                if (count >= 3) level = 2;
-                if (count >= 6) level = 3;
-                if (count >= 10) level = 4;
+            // Adjust to start on a Sunday
+            const startDayOfWeek = startDate.getDay();
+            startDate.setDate(startDate.getDate() - startDayOfWeek);
 
-                html += `<div class="heatmap-day" data-level="${level}" title="${date.toLocaleDateString()}: ${count} interactions"></div>`;
+            // Generate weeks (columns)
+            let weeksHtml = '';
+            let currentDate = new Date(startDate);
+            let monthLabels = [];
+            let weekIndex = 0;
+            let lastMonth = -1;
+
+            while (currentDate <= endDate) {
+                weeksHtml += '<div class="heatmap-week">';
+
+                for (let day = 0; day < 7; day++) {
+                    const dateKey = currentDate.toISOString().split('T')[0];
+                    const dayData = heatmapData[dateKey] || { total: 0, sources: {} };
+                    const count = dayData.total;
+
+                    // Calculate level (0-5)
+                    let level = 0;
+                    if (count > 0) level = 1;
+                    if (count >= 3) level = 2;
+                    if (count >= 6) level = 3;
+                    if (count >= 10) level = 4;
+                    if (count >= 20) level = 5;
+
+                    // Track month changes for labels
+                    const currentMonth = currentDate.getMonth();
+                    if (currentMonth !== lastMonth && day === 0) {
+                        const monthName = currentDate.toLocaleDateString('en-US', { month: 'short' });
+                        monthLabels.push({ weekIndex, monthName });
+                        lastMonth = currentMonth;
+                    }
+
+                    // Only render if within valid date range
+                    if (currentDate > endDate || currentDate < startDate) {
+                        weeksHtml += '<div class="heatmap-day" style="visibility:hidden"></div>';
+                    } else {
+                        weeksHtml += `<div class="heatmap-day" data-level="${level}" data-date="${dateKey}"></div>`;
+                    }
+
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+
+                weeksHtml += '</div>';
+                weekIndex++;
             }
 
-            grid.innerHTML = html;
+            grid.innerHTML = weeksHtml;
+
+            // Generate month labels
+            const totalWeeks = weekIndex;
+            let monthsHtml = '';
+            for (let i = 0; i < monthLabels.length; i++) {
+                const label = monthLabels[i];
+                const nextLabel = monthLabels[i + 1];
+                const span = nextLabel ? nextLabel.weekIndex - label.weekIndex : totalWeeks - label.weekIndex;
+                monthsHtml += `<div class="heatmap-month-label" style="flex: ${span}">${label.monthName}</div>`;
+            }
+            monthsContainer.innerHTML = monthsHtml;
+
+            // Setup tooltip and click handlers
+            setupHeatmapInteractions();
+        }
+
+        // Setup tooltip and click interactions for heatmap
+        function setupHeatmapInteractions() {
+            const tooltip = document.getElementById('heatmapTooltip');
+            const days = document.querySelectorAll('.heatmap-day[data-date]');
+
+            days.forEach(day => {
+                day.addEventListener('mouseenter', (e) => {
+                    const dateKey = day.dataset.date;
+                    const dayData = heatmapData[dateKey] || { total: 0, sources: {} };
+
+                    // Format date nicely
+                    const dateObj = new Date(dateKey + 'T12:00:00');
+                    const dateStr = dateObj.toLocaleDateString('en-US', {
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric'
+                    });
+
+                    // Build tooltip content
+                    let html = `<div class="heatmap-tooltip-date">${dateStr}</div>`;
+
+                    if (dayData.total === 0) {
+                        html += '<div class="heatmap-tooltip-item">No interactions</div>';
+                    } else {
+                        // Sort sources by count descending
+                        const sortedSources = Object.entries(dayData.sources)
+                            .sort((a, b) => b[1] - a[1]);
+
+                        sortedSources.forEach(([sourceType, count]) => {
+                            const sourceInfo = SOURCE_BADGES[sourceType] || { badge: String.fromCodePoint(0x1F4C4), label: sourceType };
+                            html += `<div class="heatmap-tooltip-item">${sourceInfo.badge} ${count} ${sourceInfo.label}</div>`;
+                        });
+
+                        html += `<div class="heatmap-tooltip-total">Total: ${dayData.total} interaction${dayData.total !== 1 ? 's' : ''}</div>`;
+                    }
+
+                    tooltip.innerHTML = html;
+
+                    // Position tooltip
+                    const rect = day.getBoundingClientRect();
+                    tooltip.style.left = `${rect.left + rect.width / 2}px`;
+                    tooltip.style.top = `${rect.top - 8}px`;
+                    tooltip.style.transform = 'translate(-50%, -100%)';
+                    tooltip.classList.add('visible');
+                });
+
+                day.addEventListener('mouseleave', () => {
+                    tooltip.classList.remove('visible');
+                });
+
+                day.addEventListener('click', () => {
+                    const dateKey = day.dataset.date;
+                    navigateToTimelineDate(dateKey);
+                });
+            });
+        }
+
+        // Navigate to timeline tab filtered to a specific date
+        async function navigateToTimelineDate(dateKey) {
+            // Switch to timeline tab
+            await switchTab('timeline');
+
+            // Store the target date for filtering
+            window.timelineDateFilter = dateKey;
+
+            // Re-render timeline with date filter applied
+            renderTimelineWithDateFilter();
+        }
+
+        // Render timeline filtered to a specific date
+        function renderTimelineWithDateFilter() {
+            const container = document.getElementById('timelineContainer');
+            const dateKey = window.timelineDateFilter;
+
+            if (!dateKey) {
+                renderTimeline();
+                return;
+            }
+
+            // Filter items to the specific date
+            const targetDate = new Date(dateKey + 'T00:00:00');
+            const nextDate = new Date(targetDate);
+            nextDate.setDate(nextDate.getDate() + 1);
+
+            let items = timelineData.filter(item => {
+                const itemDate = new Date(item.timestamp);
+                return itemDate >= targetDate && itemDate < nextDate;
+            });
+
+            // Apply source filter if active
+            if (timelineFilter !== 'all') {
+                items = items.filter(item => {
+                    const sourceType = (item.source_type || '').toLowerCase();
+                    return sourceType.includes(timelineFilter);
+                });
+            }
+
+            // Show date filter banner
+            const formattedDate = targetDate.toLocaleDateString('en-US', {
+                weekday: 'long',
+                month: 'long',
+                day: 'numeric',
+                year: 'numeric'
+            });
+
+            if (items.length === 0) {
+                container.innerHTML = `
+                    <div class="timeline-date-filter">
+                        <span>Showing ${formattedDate}</span>
+                        <button onclick="clearTimelineDateFilter()">Clear filter</button>
+                    </div>
+                    <div class="empty-state">
+                        <div class="empty-state-icon">${String.fromCodePoint(0x1F4C5)}</div>
+                        <p>No interactions on this day</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = `
+                <div class="timeline-date-filter">
+                    <span>Showing ${formattedDate} (${items.length} interaction${items.length !== 1 ? 's' : ''})</span>
+                    <button onclick="clearTimelineDateFilter()">Clear filter</button>
+                </div>
+            ` + items.map(item => `
+                <div class="timeline-item">
+                    <div class="timeline-badge">${item.source_badge || String.fromCodePoint(0x1F4C4)}</div>
+                    <div class="timeline-content">
+                        <div class="timeline-title">
+                            ${item.source_link ? `<a href="${item.source_link}" target="_blank">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
+                        </div>
+                        ${item.snippet ? `<div class="timeline-snippet">${escapeHtml(item.snippet)}</div>` : ''}
+                        <div class="timeline-meta">
+                            ${formatDate(item.timestamp)}
+                            <span class="timeline-source-badge">${escapeHtml(item.source_type || 'Unknown')}</span>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Clear timeline date filter
+        function clearTimelineDateFilter() {
+            window.timelineDateFilter = null;
+            renderTimeline();
         }
 
         // Edit person (placeholder)
@@ -1968,6 +2404,12 @@
 
         // Render timeline with current filter
         function renderTimeline() {
+            // If date filter is active, use the date-filtered render
+            if (window.timelineDateFilter) {
+                renderTimelineWithDateFilter();
+                return;
+            }
+
             const container = document.getElementById('timelineContainer');
 
             // Filter items
@@ -2033,7 +2475,8 @@
         function renderFacts(byCategory) {
             const container = document.getElementById('factsContainer');
 
-            const categoryOrder = ['family', 'work', 'background', 'interests', 'preferences', 'dates', 'topics', 'travel'];
+            // Include summary category at the end
+            const categoryOrder = ['summary', 'family', 'work', 'background', 'interests', 'preferences', 'dates', 'topics', 'travel'];
             const categoryIcons = {
                 'family': String.fromCodePoint(0x1F468, 0x200D, 0x1F469, 0x200D, 0x1F467),  // family emoji
                 'preferences': String.fromCodePoint(0x2699, 0xFE0F),  // gear
@@ -2043,6 +2486,20 @@
                 'work': String.fromCodePoint(0x1F4BC),  // briefcase
                 'topics': String.fromCodePoint(0x1F4AC),  // speech bubble
                 'travel': String.fromCodePoint(0x2708, 0xFE0F),  // airplane
+                'summary': String.fromCodePoint(0x1F4CA),  // chart emoji
+            };
+
+            // Display names for categories
+            const categoryNames = {
+                'summary': 'Relationship Insights',
+                'family': 'Family',
+                'work': 'Work',
+                'background': 'Background',
+                'interests': 'Interests',
+                'preferences': 'Preferences',
+                'dates': 'Important Dates',
+                'topics': 'Topics',
+                'travel': 'Travel',
             };
 
             // Check if we have any facts
@@ -2059,13 +2516,13 @@
                 if (!facts || facts.length === 0) continue;
 
                 const icon = categoryIcons[category] || '';
-                const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
+                const displayName = categoryNames[category] || (category.charAt(0).toUpperCase() + category.slice(1));
 
                 html += `
-                    <div class="facts-category">
+                    <div class="facts-category ${category}">
                         <div class="facts-category-header">
                             <span class="facts-category-icon">${icon}</span>
-                            <span>${categoryName}</span>
+                            <span>${displayName}</span>
                         </div>
                         <ul class="facts-list">
                             ${facts.map(fact => renderFactItem(fact)).join('')}
@@ -2081,15 +2538,40 @@
         function renderFactItem(fact) {
             const unconfirmedClass = fact.confirmed_by_user ? '' : 'unconfirmed';
             const factSentence = formatFactAsSentence(fact.key, fact.value);
-            const sourceText = formatSourceAttribution(fact);
             const confidencePercent = Math.round(fact.confidence * 100);
+
+            // Confidence level class
+            const confLevel = fact.confidence >= 0.8 ? 'high' : (fact.confidence >= 0.5 ? 'medium' : 'low');
+
+            // Source link (clickable to open Gmail/Calendar/Obsidian)
+            const sourceLinkHtml = fact.source_link ?
+                `<a href="${escapeHtml(fact.source_link)}" class="fact-source-link" target="_blank" onclick="event.stopPropagation();" title="View source">
+                    <span class="fact-source-link-icon">${getSourceIcon(fact.source_link)}</span>
+                    view source
+                </a>` : '';
+
+            // Confidence indicator
+            const confidenceHtml = `
+                <span class="fact-confidence">
+                    <span class="fact-confidence-bar">
+                        <span class="fact-confidence-fill ${confLevel}" style="width: ${confidencePercent}%"></span>
+                    </span>
+                    ${confidencePercent}%
+                </span>
+            `;
+
+            // Source quote (shown on hover)
+            const quoteHtml = fact.source_quote ?
+                `<div class="fact-quote">${escapeHtml(fact.source_quote)}</div>` : '';
 
             return `
                 <li class="fact-item ${unconfirmedClass}">
-                    <span class="fact-bullet">•</span>
+                    <span class="fact-bullet">${fact.category === 'summary' ? '📊' : '•'}</span>
                     <span class="fact-content">
                         <span class="fact-text">${escapeHtml(factSentence)}</span>
-                        ${sourceText ? `<span class="fact-source">${sourceText}<span class="fact-source-tooltip">${confidencePercent}% confidence${fact.extracted_at ? ' • Extracted ' + formatRelativeDate(fact.extracted_at) : ''}</span></span>` : ''}
+                        ${sourceLinkHtml}
+                        ${confidenceHtml}
+                        ${quoteHtml}
                     </span>
                     <div class="fact-actions">
                         ${!fact.confirmed_by_user ? `<button class="fact-action-btn confirm" onclick="confirmFact('${fact.id}'); event.stopPropagation();" title="Confirm">✓</button>` : ''}
@@ -2097,6 +2579,15 @@
                     </div>
                 </li>
             `;
+        }
+
+        // Get appropriate icon for source link type
+        function getSourceIcon(sourceLink) {
+            if (!sourceLink) return '';
+            if (sourceLink.includes('mail.google.com')) return String.fromCodePoint(0x1F4E7);
+            if (sourceLink.includes('calendar.google.com')) return String.fromCodePoint(0x1F4C5);
+            if (sourceLink.startsWith('obsidian://')) return String.fromCodePoint(0x1F4DD);
+            return String.fromCodePoint(0x1F517);
         }
 
         // Format a fact key/value pair as a natural sentence
@@ -2133,6 +2624,11 @@
                 'pet': `Has a pet: ${value}`,
                 'pets': `Has pets: ${value}`,
                 'anniversary': `Anniversary is ${value}`,
+                // Summary category patterns
+                'relationship trajectory': value,
+                'key themes': `Key themes: ${value}`,
+                'major events': `Major events: ${value}`,
+                'communication style': `Communication style: ${value}`,
             };
 
             // Check for exact or partial matches
