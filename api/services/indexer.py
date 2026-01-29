@@ -176,12 +176,13 @@ class IndexerService:
         # Sync to v2 people system if available
         if HAS_V2_PEOPLE and all_people:
             try:
+                from datetime import timezone
                 note_date_str = self._extract_note_date(path, frontmatter)
                 if note_date_str:
-                    note_date = datetime.strptime(note_date_str, "%Y-%m-%d")
+                    note_date = datetime.strptime(note_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
                 else:
                     # Use file mtime as fallback for undated notes
-                    note_date = datetime.fromtimestamp(path.stat().st_mtime)
+                    note_date = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
                 self._sync_people_to_v2(path, all_people, note_date, is_granola)
             except Exception as e:
                 logger.warning(f"Failed to sync people to v2 for {file_path}: {e}")
