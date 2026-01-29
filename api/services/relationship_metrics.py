@@ -146,7 +146,7 @@ def compute_relationship_strength(
         sources: List of source types used
 
     Returns:
-        Relationship strength between 0.0 and 1.0
+        Relationship strength between 0 and 100
     """
     recency = compute_recency_score(last_seen)
     frequency = compute_frequency_score(interaction_count)
@@ -158,7 +158,8 @@ def compute_relationship_strength(
         diversity * DIVERSITY_WEIGHT
     )
 
-    return round(strength, 3)
+    # Scale to 0-100 to match UI slider
+    return round(strength * 100, 1)
 
 
 def compute_relationship_strength_weighted(
@@ -177,7 +178,7 @@ def compute_relationship_strength_weighted(
         sources: List of source types used
 
     Returns:
-        Relationship strength between 0.0 and 1.0
+        Relationship strength between 0 and 100
     """
     recency = compute_recency_score(last_seen)
     frequency = compute_weighted_frequency_score(interactions_by_type)
@@ -189,7 +190,8 @@ def compute_relationship_strength_weighted(
         diversity * DIVERSITY_WEIGHT
     )
 
-    return round(strength, 3)
+    # Scale to 0-100 to match UI slider
+    return round(strength * 100, 1)
 
 
 def compute_strength_for_person(person: PersonEntity) -> float:

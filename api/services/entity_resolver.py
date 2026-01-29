@@ -17,6 +17,7 @@ from rapidfuzz import fuzz
 
 from api.services.person_entity import PersonEntity, PersonEntityStore, get_person_entity_store
 from api.services.people import resolve_person_name, PEOPLE_DICTIONARY
+from api.services.link_override import get_link_override_store
 from config.people_config import (
     DOMAIN_CONTEXT_MAP,
     COMPANY_NORMALIZATION,
@@ -144,6 +145,24 @@ class EntityResolver:
                 confidence=1.0,
                 match_type="name_exact",
             )
+
+        # Check for link override (disambiguation rules from previous splits)
+        override_store = get_link_override_store()
+        override = override_store.find_matching(
+            name=canonical,
+            source_type=None,  # Will be passed in enhanced version
+            context_path=context_path,
+        )
+        if override:
+            preferred = self._store.get_by_id(override.preferred_person_id)
+            if preferred:
+                logger.debug(f"Link override matched: '{canonical}' -> {preferred.canonical_name}")
+                return ResolutionResult(
+                    entity=preferred,
+                    is_new=False,
+                    confidence=1.0,
+                    match_type="link_override",
+                )
 
         # Score all candidates using fuzzy matching
         candidates = self._score_candidates(canonical, context_path)

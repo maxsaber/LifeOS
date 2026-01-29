@@ -138,8 +138,8 @@ class TestRelationshipStrength:
             interaction_count=FREQUENCY_TARGET,
             sources=["gmail", "calendar", "slack", "imessage", "vault"],
         )
-        # Should be close to 1.0
-        assert strength > 0.8
+        # Should be close to 100 (scale is 0-100)
+        assert strength > 80
 
     def test_old_but_active(self):
         """Test with old last_seen but many interactions."""
@@ -149,8 +149,8 @@ class TestRelationshipStrength:
             interaction_count=FREQUENCY_TARGET,
             sources=["gmail", "calendar"],
         )
-        # Recency is 0, but frequency and diversity contribute
-        assert 0.3 < strength < 0.6
+        # Recency is 0, but frequency and diversity contribute (scale is 0-100)
+        assert 30 < strength < 60
 
     def test_recent_but_inactive(self):
         """Test with recent last_seen but few interactions."""
@@ -160,11 +160,11 @@ class TestRelationshipStrength:
             interaction_count=1,
             sources=["gmail"],
         )
-        # Recency is high, but frequency and diversity are low
-        assert 0.3 < strength < 0.5
+        # Recency is high, but frequency and diversity are low (scale is 0-100)
+        assert 30 < strength < 50
 
     def test_weights_sum_to_one(self):
-        """Verify that maximum possible score is 1.0."""
+        """Verify that maximum possible score is 100."""
         now = datetime.now(timezone.utc)
         # All components at max
         strength = compute_relationship_strength(
@@ -172,15 +172,15 @@ class TestRelationshipStrength:
             interaction_count=FREQUENCY_TARGET * 2,
             sources=list(range(20)),  # More than total_sources
         )
-        assert strength <= 1.0
+        assert strength <= 100.0
 
     def test_rounding(self):
-        """Test that strength is rounded to 3 decimal places."""
+        """Test that strength is rounded to 1 decimal place."""
         now = datetime.now(timezone.utc) - timedelta(days=7)
         strength = compute_relationship_strength(
             last_seen=now,
             interaction_count=5,
             sources=["gmail", "calendar"],
         )
-        # Check it's a reasonable precision
-        assert len(str(strength).split(".")[-1]) <= 3
+        # Check it's a reasonable precision (1 decimal for 0-100 scale)
+        assert len(str(strength).split(".")[-1]) <= 1

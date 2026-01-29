@@ -245,6 +245,13 @@ class NetworkEdge(BaseModel):
     target: str
     weight: int = 0
     type: str = "inferred"
+    # Multi-source breakdown for filtering
+    shared_events_count: int = 0      # Calendar events
+    shared_threads_count: int = 0     # Email threads
+    shared_messages_count: int = 0    # iMessage/SMS
+    shared_whatsapp_count: int = 0    # WhatsApp
+    shared_slack_count: int = 0       # Slack DMs
+    is_linkedin_connection: bool = False
 
 
 class NetworkGraphResponse(BaseModel):
@@ -693,6 +700,290 @@ async def merge_people(request: PersonMergeRequest):
         primary_id=request.primary_id,
         merged_ids=merged_ids,
         stats=total_stats,
+    )
+
+
+class PersonSplitRequest(BaseModel):
+    """Request to split source entities from a person to another."""
+    from_person_id: str
+    to_person_id: Optional[str] = None  # None = create new person
+    new_person_name: Optional[str] = None  # Required if to_person_id is None
+    source_entity_ids: list[str]  # IDs of source entities to move
+    create_overrides: bool = True  # Create link override rules for durability
+
+
+class PersonSplitResponse(BaseModel):
+    """Response for split operation."""
+    status: str
+    from_person_id: str
+    to_person_id: str
+    source_entities_moved: int
+    interactions_moved: int
+    overrides_created: int
+
+
+@router.get("/people/{person_id}/source-entities")
+async def get_person_source_entities(person_id: str):
+    """
+    Get all source entities linked to a person.
+
+    Used by the split UI to show what sources comprise a person record.
+    """
+    import sqlite3
+    from pathlib import Path
+
+    person_store = get_person_entity_store()
+    person = person_store.get_by_id(person_id)
+
+    if not person:
+        raise HTTPException(status_code=404, detail=f"Person '{person_id}' not found")
+
+    crm_db = Path(__file__).parent.parent.parent / "data" / "crm.db"
+    conn = sqlite3.connect(crm_db)
+    conn.row_factory = sqlite3.Row
+
+    cursor = conn.execute("""
+        SELECT id, source_type, source_id, observed_name, observed_email, observed_phone,
+               link_confidence, link_status, observed_at
+        FROM source_entities
+        WHERE canonical_person_id = ?
+        ORDER BY source_type, observed_at DESC
+    """, (person_id,))
+
+    source_entities = []
+    for row in cursor:
+        # Create a short display for source_id (for vault paths, show just the filename)
+        source_id = row['source_id'] or ''
+        if '/' in source_id:
+            source_id_display = source_id.split('/')[-1]
+            if len(source_id_display) > 50:
+                source_id_display = source_id_display[:47] + '...'
+        else:
+            source_id_display = source_id[:50] if source_id else ''
+
+        source_entities.append({
+            'id': row['id'],
+            'source_type': row['source_type'],
+            'source_id': source_id,
+            'source_id_display': source_id_display,
+            'observed_name': row['observed_name'],
+            'observed_email': row['observed_email'],
+            'observed_phone': row['observed_phone'],
+            'link_confidence': row['link_confidence'] or 0.0,
+            'link_status': row['link_status'] or 'auto',
+            'observed_at': row['observed_at'],
+        })
+
+    conn.close()
+
+    # Group by source_type for easier UI display
+    by_type = {}
+    for se in source_entities:
+        st = se['source_type']
+        if st not in by_type:
+            by_type[st] = []
+        by_type[st].append(se)
+
+    return {
+        'person_id': person_id,
+        'person_name': person.canonical_name,
+        'total_count': len(source_entities),
+        'source_entities': source_entities,
+        'by_type': by_type,
+    }
+
+
+@router.post("/people/split", response_model=PersonSplitResponse)
+async def split_person(request: PersonSplitRequest):
+    """
+    Split source entities from one person to another.
+
+    This is the reverse of merge - it moves specific source entities
+    (and their interactions) from one person to another.
+
+    Use cases:
+    - Fix incorrectly merged entities (e.g., two different "Hayley"s)
+    - Separate a person into work/personal records
+
+    The operation:
+    - Moves specified source entities to the target person
+    - Moves related interactions to the target person
+    - Optionally creates link override rules to prevent future mis-linking
+    - Updates source lists on both persons
+
+    If to_person_id is None, a new person is created with new_person_name.
+    """
+    import sqlite3
+    import uuid
+    from pathlib import Path
+    from datetime import datetime, timezone
+
+    from api.services.link_override import get_link_override_store, LinkOverride
+
+    person_store = get_person_entity_store()
+    source_store = get_source_entity_store()
+
+    # Validate from_person exists
+    from_person = person_store.get_by_id(request.from_person_id)
+    if not from_person:
+        raise HTTPException(status_code=404, detail=f"From person '{request.from_person_id}' not found")
+
+    # Get or create to_person
+    if request.to_person_id:
+        to_person = person_store.get_by_id(request.to_person_id)
+        if not to_person:
+            raise HTTPException(status_code=404, detail=f"To person '{request.to_person_id}' not found")
+    else:
+        if not request.new_person_name:
+            raise HTTPException(status_code=400, detail="new_person_name required when to_person_id is not provided")
+
+        to_person = PersonEntity(
+            id=str(uuid.uuid4()),
+            canonical_name=request.new_person_name,
+            sources=[],
+            first_seen=datetime.now(timezone.utc),
+            last_seen=datetime.now(timezone.utc),
+        )
+        person_store.add(to_person)
+        person_store.save()
+        logger.info(f"Created new person for split: {to_person.canonical_name} ({to_person.id[:8]})")
+
+    # Get source entity details for override creation
+    crm_db = Path(__file__).parent.parent.parent / "data" / "crm.db"
+    conn = sqlite3.connect(crm_db)
+    conn.row_factory = sqlite3.Row
+
+    placeholders = ','.join('?' * len(request.source_entity_ids))
+    cursor = conn.execute(f"""
+        SELECT id, source_type, source_id, observed_name
+        FROM source_entities
+        WHERE id IN ({placeholders})
+        AND canonical_person_id = ?
+    """, request.source_entity_ids + [request.from_person_id])
+
+    source_entity_details = [dict(row) for row in cursor]
+
+    if len(source_entity_details) != len(request.source_entity_ids):
+        found_ids = {se['id'] for se in source_entity_details}
+        missing = set(request.source_entity_ids) - found_ids
+        raise HTTPException(
+            status_code=400,
+            detail=f"Some source entities not found or not linked to from_person: {missing}"
+        )
+
+    # Move source entities
+    cursor = conn.execute(f"""
+        UPDATE source_entities
+        SET canonical_person_id = ?, linked_at = ?, link_status = 'confirmed'
+        WHERE id IN ({placeholders})
+    """, [to_person.id, datetime.now(timezone.utc).isoformat()] + request.source_entity_ids)
+    source_entities_moved = cursor.rowcount
+    conn.commit()
+
+    # Move interactions - get source_types from the source entities
+    source_types = list({se['source_type'] for se in source_entity_details})
+    source_ids = [se['source_id'] for se in source_entity_details if se['source_id']]
+
+    interactions_moved = 0
+    if source_ids:
+        int_db = Path(__file__).parent.parent.parent / "data" / "interactions.db"
+        int_conn = sqlite3.connect(int_db)
+
+        id_placeholders = ','.join('?' * len(source_ids))
+        cursor = int_conn.execute(f"""
+            UPDATE interactions
+            SET person_id = ?
+            WHERE person_id = ?
+            AND source_id IN ({id_placeholders})
+        """, [to_person.id, request.from_person_id] + source_ids)
+        interactions_moved = cursor.rowcount
+        int_conn.commit()
+        int_conn.close()
+
+    # Update source lists on both persons
+    cursor = conn.execute("""
+        SELECT DISTINCT source_type FROM source_entities
+        WHERE canonical_person_id = ?
+    """, (from_person.id,))
+    from_person.sources = [row[0] for row in cursor]
+    person_store.update(from_person)
+
+    cursor = conn.execute("""
+        SELECT DISTINCT source_type FROM source_entities
+        WHERE canonical_person_id = ?
+    """, (to_person.id,))
+    to_person.sources = [row[0] for row in cursor]
+    person_store.update(to_person)
+    person_store.save()
+
+    conn.close()
+
+    # Create link overrides for durability
+    overrides_created = 0
+    if request.create_overrides:
+        override_store = get_link_override_store()
+
+        # Group by name pattern + source_type
+        patterns = {}
+        for se in source_entity_details:
+            name = se.get('observed_name', '')
+            source_type = se.get('source_type', '')
+            source_id = se.get('source_id', '')
+
+            if not name:
+                continue
+
+            key = (name.lower(), source_type)
+            if key not in patterns:
+                patterns[key] = {'name': name, 'source_type': source_type, 'contexts': set()}
+
+            # Extract context patterns from source_id
+            if source_type in ('vault', 'granola') and source_id:
+                if 'Work/ML' in source_id:
+                    patterns[key]['contexts'].add('Work/ML/')
+                elif 'Work/' in source_id:
+                    patterns[key]['contexts'].add('Work/')
+
+        for (name_lower, source_type), pattern in patterns.items():
+            if pattern['contexts']:
+                for context in pattern['contexts']:
+                    override = LinkOverride(
+                        id=str(uuid.uuid4()),
+                        name_pattern=pattern['name'],
+                        source_type=source_type,
+                        context_pattern=context,
+                        preferred_person_id=to_person.id,
+                        rejected_person_id=from_person.id,
+                        reason=f"Split via UI from {from_person.canonical_name}",
+                    )
+                    override_store.add(override)
+                    overrides_created += 1
+            else:
+                override = LinkOverride(
+                    id=str(uuid.uuid4()),
+                    name_pattern=pattern['name'],
+                    source_type=source_type,
+                    context_pattern=None,
+                    preferred_person_id=to_person.id,
+                    rejected_person_id=from_person.id,
+                    reason=f"Split via UI from {from_person.canonical_name}",
+                )
+                override_store.add(override)
+                overrides_created += 1
+
+    logger.info(
+        f"Split {source_entities_moved} source entities from {from_person.canonical_name} "
+        f"to {to_person.canonical_name}, {interactions_moved} interactions, "
+        f"{overrides_created} overrides created"
+    )
+
+    return PersonSplitResponse(
+        status="completed",
+        from_person_id=request.from_person_id,
+        to_person_id=to_person.id,
+        source_entities_moved=source_entities_moved,
+        interactions_moved=interactions_moved,
+        overrides_created=overrides_created,
     )
 
 
@@ -1636,19 +1927,115 @@ async def get_network_graph(
             continue
         seen_edges.add(edge_key)
 
-        weight = rel.shared_events_count + rel.shared_threads_count
-
         edges.append(NetworkEdge(
             source=rel.person_a_id,
             target=rel.person_b_id,
-            weight=weight,
+            weight=rel.edge_weight,
             type=rel.relationship_type,
+            shared_events_count=rel.shared_events_count or 0,
+            shared_threads_count=rel.shared_threads_count or 0,
+            shared_messages_count=rel.shared_messages_count or 0,
+            shared_whatsapp_count=rel.shared_whatsapp_count or 0,
+            shared_slack_count=rel.shared_slack_count or 0,
+            is_linkedin_connection=rel.is_linkedin_connection,
         ))
 
     elapsed = (time.time() - start_time) * 1000
     logger.info(f"network_graph(center={center_on}, depth={depth}) took {elapsed:.1f}ms ({len(nodes)} nodes, {len(edges)} edges)")
 
     return NetworkGraphResponse(nodes=nodes, edges=edges)
+
+
+class RelationshipDetailResponse(BaseModel):
+    """Response model for relationship details between two people."""
+    person_a_id: str
+    person_a_name: str
+    person_b_id: str
+    person_b_name: str
+    relationship_type: str
+    shared_contexts: list[str] = []
+    # Multi-source breakdown
+    shared_events_count: int = 0      # Calendar events
+    shared_threads_count: int = 0     # Email threads
+    shared_messages_count: int = 0    # iMessage/SMS
+    shared_whatsapp_count: int = 0    # WhatsApp
+    shared_slack_count: int = 0       # Slack DMs
+    is_linkedin_connection: bool = False
+    # Computed totals
+    total_interactions: int = 0
+    first_seen_together: Optional[str] = None
+    last_seen_together: Optional[str] = None
+    weight: int = 0  # Same as network edge weight
+
+
+@router.get("/relationship/{person_a_id}/{person_b_id}", response_model=RelationshipDetailResponse)
+async def get_relationship_details(person_a_id: str, person_b_id: str):
+    """
+    Get detailed information about the relationship between two people.
+
+    Returns shared contexts, interaction counts, and timing information.
+    """
+    try:
+        relationship_store = get_relationship_store()
+        person_store = get_person_entity_store()
+
+        # Get relationship
+        rel = relationship_store.get_between(person_a_id, person_b_id)
+
+        # Get person names
+        person_a = person_store.get_by_id(person_a_id)
+        person_b = person_store.get_by_id(person_b_id)
+
+        if not person_a or not person_b:
+            raise HTTPException(status_code=404, detail="One or both people not found")
+
+        # If no relationship exists, return empty/default values
+        if not rel:
+            return RelationshipDetailResponse(
+                person_a_id=person_a_id,
+                person_a_name=person_a.canonical_name,
+                person_b_id=person_b_id,
+                person_b_name=person_b.canonical_name,
+                relationship_type="none",
+                shared_contexts=[],
+                shared_events_count=0,
+                shared_threads_count=0,
+                shared_messages_count=0,
+                shared_whatsapp_count=0,
+                shared_slack_count=0,
+                is_linkedin_connection=False,
+                total_interactions=0,
+                first_seen_together=None,
+                last_seen_together=None,
+                weight=0,
+            )
+
+        # Map names correctly based on normalized IDs
+        name_map = {person_a_id: person_a.canonical_name, person_b_id: person_b.canonical_name}
+
+        return RelationshipDetailResponse(
+            person_a_id=rel.person_a_id,
+            person_a_name=name_map.get(rel.person_a_id, "Unknown"),
+            person_b_id=rel.person_b_id,
+            person_b_name=name_map.get(rel.person_b_id, "Unknown"),
+            relationship_type=rel.relationship_type or "inferred",
+            shared_contexts=rel.shared_contexts or [],
+            shared_events_count=rel.shared_events_count or 0,
+            shared_threads_count=rel.shared_threads_count or 0,
+            shared_messages_count=rel.shared_messages_count or 0,
+            shared_whatsapp_count=rel.shared_whatsapp_count or 0,
+            shared_slack_count=rel.shared_slack_count or 0,
+            is_linkedin_connection=rel.is_linkedin_connection,
+            total_interactions=rel.total_shared_interactions or 0,
+            first_seen_together=rel.first_seen_together.isoformat() if rel.first_seen_together else None,
+            last_seen_together=rel.last_seen_together.isoformat() if rel.last_seen_together else None,
+            weight=rel.edge_weight,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception(f"Error in get_relationship_details: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # Slack Integration Routes
@@ -2311,3 +2698,81 @@ async def get_data_health_summary():
         "total_people": health["people"].get("total", 0),
         "issues": len(health.get("sync_recommendations", [])),
     }
+
+
+# Link Override Management
+
+
+class LinkOverrideResponse(BaseModel):
+    """Response model for a link override rule."""
+    id: str
+    name_pattern: str
+    source_type: Optional[str] = None
+    context_pattern: Optional[str] = None
+    preferred_person_id: str
+    preferred_person_name: Optional[str] = None
+    rejected_person_id: Optional[str] = None
+    rejected_person_name: Optional[str] = None
+    reason: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+@router.get("/link-overrides")
+async def get_link_overrides(person_id: Optional[str] = Query(default=None)):
+    """
+    Get all link override rules.
+
+    Optionally filter by person_id to see overrides affecting a specific person.
+    """
+    from api.services.link_override import get_link_override_store
+
+    override_store = get_link_override_store()
+    person_store = get_person_entity_store()
+
+    if person_id:
+        overrides = override_store.get_for_person(person_id)
+    else:
+        overrides = override_store.get_all()
+
+    results = []
+    for o in overrides:
+        preferred_name = None
+        rejected_name = None
+
+        preferred = person_store.get_by_id(o.preferred_person_id)
+        if preferred:
+            preferred_name = preferred.canonical_name
+
+        if o.rejected_person_id:
+            rejected = person_store.get_by_id(o.rejected_person_id)
+            if rejected:
+                rejected_name = rejected.canonical_name
+
+        results.append(LinkOverrideResponse(
+            id=o.id,
+            name_pattern=o.name_pattern,
+            source_type=o.source_type,
+            context_pattern=o.context_pattern,
+            preferred_person_id=o.preferred_person_id,
+            preferred_person_name=preferred_name,
+            rejected_person_id=o.rejected_person_id,
+            rejected_person_name=rejected_name,
+            reason=o.reason,
+            created_at=o.created_at.isoformat() if o.created_at else None,
+        ))
+
+    return {"overrides": results, "count": len(results)}
+
+
+@router.delete("/link-overrides/{override_id}")
+async def delete_link_override(override_id: str):
+    """Delete a link override rule."""
+    from api.services.link_override import get_link_override_store
+
+    override_store = get_link_override_store()
+    deleted = override_store.delete(override_id)
+
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Override '{override_id}' not found")
+
+    return {"status": "deleted", "id": override_id}

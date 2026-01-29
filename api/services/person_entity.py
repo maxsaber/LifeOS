@@ -103,7 +103,7 @@ class PersonEntity:
     @property
     def relationship_strength(self) -> float:
         """
-        Get computed relationship strength (0.0-1.0).
+        Get computed relationship strength (0-100).
 
         If not computed yet, returns 0.0. Use relationship_metrics.py
         to compute and cache this value.
@@ -112,8 +112,8 @@ class PersonEntity:
 
     @relationship_strength.setter
     def relationship_strength(self, value: float) -> None:
-        """Set relationship strength."""
-        self._relationship_strength = max(0.0, min(1.0, value))
+        """Set relationship strength (0-100 scale)."""
+        self._relationship_strength = max(0.0, min(100.0, value))
 
     def add_tag(self, tag: str) -> bool:
         """Add a tag if not already present."""

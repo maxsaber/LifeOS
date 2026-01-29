@@ -579,13 +579,21 @@ class PersonFactExtractor:
 
     def _build_extraction_prompt(self, person_name: str, interaction_text: str) -> str:
         """Build the strict LLM prompt for fact extraction."""
-        return f"""Analyze these interactions about {person_name} and extract ONLY facts that are EXPLICITLY stated.
+        return f"""Analyze these interactions and extract ONLY facts about {person_name} (the contact person).
+
+CRITICAL - ENTITY ATTRIBUTION:
+These are conversations BETWEEN the user (Nathan) and {person_name}. You must ONLY extract facts about {person_name}.
+- If Nathan says "my daughter Malea" → This is Nathan's daughter, NOT {person_name}'s. DO NOT extract.
+- If Nathan says "my wife Taylor" → This is Nathan's wife. Only extract if {person_name} IS Taylor.
+- If {person_name} says "my daughter Emma" → This IS {person_name}'s daughter. Extract it.
+- If they discuss a third person "Sarah got a new job" → This is about Sarah, NOT {person_name}. DO NOT extract.
 
 CRITICAL RULES:
-1. DO NOT infer or assume facts - only extract what is directly stated
-2. Each fact MUST have a verbatim quote from the source as evidence
-3. If you cannot provide a direct quote, DO NOT include the fact
-4. Set confidence to 0.9+ ONLY if the fact is explicit; lower if somewhat implied
+1. ONLY extract facts that are EXPLICITLY about {person_name}, not Nathan or third parties
+2. Each fact MUST have a verbatim quote as evidence
+3. The quote must show this fact belongs to {person_name}, not someone else
+4. If unsure who a fact applies to, DO NOT extract it
+5. Set confidence to 0.9+ ONLY if fact is explicitly about {person_name}
 
 Return ONLY valid JSON with this structure (no markdown, no explanation):
 {{
@@ -594,7 +602,7 @@ Return ONLY valid JSON with this structure (no markdown, no explanation):
       "category": "family",
       "key": "spouse_name",
       "value": "Sarah",
-      "quote": "My wife Sarah and I went hiking",
+      "quote": "my wife Sarah and I went hiking",
       "source_id": "abc123",
       "confidence": 0.95
     }}
@@ -604,7 +612,7 @@ Return ONLY valid JSON with this structure (no markdown, no explanation):
 Categories and example keys:
 - family: spouse_name, children_count, child_names, parent_names, sibling_names, pet_name
 - preferences: food_preference, communication_style, meeting_preference, schedule_preference
-- background: hometown, alma_mater, previous_companies, nationality, languages
+- background: hometown, alma_mater, previous_companies, nationality, languages, medication
 - interests: hobby, sport, music_taste, book_genre, favorite_team, creative_pursuits
 - dates: birthday, anniversary, started_job, important_dates
 - work: current_role, company, expertise, projects, team_size, reports_to
@@ -612,21 +620,24 @@ Categories and example keys:
 - travel: visited_countries, planned_trips, favorite_destination, travel_style
 
 EXTRACTION RULES:
-- Only include facts with clear textual evidence from the interactions
-- The "quote" field MUST contain the exact text that proves this fact
+- Only include facts with clear textual evidence about {person_name} specifically
+- The "quote" field MUST show this fact belongs to {person_name}
 - The "source_id" field should match the ID shown in the interaction (e.g., "ID:abc123")
-- Values should be concise (1-10 words)
+- Values should be specific (not "sister" but "sister named Jane")
 - Use lowercase snake_case for keys
-- Reject any fact you cannot directly quote from the text
-- Prefer explicit statements over inferences
+- Reject vague facts without specific names or details
+- Reject any fact about Nathan (the user) or third parties mentioned in conversation
 
-Example of GOOD extraction:
-- Text says "I'm taking my daughter Emma to soccer practice"
-- Fact: {{"category": "family", "key": "daughter_name", "value": "Emma", "quote": "my daughter Emma", "confidence": 0.95}}
+Example of GOOD extraction (when {person_name} says something):
+- {person_name} says "I'm taking my daughter Emma to soccer practice"
+- Fact: {{"category": "family", "key": "daughter_name", "value": "Emma", "quote": "I'm taking my daughter Emma", "confidence": 0.95}}
 
 Example of BAD extraction (DO NOT do this):
-- Text mentions attending a tech conference
-- BAD Fact: {{"category": "interests", "key": "hobby", "value": "technology"}} <- No quote, too inferential
+- Nathan says "I need to pick up Malea" (Malea is Nathan's family, not {person_name}'s)
+- BAD: {{"category": "family", "key": "child_name", "value": "Malea"}} <- Wrong person!
+
+- They discuss "Sarah got a new job in Boston"
+- BAD: {{"category": "work", "key": "employer", "value": "Boston company"}} <- About Sarah, not {person_name}!
 
 Interactions:
 {interaction_text}"""

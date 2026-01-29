@@ -56,9 +56,13 @@ class Relationship:
     relationship_type: str = TYPE_INFERRED
     shared_contexts: list[str] = field(default_factory=list)  # vault paths, slack channels
 
-    # Interaction stats
+    # Interaction stats - multi-source tracking
     shared_events_count: int = 0  # Calendar events together
     shared_threads_count: int = 0  # Email threads together
+    shared_messages_count: int = 0  # iMessage/SMS direct threads
+    shared_whatsapp_count: int = 0  # WhatsApp direct threads
+    shared_slack_count: int = 0  # Slack DM message count
+    is_linkedin_connection: bool = False  # LinkedIn connection flag
 
     # Timestamps
     first_seen_together: Optional[datetime] = None
@@ -102,11 +106,18 @@ class Relationship:
         """Create Relationship from SQLite row."""
         # Row order: id, person_a_id, person_b_id, relationship_type, shared_contexts,
         #            shared_events_count, shared_threads_count, first_seen_together,
-        #            last_seen_together, created_at, updated_at
+        #            last_seen_together, created_at, updated_at,
+        #            shared_messages_count, shared_whatsapp_count, shared_slack_count, is_linkedin_connection
         first_seen = datetime.fromisoformat(row[7]) if row[7] else None
         last_seen = datetime.fromisoformat(row[8]) if row[8] else None
         created_at = datetime.fromisoformat(row[9]) if row[9] else datetime.now(timezone.utc)
         updated_at = datetime.fromisoformat(row[10]) if row[10] else datetime.now(timezone.utc)
+
+        # Handle new fields (may not exist in older rows)
+        shared_messages_count = row[11] if len(row) > 11 else 0
+        shared_whatsapp_count = row[12] if len(row) > 12 else 0
+        shared_slack_count = row[13] if len(row) > 13 else 0
+        is_linkedin_connection = bool(row[14]) if len(row) > 14 else False
 
         return cls(
             id=row[0],
@@ -120,12 +131,34 @@ class Relationship:
             last_seen_together=_make_aware(last_seen),
             created_at=_make_aware(created_at),
             updated_at=_make_aware(updated_at),
+            shared_messages_count=shared_messages_count or 0,
+            shared_whatsapp_count=shared_whatsapp_count or 0,
+            shared_slack_count=shared_slack_count or 0,
+            is_linkedin_connection=is_linkedin_connection,
         )
 
     @property
     def total_shared_interactions(self) -> int:
-        """Get total number of shared interactions."""
-        return self.shared_events_count + self.shared_threads_count
+        """Get total number of shared interactions from all sources."""
+        return (
+            self.shared_events_count +
+            self.shared_threads_count +
+            self.shared_messages_count +
+            self.shared_whatsapp_count +
+            self.shared_slack_count
+        )
+
+    @property
+    def edge_weight(self) -> int:
+        """Calculate edge weight for graph visualization."""
+        return (
+            self.shared_events_count * 3 +      # Calendar meetings (high signal)
+            self.shared_threads_count * 2 +     # Email threads
+            self.shared_messages_count * 2 +    # iMessage threads
+            self.shared_whatsapp_count * 2 +    # WhatsApp threads
+            self.shared_slack_count * 1 +       # Slack DMs (weaker per-message signal)
+            (10 if self.is_linkedin_connection else 0)  # LinkedIn connection bonus
+        )
 
     def involves(self, person_id: str) -> bool:
         """Check if this relationship involves a specific person."""
@@ -178,6 +211,21 @@ class RelationshipStore:
                 )
             """)
 
+            # Add new columns for multi-source tracking (migration)
+            new_columns = [
+                ("shared_messages_count", "INTEGER DEFAULT 0"),
+                ("shared_whatsapp_count", "INTEGER DEFAULT 0"),
+                ("shared_slack_count", "INTEGER DEFAULT 0"),
+                ("is_linkedin_connection", "INTEGER DEFAULT 0"),
+            ]
+            for col_name, col_type in new_columns:
+                try:
+                    conn.execute(f"ALTER TABLE relationships ADD COLUMN {col_name} {col_type}")
+                    logger.info(f"Added column {col_name} to relationships table")
+                except sqlite3.OperationalError:
+                    # Column already exists
+                    pass
+
             # Index for finding relationships by person
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_relationships_person_a
@@ -226,8 +274,9 @@ class RelationshipStore:
                 INSERT INTO relationships
                 (id, person_a_id, person_b_id, relationship_type, shared_contexts,
                  shared_events_count, shared_threads_count, first_seen_together,
-                 last_seen_together, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 last_seen_together, created_at, updated_at,
+                 shared_messages_count, shared_whatsapp_count, shared_slack_count, is_linkedin_connection)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 relationship.id,
                 relationship.person_a_id,
@@ -240,6 +289,10 @@ class RelationshipStore:
                 relationship.last_seen_together.isoformat() if relationship.last_seen_together else None,
                 relationship.created_at.isoformat(),
                 relationship.updated_at.isoformat(),
+                relationship.shared_messages_count,
+                relationship.shared_whatsapp_count,
+                relationship.shared_slack_count,
+                1 if relationship.is_linkedin_connection else 0,
             ))
             conn.commit()
             return relationship
@@ -298,7 +351,11 @@ class RelationshipStore:
                     shared_threads_count = ?,
                     first_seen_together = ?,
                     last_seen_together = ?,
-                    updated_at = ?
+                    updated_at = ?,
+                    shared_messages_count = ?,
+                    shared_whatsapp_count = ?,
+                    shared_slack_count = ?,
+                    is_linkedin_connection = ?
                 WHERE id = ?
             """, (
                 relationship.relationship_type,
@@ -308,6 +365,10 @@ class RelationshipStore:
                 relationship.first_seen_together.isoformat() if relationship.first_seen_together else None,
                 relationship.last_seen_together.isoformat() if relationship.last_seen_together else None,
                 relationship.updated_at.isoformat(),
+                relationship.shared_messages_count,
+                relationship.shared_whatsapp_count,
+                relationship.shared_slack_count,
+                1 if relationship.is_linkedin_connection else 0,
                 relationship.id,
             ))
             conn.commit()
