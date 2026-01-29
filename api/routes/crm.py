@@ -8,6 +8,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional, Union
 import logging
+import time
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel, Field
@@ -121,6 +122,7 @@ class PersonDetailResponse(BaseModel):
     meeting_count: int = 0
     email_count: int = 0
     mention_count: int = 0
+    message_count: int = 0  # iMessage/SMS count
     # Related data
     source_entities: list[SourceEntityResponse] = []
     pending_links: list[PendingLinkResponse] = []
@@ -404,6 +406,7 @@ def _person_to_detail_response(
         meeting_count=person.meeting_count,
         email_count=person.email_count,
         mention_count=person.mention_count,
+        message_count=person.message_count,
     )
 
     if include_related:
@@ -439,7 +442,8 @@ async def list_people(
     source: Optional[str] = Query(default=None, description="Filter by source"),
     has_pending: Optional[bool] = Query(default=None, description="Filter by pending links"),
     has_interactions: Optional[bool] = Query(default=None, description="Filter by interaction count > 0"),
-    sort: str = Query(default="interactions", description="Sort field: interactions, last_seen, name, strength"),
+    min_interactions: int = Query(default=0, ge=0, description="Minimum total interactions (emails + meetings + mentions + messages)"),
+    sort: str = Query(default="strength", description="Sort field: interactions, last_seen, name, strength"),
     offset: int = Query(default=0, ge=0, description="Offset for pagination"),
     limit: int = Query(default=50, ge=1, le=200, description="Max results"),
 ):
@@ -485,7 +489,7 @@ async def list_people(
         else:
             people = [p for p in people if p.id not in pending_person_ids]
 
-    # Apply interactions filter
+    # Apply interactions filter (boolean)
     if has_interactions is not None:
         if has_interactions:
             people = [
@@ -497,6 +501,13 @@ async def list_people(
                 p for p in people
                 if (p.email_count or 0) + (p.meeting_count or 0) + (p.mention_count or 0) + getattr(p, 'message_count', 0) == 0
             ]
+
+    # Apply min_interactions filter (numeric threshold)
+    if min_interactions > 0:
+        people = [
+            p for p in people
+            if (p.email_count or 0) + (p.meeting_count or 0) + (p.mention_count or 0) + getattr(p, 'message_count', 0) >= min_interactions
+        ]
 
     total = len(people)
 
@@ -531,26 +542,41 @@ async def list_people(
 
 
 @router.get("/people/{person_id}", response_model=PersonDetailResponse)
-async def get_person(person_id: str):
+async def get_person(
+    person_id: str,
+    include_related: bool = Query(default=False, description="Include source entities, pending links, relationships"),
+    refresh_strength: bool = Query(default=False, description="Recompute relationship strength (slower)"),
+):
     """
     Get detailed information about a person.
 
-    Includes source entities, pending links, and relationships.
+    By default returns only person data for fast loading.
+    Use include_related=true for source entities, pending links, relationships.
+    Use refresh_strength=true to recompute relationship strength (slower).
     """
+    start_time = time.time()
+
     person_store = get_person_entity_store()
     person = person_store.get_by_id(person_id)
 
     if not person:
         raise HTTPException(status_code=404, detail=f"Person '{person_id}' not found")
 
-    # Compute fresh relationship strength
-    try:
-        strength = compute_strength_for_person(person)
-        person.relationship_strength = strength
-    except Exception as e:
-        logger.warning(f"Failed to compute relationship strength: {e}")
+    # Only recompute relationship strength if explicitly requested
+    # This is slow (~100-500ms) so skip by default
+    if refresh_strength:
+        try:
+            strength = compute_strength_for_person(person)
+            person.relationship_strength = strength
+        except Exception as e:
+            logger.warning(f"Failed to compute relationship strength: {e}")
 
-    return _person_to_detail_response(person, include_related=True)
+    response = _person_to_detail_response(person, include_related=include_related)
+
+    elapsed = (time.time() - start_time) * 1000
+    logger.info(f"get_person({person_id}) took {elapsed:.1f}ms (include_related={include_related})")
+
+    return response
 
 
 @router.patch("/people/{person_id}", response_model=PersonDetailResponse)
@@ -650,10 +676,10 @@ async def get_person_timeline_aggregated(
     person_id: str,
     source_type: Optional[str] = Query(default=None, description="Filter by source type"),
     days_back: int = Query(
-        default=InteractionConfig.DEFAULT_WINDOW_DAYS,
+        default=90,  # Default to 90 days for faster initial load
         ge=1,
         le=InteractionConfig.MAX_WINDOW_DAYS,
-        description="Days to look back (default 365, max 3650)"
+        description="Days to look back (default 90, max 3650)"
     ),
     include_items: bool = Query(default=False, description="Include individual items in each group"),
     max_items_per_group: int = Query(default=10, ge=1, le=50, description="Max items per group when include_items=True"),
@@ -663,6 +689,11 @@ async def get_person_timeline_aggregated(
 
     Returns interactions aggregated by day, with counts and previews.
     Use include_items=True to get individual interactions within each group.
+
+    Performance notes:
+    - Default days_back=90 for fast initial load (~100ms)
+    - Use days_back=365 for full year view (may take 500ms+)
+    - include_items=False is faster for initial rendering
 
     Example response structure:
     ```
@@ -696,6 +727,8 @@ async def get_person_timeline_aggregated(
     }
     ```
     """
+    start_time = time.time()
+
     person_store = get_person_entity_store()
     person = person_store.get_by_id(person_id)
 
@@ -704,8 +737,8 @@ async def get_person_timeline_aggregated(
 
     interaction_store = get_interaction_store()
 
-    # Fetch all interactions within the time range (no pagination for aggregation)
-    # Limit to a reasonable amount to avoid performance issues
+    # Fetch interactions within the time range
+    # Use a reasonable limit for performance
     interactions = interaction_store.get_for_person(
         person_id,
         days_back=days_back,
@@ -785,6 +818,9 @@ async def get_person_timeline_aggregated(
     # Get date range
     date_range_start = days[-1].date if days else None
     date_range_end = days[0].date if days else None
+
+    elapsed = (time.time() - start_time) * 1000
+    logger.info(f"timeline_aggregated({person_id}) took {elapsed:.1f}ms ({len(interactions)} interactions, {days_back} days)")
 
     return AggregatedTimelineResponse(
         days=days,
@@ -1390,6 +1426,7 @@ async def get_network_graph(
     - 2 = second-degree connection (connection of connection)
     - etc.
     """
+    start_time = time.time()
     person_store = get_person_entity_store()
     rel_store = get_relationship_store()
 
@@ -1473,6 +1510,9 @@ async def get_network_graph(
                 weight=weight,
                 type=rel.relationship_type,
             ))
+
+    elapsed = (time.time() - start_time) * 1000
+    logger.info(f"network_graph(center={center_on}, depth={depth}) took {elapsed:.1f}ms ({len(nodes)} nodes, {len(edges)} edges)")
 
     return NetworkGraphResponse(nodes=nodes, edges=edges)
 

@@ -187,24 +187,193 @@ Use Playwright/Chrome to:
 
 ---
 
-## Implementation Order
+## Task 9: People List Filtering and Sorting
+**Priority: Critical**
 
-1. **Task 1**: Timeline aggregation fix (blocking usability)
-2. **Task 5**: Review queue UI (important feature)
-3. **Task 6**: Quick Facts overhaul (data quality)
-4. **Task 2**: Graph second-degree connections
-5. **Task 3**: Remove unused elements
-6. **Task 4**: Connections tab decision
-7. **Task 7**: Visual review
+### Problem
+The people list shows everyone, including those with zero interactions. List is not sorted meaningfully.
+
+### Requirements
+1. **Filter by default**: Only show people with 1+ interactions
+2. **Sort by strength**: Order by relationship strength (descending)
+3. **Show all toggle**: Optional checkbox to include zero-interaction people
+4. **Performance**: List should load quickly with filtering applied
+
+### API Changes
+- Add `min_interactions=1` default parameter to `/api/crm/people`
+- Add `sort_by=strength` parameter
+- Return only filtered results by default
+
+### Verification
+- Load CRM, see only people with interactions
+- Top of list = highest strength connections
+- Toggle to see all (including zero-interaction)
+
+---
+
+## Task 10: Pre-Extract Facts for Top 50
+**Priority: High**
+
+### Problem
+Quick Facts are empty until manually extracted. Users shouldn't have to click "Extract" for everyone.
+
+### Requirements
+1. Identify top 50 people by relationship strength
+2. Run fact extraction for each (in background)
+3. Store results so they're immediately available when viewing person
+4. Skip people who already have facts extracted
+
+### Implementation
+- Create `scripts/batch_extract_facts.py`
+- Query top 50 people by strength with 1+ interactions
+- For each, call the fact extraction service
+- Log progress and any errors
+- Can be run manually or via cron
+
+### Verification
+- Run script
+- Open CRM, view top people
+- Quick Facts are already populated (no "Extract" needed)
+
+---
+
+## Task 11: Remove Connections Tab
+**Priority: High**
+
+### Problem
+Connections tab is confusing and redundant with Graph view. User doesn't understand its purpose.
+
+### Decision
+**Remove the Connections tab entirely.**
+
+### Rationale
+- Graph view already shows connections visually
+- Having both creates confusion
+- Simpler UI = better UX
+
+### Implementation
+1. Remove "Connections" tab from tab bar
+2. Remove connections tab content/rendering code
+3. Keep Graph as the sole network visualization
+4. Update any references in documentation
+
+### Verification
+- Only 3 tabs remain: Overview, Timeline, Graph
+- Graph works correctly for network visualization
+
+---
+
+## Task 12: Fix Graph Tab - Second-Degree Connections
+**Priority: Critical**
+
+### Problem
+Graph tab was working before but is now broken. Does not show proper 2-degree network.
+
+### Required Behavior
+1. **Center node**: Selected person is ALWAYS the center of the graph
+2. **Two-degree network**: Show all people within 2 degrees of connection
+   - Degree 0: Central person (selected)
+   - Degree 1: Direct connections to central person
+   - Degree 2: Connections of those direct connections
+3. **Click behavior**: Clicking ANY node:
+   - Switches to that person's detail page
+   - That person becomes the NEW center
+   - Graph re-renders with THEIR 2-degree network
+   - Stays on Graph tab
+4. **Visual hierarchy**:
+   - Degree 0: Largest node, accent color
+   - Degree 1: Medium nodes
+   - Degree 2: Smaller nodes, reduced opacity
+
+### API Requirements
+- `/api/crm/network?center_on={person_id}&depth=2`
+- Returns nodes with `degree` field (0, 1, or 2)
+- Returns edges connecting the network
+
+### Debugging Steps
+1. Check if API returns correct data with depth=2
+2. Check if D3.js force simulation is running
+3. Check if SVG is being rendered in container
+4. Check for JavaScript errors in console
+
+### Verification
+- Select any person → they're centered in graph
+- See their direct connections (degree 1)
+- See connections-of-connections (degree 2)
+- Click another node → graph re-centers on them
+
+---
+
+## Task 13: Performance Optimization
+**Priority: Critical**
+
+### Problem
+Loading a person's page takes many seconds. Unacceptable UX.
+
+### Root Causes to Investigate
+1. **API calls**: How many calls on person load? Can they be parallelized/batched?
+2. **Timeline query**: Loading full timeline on initial load?
+3. **Network query**: Complex graph queries blocking UI?
+4. **Facts extraction**: Running synchronously on load?
+5. **Frontend**: Re-rendering unnecessarily?
+
+### Performance Targets
+- Person page initial load: < 500ms
+- Tab switch: < 200ms
+- Graph render: < 1s for networks up to 200 nodes
+
+### Optimization Strategies
+1. **Lazy loading**: Only load visible tab's data
+2. **Pagination**: Don't load full timeline upfront
+3. **Caching**: Cache person data, timeline, network
+4. **Background loading**: Load secondary data after initial render
+5. **API batching**: Single call for person + stats + recent activity
+6. **Indexes**: Ensure database indexes on frequently queried columns
+
+### Implementation
+1. Profile current load to identify bottleneck
+2. Add timing logs to API endpoints
+3. Implement lazy tab loading
+4. Add response caching
+5. Optimize slow queries
+
+### Verification
+- Open Network tab in browser DevTools
+- Click person → all data loads in < 500ms
+- Switch tabs → instant response
+
+---
+
+## Implementation Order (Updated)
+
+### Round 1 (Critical - Do Now)
+1. **Task 9**: Filter people list (blocking usability)
+2. **Task 12**: Fix Graph tab (broken feature)
+3. **Task 13**: Performance optimization (UX blocker)
+
+### Round 2 (High Priority)
+4. **Task 11**: Remove Connections tab (cleanup)
+5. **Task 10**: Pre-extract facts for top 50
+
+### Already Completed
+- ~~Task 1~~: Timeline aggregation ✅
+- ~~Task 5~~: Review queue UI ✅
+- ~~Task 6~~: Quick Facts overhaul ✅
+- ~~Task 7~~: History grid ✅
 
 ---
 
 ## Success Criteria
 
-- [ ] Timeline shows grouped interactions that expand
+- [x] Timeline shows grouped interactions that expand
 - [ ] Graph shows 2-degree connections, node click navigates
-- [ ] No confusing unused buttons
-- [ ] Review queue accessible from UI
-- [ ] Quick Facts are accurate with source links
-- [ ] Full history analyzed for facts
-- [ ] Clean, intuitive UI confirmed by visual review
+- [x] No confusing unused buttons
+- [x] Review queue accessible from UI
+- [x] Quick Facts are accurate with source links
+- [x] Full history analyzed for facts
+- [ ] People list filtered to those with interactions
+- [ ] People list sorted by strength
+- [ ] Top 50 have pre-extracted facts
+- [ ] Connections tab removed
+- [ ] Page load < 500ms
+- [ ] Graph tab works correctly with 2-degree network

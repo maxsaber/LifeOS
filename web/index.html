@@ -2452,9 +2452,9 @@
                 <div class="crm-filters" id="crmFilters">
                     <div class="crm-filter-row">
                         <select class="crm-sort-select" id="crmSortSelect" onchange="handleCrmSortChange()">
+                            <option value="strength" selected>Strongest</option>
                             <option value="interactions">Most Active</option>
                             <option value="name">Name A-Z</option>
-                            <option value="strength">Strongest</option>
                             <option value="last_seen">Recent</option>
                         </select>
                         <label class="crm-filter-toggle" id="crmShowAllToggle">
@@ -4400,7 +4400,7 @@
             timelineFilter: null, // null = all, or 'gmail', 'calendar', 'imessage', etc.
             timelineDaysShown: 30, // Number of days currently shown
             timelineData: null, // Cached timeline data for load more
-            sortBy: 'interactions',
+            sortBy: 'strength',
             showAll: false,
             reviewQueue: [],
             reviewIndex: 0,
@@ -4474,6 +4474,7 @@
                             <div class="crm-person-stats">
                                 ${person.email_count ? `<span class="crm-person-stat" title="Emails">📧${person.email_count}</span>` : ''}
                                 ${person.meeting_count ? `<span class="crm-person-stat" title="Meetings">📅${person.meeting_count}</span>` : ''}
+                                ${person.message_count ? `<span class="crm-person-stat" title="Messages">💬${person.message_count}</span>` : ''}
                                 ${person.mention_count ? `<span class="crm-person-stat" title="Mentions">📝${person.mention_count}</span>` : ''}
                             </div>
                         </div>
@@ -4613,16 +4614,19 @@
         }
 
         // Load and render aggregated timeline for a person
-        async function loadPersonTimeline(personId, sourceTypeFilter = null) {
+        // Performance: days_back=90 for fast initial load (vs 365 before)
+        async function loadPersonTimeline(personId, sourceTypeFilter = null, daysBack = 90) {
             const container = document.getElementById('personTimeline');
             if (!container) return;
 
             // Reset days shown when loading fresh
             crmState.timelineDaysShown = 30;
             crmState.timelineFilter = sourceTypeFilter;
+            crmState.timelineDaysBack = daysBack;
 
             try {
-                let url = `/api/crm/people/${personId}/timeline/aggregated?days_back=365&include_items=true&max_items_per_group=10`;
+                // Fetch 90 days with items (was 365, caused slow loads)
+                let url = `/api/crm/people/${personId}/timeline/aggregated?days_back=${daysBack}&include_items=true&max_items_per_group=10`;
                 if (sourceTypeFilter) {
                     url += `&source_type=${sourceTypeFilter}`;
                 }
@@ -4798,7 +4802,23 @@
                 `;
             }
 
+            // Show "Load Full Year" button if we loaded less than 365 days
+            if (crmState.timelineDaysBack < 365) {
+                html += `
+                    <button class="crm-timeline-load-more" style="margin-top: 0.5rem; background: var(--bg-tertiary);" onclick="loadFullYearTimeline()">
+                        Load Full Year History
+                    </button>
+                `;
+            }
+
             container.innerHTML = html;
+        }
+
+        // Load full year timeline (slower, but complete)
+        function loadFullYearTimeline() {
+            if (crmState.selectedPersonId) {
+                loadPersonTimeline(crmState.selectedPersonId, crmState.timelineFilter, 365);
+            }
         }
 
         // Toggle timeline group expansion

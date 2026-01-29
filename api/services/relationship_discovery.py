@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from api.services.person_entity import PersonEntity, get_person_entity_store
-from api.services.interaction_store import get_interaction_store
+from api.services.interaction_store import get_interaction_store, get_interaction_db_path
 from api.services.relationship import (
     Relationship,
     get_relationship_store,
@@ -43,26 +43,67 @@ def discover_from_calendar(
     Returns:
         List of discovered relationships
     """
-    interaction_store = get_interaction_store()
+    import sqlite3
+
     relationship_store = get_relationship_store()
     person_store = get_person_entity_store()
 
-    # Get all calendar interactions in the window
+    # Build lookup tables from people_entities
+    email_to_person: dict[str, str] = {}
+    name_to_person: dict[str, str] = {}
+    for person in person_store.get_all():
+        for email in person.emails:
+            email_to_person[email.lower()] = person.id
+        name_to_person[person.canonical_name.lower()] = person.id
+        for alias in person.aliases:
+            name_to_person[alias.lower()] = person.id
+
+    def resolve_participant(participant: str) -> Optional[str]:
+        """Resolve participant (email or name) to canonical person ID."""
+        if not participant:
+            return None
+        participant_lower = participant.lower().strip()
+        # Try as email first
+        if '@' in participant:
+            return email_to_person.get(participant_lower)
+        # Then try as name
+        return name_to_person.get(participant_lower)
+
+    # Query interactions database directly to find shared calendar events
+    # source_id format is "event_id:participant" - extract participant
+    db_path = get_interaction_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+
     cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
 
-    # Group interactions by event (source_id)
-    event_attendees: dict[str, list[str]] = defaultdict(list)
+    # Get all calendar interactions with source_id containing participant
+    query = """
+        SELECT
+            substr(source_id, 1, instr(source_id, ':') - 1) as event_id,
+            substr(source_id, instr(source_id, ':') + 1) as participant
+        FROM interactions
+        WHERE source_type = 'calendar'
+          AND source_id LIKE '%:%'
+          AND timestamp >= ?
+    """
 
-    # Iterate through all people and their calendar interactions
-    for person in person_store.get_all():
-        interactions = interaction_store.get_for_person(
-            person.id,
-            days_back=days_back,
-            source_type="calendar",
-        )
-        for interaction in interactions:
-            if interaction.source_id:
-                event_attendees[interaction.source_id].append(person.id)
+    cursor = conn.execute(query, (cutoff.isoformat(),))
+
+    # Group by event, resolving participants to person IDs
+    event_attendees: dict[str, set[str]] = defaultdict(set)
+    for row in cursor:
+        event_id = row['event_id']
+        participant = row['participant']
+        person_id = resolve_participant(participant)
+        if person_id:
+            event_attendees[event_id].add(person_id)
+
+    conn.close()
+
+    # Filter to events with 2+ resolved attendees
+    event_attendees = {eid: list(pids) for eid, pids in event_attendees.items() if len(pids) >= 2}
+    logger.info(f"Found {len(event_attendees)} calendar events with 2+ resolved attendees")
 
     # Find pairs of people who share events
     pair_events: dict[tuple[str, str], list[str]] = defaultdict(list)
