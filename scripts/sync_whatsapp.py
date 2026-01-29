@@ -11,6 +11,12 @@ Syncs:
 2. WhatsApp messages as interactions (DMs and group chats)
 3. Group memberships (for relationship discovery)
 """
+import sys
+from pathlib import Path
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 import subprocess
 import json
 import uuid
@@ -19,7 +25,6 @@ import logging
 import argparse
 import re
 from datetime import datetime, timezone
-from pathlib import Path
 
 from api.services.entity_resolver import get_entity_resolver
 from api.services.interaction_store import get_interaction_db_path

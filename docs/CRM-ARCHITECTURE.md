@@ -740,6 +740,98 @@ The EntityResolver uses a **three-pass algorithm** with weighted scoring:
 
 ---
 
+## Data Sync & Relationship Discovery
+
+### Sync Scripts
+
+All sync scripts are in `scripts/` and follow the pattern:
+- Dry run by default (shows what would change)
+- Use `--execute` flag to apply changes
+
+| Script | Purpose | Data Source |
+|--------|---------|-------------|
+| `sync_gmail_calendar_interactions.py` | Sync emails and calendar events | Gmail API |
+| `sync_imessage_interactions.py` | Sync iMessage to interactions | `data/imessage.db` |
+| `sync_whatsapp.py` | Sync WhatsApp contacts and messages | `~/.wacli/wacli.db` |
+| `sync_phone_calls.py` | Sync phone call history | macOS CallHistoryDB |
+| `sync_contacts_csv.py` | Import Apple Contacts | Contacts export CSV |
+| `sync_person_stats.py` | Update interaction counts on PersonEntity | `data/interactions.db` |
+| `link_imessage_entities.py` | Link iMessage handles to CRM people | CRM + imessage.db |
+
+### Relationship Discovery Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `discover_whatsapp_relationships.py` | Find relationships from WhatsApp group membership |
+| `discover_imessage_relationships.py` | Find relationships from iMessage group chats |
+| `create_relationship.py` | Manually create relationships (single or batch) |
+
+### Unified Sync Runner
+
+Run all syncs in correct order with a single command:
+
+```bash
+# View current stats
+uv run python scripts/run_comprehensive_sync.py --stats-only
+
+# Dry run (see what would change)
+uv run python scripts/run_comprehensive_sync.py
+
+# Execute full sync
+uv run python scripts/run_comprehensive_sync.py --execute
+```
+
+**Execution Order:**
+1. Link iMessage entities to CRM people
+2. Sync iMessage interactions
+3. Sync WhatsApp contacts and messages
+4. Update person statistics
+5. Discover WhatsApp group relationships
+6. Discover iMessage group relationships
+7. Run full relationship discovery (calendar, email, vault, messaging)
+
+### Data Health API
+
+Monitor data coverage and sync health:
+
+```bash
+# Full health report
+curl http://localhost:8000/api/crm/data-health
+
+# Summary for UI
+curl http://localhost:8000/api/crm/data-health/summary
+```
+
+**Response includes:**
+- Interaction counts by source with date ranges
+- iMessage linking statistics
+- Relationship counts by context
+- Sync recommendations for stale/incomplete data
+
+### Manual Relationship Creation
+
+For relationships that can't be auto-discovered:
+
+```bash
+# Interactive mode
+uv run python scripts/create_relationship.py -i
+
+# Single relationship
+uv run python scripts/create_relationship.py \
+  --person1 "Taylor Walker" \
+  --person2 "Alix Haber" \
+  --type friend \
+  --execute
+
+# Batch mode (link everyone in a friend group)
+uv run python scripts/create_relationship.py \
+  --batch "Taylor Walker" "Alix Haber" "Heather Williams" "Emily Durfee" \
+  --type friend \
+  --execute
+```
+
+---
+
 ## Future Enhancements (Planned)
 
 ### Phase 5: Relationship Visualization

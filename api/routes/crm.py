@@ -2149,3 +2149,165 @@ async def reject_review_item(entity_id: str, request: LinkConfirmRequest):
         "entity_id": entity_id,
         "new_person_id": new_person_id,
     }
+
+
+# ============================================================================
+# Data Health Endpoints
+# ============================================================================
+
+
+@router.get("/data-health")
+async def get_data_health():
+    """
+    Get comprehensive data health statistics.
+
+    Returns metrics on data coverage, sync status, and relationship discovery.
+    """
+    import sqlite3
+    from pathlib import Path
+
+    data_dir = Path(__file__).parent.parent.parent / "data"
+
+    result = {
+        "sources": {},
+        "relationships": {},
+        "people": {},
+        "sync_recommendations": [],
+    }
+
+    # Interaction stats by source
+    int_db = data_dir / "interactions.db"
+    if int_db.exists():
+        conn = sqlite3.connect(int_db)
+        cursor = conn.execute("""
+            SELECT source_type, COUNT(*) as total,
+                   MIN(DATE(timestamp)) as earliest,
+                   MAX(DATE(timestamp)) as latest
+            FROM interactions
+            GROUP BY source_type
+        """)
+        for row in cursor.fetchall():
+            source_type, total, earliest, latest = row
+            result["sources"][source_type] = {
+                "total_interactions": total,
+                "earliest": earliest,
+                "latest": latest,
+            }
+        conn.close()
+
+    # iMessage linking stats
+    imessage_db = data_dir / "imessage.db"
+    if imessage_db.exists():
+        conn = sqlite3.connect(imessage_db)
+        cursor = conn.execute("""
+            SELECT
+                COUNT(*) as total,
+                SUM(CASE WHEN person_entity_id IS NOT NULL THEN 1 ELSE 0 END) as linked
+            FROM messages
+        """)
+        row = cursor.fetchone()
+        if row:
+            total, linked = row
+            result["sources"]["imessage_raw"] = {
+                "total_messages": total,
+                "linked_messages": linked or 0,
+                "unlinked_messages": total - (linked or 0),
+                "linked_pct": round((linked or 0) / total * 100, 1) if total > 0 else 0,
+            }
+        conn.close()
+
+    # Relationship stats
+    crm_db = data_dir / "crm.db"
+    if crm_db.exists():
+        conn = sqlite3.connect(crm_db)
+
+        # Total relationships
+        cursor = conn.execute("SELECT COUNT(*) FROM relationships")
+        result["relationships"]["total"] = cursor.fetchone()[0]
+
+        # By context
+        cursor = conn.execute("""
+            SELECT shared_contexts, COUNT(*) as cnt
+            FROM relationships
+            GROUP BY shared_contexts
+            ORDER BY cnt DESC
+            LIMIT 20
+        """)
+        result["relationships"]["by_context"] = [
+            {"contexts": row[0], "count": row[1]}
+            for row in cursor.fetchall()
+        ]
+
+        # Source entities
+        cursor = conn.execute("""
+            SELECT source_type, COUNT(*) as total,
+                   SUM(CASE WHEN canonical_person_id IS NOT NULL THEN 1 ELSE 0 END) as linked
+            FROM source_entities
+            GROUP BY source_type
+        """)
+        result["source_entities"] = {}
+        for row in cursor.fetchall():
+            source_type, total, linked = row
+            result["source_entities"][source_type] = {
+                "total": total,
+                "linked": linked or 0,
+                "unlinked": total - (linked or 0),
+            }
+
+        conn.close()
+
+    # People stats
+    person_store = get_person_entity_store()
+    all_people = person_store.get_all()
+    result["people"]["total"] = len(all_people)
+    result["people"]["with_interactions"] = sum(
+        1 for p in all_people
+        if (p.email_count or 0) + (p.meeting_count or 0) + (p.message_count or 0) > 0
+    )
+
+    # Sync recommendations
+    imessage_data = result["sources"].get("imessage_raw", {})
+    if imessage_data.get("linked_pct", 100) < 80:
+        result["sync_recommendations"].append({
+            "source": "imessage",
+            "issue": f"Only {imessage_data.get('linked_pct')}% of messages linked",
+            "action": "Run: uv run python scripts/link_imessage_entities.py --execute",
+        })
+
+    # Check for stale syncs
+    for source, data in result["sources"].items():
+        if source == "imessage_raw":
+            continue
+        latest = data.get("latest")
+        if latest:
+            from datetime import datetime, timedelta
+            try:
+                latest_date = datetime.strptime(latest, "%Y-%m-%d")
+                days_old = (datetime.now() - latest_date).days
+                if days_old > 7:
+                    result["sync_recommendations"].append({
+                        "source": source,
+                        "issue": f"Last data is {days_old} days old",
+                        "action": f"Run sync script for {source}",
+                    })
+            except ValueError:
+                pass
+
+    return result
+
+
+@router.get("/data-health/summary")
+async def get_data_health_summary():
+    """Get a brief summary of data health for the UI header."""
+    health = await get_data_health()
+
+    return {
+        "total_interactions": sum(
+            s.get("total_interactions", 0)
+            for s in health["sources"].values()
+            if isinstance(s.get("total_interactions"), int)
+        ),
+        "total_relationships": health["relationships"].get("total", 0),
+        "total_people": health["people"].get("total", 0),
+        "issues": len(health.get("sync_recommendations", [])),
+    }

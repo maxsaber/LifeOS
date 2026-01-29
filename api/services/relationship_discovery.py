@@ -152,12 +152,13 @@ def discover_from_calendar(
 
 def discover_from_email_threads(
     days_back: int = DISCOVERY_WINDOW_DAYS,
-    min_shared_threads: int = 3,
+    min_shared_threads: int = 2,
 ) -> list[Relationship]:
     """
     Discover relationships from shared email threads.
 
     People who are CC'd together or reply to same threads are likely connected.
+    Uses email subject (title) as a proxy for thread grouping.
 
     Args:
         days_back: Days to look back
@@ -166,37 +167,51 @@ def discover_from_email_threads(
     Returns:
         List of discovered relationships
     """
-    interaction_store = get_interaction_store()
+    import sqlite3
+
     relationship_store = get_relationship_store()
-    person_store = get_person_entity_store()
 
-    # Group email interactions by thread (using source_id prefix as thread proxy)
-    # In Gmail, thread IDs are often similar to message IDs
-    thread_participants: dict[str, list[str]] = defaultdict(list)
+    db_path = get_interaction_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
 
-    for person in person_store.get_all():
-        interactions = interaction_store.get_for_person(
-            person.id,
-            days_back=days_back,
-            source_type="gmail",
-        )
-        for interaction in interactions:
-            if interaction.source_id:
-                # Use source_id as thread identifier
-                # (In practice, you'd want to use actual thread_id from Gmail)
-                thread_participants[interaction.source_id].append(person.id)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
+
+    # Group by email subject (title) to find shared threads
+    # This isn't perfect but catches most group emails
+    query = """
+        SELECT title, person_id
+        FROM interactions
+        WHERE source_type = 'gmail'
+          AND timestamp >= ?
+          AND title IS NOT NULL
+          AND title != ''
+    """
+
+    cursor = conn.execute(query, (cutoff.isoformat(),))
+
+    # Build thread -> participants mapping
+    thread_participants: dict[str, set[str]] = defaultdict(set)
+    for row in cursor:
+        title = row['title']
+        person_id = row['person_id']
+        if person_id:
+            thread_participants[title].add(person_id)
+
+    conn.close()
+
+    # Filter to threads with 2+ participants
+    thread_participants = {t: list(pids) for t, pids in thread_participants.items() if len(pids) >= 2}
+    logger.info(f"Found {len(thread_participants)} email threads with 2+ participants")
 
     # Find pairs who share threads
     pair_threads: dict[tuple[str, str], list[str]] = defaultdict(list)
 
-    for thread_id, participants in thread_participants.items():
-        if len(participants) < 2:
-            continue
-
+    for thread_title, participants in thread_participants.items():
         for i, person_a in enumerate(participants):
             for person_b in participants[i + 1:]:
                 pair = (min(person_a, person_b), max(person_a, person_b))
-                pair_threads[pair].append(thread_id)
+                pair_threads[pair].append(thread_title)
 
     # Create/update relationships
     relationships = []
@@ -215,7 +230,7 @@ def discover_from_email_threads(
                 rel = Relationship(
                     person_a_id=person_a_id,
                     person_b_id=person_b_id,
-                    relationship_type=TYPE_COWORKER,
+                    relationship_type=TYPE_INFERRED,
                     shared_threads_count=len(threads),
                     first_seen_together=datetime.now(timezone.utc),
                     last_seen_together=datetime.now(timezone.utc),
@@ -301,6 +316,99 @@ def discover_from_vault_comments(
     return relationships
 
 
+def discover_from_messaging_groups(
+    days_back: int = DISCOVERY_WINDOW_DAYS,
+    min_shared_groups: int = 1,
+) -> list[Relationship]:
+    """
+    Discover relationships from shared messaging groups (WhatsApp and iMessage).
+
+    People in the same messaging groups are likely connected.
+
+    Args:
+        days_back: Days to look back
+        min_shared_groups: Minimum shared groups to create relationship
+
+    Returns:
+        List of discovered relationships
+    """
+    import sqlite3
+
+    relationship_store = get_relationship_store()
+
+    db_path = get_interaction_db_path()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
+
+    # Find all WhatsApp groups and their participants
+    # Group ID is extracted from the title field
+    query = """
+        SELECT
+            title as group_id,
+            person_id,
+            COUNT(*) as message_count
+        FROM interactions
+        WHERE source_type = 'whatsapp'
+          AND title LIKE 'WhatsApp group:%'
+          AND timestamp >= ?
+        GROUP BY title, person_id
+    """
+
+    cursor = conn.execute(query, (cutoff.isoformat(),))
+
+    # Build group -> participants mapping
+    group_participants: dict[str, set[str]] = defaultdict(set)
+    for row in cursor:
+        group_id = row['group_id']
+        person_id = row['person_id']
+        if person_id:
+            group_participants[group_id].add(person_id)
+
+    conn.close()
+
+    # Filter to groups with 2+ participants
+    group_participants = {gid: list(pids) for gid, pids in group_participants.items() if len(pids) >= 2}
+    logger.info(f"Found {len(group_participants)} WhatsApp groups with 2+ participants")
+
+    # Find pairs of people who share groups
+    pair_groups: dict[tuple[str, str], list[str]] = defaultdict(list)
+
+    for group_id, participants in group_participants.items():
+        for i, person_a in enumerate(participants):
+            for person_b in participants[i + 1:]:
+                pair = (min(person_a, person_b), max(person_a, person_b))
+                pair_groups[pair].append(group_id)
+
+    # Create/update relationships
+    relationships = []
+    for (person_a_id, person_b_id), groups in pair_groups.items():
+        if len(groups) >= min_shared_groups:
+            existing = relationship_store.get_between(person_a_id, person_b_id)
+
+            if existing:
+                existing.last_seen_together = datetime.now(timezone.utc)
+                if "whatsapp" not in existing.shared_contexts:
+                    existing.shared_contexts.append("whatsapp")
+                relationship_store.update(existing)
+                relationships.append(existing)
+            else:
+                rel = Relationship(
+                    person_a_id=person_a_id,
+                    person_b_id=person_b_id,
+                    relationship_type=TYPE_INFERRED,
+                    first_seen_together=datetime.now(timezone.utc),
+                    last_seen_together=datetime.now(timezone.utc),
+                    shared_contexts=["whatsapp"],
+                )
+                relationship_store.add(rel)
+                relationships.append(rel)
+
+    logger.info(f"Discovered {len(relationships)} relationships from WhatsApp groups")
+    return relationships
+
+
 def run_full_discovery(days_back: int = DISCOVERY_WINDOW_DAYS) -> dict:
     """
     Run all discovery methods and return statistics.
@@ -315,6 +423,7 @@ def run_full_discovery(days_back: int = DISCOVERY_WINDOW_DAYS) -> dict:
         "calendar": len(discover_from_calendar(days_back)),
         "email": len(discover_from_email_threads(days_back)),
         "vault": len(discover_from_vault_comments(days_back)),
+        "messaging": len(discover_from_messaging_groups(days_back)),
     }
 
     total = sum(results.values())
