@@ -16,16 +16,12 @@ from pydantic import BaseModel, Field
 from api.services.person_entity import PersonEntity, get_person_entity_store
 from api.services.interaction_store import get_interaction_store
 from config.people_config import InteractionConfig
+from config.settings import settings
 from api.services.source_entity import (
     SourceEntity,
     get_source_entity_store,
     LINK_STATUS_CONFIRMED,
     LINK_STATUS_REJECTED,
-)
-from api.services.pending_link import (
-    PendingLink,
-    get_pending_link_store,
-    STATUS_PENDING,
 )
 from api.services.relationship import get_relationship_store
 from api.services.relationship_metrics import (
@@ -67,23 +63,6 @@ class SourceEntityResponse(BaseModel):
     source_badge: str = ""
 
 
-class PendingLinkResponse(BaseModel):
-    """Response model for a pending link."""
-    id: str
-    source_entity_id: str
-    proposed_canonical_id: str
-    previous_canonical_id: Optional[str] = None
-    reason: str
-    reason_display: str
-    confidence: float = 0.0
-    status: str = "pending"
-    created_at: Optional[str] = None
-    # Include source entity details for UI
-    source_entity: Optional[SourceEntityResponse] = None
-    # Include proposed person name for UI
-    proposed_person_name: Optional[str] = None
-
-
 class RelationshipResponse(BaseModel):
     """Response model for a relationship."""
     id: str
@@ -118,6 +97,7 @@ class PersonDetailResponse(BaseModel):
     first_seen: Optional[str] = None
     last_seen: Optional[str] = None
     relationship_strength: float = 0.0
+    edge_weight_with_me: int = 0  # Normalized edge weight (0-100) with the CRM owner
     source_entity_count: int = 0
     meeting_count: int = 0
     email_count: int = 0
@@ -125,7 +105,6 @@ class PersonDetailResponse(BaseModel):
     message_count: int = 0  # iMessage/SMS count
     # Related data
     source_entities: list[SourceEntityResponse] = []
-    pending_links: list[PendingLinkResponse] = []
     relationships: list[RelationshipResponse] = []
 
 
@@ -225,7 +204,6 @@ class StatisticsResponse(BaseModel):
     total_source_entities: int = 0
     linked_entities: int = 0
     unlinked_entities: int = 0
-    pending_links_count: int = 0
     total_relationships: int = 0
 
 
@@ -258,12 +236,6 @@ class NetworkGraphResponse(BaseModel):
     """Response for network graph endpoint."""
     nodes: list[NetworkNode]
     edges: list[NetworkEdge]
-
-
-class PendingLinksResponse(BaseModel):
-    """Response for pending links list."""
-    links: list[PendingLinkResponse]
-    count: int
 
 
 class PersonFactResponse(BaseModel):
@@ -349,27 +321,6 @@ def _source_entity_to_response(entity: SourceEntity) -> SourceEntityResponse:
     )
 
 
-def _pending_link_to_response(
-    link: PendingLink,
-    source_entity: Optional[SourceEntity] = None,
-    proposed_person: Optional[PersonEntity] = None,
-) -> PendingLinkResponse:
-    """Convert PendingLink to API response."""
-    return PendingLinkResponse(
-        id=link.id,
-        source_entity_id=link.source_entity_id,
-        proposed_canonical_id=link.proposed_canonical_id,
-        previous_canonical_id=link.previous_canonical_id,
-        reason=link.reason,
-        reason_display=link.reason_display,
-        confidence=link.confidence,
-        status=link.status,
-        created_at=link.created_at.isoformat() if link.created_at else None,
-        source_entity=_source_entity_to_response(source_entity) if source_entity else None,
-        proposed_person_name=proposed_person.canonical_name if proposed_person else None,
-    )
-
-
 def _relationship_to_response(
     rel,
     person_store,
@@ -396,6 +347,7 @@ def _relationship_to_response(
 def _person_to_detail_response(
     person: PersonEntity,
     include_related: bool = True,
+    edge_weight_with_me: int = 0,
 ) -> PersonDetailResponse:
     """Convert PersonEntity to detailed API response."""
     response = PersonDetailResponse(
@@ -415,6 +367,7 @@ def _person_to_detail_response(
         first_seen=person.first_seen.isoformat() if person.first_seen else None,
         last_seen=person.last_seen.isoformat() if person.last_seen else None,
         relationship_strength=person.relationship_strength,
+        edge_weight_with_me=edge_weight_with_me,
         source_entity_count=person.source_entity_count,
         meeting_count=person.meeting_count,
         email_count=person.email_count,
@@ -428,14 +381,6 @@ def _person_to_detail_response(
         source_store = get_source_entity_store()
         source_entities = source_store.get_for_person(person.id, limit=100)
         response.source_entities = [_source_entity_to_response(e) for e in source_entities]
-
-        # Add pending links
-        pending_store = get_pending_link_store()
-        pending = pending_store.get_pending_for_person(person.id)
-        response.pending_links = [
-            _pending_link_to_response(link, source_store.get_by_id(link.source_entity_id), person)
-            for link in pending
-        ]
 
         # Add relationships
         rel_store = get_relationship_store()
@@ -454,7 +399,6 @@ async def list_people(
     q: Optional[str] = Query(default=None, description="Search query"),
     category: Optional[str] = Query(default=None, description="Filter by category"),
     source: Optional[str] = Query(default=None, description="Filter by source"),
-    has_pending: Optional[bool] = Query(default=None, description="Filter by pending links"),
     has_interactions: Optional[bool] = Query(default=None, description="Filter by interaction count > 0"),
     min_interactions: int = Query(default=0, ge=0, description="Minimum total interactions (emails + meetings + mentions + messages)"),
     sort: str = Query(default="strength", description="Sort field: interactions, last_seen, name, strength"),
@@ -470,7 +414,6 @@ async def list_people(
     start_time = time.time()
 
     person_store = get_person_entity_store()
-    pending_store = get_pending_link_store()
 
     # Get all people
     people = person_store.get_all()
@@ -493,17 +436,6 @@ async def list_people(
     # Apply source filter
     if source:
         people = [p for p in people if source in p.sources]
-
-    # Apply pending links filter
-    if has_pending is not None:
-        pending_person_ids = set()
-        for link in pending_store.get_pending():
-            pending_person_ids.add(link.proposed_canonical_id)
-
-        if has_pending:
-            people = [p for p in people if p.id in pending_person_ids]
-        else:
-            people = [p for p in people if p.id not in pending_person_ids]
 
     # Apply interactions filter (boolean)
     if has_interactions is not None:
@@ -548,8 +480,23 @@ async def list_people(
     has_more = offset + limit < total
     people = people[offset:offset + limit]
 
+    # Fetch edge weights with "me" for all people in one batch
+    rel_store = get_relationship_store()
+    my_person_id = settings.my_person_id
+    edge_weights = {}
+    if my_person_id:
+        # Get all relationships for "me" to build lookup
+        my_relationships = rel_store.get_for_person(my_person_id, limit=10000)
+        for rel in my_relationships:
+            other_id = rel.other_person(my_person_id)
+            if other_id:
+                edge_weights[other_id] = rel.edge_weight
+
     result = PersonListResponse(
-        people=[_person_to_detail_response(p, include_related=False) for p in people],
+        people=[
+            _person_to_detail_response(p, include_related=False, edge_weight_with_me=edge_weights.get(p.id, 0))
+            for p in people
+        ],
         count=len(people),
         total=total,
         offset=offset,
@@ -565,14 +512,14 @@ async def list_people(
 @router.get("/people/{person_id}", response_model=PersonDetailResponse)
 async def get_person(
     person_id: str,
-    include_related: bool = Query(default=False, description="Include source entities, pending links, relationships"),
+    include_related: bool = Query(default=False, description="Include source entities and relationships"),
     refresh_strength: bool = Query(default=False, description="Recompute relationship strength (slower)"),
 ):
     """
     Get detailed information about a person.
 
     By default returns only person data for fast loading.
-    Use include_related=true for source entities, pending links, relationships.
+    Use include_related=true for source entities and relationships.
     Use refresh_strength=true to recompute relationship strength (slower).
     """
     start_time = time.time()
@@ -1490,143 +1437,6 @@ async def confirm_person_fact(person_id: str, fact_id: str):
     return {"status": "confirmed", "fact_id": fact_id}
 
 
-@router.get("/pending-links", response_model=PendingLinksResponse)
-async def get_pending_links(
-    limit: int = Query(default=100, ge=1, le=500, description="Max results"),
-):
-    """
-    List pending entity links awaiting confirmation.
-    """
-    start_time = time.time()
-
-    pending_store = get_pending_link_store()
-    source_store = get_source_entity_store()
-    person_store = get_person_entity_store()
-
-    pending = pending_store.get_pending(limit=limit)
-
-    links = []
-    for link in pending:
-        source_entity = source_store.get_by_id(link.source_entity_id)
-        proposed_person = person_store.get_by_id(link.proposed_canonical_id)
-        links.append(_pending_link_to_response(link, source_entity, proposed_person))
-
-    elapsed = (time.time() - start_time) * 1000
-    logger.info(f"pending_links() took {elapsed:.1f}ms ({len(links)} links)")
-
-    return PendingLinksResponse(
-        links=links,
-        count=len(links),
-    )
-
-
-@router.post("/pending-links/{link_id}/confirm")
-async def confirm_pending_link(link_id: str):
-    """
-    Confirm a pending link.
-
-    Updates the source entity to link to the proposed canonical person.
-    """
-    pending_store = get_pending_link_store()
-    source_store = get_source_entity_store()
-    person_store = get_person_entity_store()
-
-    link = pending_store.get_by_id(link_id)
-    if not link:
-        raise HTTPException(status_code=404, detail=f"Pending link '{link_id}' not found")
-
-    if link.status != STATUS_PENDING:
-        raise HTTPException(status_code=400, detail=f"Link is already {link.status}")
-
-    # Update source entity
-    source_store.link_to_person(
-        link.source_entity_id,
-        link.proposed_canonical_id,
-        confidence=1.0,
-        status=LINK_STATUS_CONFIRMED,
-    )
-
-    # Update person's source entity count
-    person = person_store.get_by_id(link.proposed_canonical_id)
-    if person:
-        person.source_entity_count = source_store.count_for_person(link.proposed_canonical_id)
-        person_store.update(person)
-        person_store.save()
-
-    # Mark link as confirmed
-    pending_store.confirm(link_id)
-
-    return {"status": "confirmed", "link_id": link_id}
-
-
-@router.post("/pending-links/{link_id}/reject")
-async def reject_pending_link(link_id: str, request: LinkConfirmRequest):
-    """
-    Reject a pending link.
-
-    Optionally creates a new person from the source entity.
-    """
-    pending_store = get_pending_link_store()
-    source_store = get_source_entity_store()
-    person_store = get_person_entity_store()
-
-    link = pending_store.get_by_id(link_id)
-    if not link:
-        raise HTTPException(status_code=404, detail=f"Pending link '{link_id}' not found")
-
-    if link.status != STATUS_PENDING:
-        raise HTTPException(status_code=400, detail=f"Link is already {link.status}")
-
-    new_person_id = None
-
-    if request.create_new_person:
-        if not request.new_person_name:
-            raise HTTPException(status_code=400, detail="new_person_name required when creating new person")
-
-        source_entity = source_store.get_by_id(link.source_entity_id)
-        if not source_entity:
-            raise HTTPException(status_code=404, detail="Source entity not found")
-
-        # Create new person from source entity
-        new_person = PersonEntity(
-            canonical_name=request.new_person_name,
-            display_name=request.new_person_name,
-            emails=[source_entity.observed_email] if source_entity.observed_email else [],
-            phone_numbers=[source_entity.observed_phone] if source_entity.observed_phone else [],
-            sources=[source_entity.source_type],
-            first_seen=source_entity.observed_at,
-            last_seen=source_entity.observed_at,
-            source_entity_count=1,
-        )
-        person_store.add(new_person)
-        person_store.save()
-
-        # Link source entity to new person
-        source_store.link_to_person(
-            link.source_entity_id,
-            new_person.id,
-            confidence=1.0,
-            status=LINK_STATUS_CONFIRMED,
-        )
-
-        new_person_id = new_person.id
-    else:
-        # Just mark source entity as rejected
-        source_entity = source_store.get_by_id(link.source_entity_id)
-        if source_entity:
-            source_entity.link_status = LINK_STATUS_REJECTED
-            source_store.update(source_entity)
-
-    # Mark link as rejected
-    pending_store.reject(link_id)
-
-    return {
-        "status": "rejected",
-        "link_id": link_id,
-        "new_person_id": new_person_id,
-    }
-
-
 @router.get("/discover", response_model=DiscoverResponse)
 async def discover_connections(
     person_id: Optional[str] = Query(default=None, description="Person to find suggestions for"),
@@ -1800,12 +1610,10 @@ async def get_crm_statistics():
 
     person_store = get_person_entity_store()
     source_store = get_source_entity_store()
-    pending_store = get_pending_link_store()
     rel_store = get_relationship_store()
 
     person_stats = person_store.get_statistics()
     source_stats = source_store.get_statistics()
-    pending_stats = pending_store.get_statistics()
     rel_stats = rel_store.get_statistics()
 
     elapsed = (time.time() - start_time) * 1000
@@ -1818,7 +1626,6 @@ async def get_crm_statistics():
         total_source_entities=source_stats.get("total_entities", 0),
         linked_entities=source_stats.get("linked_entities", 0),
         unlinked_entities=source_stats.get("unlinked_entities", 0),
-        pending_links_count=pending_stats.get("pending_count", 0),
         total_relationships=rel_stats.get("total_relationships", 0),
     )
 
