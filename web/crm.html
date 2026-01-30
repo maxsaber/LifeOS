@@ -2597,7 +2597,7 @@
         }
 
         .fact-bullet {
-            color: var(--text-muted);
+            color: goldenrod;
             flex-shrink: 0;
             margin-top: 0.1rem;
         }
@@ -2975,7 +2975,7 @@
                             <div class="quick-facts-section overview-panel">
                                 <div class="overview-panel-header">
                                     <span class="overview-panel-title">Quick Facts</span>
-                                    <button class="extract-facts-btn" id="extractFactsBtn" onclick="extractFacts()">
+                                    <button class="extract-facts-btn" id="extractFactsBtn" onclick="extractFacts('sonnet')">
                                         <span>Extract Facts</span>
                                     </button>
                                 </div>
@@ -4856,14 +4856,14 @@
                 const byCategory = data.by_category || {};
                 renderFacts(byCategory);
 
-                // Auto-trigger extraction if no facts exist
+                // Auto-trigger extraction if no facts exist (using fast/cheap Haiku)
                 const hasAnyFacts = Object.values(byCategory).some(facts => facts && facts.length > 0);
                 if (!hasAnyFacts && !autoExtractInProgress && selectedPersonId === personId) {
                     autoExtractInProgress = true;
-                    console.log('No facts found, auto-triggering extraction...');
+                    console.log('No facts found, auto-triggering Haiku extraction...');
                     // Small delay to let the UI render first
                     setTimeout(() => {
-                        extractFacts().finally(() => {
+                        extractFacts('haiku').finally(() => {
                             autoExtractInProgress = false;
                         });
                     }, 500);
@@ -4943,8 +4943,9 @@
             const factSentence = formatFactAsSentence(fact.key, fact.value);
             const confidencePercent = Math.round(fact.confidence * 100);
 
-            // Confidence level class
+            // Confidence level - High/Mid/Low
             const confLevel = fact.confidence >= 0.8 ? 'high' : (fact.confidence >= 0.5 ? 'medium' : 'low');
+            const confLabel = fact.confidence >= 0.8 ? 'High' : (fact.confidence >= 0.5 ? 'Mid' : 'Low');
 
             // Source link (clickable to open Gmail/Calendar/Obsidian)
             const sourceLinkHtml = fact.source_link ?
@@ -4953,15 +4954,8 @@
                     view source
                 </a>` : '';
 
-            // Confidence indicator
-            const confidenceHtml = `
-                <span class="fact-confidence">
-                    <span class="fact-confidence-bar">
-                        <span class="fact-confidence-fill ${confLevel}" style="width: ${confidencePercent}%"></span>
-                    </span>
-                    ${confidencePercent}%
-                </span>
-            `;
+            // Confidence indicator - just text label
+            const confidenceHtml = `<span class="fact-confidence ${confLevel}">(${confLabel})</span>`;
 
             // Source quote (shown on hover)
             const quoteHtml = fact.source_quote ?
@@ -4969,7 +4963,7 @@
 
             return `
                 <li class="fact-item ${unconfirmedClass}">
-                    <span class="fact-bullet">${fact.category === 'summary' ? '📊' : '•'}</span>
+                    <span class="fact-bullet">•</span>
                     <span class="fact-content">
                         <span class="fact-text">${escapeHtml(factSentence)}</span>
                         ${sourceLinkHtml}
@@ -5081,26 +5075,42 @@
         }
 
         // Extract facts using LLM
-        async function extractFacts() {
+        // Extract facts for a person
+        // model: 'haiku' (default, fast/cheap) or 'sonnet' (high quality)
+        async function extractFacts(model = 'haiku') {
             if (!selectedPersonId) return;
 
             const btn = document.getElementById('extractFactsBtn');
-            btn.disabled = true;
-            btn.classList.add('extracting');
-            btn.innerHTML = '<span>Extracting...</span>';
+            const isManual = model === 'sonnet';
+
+            if (isManual) {
+                btn.disabled = true;
+                btn.classList.add('extracting');
+                btn.innerHTML = '<span>Extracting (Sonnet)...</span>';
+            } else {
+                // Auto-extraction with Haiku - show subtle indicator
+                btn.innerHTML = '<span>Auto-extracting...</span>';
+            }
 
             try {
-                const data = await api(`/people/${selectedPersonId}/facts/extract`, { method: 'POST' });
+                const data = await api(`/people/${selectedPersonId}/facts/extract?model=${model}`, { method: 'POST' });
 
                 if (data.status === 'no_interactions') {
-                    alert('No interactions found to extract facts from.');
+                    if (isManual) {
+                        alert('No interactions found to extract facts from.');
+                    }
                 } else {
-                    // Reload facts to show updated list
+                    // Reload facts to show updated list (skip auto-trigger since we just extracted)
+                    const tmpAutoExtract = autoExtractInProgress;
+                    autoExtractInProgress = true;  // Prevent re-triggering
                     await loadFacts(selectedPersonId);
+                    autoExtractInProgress = tmpAutoExtract;
                 }
             } catch (error) {
                 console.error('Failed to extract facts:', error);
-                alert('Failed to extract facts. Please try again.');
+                if (isManual) {
+                    alert('Failed to extract facts. Please try again.');
+                }
             } finally {
                 btn.disabled = false;
                 btn.classList.remove('extracting');

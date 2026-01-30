@@ -397,18 +397,19 @@ class PersonFactStore:
 
 class PersonFactExtractor:
     """
-    Extracts facts from interactions using Claude Sonnet.
+    Extracts facts from interactions using Claude.
 
     Simple pipeline:
     1. Strategic sampling for large interaction sets
     2. Enrich message-based interactions with conversation context
-    3. Single Claude Sonnet call to extract facts with calibrated confidence
+    3. Single Claude call to extract facts with calibrated confidence
     4. Save facts
 
     Key features:
     - Focus on MEMORABLE facts, not obvious professional info
     - Confidence calibrated based on evidence strength in prompt
     - Message context windows for conversation-based sources
+    - Supports both Sonnet (more accurate) and Haiku (cheaper/faster)
     """
 
     # Sampling configuration - tuned for ~20-30 second extraction
@@ -418,6 +419,12 @@ class PersonFactExtractor:
     # High-value sources get priority allocation in budget distribution
     PRIORITY_SOURCES = {"calendar", "vault", "granola"}
     PRIORITY_BONUS = 1.5  # Priority sources get 50% more of their share
+
+    # Model options
+    # Use non-dated aliases for durability (always gets latest version)
+    MODEL_SONNET = "claude-sonnet-4-5"
+    MODEL_HAIKU = "claude-haiku-4-5"
+    DEFAULT_MODEL = MODEL_HAIKU  # Default to Haiku for auto-extraction
 
     def __init__(self, fact_store: Optional[PersonFactStore] = None):
         """Initialize extractor."""
@@ -432,24 +439,34 @@ class PersonFactExtractor:
             self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
         return self._client
 
-    async def extract_facts_async(self, person_id: str, person_name: str, interactions: list) -> list[PersonFact]:
+    async def extract_facts_async(
+        self,
+        person_id: str,
+        person_name: str,
+        interactions: list,
+        model: Optional[str] = None,
+    ) -> list[PersonFact]:
         """
-        Extract facts from a person's interactions using Claude Sonnet.
+        Extract facts from a person's interactions using Claude.
 
         Simple pipeline:
         1. Strategic sampling for large interaction sets
         2. Enrich message-based interactions with conversation context
-        3. Single Claude Sonnet call to extract facts with confidence
+        3. Single Claude call to extract facts with confidence
         4. Save facts
 
         Args:
             person_id: The person's ID
             person_name: The person's name
             interactions: List of interaction records
+            model: Claude model to use (default: Sonnet, can use Haiku for cheaper/faster)
 
         Returns:
             List of extracted PersonFact objects
         """
+        use_model = model or self.DEFAULT_MODEL
+        logger.info(f"Using model {use_model} for {person_name}")
+
         if not interactions:
             logger.info(f"No interactions to extract facts from for {person_name}")
             return []
@@ -466,16 +483,18 @@ class PersonFactExtractor:
         # Enrich with conversation context (for message-based sources)
         enriched_interactions = self._enrich_with_context(sampled_interactions)
 
-        # Extract facts with Claude Sonnet (single call per batch)
+        # Extract facts with Claude
         extracted_facts = self._extract_facts_claude(
-            person_id, person_name, enriched_interactions, interaction_lookup
+            person_id, person_name, enriched_interactions, interaction_lookup, use_model
         )
         logger.info(f"Extracted {len(extracted_facts)} facts for {person_name}")
 
         # Generate relationship summaries for people with sufficient interactions
         if len(interactions) >= 10:
             try:
-                summaries = self._generate_relationship_summaries(person_id, person_name, sampled_interactions)
+                summaries = self._generate_relationship_summaries(
+                    person_id, person_name, sampled_interactions, use_model
+                )
                 extracted_facts.extend(summaries)
             except Exception as e:
                 logger.error(f"Failed to generate summaries for {person_name}: {e}")
@@ -494,7 +513,13 @@ class PersonFactExtractor:
         logger.info(f"Saved {len(saved_facts)} facts for {person_name}")
         return saved_facts
 
-    def extract_facts(self, person_id: str, person_name: str, interactions: list) -> list[PersonFact]:
+    def extract_facts(
+        self,
+        person_id: str,
+        person_name: str,
+        interactions: list,
+        model: Optional[str] = None,
+    ) -> list[PersonFact]:
         """
         Extract facts from a person's interactions (sync wrapper).
 
@@ -502,6 +527,7 @@ class PersonFactExtractor:
             person_id: The person's ID
             person_name: The person's name
             interactions: List of interaction records
+            model: Claude model to use (default: Sonnet)
 
         Returns:
             List of extracted PersonFact objects
@@ -511,13 +537,21 @@ class PersonFactExtractor:
             asyncio.get_running_loop()
             # We're in an async context - run sync version
             logger.warning("extract_facts called from async context - use extract_facts_async instead")
-            return self._extract_facts_sync(person_id, person_name, interactions)
+            return self._extract_facts_sync(person_id, person_name, interactions, model)
         except RuntimeError:
             # No running event loop - safe to use asyncio.run
-            return asyncio.run(self.extract_facts_async(person_id, person_name, interactions))
+            return asyncio.run(self.extract_facts_async(person_id, person_name, interactions, model))
 
-    def _extract_facts_sync(self, person_id: str, person_name: str, interactions: list) -> list[PersonFact]:
+    def _extract_facts_sync(
+        self,
+        person_id: str,
+        person_name: str,
+        interactions: list,
+        model: Optional[str] = None,
+    ) -> list[PersonFact]:
         """Synchronous extraction for use within async contexts."""
+        use_model = model or self.DEFAULT_MODEL
+
         if not interactions:
             return []
 
@@ -526,12 +560,14 @@ class PersonFactExtractor:
         enriched_interactions = self._enrich_with_context(sampled_interactions)
 
         extracted_facts = self._extract_facts_claude(
-            person_id, person_name, enriched_interactions, interaction_lookup
+            person_id, person_name, enriched_interactions, interaction_lookup, use_model
         )
 
         if len(interactions) >= 10:
             try:
-                summaries = self._generate_relationship_summaries(person_id, person_name, sampled_interactions)
+                summaries = self._generate_relationship_summaries(
+                    person_id, person_name, sampled_interactions, use_model
+                )
                 extracted_facts.extend(summaries)
             except Exception as e:
                 logger.error(f"Failed to generate summaries for {person_name}: {e}")
@@ -568,10 +604,11 @@ class PersonFactExtractor:
         person_id: str,
         person_name: str,
         interactions: list[dict],
-        interaction_lookup: dict
+        interaction_lookup: dict,
+        model: str,
     ) -> list[PersonFact]:
         """
-        Extract facts using Claude Sonnet with calibrated confidence.
+        Extract facts using Claude with calibrated confidence.
 
         Focuses on MEMORABLE personal details that help with recall,
         not obvious professional information.
@@ -581,6 +618,7 @@ class PersonFactExtractor:
             person_name: The person's name
             interactions: Interactions to extract facts from
             interaction_lookup: Dict mapping interaction IDs to full records
+            model: Claude model to use
 
         Returns:
             List of PersonFact objects with calibrated confidence scores
@@ -596,7 +634,7 @@ class PersonFactExtractor:
 
             try:
                 response = self.client.messages.create(
-                    model="claude-sonnet-4-20250514",
+                    model=model,
                     max_tokens=4096,
                     messages=[{"role": "user", "content": prompt}]
                 )
@@ -952,7 +990,7 @@ Interactions:
         return facts
 
     def _generate_relationship_summaries(
-        self, person_id: str, person_name: str, interactions: list
+        self, person_id: str, person_name: str, interactions: list, model: str
     ) -> list[PersonFact]:
         """
         Generate relationship summary facts.
@@ -1011,7 +1049,7 @@ Interactions:
 
         try:
             response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model=model,
                 max_tokens=2048,
                 messages=[{"role": "user", "content": prompt}]
             )

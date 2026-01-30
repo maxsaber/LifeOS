@@ -1391,6 +1391,14 @@ OLLAMA_MODEL = "llama3.2:3b"  # Fast, local
 | `api/routes/crm.py` | Extract facts endpoint |
 | `config/prompts/fact_extraction.py` | Prompt templates |
 
+### Model Selection
+
+Fact extraction supports two Claude models:
+- **Haiku** (`claude-haiku-4-5`): Fast, cheap (~$0.01/person). Used for auto-extraction when loading a person.
+- **Sonnet** (`claude-sonnet-4-5`): Higher quality (~$0.15/person). Used when clicking "Extract Facts" button.
+
+API: `POST /api/crm/people/{id}/facts/extract?model=haiku|sonnet`
+
 ### Success Metrics
 
 1. **Precision**: >80% of extracted facts are accurate

@@ -790,7 +790,7 @@ async def merge_people(request: PersonMergeRequest):
     total_stats = {
         'interactions_updated': 0,
         'source_entities_updated': 0,
-        'facts_updated': 0,
+        'facts_cleared': 0,
         'emails_merged': 0,
         'phones_merged': 0,
         'aliases_added': 0,
@@ -1903,20 +1903,28 @@ async def get_person_facts(person_id: str):
 
 
 @router.post("/people/{person_id}/facts/extract", response_model=FactExtractionResponse)
-async def extract_person_facts(person_id: str):
+async def extract_person_facts(person_id: str, model: Optional[str] = None):
     """
     Trigger fact extraction for a person.
 
     Analyzes ALL interactions using strategic sampling and extracts
     structured facts using LLM with strict evidence requirements.
 
+    Args:
+        person_id: The person's ID
+        model: Claude model to use. Options:
+            - "sonnet" or "claude-sonnet-4-5" (more accurate, ~$0.15/person)
+            - "haiku" or "claude-haiku-4-5" (faster/cheaper, ~$0.01/person, default)
+
     For contacts with many interactions (e.g., 49K), the extractor
-    strategically samples:
-    - Recent 100 interactions
-    - Random sample of 100 from history
-    - All calendar/meeting events
-    - All vault/notes mentions
+    strategically samples based on source type distribution.
     """
+    # Translate simple model names to full names
+    from api.services.person_facts import PersonFactExtractor
+    if model == "sonnet":
+        model = PersonFactExtractor.MODEL_SONNET
+    elif model == "haiku":
+        model = PersonFactExtractor.MODEL_HAIKU
     person_store = get_person_entity_store()
     person = person_store.get_by_id(person_id)
 
@@ -1951,13 +1959,14 @@ async def extract_person_facts(person_id: str):
         for i in interactions
     ]
 
-    # Extract facts
+    # Extract facts (use async version for proper event loop handling)
     try:
         extractor = get_person_fact_extractor()
-        extracted_facts = extractor.extract_facts(
+        extracted_facts = await extractor.extract_facts_async(
             person_id=person_id,
             person_name=person.canonical_name,
             interactions=interaction_dicts,
+            model=model,
         )
 
         return FactExtractionResponse(

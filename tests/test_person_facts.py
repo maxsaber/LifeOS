@@ -486,9 +486,9 @@ class TestPersonFactExtractor:
         ]
         result = extractor._sample_interactions(interactions)
 
-        # Should be reduced but include recent + random sample
+        # Should be reduced to max batch size
         assert len(result) < len(interactions)
-        assert len(result) <= extractor.RECENT_SAMPLE_SIZE + extractor.RANDOM_SAMPLE_SIZE + 50
+        assert len(result) <= extractor.MAX_INTERACTIONS_PER_BATCH
 
     def test_sample_interactions_prioritizes_calendar(self, extractor):
         """Calendar and vault interactions are always included."""
