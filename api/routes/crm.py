@@ -1309,7 +1309,7 @@ async def get_person_timeline(
         description="Days to look back (default 365, max 3650)"
     ),
     offset: int = Query(default=0, ge=0, description="Offset for pagination"),
-    limit: int = Query(default=50, ge=1, le=200, description="Max results"),
+    limit: int = Query(default=50, ge=1, le=2000, description="Max results"),
 ):
     """
     Get chronological interaction history for a person.
@@ -1436,11 +1436,12 @@ async def get_person_timeline_aggregated(
     interaction_store = get_interaction_store()
 
     # Fetch interactions within the time range
-    # Use a reasonable limit for performance
+    # Use high limit for aggregation - need to support heavy users like Taylor (60k+ interactions)
+    # TODO: Optimize by doing aggregation in SQL instead of fetching all to Python
     interactions = interaction_store.get_for_person(
         person_id,
         days_back=days_back,
-        limit=10000,  # High limit for aggregation
+        limit=100000,  # High limit for aggregation
         source_type=source_type,
     )
 

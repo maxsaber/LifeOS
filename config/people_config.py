@@ -106,8 +106,8 @@ class InteractionConfig:
     # Maximum time window allowed for timeline queries (10 years)
     MAX_WINDOW_DAYS: int = 3650
 
-    # Maximum interactions to return in a single query
-    MAX_INTERACTIONS_PER_QUERY: int = 100
+    # Maximum interactions to return in a single query (default when no limit specified)
+    MAX_INTERACTIONS_PER_QUERY: int = 1000
 
     # Snippet length for interaction preview
     SNIPPET_LENGTH: int = 100
