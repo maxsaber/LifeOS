@@ -2792,7 +2792,7 @@
                 if (currentFilter !== 'all') {
                     params.set('category', currentFilter);
                 }
-                params.set('sort', 'last_seen');
+                params.set('sort', 'strength');
                 params.set('limit', '100');
 
                 const data = await api(`/people?${params}`);
