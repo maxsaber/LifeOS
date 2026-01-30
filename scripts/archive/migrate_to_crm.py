@@ -15,6 +15,21 @@ Usage:
 Options:
     --dry-run   Show what would be done without making changes
     --backup    Create backup of data files before migration
+
+WARNING - ID DURABILITY:
+========================
+This script PRESERVES existing PersonEntity IDs. It does NOT recreate entities
+from scratch. Person IDs are critical because they are:
+- Referenced throughout the system (relationships, interactions, source entities)
+- Hardcoded in config/settings.py (my_person_id for the CRM owner)
+- Used in merged_person_ids.json to track person merges
+
+If you need to rebuild from scratch (AVOID if possible):
+- All person IDs will change, breaking relationships and hardcoded references
+- You MUST update my_person_id in settings after finding your new ID
+- All merge history will be lost
+
+Prefer incremental syncs and edits over full rebuilds whenever possible.
 """
 import argparse
 import json

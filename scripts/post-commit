@@ -2,7 +2,8 @@
 #
 # LifeOS Post-commit Hook
 #
-# Automatically restarts the server after each commit.
+# Automatically restarts the server after each commit using server.sh
+# for consistent behavior with manual restarts.
 #
 # Installation:
 #   cp scripts/post-commit .git/hooks/post-commit
@@ -25,28 +26,18 @@ echo "========================================"
 echo "  Restarting LifeOS server..."
 echo "========================================"
 
-# Activate venv
-if [ -f "venv/bin/activate" ]; then
-    source venv/bin/activate
+# Use server.sh for consistent restart behavior
+# This ensures ChromaDB check, proper binding, and correct timeouts
+if [ -x "./scripts/server.sh" ]; then
+    ./scripts/server.sh restart
+    if [ $? -eq 0 ]; then
+        echo "  Server restarted successfully"
+    else
+        echo "  Warning: Server restart may have issues"
+    fi
+else
+    echo "  Error: scripts/server.sh not found"
+    exit 1
 fi
 
-# Kill existing server
-pkill -f "uvicorn api.main:app" 2>/dev/null || true
-sleep 1
-
-# Start server in background
-nohup uvicorn api.main:app --host 0.0.0.0 --port 8000 > /tmp/lifeos.log 2>&1 &
-disown
-
-# Wait for server to start
-for i in {1..10}; do
-    if curl -s -o /dev/null http://localhost:8000/health 2>/dev/null; then
-        echo "  Server restarted successfully"
-        echo "========================================"
-        exit 0
-    fi
-    sleep 1
-done
-
-echo "  Warning: Server may still be starting..."
 echo "========================================"

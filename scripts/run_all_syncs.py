@@ -54,34 +54,79 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Order of sync operations (dependencies first)
+# =============================================================================
+# UNIFIED SYNC ORDER - Organized by Phase
+# =============================================================================
+#
+# Phase 1: Data Collection - Pull fresh data from all external sources
+# Phase 2: Entity Processing - Link source entities to canonical people
+# Phase 3: Relationship Building - Build relationships and compute metrics
+# Phase 4: Vector Store Indexing - Index content with fresh people data
+# Phase 5: Content Sync - Pull external content into vault
+#
+# This order ensures downstream processes have access to fresh upstream data.
+# =============================================================================
+
 SYNC_ORDER = [
-    "gmail",
-    "calendar",
-    "contacts",
-    "phone",
-    "whatsapp",
-    "imessage",
-    "slack",                    # Sync Slack users and messages
-    "link_slack",               # Link Slack entities by email (must run after slack)
-    "relationship_discovery",   # Discover relationships and populate edge weights (must run after all syncs)
-    "person_stats",             # Must run after other syncs
-    "strengths",                # Must run after person_stats
+    # === Phase 1: Data Collection ===
+    # Pull fresh data from all external sources (no dependencies on each other)
+    "gmail",                    # Gmail sent + received + CC
+    "calendar",                 # Google Calendar events
+    "linkedin",                 # LinkedIn connections CSV
+    "contacts",                 # Apple Contacts CSV
+    "phone",                    # Phone call history
+    "whatsapp",                 # WhatsApp contacts + messages
+    "imessage",                 # iMessage/SMS
+    "slack",                    # Slack users + DM messages
+
+    # === Phase 2: Entity Processing ===
+    # Link source entities to canonical PersonEntity records
+    "link_slack",               # Link Slack users to people by email
+    "link_imessage",            # Link iMessage handles to people by phone
+
+    # === Phase 3: Relationship Building ===
+    # Build relationships using all collected interaction data
+    "relationship_discovery",   # Discover relationships, populate edge weights
+    "person_stats",             # Update interaction counts on PersonEntity
+    "strengths",                # Calculate relationship strength scores
+
+    # === Phase 4: Vector Store Indexing ===
+    # Index content with fresh people data available for entity resolution
+    "vault_reindex",            # Reindex vault notes to ChromaDB + BM25
+
+    # === Phase 5: Content Sync ===
+    # Pull external content into vault (will be indexed on next run)
+    "google_docs",              # Sync Google Docs to vault as markdown
+    "google_sheets",            # Sync Google Sheets to vault as markdown
 ]
 
 # Scripts that can be run directly
 SYNC_SCRIPTS = {
+    # Phase 1: Data Collection
     "gmail": ("scripts/sync_gmail_calendar_interactions.py", ["--execute", "--source", "gmail"]),
     "calendar": ("scripts/sync_gmail_calendar_interactions.py", ["--execute", "--source", "calendar"]),
+    "linkedin": ("scripts/sync_linkedin.py", ["--execute"]),
     "contacts": ("scripts/sync_contacts_csv.py", ["--execute"]),
     "phone": ("scripts/sync_phone_calls.py", ["--execute"]),
     "whatsapp": ("scripts/sync_whatsapp.py", ["--execute"]),
     "imessage": ("scripts/sync_imessage_interactions.py", ["--execute"]),
     "slack": ("scripts/sync_slack.py", ["--execute"]),
+
+    # Phase 2: Entity Processing
     "link_slack": ("scripts/link_slack_entities.py", ["--execute"]),
+    "link_imessage": ("scripts/link_imessage_entities.py", ["--execute"]),
+
+    # Phase 3: Relationship Building
     "relationship_discovery": ("scripts/sync_relationship_discovery.py", ["--execute"]),
     "person_stats": ("scripts/sync_person_stats.py", ["--execute"]),
     "strengths": ("scripts/sync_strengths.py", ["--execute"]),
+
+    # Phase 4: Vector Store Indexing
+    "vault_reindex": ("scripts/sync_vault_reindex.py", ["--execute"]),
+
+    # Phase 5: Content Sync
+    "google_docs": ("scripts/sync_google_docs.py", ["--execute"]),
+    "google_sheets": ("scripts/sync_google_sheets.py", ["--execute"]),
 }
 
 

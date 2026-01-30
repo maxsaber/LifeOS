@@ -19,6 +19,7 @@ from api.services.calendar import CalendarService
 from api.services.google_auth import GoogleAccount
 from api.services.entity_resolver import get_entity_resolver
 from api.services.interaction_store import get_interaction_db_path
+from config.settings import settings
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -29,6 +30,7 @@ def sync_gmail_interactions(
     days_back: int = 365,
     dry_run: bool = True,
     batch_size: int = 100,
+    domain_filter: str | None = None,
 ) -> dict:
     """
     Sync Gmail interactions for an account.
@@ -37,6 +39,7 @@ def sync_gmail_interactions(
         account_type: Which Google account to use
         days_back: How many days back to sync
         dry_run: If True, don't actually insert
+        domain_filter: Optional email domain to filter (e.g., "gmail.com")
 
     Returns:
         Stats dict
@@ -52,6 +55,7 @@ def sync_gmail_interactions(
     db_path = get_interaction_db_path()
     conn = sqlite3.connect(db_path)
     resolver = get_entity_resolver()
+    my_person_id = settings.my_person_id
 
     # Get existing interactions to avoid duplicates
     existing = set()
@@ -69,12 +73,19 @@ def sync_gmail_interactions(
     # Fetch emails in batches using search
     # Gmail API limits to 500 results per query, so we paginate
     try:
-        logger.info(f"Fetching emails from {account_type.value} account (last {days_back} days)...")
+        # Build search query
+        query = f"after:{after_date.strftime('%Y/%m/%d')}"
+        if domain_filter:
+            # Filter to emails from/to the specified domain
+            query += f" (from:*@{domain_filter} OR to:*@{domain_filter})"
+            logger.info(f"Fetching emails from {account_type.value} account (last {days_back} days, domain: {domain_filter})...")
+        else:
+            logger.info(f"Fetching emails from {account_type.value} account (last {days_back} days)...")
 
-        # Search for all emails after the date
+        # Search for emails matching query
         result = gmail.service.users().messages().list(
             userId="me",
-            q=f"after:{after_date.strftime('%Y/%m/%d')}",
+            q=query,
             maxResults=500,
         ).execute()
 
@@ -84,7 +95,7 @@ def sync_gmail_interactions(
         while next_page_token:
             result = gmail.service.users().messages().list(
                 userId="me",
-                q=f"after:{after_date.strftime('%Y/%m/%d')}",
+                q=query,
                 maxResults=500,
                 pageToken=next_page_token,
             ).execute()
@@ -115,39 +126,88 @@ def sync_gmail_interactions(
                     stats['errors'] += 1
                     continue
 
-                # Resolve sender to PersonEntity
-                result = resolver.resolve(
+                # Resolve the sender
+                sender_result = resolver.resolve(
                     name=email.sender_name if email.sender_name != email.sender else None,
                     email=email.sender,
                     create_if_missing=True,
                 )
+                sender_person_id = sender_result.entity.id if sender_result and sender_result.entity else None
 
-                if not result or not result.entity:
-                    stats['no_person'] += 1
-                    continue
-
-                person_id = result.entity.id
-
-                # Create interaction
-                interaction_id = str(uuid.uuid4())
                 timestamp = email.date.isoformat()
                 source_link = f"https://mail.google.com/mail/u/0/#inbox/{message_id}"
+                subject = email.subject or "(No Subject)"
+                snippet = email.snippet[:200] if email.snippet else None
 
-                batch.append((
-                    interaction_id,
-                    person_id,
-                    timestamp,
-                    'gmail',
-                    email.subject or "(No Subject)",
-                    email.snippet[:200] if email.snippet else None,
-                    source_link,
-                    message_id,
-                    datetime.now(timezone.utc).isoformat(),
-                ))
+                # Determine if this is a received email (sender != me) or sent email (sender == me)
+                if sender_person_id and sender_person_id != my_person_id:
+                    # RECEIVED EMAIL: Create one interaction with the sender
+                    batch.append((
+                        str(uuid.uuid4()),
+                        sender_person_id,
+                        timestamp,
+                        'gmail',
+                        subject,
+                        snippet,
+                        source_link,
+                        message_id,
+                        datetime.now(timezone.utc).isoformat(),
+                    ))
+                else:
+                    # SENT EMAIL: Create interactions for ALL recipients (To + CC)
+                    recipients = []
+
+                    # Parse To recipients
+                    if email.to:
+                        recipients.extend(_parse_email_addresses(email.to))
+
+                    # Parse CC recipients
+                    if email.cc:
+                        recipients.extend(_parse_email_addresses(email.cc))
+
+                    if not recipients:
+                        stats['no_person'] += 1
+                        continue
+
+                    created_for_this_email = 0
+                    for recipient_name, recipient_email in recipients:
+                        # Skip duplicates within same email
+                        source_id = f"{message_id}:{recipient_email}"
+                        if source_id in existing:
+                            stats['already_exists'] += 1
+                            continue
+
+                        recipient_result = resolver.resolve(
+                            name=recipient_name,
+                            email=recipient_email,
+                            create_if_missing=True,
+                        )
+                        if not recipient_result or not recipient_result.entity:
+                            continue
+                        if recipient_result.entity.id == my_person_id:
+                            continue  # Skip myself
+
+                        batch.append((
+                            str(uuid.uuid4()),
+                            recipient_result.entity.id,
+                            timestamp,
+                            'gmail',
+                            subject,
+                            snippet,
+                            source_link,
+                            source_id,  # Use email-specific source_id for deduplication
+                            datetime.now(timezone.utc).isoformat(),
+                        ))
+                        created_for_this_email += 1
+
+                    if created_for_this_email == 0:
+                        stats['no_person'] += 1
+                        continue
 
                 if len(batch) >= batch_size:
                     if not dry_run:
                         _insert_batch(conn, batch)
+                        conn.commit()  # Commit after each batch to avoid losing progress
                     stats['inserted'] += len(batch)
                     batch = []
 
@@ -205,6 +265,7 @@ def sync_calendar_interactions(
     db_path = get_interaction_db_path()
     conn = sqlite3.connect(db_path)
     resolver = get_entity_resolver()
+    my_person_id = settings.my_person_id
 
     # Get existing interactions to avoid duplicates
     existing = set()
@@ -281,6 +342,10 @@ def sync_calendar_interactions(
 
                 person_id = result.entity.id
 
+                # Skip if the attendee is myself
+                if person_id == my_person_id:
+                    continue
+
                 # Create interaction
                 interaction_id = str(uuid.uuid4())
                 timestamp = event.start_time.isoformat()
@@ -312,6 +377,52 @@ def sync_calendar_interactions(
 
     conn.close()
     return stats
+
+
+def _parse_email_addresses(field: str) -> list[tuple[str | None, str]]:
+    """
+    Parse email addresses from a To or CC field.
+
+    Handles formats:
+    - "Name <email@domain.com>"
+    - "email@domain.com"
+    - "Name1 <email1>, Name2 <email2>"
+
+    Returns:
+        List of (name, email) tuples
+    """
+    if not field:
+        return []
+
+    results = []
+    # Split by comma, handling quoted names with commas
+    parts = []
+    current = ""
+    in_quotes = False
+    for char in field:
+        if char == '"':
+            in_quotes = not in_quotes
+        elif char == ',' and not in_quotes:
+            if current.strip():
+                parts.append(current.strip())
+            current = ""
+            continue
+        current += char
+    if current.strip():
+        parts.append(current.strip())
+
+    for part in parts:
+        part = part.strip()
+        if '<' in part and '>' in part:
+            # Format: "Name <email>"
+            name = part.split('<')[0].strip().strip('"').strip()
+            email = part.split('<')[1].rstrip('>').strip()
+            results.append((name if name else None, email))
+        elif '@' in part:
+            # Just email
+            results.append((None, part))
+
+    return results
 
 
 def _parse_attendees_from_title(title: str) -> list[str]:
@@ -388,6 +499,7 @@ def main():
     parser.add_argument('--calendar-only', action='store_true', help='Only sync Calendar')
     parser.add_argument('--personal-only', action='store_true', help='Only sync personal account')
     parser.add_argument('--work-only', action='store_true', help='Only sync work account')
+    parser.add_argument('--domain', type=str, help='Filter emails by domain (e.g., gmail.com)')
     args = parser.parse_args()
 
     dry_run = not args.execute
@@ -409,6 +521,7 @@ def main():
                 account_type=account,
                 days_back=args.days,
                 dry_run=dry_run,
+                domain_filter=args.domain,
             )
             all_stats[f'gmail_{account.value}'] = stats
             logger.info(f"Gmail {account.value}: fetched={stats['fetched']}, inserted={stats['inserted']}, exists={stats['already_exists']}, errors={stats['errors']}")

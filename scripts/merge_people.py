@@ -287,16 +287,104 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
 
     crm_conn.close()
 
-    # 5. Save merge mapping for durability
-    logger.info("\n5. Recording merge for durability...")
+    # 5. Merge relationships
+    logger.info("\n5. Merging relationships...")
+    stats['relationships_updated'] = 0
+    stats['relationships_merged'] = 0
+    stats['relationships_deleted'] = 0
+
+    from api.services.relationship import get_relationship_store, Relationship
+    rel_store = get_relationship_store()
+
+    # Get all relationships involving the secondary person
+    secondary_rels = rel_store.get_for_person(secondary_id)
+    logger.info(f"   {len(secondary_rels)} relationships to process")
+
+    for rel in secondary_rels:
+        # Find the "other" person in this relationship
+        other_id = rel.other_person(secondary_id)
+        if not other_id:
+            continue
+
+        # Skip if other person is the primary (self-relationship after merge)
+        if other_id == primary_id:
+            # Delete this relationship - it would be a self-loop
+            if not dry_run:
+                rel_store.delete(rel.id)
+            stats['relationships_deleted'] += 1
+            logger.info(f"   - Deleted self-loop relationship")
+            continue
+
+        # Check if primary already has a relationship with the other person
+        existing = rel_store.get_between(primary_id, other_id)
+
+        if existing:
+            # Merge relationship data into existing
+            existing.shared_events_count = (existing.shared_events_count or 0) + (rel.shared_events_count or 0)
+            existing.shared_threads_count = (existing.shared_threads_count or 0) + (rel.shared_threads_count or 0)
+            existing.shared_messages_count = (existing.shared_messages_count or 0) + (rel.shared_messages_count or 0)
+            existing.shared_whatsapp_count = (existing.shared_whatsapp_count or 0) + (rel.shared_whatsapp_count or 0)
+            existing.shared_slack_count = (existing.shared_slack_count or 0) + (rel.shared_slack_count or 0)
+
+            # Merge shared contexts
+            for ctx in (rel.shared_contexts or []):
+                if ctx not in (existing.shared_contexts or []):
+                    if existing.shared_contexts is None:
+                        existing.shared_contexts = []
+                    existing.shared_contexts.append(ctx)
+
+            # Update dates
+            if rel.first_seen_together:
+                if not existing.first_seen_together or rel.first_seen_together < existing.first_seen_together:
+                    existing.first_seen_together = rel.first_seen_together
+            if rel.last_seen_together:
+                if not existing.last_seen_together or rel.last_seen_together > existing.last_seen_together:
+                    existing.last_seen_together = rel.last_seen_together
+
+            # LinkedIn connection - true if either was connected
+            if rel.is_linkedin_connection:
+                existing.is_linkedin_connection = True
+
+            if not dry_run:
+                rel_store.update(existing)
+                rel_store.delete(rel.id)
+
+            stats['relationships_merged'] += 1
+            logger.info(f"   ~ Merged relationship with {other_id}")
+        else:
+            # Transfer relationship to primary - create new to trigger normalization
+            new_rel = Relationship(
+                person_a_id=primary_id if rel.person_a_id == secondary_id else rel.person_a_id,
+                person_b_id=primary_id if rel.person_b_id == secondary_id else rel.person_b_id,
+                relationship_type=rel.relationship_type,
+                shared_contexts=rel.shared_contexts,
+                shared_events_count=rel.shared_events_count,
+                shared_threads_count=rel.shared_threads_count,
+                shared_messages_count=rel.shared_messages_count,
+                shared_whatsapp_count=rel.shared_whatsapp_count,
+                shared_slack_count=rel.shared_slack_count,
+                is_linkedin_connection=rel.is_linkedin_connection,
+                first_seen_together=rel.first_seen_together,
+                last_seen_together=rel.last_seen_together,
+            )
+
+            if not dry_run:
+                rel_store.delete(rel.id)
+                rel_store.add(new_rel)
+
+            stats['relationships_updated'] += 1
+            logger.info(f"   > Transferred relationship with {other_id}")
+
+    # 6. Save merge mapping for durability
+    logger.info("\n6. Recording merge for durability...")
     if not dry_run:
         merged_ids = load_merged_ids()
         merged_ids[secondary_id] = primary_id
         save_merged_ids(merged_ids)
         logger.info(f"   Recorded: {secondary_id} -> {primary_id}")
 
-    # 6. Update primary stats and delete secondary
-    logger.info("\n6. Updating stats and cleaning up...")
+    # 7. Update primary stats and delete secondary
+    logger.info("\n7. Updating stats and cleaning up...")
     if not dry_run:
         # Recalculate stats for primary
         primary.email_count = (primary.email_count or 0) + (secondary.email_count or 0)
@@ -326,6 +414,19 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
 
         logger.info(f"   Deleted secondary record: {secondary.canonical_name}")
 
+    # 8. Recalculate relationship strength for primary
+    logger.info("\n8. Recalculating relationship strength...")
+    if not dry_run:
+        from api.services.relationship_metrics import compute_strength_for_person
+        new_strength = compute_strength_for_person(primary)
+        if new_strength != primary.relationship_strength:
+            logger.info(f"   Strength: {primary.relationship_strength} -> {new_strength}")
+            primary.relationship_strength = new_strength
+            store.update(primary)
+            store.save()
+        else:
+            logger.info(f"   Strength unchanged: {new_strength}")
+
     # Summary
     logger.info(f"\n=== Merge Summary ===")
     logger.info(f"Primary: {primary.canonical_name} ({primary_id})")
@@ -333,6 +434,7 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
     logger.info(f"Interactions updated: {stats['interactions_updated']}")
     logger.info(f"Source entities updated: {stats['source_entities_updated']}")
     logger.info(f"Facts updated: {stats['facts_updated']}")
+    logger.info(f"Relationships: {stats['relationships_updated']} transferred, {stats['relationships_merged']} merged, {stats['relationships_deleted']} deleted")
     logger.info(f"Emails merged: {stats['emails_merged']}")
     logger.info(f"Phones merged: {stats['phones_merged']}")
     logger.info(f"Aliases added: {stats['aliases_added']}")

@@ -75,11 +75,32 @@ def populate_source_entities(dry_run: bool = True) -> dict:
             continue
         existing.add(key)
 
-        # Get person details
+        # Extract observed data from source_id where possible
+        # Gmail/Calendar source_ids have format: "message_id:email@domain.com"
+        observed_email = None
+        observed_phone = None
+
+        if source_type in ('gmail', 'calendar') and ':' in source_id:
+            # Parse email from source_id
+            parts = source_id.split(':', 1)
+            if len(parts) == 2 and '@' in parts[1]:
+                observed_email = parts[1].lower()
+
+        # For Gmail without email in source_id, skip creating source entity
+        # (these are low-confidence name-only matches we don't want)
+        if source_type == 'gmail' and not observed_email:
+            stats['skipped_no_email'] = stats.get('skipped_no_email', 0) + 1
+            continue
+
+        # Get person details for name (and fallback email/phone for non-gmail types)
         person = person_store.get_by_id(person_id)
         observed_name = person.canonical_name if person else None
-        observed_email = person.primary_email if person else None
-        observed_phone = person.phone_primary if person else None
+
+        # For non-gmail/calendar types, get email/phone from person if not parsed
+        if not observed_email and source_type not in ('gmail', 'calendar'):
+            observed_email = person.primary_email if person else None
+        if source_type not in ('gmail', 'calendar'):
+            observed_phone = person.phone_primary if person else None
 
         # Parse timestamp
         try:
@@ -173,6 +194,7 @@ def populate_source_entities(dry_run: bool = True) -> dict:
     logger.info(f"From interactions: {stats['from_interactions']}")
     logger.info(f"From person sources: {stats['from_person_sources']}")
     logger.info(f"Already existed: {stats['already_exists']}")
+    logger.info(f"Skipped (gmail without email): {stats.get('skipped_no_email', 0)}")
     logger.info(f"Total inserted: {stats['total_inserted']}")
 
     if dry_run:

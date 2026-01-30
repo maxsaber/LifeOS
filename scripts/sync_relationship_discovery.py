@@ -27,7 +27,7 @@ logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
 
 
-def run_relationship_discovery(dry_run: bool = True, days_back: int = 180) -> dict:
+def run_relationship_discovery(dry_run: bool = True, days_back: int = 3650) -> dict:
     """
     Run relationship discovery.
 
@@ -67,7 +67,7 @@ def run_relationship_discovery(dry_run: bool = True, days_back: int = 180) -> di
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Run relationship discovery')
     parser.add_argument('--execute', action='store_true', help='Actually apply changes')
-    parser.add_argument('--days-back', type=int, default=180, help='Days to look back')
+    parser.add_argument('--days-back', type=int, default=3650, help='Days to look back (default: ~10 years)')
     args = parser.parse_args()
 
     run_relationship_discovery(dry_run=not args.execute, days_back=args.days_back)
