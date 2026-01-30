@@ -629,7 +629,7 @@ class PersonFactExtractor:
 
         for batch_idx, batch in enumerate(batches):
             logger.info(f"Batch {batch_idx + 1}/{len(batches)}: {len(batch)} interactions")
-            interaction_text = self._format_interactions(batch)
+            interaction_text = self._format_interactions(batch, person_name)
             prompt = self._build_extraction_prompt(person_name, interaction_text)
 
             try:
@@ -816,8 +816,8 @@ Interactions:
             for i in range(0, len(interactions), batch_size)
         ]
 
-    def _format_interactions(self, interactions: list) -> str:
-        """Format interactions for the prompt with full context."""
+    def _format_interactions(self, interactions: list, person_name: str = "") -> str:
+        """Format interactions for the prompt with clear sender attribution."""
         lines = []
         for i, interaction in enumerate(interactions, 1):
             source_type = interaction.get("source_type", "unknown")
@@ -826,31 +826,61 @@ Interactions:
             timestamp = interaction.get("timestamp", "")
             interaction_id = interaction.get("id", "")
 
-            line = f"[{i}] ID:{interaction_id} [{source_type}] {timestamp}: {title}"
-            if snippet:
-                # Include more of the snippet for better context
+            # For message-based sources, make sender crystal clear
+            # Title format from sync: "→ message" (sent) or "← message" (received)
+            sender_prefix = ""
+            if source_type in ("imessage", "whatsapp", "slack", "phone"):
+                if title.startswith("→"):
+                    sender_prefix = "[NATHAN SENT]: "
+                    title = title[1:].strip()  # Remove arrow
+                elif title.startswith("←"):
+                    sender_prefix = f"[{person_name.upper()} SENT]: "
+                    title = title[1:].strip()  # Remove arrow
+
+            line = f"[{i}] ID:{interaction_id} [{source_type}] {timestamp}"
+            if sender_prefix:
+                line += f"\n    {sender_prefix}{title}"
+            else:
+                line += f": {title}"
+
+            if snippet and not sender_prefix:
+                # Only add snippet if we didn't already include the full message
                 line += f"\n    Content: {snippet[:500]}"
+
             lines.append(line)
 
         return "\n\n".join(lines)
 
     def _build_extraction_prompt(self, person_name: str, interaction_text: str) -> str:
         """Build the strict LLM prompt for fact extraction."""
+        person_upper = person_name.upper()
         return f"""Analyze these interactions and extract ONLY facts about {person_name} (the contact person).
 
+CONTEXT: These messages are between Nathan Ramia (the user, referred to as "Nathan") and {person_name}.
+
+CRITICAL - MESSAGE SENDER LABELS:
+Messages are labeled with who sent them:
+- [NATHAN SENT]: Nathan Ramia (the user) wrote this message. ANY fact stated here is about NATHAN, NOT {person_name}. NEVER extract these as facts about {person_name}.
+- [{person_upper} SENT]: {person_name} wrote this message. Facts stated here ARE about {person_name}. These can be extracted.
+
+EXAMPLES OF CORRECT ATTRIBUTION:
+- [NATHAN SENT]: "I'm in Minnesota" → Nathan is in Minnesota. DO NOT extract as fact about {person_name}.
+- [{person_upper} SENT]: "I'm in Minnesota" → {person_name} is in Minnesota. Extract this fact.
+- [NATHAN SENT]: "I imagine you're in Minnesota" → Nathan thinks {person_name} might be there. NOT a confirmed fact.
+- [{person_upper} SENT]: "Just landed in Denver" → {person_name} is in Denver. Extract this fact.
+
 CRITICAL - ENTITY ATTRIBUTION:
-These are conversations BETWEEN the user (Nathan) and {person_name}. You must ONLY extract facts about {person_name}.
 - If Nathan says "my daughter Malea" → This is Nathan's daughter, NOT {person_name}'s. DO NOT extract.
 - If Nathan says "my wife Taylor" → This is Nathan's wife. Only extract if {person_name} IS Taylor.
 - If {person_name} says "my daughter Emma" → This IS {person_name}'s daughter. Extract it.
 - If they discuss a third person "Sarah got a new job" → This is about Sarah, NOT {person_name}. DO NOT extract.
 
 CRITICAL RULES:
-1. ONLY extract facts that are EXPLICITLY about {person_name}, not Nathan or third parties
-2. Each fact MUST have a verbatim quote as evidence
-3. The quote must show this fact belongs to {person_name}, not someone else
-4. If unsure who a fact applies to, DO NOT extract it
-5. Set confidence to 0.9+ ONLY if fact is explicitly about {person_name}
+1. CHECK THE SENDER LABEL before extracting any fact from a message
+2. ONLY extract facts that {person_name} states about themselves
+3. Each fact MUST have a verbatim quote as evidence
+4. The quote must come from a message {person_name} sent (labeled [{person_upper} SENT])
+5. If unsure who a fact applies to, DO NOT extract it
 
 Return ONLY valid JSON with this structure (no markdown, no explanation):
 {{
@@ -885,16 +915,19 @@ EXTRACTION RULES:
 - Reject vague facts without specific names or details
 - Reject any fact about Nathan (the user) or third parties mentioned in conversation
 
-Example of GOOD extraction (when {person_name} says something):
-- {person_name} says "I'm taking my daughter Emma to soccer practice"
+Example of GOOD extraction (from [{person_name.upper()} SENT] messages):
+- [{person_name.upper()} SENT]: "I'm taking my daughter Emma to soccer practice"
 - Fact: {{"category": "family", "key": "daughter_name", "value": "Emma", "quote": "I'm taking my daughter Emma", "confidence": 0.95}}
 
 Example of BAD extraction (DO NOT do this):
-- Nathan says "I need to pick up Malea" (Malea is Nathan's family, not {person_name}'s)
-- BAD: {{"category": "family", "key": "child_name", "value": "Malea"}} <- Wrong person!
+- [NATHAN SENT]: "I'm in Minnesota" <- Nathan said this, not {person_name}!
+- BAD: {{"category": "travel", "key": "location", "value": "Minnesota"}} <- WRONG! This is about Nathan!
+
+- [NATHAN SENT]: "I need to pick up Malea" <- Nathan said this about his own family
+- BAD: {{"category": "family", "key": "child_name", "value": "Malea"}} <- WRONG! Malea is Nathan's, not {person_name}'s!
 
 - They discuss "Sarah got a new job in Boston"
-- BAD: {{"category": "work", "key": "employer", "value": "Boston company"}} <- About Sarah, not {person_name}!
+- BAD: {{"category": "work", "key": "employer", "value": "Boston company"}} <- WRONG! This is about Sarah, not {person_name}!
 
 Interactions:
 {interaction_text}"""
