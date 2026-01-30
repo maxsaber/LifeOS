@@ -45,6 +45,43 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/crm", tags=["crm"])
 
+# Work email domain for category detection
+WORK_EMAIL_DOMAIN = "movementlabs.com"
+
+
+def compute_person_category(person: PersonEntity, source_entities: list = None) -> str:
+    """
+    Compute category (work/personal) based on source entities and email domains.
+
+    Rules:
+    1. Has any Slack source entity → work (Slack is always work)
+    2. Has any email with work domain (@movementlabs.com) → work
+    3. Otherwise → personal
+    """
+    # Check person's own emails first
+    for email in person.emails:
+        if email and WORK_EMAIL_DOMAIN in email.lower():
+            return "work"
+
+    # Check sources list for slack
+    if "slack" in person.sources:
+        return "work"
+
+    # If no source entities provided, fetch them
+    if source_entities is None:
+        source_store = get_source_entity_store()
+        source_entities = source_store.get_for_person(person.id, limit=500)
+
+    for se in source_entities:
+        if se.source_type == "slack":
+            return "work"
+        if se.observed_email and WORK_EMAIL_DOMAIN in se.observed_email.lower():
+            return "work"
+        if se.metadata and se.metadata.get("account") == "work":
+            return "work"
+
+    return "personal"
+
 
 # Response Models
 
@@ -350,6 +387,13 @@ def _person_to_detail_response(
     edge_weight_with_me: int = 0,
 ) -> PersonDetailResponse:
     """Convert PersonEntity to detailed API response."""
+    # Fetch source entities first for category computation
+    source_store = get_source_entity_store()
+    source_entities = source_store.get_for_person(person.id, limit=100) if include_related else None
+
+    # Compute category dynamically based on source entities and email domains
+    computed_category = compute_person_category(person, source_entities)
+
     response = PersonDetailResponse(
         id=person.id,
         canonical_name=person.canonical_name,
@@ -359,7 +403,7 @@ def _person_to_detail_response(
         company=person.company,
         position=person.position,
         linkedin_url=person.linkedin_url,
-        category=person.category,
+        category=computed_category,
         vault_contexts=person.vault_contexts,
         tags=person.tags,
         notes=person.notes,
@@ -376,10 +420,7 @@ def _person_to_detail_response(
     )
 
     if include_related:
-        # Add source entities (limit to 100 most recent for performance)
-        # The full count is available in source_entity_count
-        source_store = get_source_entity_store()
-        source_entities = source_store.get_for_person(person.id, limit=100)
+        # Source entities already fetched for category computation
         response.source_entities = [_source_entity_to_response(e) for e in source_entities]
 
         # Add relationships
@@ -429,9 +470,9 @@ async def list_people(
             or (p.company and q_lower in p.company.lower())
         ]
 
-    # Apply category filter
+    # Apply category filter (uses computed category based on work domain/slack)
     if category:
-        people = [p for p in people if p.category == category]
+        people = [p for p in people if compute_person_category(p, []) == category]
 
     # Apply source filter
     if source:
@@ -1668,6 +1709,11 @@ async def get_network_graph(
         if not center_person:
             raise HTTPException(status_code=404, detail=f"Person '{center_on}' not found")
 
+        # Get the CRM owner's ID - exclude from 2nd+ degree traversal
+        # since they're connected to everyone and would pollute the graph
+        my_person_id = settings.my_person_id
+        is_viewing_self = (center_on == my_person_id)
+
         # BFS traversal with degree tracking - use batch queries
         node_degrees[center_on] = 0  # Center is degree 0
         current_level: set[str] = {center_on}
@@ -1679,6 +1725,10 @@ async def get_network_graph(
             level_relationships = rel_store.get_for_people_batch(current_level)
             next_level: set[str] = set()
             for person_id in current_level:
+                # Skip "me" as a bridge for 2nd+ degree when not viewing self
+                # This prevents everyone appearing as 2nd-degree through me
+                if not is_viewing_self and current_depth > 1 and person_id == my_person_id:
+                    continue
                 for rel in level_relationships.get(person_id, []):
                     other_id = rel.other_person(person_id)
                     if other_id and other_id not in node_degrees:
