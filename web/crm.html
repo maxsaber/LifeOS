@@ -4062,7 +4062,7 @@
 
             try {
                 // Use aggregated timeline endpoint for efficient data loading
-                const data = await api(`/people/${personId}/timeline/aggregated?days_back=365`);
+                const data = await api(`/people/${personId}/timeline/aggregated?days_back=372`);
                 const days = data.days || [];
 
                 // Build interaction history with source breakdown
@@ -4332,7 +4332,7 @@
                 // Otherwise, use default limit for performance
                 let url = `/people/${personId}/timeline`;
                 if (window.timelineDateFilter) {
-                    url += '?days_back=365&limit=500';
+                    url += '?days_back=372&limit=1500';
                 } else {
                     url += '?limit=100';
                 }
