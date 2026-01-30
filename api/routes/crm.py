@@ -49,15 +49,17 @@ router = APIRouter(prefix="/api/crm", tags=["crm"])
 WORK_EMAIL_DOMAIN = "movementlabs.com"
 
 # Family last names (case-insensitive matching)
-FAMILY_LAST_NAMES = {"ramia", "berry"}
+FAMILY_LAST_NAMES = {"ramia"}
 
 # Family members by exact name (case-insensitive)
 FAMILY_EXACT_NAMES = {
+    # Walker/Lyras/Haddad
     "taylor walker",
     "cissy",
     "ethan van drimmelen",
     "evie lyras",
     "jordan haddad",
+    # Jones family
     "lucy jones",
     "grandparents jones",
     "bryce jones",
@@ -67,6 +69,17 @@ FAMILY_EXACT_NAMES = {
     "uncle dave",
     "aunt judi",
     "aunt kathleen",
+    # Berry family
+    "shane berry",
+    "shane e. berry",
+    "bryce berry",
+    "jonas berry",
+    "brian berry",
+    # Prenger/Townsend family
+    "kayla townsend",
+    "amy prenger",
+    "grammy",
+    "jeremy prenger",
 }
 
 
