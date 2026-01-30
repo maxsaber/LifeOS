@@ -82,6 +82,18 @@ FAMILY_EXACT_NAMES = {
     "jeremy prenger",
 }
 
+# Manual strength overrides (name -> strength 0-100)
+STRENGTH_OVERRIDES = {
+    "taylor walker": 100.0,
+}
+
+
+def _get_strength_override(name: str) -> float | None:
+    """Check if a person has a manual strength override."""
+    if not name:
+        return None
+    return STRENGTH_OVERRIDES.get(name.lower().strip())
+
 
 def _is_family_member(name: str) -> bool:
     """Check if a name matches family criteria."""
@@ -519,6 +531,10 @@ def _person_to_detail_response(
     # Compute category dynamically based on source entities and email domains
     computed_category = compute_person_category(person, source_entities)
 
+    # Check for manual strength override
+    strength_override = _get_strength_override(person.canonical_name)
+    computed_strength = strength_override if strength_override is not None else person.relationship_strength
+
     response = PersonDetailResponse(
         id=person.id,
         canonical_name=person.canonical_name,
@@ -535,7 +551,7 @@ def _person_to_detail_response(
         sources=person.sources,
         first_seen=person.first_seen.isoformat() if person.first_seen else None,
         last_seen=person.last_seen.isoformat() if person.last_seen else None,
-        relationship_strength=person.relationship_strength,
+        relationship_strength=computed_strength,
         edge_weight_with_me=edge_weight_with_me,
         source_entity_count=person.source_entity_count,
         meeting_count=person.meeting_count,
@@ -622,7 +638,8 @@ async def list_people(
     if sort == "name":
         people.sort(key=lambda p: p.canonical_name.lower())
     elif sort == "strength":
-        people.sort(key=lambda p: p.relationship_strength, reverse=True)
+        # Use strength override if available
+        people.sort(key=lambda p: _get_strength_override(p.canonical_name) or p.relationship_strength, reverse=True)
     elif sort == "interactions":
         # Sort by total interaction count (emails + meetings + mentions + messages)
         people.sort(
