@@ -232,8 +232,11 @@ class PersonEntity:
         position = self.position or other.position
         linkedin_url = self.linkedin_url or other.linkedin_url
 
-        # Category: prefer non-unknown
-        category = self.category if self.category != "unknown" else other.category
+        # Category: use hierarchy (family > work > personal > unknown)
+        category_priority = {"family": 0, "work": 1, "personal": 2, "unknown": 3}
+        self_priority = category_priority.get(self.category, 3)
+        other_priority = category_priority.get(other.category, 3)
+        category = self.category if self_priority <= other_priority else other.category
 
         # Confidence: average of both, slightly reduced for merge uncertainty
         confidence_score = (self.confidence_score + other.confidence_score) / 2 * 0.95
