@@ -921,23 +921,6 @@
             gap: 0.5rem;
         }
 
-        .edit-btn {
-            padding: 0.5rem 1rem;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text-primary);
-            font-size: 0.875rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .edit-btn:hover {
-            background: var(--people);
-            border-color: var(--people);
-            color: white;
-        }
-
         .detail-strength-container {
             text-align: right;
         }
@@ -2382,9 +2365,6 @@
                         <div class="detail-contact-quick" id="detailContactQuick"></div>
                         <div class="detail-tags" id="detailTagsChips"></div>
                     </div>
-                    <div class="detail-actions">
-                        <button class="edit-btn" onclick="editPerson()">✏️ Edit</button>
-                    </div>
                 </div>
 
                 <div class="detail-tabs">
@@ -2518,7 +2498,7 @@
                                 Show Labels
                             </label>
                             <div class="graph-slider-container">
-                                <label for="edgeStrengthSlider">Edge Strength:</label>
+                                <label for="edgeStrengthSlider">Edge Weight:</label>
                                 <input type="range" id="edgeStrengthSlider" min="0" max="100" value="50" oninput="updateEdgeVisibility(this.value)">
                                 <span id="edgeStrengthValue">50%</span>
                             </div>
@@ -3738,11 +3718,6 @@
             renderTimeline();
         }
 
-        // Edit person (placeholder)
-        function editPerson() {
-            alert('Edit functionality coming soon!');
-        }
-
         // Load timeline
         async function loadTimeline(personId) {
             const container = document.getElementById('timelineContainer');
@@ -4850,10 +4825,8 @@
         function navigateToEdgePerson(which) {
             const personId = which === 'a' ? edgePanelData.personAId : edgePanelData.personBId;
             if (personId) {
-                // Save current filter values
-                const slider = document.getElementById('edgeStrengthSlider');
+                // Save current filter values (except edge strength - recalculated per person)
                 const degreeSelect = document.getElementById('degreeFilter');
-                preservedEdgeStrength = slider ? parseInt(slider.value) : 0;
                 preservedDegreeFilter = degreeSelect ? degreeSelect.value : 'all';
                 preservedSourceFilter = getSelectedSources();
 
@@ -4924,11 +4897,9 @@
                     // Check if edge has signal from any selected source
                     const hasSelectedSource = edgeHasSelectedSource(linkData, selectedSources);
 
-                    // Calculate filtered weight for this edge
-                    const filteredWeight = calculateFilteredWeight(linkData, selectedSources);
-
                     // First-degree edges with sufficient weight make the OTHER node visible
-                    if (isFirstDegree && hasSelectedSource && filteredWeight >= threshold) {
+                    // Use linkData.weight (normalized 0-100) for threshold comparison
+                    if (isFirstDegree && hasSelectedSource && linkData.weight >= threshold) {
                         visibleNodeIds.add(sourceId);
                         visibleNodeIds.add(targetId);
                     }
