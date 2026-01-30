@@ -1207,3 +1207,194 @@ The split modal shows contact sources (not individual messages):
 | `api/services/source_entity.py` | SourceEntity model and store |
 | `api/services/link_override.py` | Link override rules |
 | `web/crm.html` | Split modal UI |
+
+---
+
+## Phase 14: Improved Person Facts & Insights
+
+### Overview
+
+The fact extraction system helps users recall personal details about contacts that they might have forgotten. The goal is **recall assistance**, not biography building.
+
+**Valuable facts:** Pet names, hobbies, family member names, preferences, anecdotes, memorable details
+**Less valuable facts:** Job title, company name, obvious professional info (findable on LinkedIn)
+
+### Current System Limitations
+
+1. **Single-pass extraction** - One LLM call tries to do everything
+2. **Self-reported confidence** - Model assigns its own confidence (unreliable)
+3. **No context for messages** - Single iMessage/WhatsApp messages analyzed without conversation context
+4. **Overconfidence** - "Mentioned jogging once" becomes "avid runner"
+5. **Local Ollama underutilized** - Expensive Claude calls for everything
+
+### P14.1: Multi-Stage Extraction Pipeline
+
+**Architecture:**
+```
+Stage 1: Filtering (Ollama - local, fast)
+├─ For each interaction, with context window for messages
+├─ "Does this contain memorable personal facts about {person}?"
+└─ Output: High-signal interactions shortlist
+
+Stage 2: Deep Extraction (Claude)
+├─ Work with filtered, contextualized interactions
+├─ Focus on: unusual, memorable, personal details
+├─ Exclude: job titles, companies, obvious professional info
+└─ Output: Candidate facts with source quotes (no confidence yet)
+
+Stage 3: Validation + Confidence (Ollama - local)
+├─ For each candidate fact:
+│   ├─ Does the quote actually support this fact?
+│   ├─ Is this about {person} or someone else?
+│   └─ Evidence strength assessment
+└─ Output: Validated facts with calibrated confidence
+```
+
+**Acceptance Criteria:**
+```
+[ ] Stage 1 runs locally on Ollama (llama3.2:3b or similar)
+[ ] Stage 1 includes message context (5 messages before/after for iMessage/WhatsApp)
+[ ] Stage 2 prompt focuses on memorable details, not biography
+[ ] Stage 3 validates entity attribution (not about Nathan, not about third parties)
+[ ] Stage 3 confidence calibration based on evidence strength
+[ ] Pipeline completes in <60s for typical contact
+```
+
+### P14.2: Message Context Window
+
+**Problem:** Single messages out of context lead to wrong conclusions.
+
+**Solution:** For iMessage/WhatsApp/Slack interactions, fetch surrounding messages from the same conversation thread.
+
+**Context Window:**
+- 5 messages before the flagged message
+- 5 messages after the flagged message
+- Same conversation thread (by phone number or chat ID)
+
+**Implementation:**
+```python
+def get_message_context(interaction_id: str, window: int = 5) -> list[dict]:
+    """
+    Get surrounding messages for context.
+    Returns the interaction plus window messages before/after.
+    """
+    # Query by conversation_id/phone_number + timestamp range
+```
+
+**Acceptance Criteria:**
+```
+[ ] Context window fetched for iMessage interactions
+[ ] Context window fetched for WhatsApp interactions
+[ ] Context window fetched for Slack DM interactions
+[ ] Context passed to Stage 1 and Stage 2
+[ ] Context helps avoid out-of-context misinterpretations
+```
+
+### P14.3: Calibrated Confidence Scoring
+
+**Problem:** Self-reported confidence is unreliable. "They mentioned dance" → 0.95 confidence "dancer"
+
+**Solution:** Stage 3 model assesses evidence strength with specific criteria.
+
+**Confidence Levels:**
+| Evidence Type | Confidence Range | Example |
+|---------------|------------------|---------|
+| Single casual mention | 0.3 - 0.5 | "Went for a jog yesterday" |
+| Multiple mentions | 0.5 - 0.7 | Jogging mentioned 3 times over 2 years |
+| Explicit self-identification | 0.7 - 0.85 | "I'm training for a marathon" |
+| Repeated, defining characteristic | 0.85 - 0.95 | "My weekly long run is 15 miles" |
+| Direct statement of fact | 0.9+ | "My dog's name is Max" |
+
+**Stage 3 Prompt Structure:**
+```
+For each candidate fact, assess:
+1. Does the quote directly support this fact? (Yes/No/Partial)
+2. Who does this fact apply to? ({person}/Nathan/Third party/Unclear)
+3. Evidence strength:
+   - single_mention: One casual reference
+   - multiple_mentions: Referenced several times
+   - self_identification: Person explicitly stated this about themselves
+   - defining_trait: Repeated, central to their identity
+
+Based on your assessment, assign confidence 0.0-1.0.
+```
+
+**Acceptance Criteria:**
+```
+[ ] Stage 3 explicitly assesses entity attribution
+[ ] Stage 3 categorizes evidence strength
+[ ] Confidence derived from evidence category, not self-reported
+[ ] Single mentions capped at 0.5 confidence
+[ ] Facts about wrong person (Nathan, third parties) rejected
+```
+
+### P14.4: Extraction Prompt Improvements
+
+**Focus on memorable, not obvious:**
+```
+Extract MEMORABLE personal details about {person} that would help recall them later.
+
+INCLUDE (high value):
+- Pet names ("my dog Max")
+- Hobby specifics ("I've been learning pottery")
+- Family member names ("my sister Emma")
+- Preferences ("I can't stand cilantro")
+- Personal anecdotes ("We went to Costa Rica last year")
+- Health/medical if mentioned ("I have my MS infusion next week")
+
+EXCLUDE (low value, findable elsewhere):
+- Current job title (find on LinkedIn)
+- Company name (find on LinkedIn)
+- Generic professional info
+- Basic biographical facts
+
+The user can find "{person} works at {company}" on LinkedIn.
+They CAN'T find "{person}'s dog is named Max" anywhere else.
+```
+
+**Acceptance Criteria:**
+```
+[ ] Prompt explicitly prioritizes memorable over obvious
+[ ] Prompt provides clear examples of high vs low value
+[ ] Extracted facts skew toward personal/memorable
+[ ] Job title/company extracted only if unusual or significant
+```
+
+### P14.5: Ollama Integration
+
+**Requirements:**
+- Use local Ollama for Stage 1 (filtering) and Stage 3 (validation)
+- Claude for Stage 2 (deep extraction) only
+- Fall back to Claude if Ollama unavailable
+
+**Configuration:**
+```python
+OLLAMA_HOST = "http://localhost:11434"
+OLLAMA_MODEL = "llama3.2:3b"  # Fast, local
+```
+
+**Acceptance Criteria:**
+```
+[ ] Stage 1 uses Ollama by default
+[ ] Stage 3 uses Ollama by default
+[ ] Ollama availability checked at pipeline start
+[ ] Graceful fallback to Claude if Ollama down
+[ ] Cost reduction: ~70% fewer Claude API calls
+```
+
+### Implementation Files
+
+| File | Purpose |
+|------|---------|
+| `api/services/person_facts.py` | Fact extraction pipeline |
+| `api/services/ollama_client.py` | Ollama API client |
+| `api/routes/crm.py` | Extract facts endpoint |
+| `config/prompts/fact_extraction.py` | Prompt templates |
+
+### Success Metrics
+
+1. **Precision**: >80% of extracted facts are accurate
+2. **Usefulness**: >70% of facts are "memorable" not "obvious"
+3. **Confidence calibration**: Single mentions don't exceed 0.5 confidence
+4. **Entity attribution**: <5% of facts incorrectly attributed
+5. **Cost**: 70% reduction in Claude API calls via Ollama

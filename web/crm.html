@@ -3278,51 +3278,71 @@
             try {
                 // Fetch ALL people sorted by strength to calculate global circles
                 const data = await api('/people?sort=strength&limit=5000');
-                const allPeople = data.people;
+                const allPeople = data.people || [];
 
-                // Sort by relationship strength descending
-                const sorted = [...allPeople].sort((a, b) =>
-                    (b.relationship_strength || 0) - (a.relationship_strength || 0)
-                );
+                console.log(`[Dunbar] Initializing with ${allPeople.length} people`);
 
-                // Create a map for quick lookup
-                const circleMap = new Map();
-
-                // Assign circle 0 to self and manual entries
-                circleMap.set(DUNBAR_CONFIG.myPersonId, 0);
-                sorted.forEach(p => {
-                    if (DUNBAR_CONFIG.manualCircleZero.includes(p.canonical_name)) {
-                        circleMap.set(p.id, 0);
-                    }
-                });
-
-                // Assign circles to remaining people based on rank
-                let rank = 0;
-                for (const person of sorted) {
-                    if (circleMap.has(person.id)) continue;  // Skip already assigned
-
-                    // Find which circle this rank falls into
-                    let circle = DUNBAR_CONFIG.thresholds.length;  // Default to outer circle
-                    for (let i = 0; i < DUNBAR_CONFIG.thresholds.length; i++) {
-                        if (rank < DUNBAR_CONFIG.thresholds[i]) {
-                            circle = i;
-                            break;
-                        }
-                    }
-                    circleMap.set(person.id, circle);
-                    rank++;
+                if (allPeople.length === 0) {
+                    console.warn('[Dunbar] No people returned from API');
+                    return;
                 }
 
-                // Update global map
-                dunbarCircleMap = circleMap;
+                calculateAndStoreDunbarCircles(allPeople);
                 dunbarCirclesInitialized = true;
+                console.log(`[Dunbar] Initialized map with ${dunbarCircleMap.size} entries`);
             } catch (error) {
-                console.error('Failed to initialize Dunbar circles:', error);
+                console.error('[Dunbar] Failed to initialize:', error);
             }
         }
 
+        // Calculate Dunbar circles from a list of people and store in global map
+        function calculateAndStoreDunbarCircles(peopleList) {
+            // Sort by relationship strength descending
+            const sorted = [...peopleList].sort((a, b) =>
+                (b.relationship_strength || 0) - (a.relationship_strength || 0)
+            );
+
+            // Create a map for quick lookup
+            const circleMap = new Map();
+
+            // Assign circle 0 to self and manual entries
+            circleMap.set(DUNBAR_CONFIG.myPersonId, 0);
+            sorted.forEach(p => {
+                if (DUNBAR_CONFIG.manualCircleZero.includes(p.canonical_name)) {
+                    circleMap.set(p.id, 0);
+                }
+            });
+
+            // Assign circles to remaining people based on rank
+            let rank = 0;
+            for (const person of sorted) {
+                if (circleMap.has(person.id)) continue;  // Skip already assigned
+
+                // Find which circle this rank falls into
+                let circle = DUNBAR_CONFIG.thresholds.length;  // Default to outer circle
+                for (let i = 0; i < DUNBAR_CONFIG.thresholds.length; i++) {
+                    if (rank < DUNBAR_CONFIG.thresholds[i]) {
+                        circle = i;
+                        break;
+                    }
+                }
+                circleMap.set(person.id, circle);
+                rank++;
+            }
+
+            // Update global map
+            dunbarCircleMap = circleMap;
+        }
+
         // Apply pre-calculated Dunbar circles to a list of people
+        // Falls back to calculating from current data if map is empty
         function applyDunbarCircles(peopleList) {
+            // If map is empty or very small, calculate from current data as fallback
+            if (dunbarCircleMap.size < 10 && peopleList.length > 10) {
+                console.warn('[Dunbar] Map is small, calculating from current data as fallback');
+                calculateAndStoreDunbarCircles(peopleList);
+            }
+
             return peopleList.map(p => ({
                 ...p,
                 dunbar_circle: dunbarCircleMap.get(p.id) ?? 7
@@ -5518,11 +5538,11 @@
                 .attr('stroke-width', d => {
                     const normalizedWeight = (d.weight - minWeight) / weightRange;
                     if (isFirstDegreeEdge(d)) {
-                        // First-degree: thicker (2 to 5px)
-                        return 2 + normalizedWeight * 3;
+                        // First-degree: thicker (1 to 10px)
+                        return 1 + normalizedWeight * 9;
                     } else {
-                        // Second-degree: visible but thinner (1 to 2.5px)
-                        return 1 + normalizedWeight * 1.5;
+                        // Second-degree: visible but thinner (0.5 to 4px)
+                        return 0.5 + normalizedWeight * 3.5;
                     }
                 })
                 .attr('stroke-opacity', d => {
@@ -5598,17 +5618,14 @@
             // Node circles with degree-based styling
             node.append('circle')
                 .attr('r', d => getNodeRadius(d))
-                .attr('fill', d => {
-                    if (d.degree === 0) return '#000';  // Selected node is black
-                    return categoryColors[d.category] || categoryColors.unknown;
-                })
+                .attr('fill', d => categoryColors[d.category] || categoryColors.unknown)
                 .attr('fill-opacity', d => d.degree === 2 ? 0.7 : 1)
                 .attr('stroke', d => {
                     if (d.degree === 0) return '#ef4444';  // Red border for selected
                     if (d.category === 'self') return '#4f46e5';  // Indigo stroke for white self node
                     return 'var(--bg-primary)';
                 })
-                .attr('stroke-width', d => d.degree === 0 ? 3 : (d.category === 'self' ? 3 : 2));
+                .attr('stroke-width', d => d.degree === 0 ? 5 : (d.category === 'self' ? 3 : 2));
 
             // Node labels - add to ALL nodes, visibility controlled by zoom
             node.append('text')
@@ -5722,7 +5739,7 @@
 
             legend.html(`
                 <div class="graph-legend-item">
-                    <div class="graph-legend-color" style="background: #000; border: 3px solid #ef4444;"></div>
+                    <div class="graph-legend-color" style="background: var(--bg-tertiary); border: 4px solid #ef4444;"></div>
                     <span>Selected</span>
                 </div>
                 <div class="graph-legend-item">
@@ -5751,6 +5768,56 @@
                     .duration(300)
                     .call(graphZoom.transform, d3.zoomIdentity);
             }
+        }
+
+        // Fit zoom to show all first-degree nodes
+        function fitToFirstDegreeNodes() {
+            if (!graphSvg || !graphZoom || !graphNodes || graphNodes.length === 0) return;
+
+            // Wait for simulation to stabilize a bit before fitting
+            setTimeout(() => {
+                // Get first-degree nodes (degree 0 or 1)
+                const firstDegreeNodes = graphNodes.filter(n => n.degree === 0 || n.degree === 1);
+                if (firstDegreeNodes.length === 0) return;
+
+                // Calculate bounding box of first-degree nodes
+                const xs = firstDegreeNodes.map(n => n.x).filter(x => x !== undefined);
+                const ys = firstDegreeNodes.map(n => n.y).filter(y => y !== undefined);
+                if (xs.length === 0 || ys.length === 0) return;
+
+                const minX = Math.min(...xs);
+                const maxX = Math.max(...xs);
+                const minY = Math.min(...ys);
+                const maxY = Math.max(...ys);
+
+                // Add padding for node radius and labels
+                const padding = 80;
+                const boundsWidth = (maxX - minX) + padding * 2;
+                const boundsHeight = (maxY - minY) + padding * 2;
+                const centerX = (minX + maxX) / 2;
+                const centerY = (minY + maxY) / 2;
+
+                // Get container dimensions
+                const container = graphSvg.node().parentElement;
+                const width = container.clientWidth;
+                const height = container.clientHeight;
+
+                // Calculate scale to fit bounds
+                const scale = Math.min(
+                    width / boundsWidth,
+                    height / boundsHeight,
+                    1.5  // Don't zoom in too much
+                );
+
+                // Calculate translation to center
+                const tx = width / 2 - centerX * scale;
+                const ty = height / 2 - centerY * scale;
+
+                // Apply transform with animation
+                graphSvg.transition()
+                    .duration(500)
+                    .call(graphZoom.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+            }, 800);  // Wait for simulation to settle
         }
 
         // Edge panel state
@@ -5973,6 +6040,9 @@
 
                 // Rebuild the graph with only filtered data
                 renderGraph(graphContainer, filteredNodes, filteredLinks, graphCenterId);
+
+                // Fit zoom to show all first-degree nodes
+                fitToFirstDegreeNodes();
             } finally {
                 isRenderingGraph = false;
             }
