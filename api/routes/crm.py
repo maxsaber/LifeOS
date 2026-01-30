@@ -48,16 +48,71 @@ router = APIRouter(prefix="/api/crm", tags=["crm"])
 # Work email domain for category detection
 WORK_EMAIL_DOMAIN = "movementlabs.com"
 
+# Family last names (case-insensitive matching)
+FAMILY_LAST_NAMES = {"ramia", "berry"}
+
+# Family members by exact name (case-insensitive)
+FAMILY_EXACT_NAMES = {
+    "taylor walker",
+    "cissy",
+    "ethan van drimmelen",
+    "lucy jones",
+    "grandparents jones",
+    "bryce jones",
+    "bill jones",
+    "ryan a. jones",
+    "ryan jones",
+    "uncle dave",
+    "aunt judi",
+    "aunt kathleen",
+}
+
+
+def _is_family_member(name: str) -> bool:
+    """Check if a name matches family criteria."""
+    if not name:
+        return False
+    name_lower = name.lower().strip()
+
+    # Check exact name match
+    if name_lower in FAMILY_EXACT_NAMES:
+        return True
+
+    # Check last name match
+    name_parts = name_lower.split()
+    if name_parts:
+        last_name = name_parts[-1]
+        if last_name in FAMILY_LAST_NAMES:
+            return True
+
+    return False
+
 
 def compute_person_category(person: PersonEntity, source_entities: list = None) -> str:
     """
-    Compute category (work/personal) based on source entities and email domains.
+    Compute category with priority: self → family → work → personal.
 
-    Rules:
-    1. Has any Slack source entity → work (Slack is always work)
-    2. Has any email with work domain (@movementlabs.com) → work
-    3. Otherwise → personal
+    Rules (in order):
+    1. Is the CRM owner (my_person_id) → self
+    2. Has family last name or exact name match → family
+    3. Has Slack or @movementlabs.com email → work
+    4. Otherwise → personal
     """
+    # 1. Check if this is "me" (the CRM owner)
+    if person.id == settings.my_person_id:
+        return "self"
+
+    # 2. Check family membership (by name)
+    if _is_family_member(person.canonical_name):
+        return "family"
+    # Also check display name and aliases
+    if _is_family_member(person.display_name):
+        return "family"
+    for alias in person.aliases:
+        if _is_family_member(alias):
+            return "family"
+
+    # 3. Check for work indicators
     # Check person's own emails first
     for email in person.emails:
         if email and WORK_EMAIL_DOMAIN in email.lower():
@@ -80,6 +135,7 @@ def compute_person_category(person: PersonEntity, source_entities: list = None) 
         if se.metadata and se.metadata.get("account") == "work":
             return "work"
 
+    # 4. Default to personal
     return "personal"
 
 

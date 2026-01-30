@@ -4221,9 +4221,10 @@
 
         // Category colors for nodes
         const categoryColors = {
+            self: '#ffffff',      // White (CRM owner)
+            family: '#daa520',    // Goldenrod
             work: '#4f46e5',      // Indigo
             personal: '#10b981',  // Emerald
-            family: '#f59e0b',    // Amber
             unknown: '#6b7280'    // Gray
         };
 
@@ -4287,7 +4288,7 @@
 
             // Create zoom behavior with label visibility updates
             graphZoom = d3.zoom()
-                .scaleExtent([0.2, 4])
+                .scaleExtent([0.05, 4])  // Allow more zoom out to see full network
                 .on('zoom', (event) => {
                     g.attr('transform', event.transform);
                     updateLabelsForZoom(event.transform.k);
@@ -4349,7 +4350,7 @@
                         if (d.degree === 1) return -900 * spreadFactor;   // 1st degree spread wide
                         return -450 * spreadFactor;                        // 2nd degree spread
                     })
-                    .distanceMax(1200 * spreadFactor))
+                    .distanceMax(800 * spreadFactor))
                 .force('center', d3.forceCenter(centerX, centerY))
                 .force('collision', d3.forceCollide()
                     .radius(d => getNodeRadius(d) + 35 * spreadFactor)  // Large collision radius
@@ -4496,8 +4497,12 @@
                 .attr('r', d => getNodeRadius(d))
                 .attr('fill', d => categoryColors[d.category] || categoryColors.unknown)
                 .attr('fill-opacity', d => d.degree === 2 ? 0.7 : 1)
-                .attr('stroke', d => d.degree === 0 ? 'var(--accent)' : 'var(--bg-primary)')
-                .attr('stroke-width', d => d.degree === 0 ? 3 : 2);
+                .attr('stroke', d => {
+                    if (d.degree === 0) return 'var(--accent)';
+                    if (d.category === 'self') return '#4f46e5';  // Indigo stroke for white self node
+                    return 'var(--bg-primary)';
+                })
+                .attr('stroke-width', d => (d.degree === 0 || d.category === 'self') ? 3 : 2);
 
             // Node labels - add to ALL nodes, visibility controlled by zoom
             node.append('text')
