@@ -397,39 +397,32 @@ class PersonFactStore:
 
 class PersonFactExtractor:
     """
-    Extracts facts from interactions using a multi-stage LLM pipeline.
+    Extracts facts from interactions using Claude Sonnet.
 
-    Pipeline v2:
-    - Stage 1: Filter to high-signal interactions (Ollama - local, fast)
-    - Stage 2: Extract candidate facts (Claude - accurate)
-    - Stage 3: Validate and assign calibrated confidence (Ollama - local)
+    Simple pipeline:
+    1. Strategic sampling for large interaction sets
+    2. Enrich message-based interactions with conversation context
+    3. Single Claude Sonnet call to extract facts with calibrated confidence
+    4. Save facts
 
-    Key improvements:
+    Key features:
     - Focus on MEMORABLE facts, not obvious professional info
-    - Calibrated confidence based on evidence strength
+    - Confidence calibrated based on evidence strength in prompt
     - Message context windows for conversation-based sources
-    - 70%+ cost reduction via local Ollama for filtering/validation
     """
 
-    # Sampling configuration
-    MAX_INTERACTIONS_PER_BATCH = 100
-    RECENT_SAMPLE_SIZE = 100
-    RANDOM_SAMPLE_SIZE = 100
-    PRIORITY_SOURCE_TYPES = {"calendar", "vault", "granola"}  # Always include these
+    # Sampling configuration - tuned for ~20-30 second extraction
+    # Target: 1 extraction batch + 1 summary = 2 Claude calls = ~20-25 seconds
+    MAX_INTERACTIONS_PER_BATCH = 300  # Single batch for most people
 
-    # Confidence calibration (based on evidence strength, NOT LLM self-assessment)
-    CONFIDENCE_MAP = {
-        "single_mention": (0.3, 0.5),      # One casual reference
-        "multiple_mentions": (0.5, 0.7),   # Referenced several times
-        "self_identification": (0.7, 0.85), # They explicitly stated this
-        "defining_trait": (0.85, 0.95),    # Central to identity, repeated
-    }
+    # High-value sources get priority allocation in budget distribution
+    PRIORITY_SOURCES = {"calendar", "vault", "granola"}
+    PRIORITY_BONUS = 1.5  # Priority sources get 50% more of their share
 
     def __init__(self, fact_store: Optional[PersonFactStore] = None):
         """Initialize extractor."""
         self.fact_store = fact_store or get_person_fact_store()
         self._client: Any = None
-        self._ollama_client: Any = None
 
     @property
     def client(self):
@@ -439,30 +432,15 @@ class PersonFactExtractor:
             self._client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
         return self._client
 
-    @property
-    def ollama_client(self):
-        """Lazy-load the Ollama client."""
-        if self._ollama_client is None:
-            from api.services.ollama_client import OllamaClient
-            self._ollama_client = OllamaClient()
-        return self._ollama_client
-
-    def _ollama_available(self) -> bool:
-        """Check if Ollama is available for local processing."""
-        try:
-            return self.ollama_client.is_available()
-        except Exception:
-            return False
-
-    def extract_facts(self, person_id: str, person_name: str, interactions: list) -> list[PersonFact]:
+    async def extract_facts_async(self, person_id: str, person_name: str, interactions: list) -> list[PersonFact]:
         """
-        Extract facts from a person's interactions using multi-stage pipeline.
+        Extract facts from a person's interactions using Claude Sonnet.
 
-        Pipeline v2:
-        1. Enrich message-based interactions with conversation context
-        2. Stage 1: Filter to high-signal interactions (Ollama - local)
-        3. Stage 2: Extract candidate facts (Claude - accurate)
-        4. Stage 3: Validate facts and assign calibrated confidence (Ollama)
+        Simple pipeline:
+        1. Strategic sampling for large interaction sets
+        2. Enrich message-based interactions with conversation context
+        3. Single Claude Sonnet call to extract facts with confidence
+        4. Save facts
 
         Args:
             person_id: The person's ID
@@ -470,7 +448,7 @@ class PersonFactExtractor:
             interactions: List of interaction records
 
         Returns:
-            List of extracted and validated PersonFact objects
+            List of extracted PersonFact objects
         """
         if not interactions:
             logger.info(f"No interactions to extract facts from for {person_name}")
@@ -485,77 +463,89 @@ class PersonFactExtractor:
         # Build interaction lookup for source attribution
         interaction_lookup = {i.get("id"): i for i in sampled_interactions if i.get("id")}
 
-        # Step 1: Enrich with conversation context (for message-based sources)
+        # Enrich with conversation context (for message-based sources)
         enriched_interactions = self._enrich_with_context(sampled_interactions)
 
-        # Step 2: Stage 1 - Filter to high-signal interactions (Ollama)
-        use_ollama = self._ollama_available()
-        if use_ollama:
-            filtered_interactions = asyncio.get_event_loop().run_until_complete(
-                self._stage1_filter_interactions(person_name, enriched_interactions)
-            )
-            logger.info(
-                f"Stage 1: {len(filtered_interactions)}/{len(enriched_interactions)} "
-                f"interactions flagged as high-signal for {person_name}"
-            )
-        else:
-            logger.warning("Ollama unavailable, skipping Stage 1 filtering")
-            filtered_interactions = enriched_interactions
+        # Extract facts with Claude Sonnet (single call per batch)
+        extracted_facts = self._extract_facts_claude(
+            person_id, person_name, enriched_interactions, interaction_lookup
+        )
+        logger.info(f"Extracted {len(extracted_facts)} facts for {person_name}")
 
-        if not filtered_interactions:
-            logger.info(f"No high-signal interactions found for {person_name}")
-            return []
-
-        # Step 3: Stage 2 - Extract candidate facts (Claude)
-        candidate_facts = self._stage2_extract_facts(person_name, filtered_interactions, interaction_lookup)
-        logger.info(f"Stage 2: {len(candidate_facts)} candidate facts extracted for {person_name}")
-
-        # Step 4: Stage 3 - Validate and assign confidence (Ollama)
-        if use_ollama and candidate_facts:
-            validated_facts = asyncio.get_event_loop().run_until_complete(
-                self._stage3_validate_facts(person_id, person_name, candidate_facts, filtered_interactions)
-            )
-            logger.info(f"Stage 3: {len(validated_facts)} facts validated for {person_name}")
-        else:
-            # Fallback: use candidate facts directly with moderate confidence
-            validated_facts = []
-            for cf in candidate_facts:
-                fact = PersonFact(
-                    person_id=person_id,
-                    category=cf.get("category", ""),
-                    key=cf.get("key", ""),
-                    value=str(cf.get("value", "")),
-                    confidence=min(0.6, cf.get("confidence", 0.5)),  # Cap at 0.6 without validation
-                    source_interaction_id=cf.get("source_id"),
-                    source_quote=cf.get("quote"),
-                    source_link=interaction_lookup.get(cf.get("source_id"), {}).get("source_link"),
-                )
-                validated_facts.append(fact)
-
-        # Step 5: Generate relationship summaries
+        # Generate relationship summaries for people with sufficient interactions
         if len(interactions) >= 10:
             try:
                 summaries = self._generate_relationship_summaries(person_id, person_name, sampled_interactions)
-                # Lower confidence for summaries (0.6-0.7) since they're synthesized
-                for s in summaries:
-                    s.confidence = min(s.confidence, 0.7)
-                validated_facts.extend(summaries)
+                extracted_facts.extend(summaries)
             except Exception as e:
                 logger.error(f"Failed to generate summaries for {person_name}: {e}")
 
-        # Step 6: Deduplicate and save facts
+        # Deduplicate and save facts
         saved_facts = []
         seen_keys = set()
-        for fact in validated_facts:
+        for fact in extracted_facts:
             key = (fact.category, fact.key)
             if key in seen_keys:
                 continue
             seen_keys.add(key)
-
             saved_fact = self.fact_store.upsert(fact)
             saved_facts.append(saved_fact)
 
-        logger.info(f"Extracted {len(saved_facts)} facts for {person_name}")
+        logger.info(f"Saved {len(saved_facts)} facts for {person_name}")
+        return saved_facts
+
+    def extract_facts(self, person_id: str, person_name: str, interactions: list) -> list[PersonFact]:
+        """
+        Extract facts from a person's interactions (sync wrapper).
+
+        Args:
+            person_id: The person's ID
+            person_name: The person's name
+            interactions: List of interaction records
+
+        Returns:
+            List of extracted PersonFact objects
+        """
+        # Check if we're already in an async context
+        try:
+            asyncio.get_running_loop()
+            # We're in an async context - run sync version
+            logger.warning("extract_facts called from async context - use extract_facts_async instead")
+            return self._extract_facts_sync(person_id, person_name, interactions)
+        except RuntimeError:
+            # No running event loop - safe to use asyncio.run
+            return asyncio.run(self.extract_facts_async(person_id, person_name, interactions))
+
+    def _extract_facts_sync(self, person_id: str, person_name: str, interactions: list) -> list[PersonFact]:
+        """Synchronous extraction for use within async contexts."""
+        if not interactions:
+            return []
+
+        sampled_interactions = self._sample_interactions(interactions)
+        interaction_lookup = {i.get("id"): i for i in sampled_interactions if i.get("id")}
+        enriched_interactions = self._enrich_with_context(sampled_interactions)
+
+        extracted_facts = self._extract_facts_claude(
+            person_id, person_name, enriched_interactions, interaction_lookup
+        )
+
+        if len(interactions) >= 10:
+            try:
+                summaries = self._generate_relationship_summaries(person_id, person_name, sampled_interactions)
+                extracted_facts.extend(summaries)
+            except Exception as e:
+                logger.error(f"Failed to generate summaries for {person_name}: {e}")
+
+        saved_facts = []
+        seen_keys = set()
+        for fact in extracted_facts:
+            key = (fact.category, fact.key)
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            saved_fact = self.fact_store.upsert(fact)
+            saved_facts.append(saved_fact)
+
         return saved_facts
 
     def _enrich_with_context(self, interactions: list) -> list:
@@ -564,137 +554,45 @@ class PersonFactExtractor:
 
         For iMessage, WhatsApp, and Slack interactions, fetches surrounding
         messages to provide better context for fact extraction.
-        """
-        try:
-            from api.services.interaction_store import get_interaction_store
-            store = get_interaction_store()
-            return store.enrich_interactions_with_context(interactions)
-        except Exception as e:
-            logger.warning(f"Failed to enrich interactions with context: {e}")
-            return interactions
 
-    async def _stage1_filter_interactions(
+        NOTE: Disabled for speed - context enrichment requires N database queries
+        where N = number of message-based interactions, which is too slow for
+        people with many iMessage/WhatsApp/Slack interactions.
+        """
+        # Skip context enrichment for now - too slow
+        # TODO: Batch context queries for better performance
+        return interactions
+
+    def _extract_facts_claude(
         self,
-        person_name: str,
-        interactions: list[dict]
-    ) -> list[dict]:
-        """
-        Stage 1: Filter to high-signal interactions using local Ollama.
-
-        Identifies interactions that contain MEMORABLE personal facts worth
-        extracting, filtering out logistics, scheduling, and routine messages.
-
-        Args:
-            person_name: The person's name
-            interactions: All interactions to filter
-
-        Returns:
-            Subset of interactions flagged as containing memorable facts
-        """
-        if not interactions:
-            return []
-
-        # Process in batches of 25 for Ollama
-        BATCH_SIZE = 25
-        flagged_ids = set()
-
-        for i in range(0, len(interactions), BATCH_SIZE):
-            batch = interactions[i:i + BATCH_SIZE]
-
-            # Format batch for filtering
-            batch_text = self._format_interactions_for_filtering(batch)
-
-            prompt = f"""Review these interactions with {person_name} and identify which ones
-contain MEMORABLE personal details worth extracting.
-
-LOOK FOR (high value for recall):
-- Pet names ("my dog Max", "our cat Luna")
-- Hobby specifics ("I've been learning pottery")
-- Family member names ("my sister Emma", "my son Jake")
-- Personal preferences ("I can't stand cilantro", "I'm a morning person")
-- Personal anecdotes ("We went to Costa Rica last year")
-- Health/medical mentions ("I have my infusion next week")
-- Interests and passions ("I'm obsessed with Formula 1")
-
-IGNORE (low value, findable elsewhere):
-- Job titles and company names (LinkedIn has this)
-- Meeting logistics ("Let's meet at 3pm")
-- Routine scheduling ("See you next week")
-- Generic pleasantries
-
-For each interaction, respond ONLY with the IDs that contain memorable facts.
-Return a JSON object with a single "ids" array.
-
-Interactions:
-{batch_text}
-
-Return JSON:
-{{"ids": ["id1", "id2", ...]}}
-"""
-
-            try:
-                response = await self.ollama_client.generate_json(
-                    prompt=prompt,
-                    temperature=0.2,
-                    max_tokens=1024,
-                )
-                ids = response.get("ids", [])
-                flagged_ids.update(ids)
-            except Exception as e:
-                logger.warning(f"Stage 1 Ollama batch failed: {e}, including all interactions from batch")
-                # Fallback: include all interactions from this batch
-                for interaction in batch:
-                    if interaction.get("id"):
-                        flagged_ids.add(interaction["id"])
-
-        # Return interactions that were flagged
-        return [i for i in interactions if i.get("id") in flagged_ids]
-
-    def _format_interactions_for_filtering(self, interactions: list) -> str:
-        """Format interactions compactly for Stage 1 filtering."""
-        lines = []
-        for interaction in interactions:
-            interaction_id = interaction.get("id", "unknown")
-            source_type = interaction.get("source_type", "")
-            title = interaction.get("title", "")
-            snippet = interaction.get("snippet", "")[:300] if interaction.get("snippet") else ""
-            context = interaction.get("context", "")[:200] if interaction.get("context") else ""
-
-            line = f"[{interaction_id}] ({source_type}) {title}"
-            if snippet:
-                line += f"\n  {snippet}"
-            if context:
-                line += f"\n  Context: {context}"
-            lines.append(line)
-
-        return "\n\n".join(lines)
-
-    def _stage2_extract_facts(
-        self,
+        person_id: str,
         person_name: str,
         interactions: list[dict],
         interaction_lookup: dict
-    ) -> list[dict]:
+    ) -> list[PersonFact]:
         """
-        Stage 2: Extract candidate facts using Claude.
+        Extract facts using Claude Sonnet with calibrated confidence.
 
         Focuses on MEMORABLE personal details that help with recall,
         not obvious professional information.
 
         Args:
+            person_id: The person's ID
             person_name: The person's name
-            interactions: Filtered high-signal interactions
+            interactions: Interactions to extract facts from
             interaction_lookup: Dict mapping interaction IDs to full records
 
         Returns:
-            List of candidate fact dicts (without final confidence scores)
+            List of PersonFact objects with calibrated confidence scores
         """
-        all_candidates = []
+        all_facts = []
         batches = self._create_batches(interactions, self.MAX_INTERACTIONS_PER_BATCH)
+        logger.info(f"Processing {len(interactions)} interactions in {len(batches)} batch(es) for {person_name}")
 
         for batch_idx, batch in enumerate(batches):
+            logger.info(f"Batch {batch_idx + 1}/{len(batches)}: {len(batch)} interactions")
             interaction_text = self._format_interactions(batch)
-            prompt = self._build_stage2_extraction_prompt(person_name, interaction_text)
+            prompt = self._build_extraction_prompt(person_name, interaction_text)
 
             try:
                 response = self.client.messages.create(
@@ -704,18 +602,18 @@ Return JSON:
                 )
 
                 response_text = response.content[0].text
-
-                # Parse JSON response
-                candidates = self._parse_stage2_response(response_text)
-                all_candidates.extend(candidates)
+                facts = self._parse_extraction_response(
+                    response_text, person_id, interaction_lookup
+                )
+                all_facts.extend(facts)
 
             except Exception as e:
-                logger.error(f"Stage 2 extraction failed for batch {batch_idx + 1}: {e}")
+                logger.error(f"Fact extraction failed for batch {batch_idx + 1}: {e}")
 
-        return all_candidates
+        return all_facts
 
-    def _build_stage2_extraction_prompt(self, person_name: str, interaction_text: str) -> str:
-        """Build the Stage 2 extraction prompt focused on memorable facts."""
+    def _build_extraction_prompt(self, person_name: str, interaction_text: str) -> str:
+        """Build the extraction prompt focused on memorable facts with confidence."""
         return f"""Extract MEMORABLE personal details about {person_name} from these interactions.
 
 YOU ARE A RECALL ASSISTANT, not a biography builder. Extract facts that help remember
@@ -737,37 +635,45 @@ SKIP (low value, findable elsewhere):
 - Meeting logistics
 - Routine scheduling details
 
-The user can find "{person_name} works at {{company}}" on LinkedIn.
-They CANNOT find "{person_name}'s dog is named Max" anywhere else.
-
 CRITICAL - ENTITY ATTRIBUTION:
 These are conversations BETWEEN the user (Nathan) and {person_name}.
 - If Nathan says "my daughter Malea" → This is Nathan's family, NOT {person_name}'s. DO NOT extract.
 - If {person_name} says "my daughter Emma" → This IS {person_name}'s daughter. EXTRACT IT.
 - If they discuss a third person "Sarah got a new job" → About Sarah, not {person_name}. DO NOT extract.
 
-Return ONLY valid JSON with this structure (no markdown, no explanation):
+CONFIDENCE SCORING (based on evidence strength):
+- 0.9: Direct quote where {person_name} states the fact explicitly ("My dog's name is Max")
+- 0.8: Clear statement in context, minor interpretation needed
+- 0.7: Reasonably certain but some ambiguity in context
+- 0.6: Likely true based on context but not explicitly stated
+- 0.5: Inference from indirect evidence
+
+Return ONLY valid JSON (no markdown, no explanation):
 {{
   "facts": [
     {{
       "category": "family",
       "key": "dog_name",
       "value": "Max",
+      "confidence": 0.9,
       "quote": "I need to take Max to the vet tomorrow",
       "source_id": "abc123"
     }}
   ]
 }}
 
-DO NOT include confidence scores - those will be assessed separately in Stage 3.
-
 Categories: family, preferences, background, interests, dates, work, topics, travel
 
 Interactions:
 {interaction_text}"""
 
-    def _parse_stage2_response(self, response_text: str) -> list[dict]:
-        """Parse Stage 2 Claude response into candidate fact dicts."""
+    def _parse_extraction_response(
+        self,
+        response_text: str,
+        person_id: str,
+        interaction_lookup: dict
+    ) -> list[PersonFact]:
+        """Parse Claude response into PersonFact objects."""
         try:
             # Handle markdown code blocks
             if "```json" in response_text:
@@ -780,188 +686,43 @@ Interactions:
                 response_text = response_text[json_start:json_end].strip()
 
             data = json.loads(response_text)
-            return data.get("facts", [])
+            facts_data = data.get("facts", [])
+
+            facts = []
+            for f in facts_data:
+                source_id = f.get("source_id")
+                fact = PersonFact(
+                    person_id=person_id,
+                    category=f.get("category", ""),
+                    key=f.get("key", ""),
+                    value=str(f.get("value", "")),
+                    confidence=f.get("confidence", 0.7),
+                    source_interaction_id=source_id,
+                    source_quote=f.get("quote"),
+                    source_link=interaction_lookup.get(source_id, {}).get("source_link"),
+                )
+                facts.append(fact)
+
+            return facts
 
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse Stage 2 JSON: {e}")
+            logger.error(f"Failed to parse extraction JSON: {e}")
             return []
-
-    async def _stage3_validate_facts(
-        self,
-        person_id: str,
-        person_name: str,
-        candidate_facts: list[dict],
-        interactions: list[dict]
-    ) -> list[PersonFact]:
-        """
-        Stage 3: Validate facts and assign calibrated confidence using Ollama.
-
-        For each candidate fact:
-        1. Does the quote support this fact?
-        2. Is this about {person_name} (not Nathan or a third party)?
-        3. Evidence strength → calibrated confidence score
-
-        Args:
-            person_id: The person's ID
-            person_name: The person's name
-            candidate_facts: Facts from Stage 2
-            interactions: Original interactions for context
-
-        Returns:
-            List of validated PersonFact objects with calibrated confidence
-        """
-        if not candidate_facts:
-            return []
-
-        # Build interaction lookup
-        interaction_lookup = {i.get("id"): i for i in interactions if i.get("id")}
-
-        # Process in batches of 10 facts
-        BATCH_SIZE = 10
-        validated_facts = []
-
-        for i in range(0, len(candidate_facts), BATCH_SIZE):
-            batch = candidate_facts[i:i + BATCH_SIZE]
-            facts_json = json.dumps(batch, indent=2)
-
-            # Build context from relevant interactions
-            relevant_ids = {f.get("source_id") for f in batch if f.get("source_id")}
-            context_parts = []
-            for int_id in relevant_ids:
-                if int_id in interaction_lookup:
-                    interaction = interaction_lookup[int_id]
-                    context_parts.append(
-                        f"[{int_id}] {interaction.get('title', '')}: {interaction.get('snippet', '')[:300]}"
-                    )
-            context = "\n".join(context_parts)
-
-            prompt = f"""Validate these candidate facts about {person_name}.
-
-For each fact, assess:
-
-1. QUOTE_SUPPORTS: Does the quote directly support this fact?
-   - yes: Quote clearly states this fact
-   - partial: Quote implies but doesn't directly state
-   - no: Quote doesn't support this fact
-
-2. ATTRIBUTION: Who does this fact apply to?
-   - target: This is about {person_name}
-   - nathan: This is about Nathan (the user), not {person_name}
-   - third_party: This is about someone else mentioned in conversation
-   - unclear: Can't determine who this applies to
-
-3. EVIDENCE_STRENGTH (determines confidence):
-   - single_mention: One casual reference → confidence 0.3-0.5
-   - multiple_mentions: Referenced several times → confidence 0.5-0.7
-   - self_identification: They explicitly stated this about themselves → confidence 0.7-0.85
-   - defining_trait: Central to their identity, repeated emphasis → confidence 0.85-0.95
-
-CRITICAL: If ATTRIBUTION is not "target", REJECT the fact.
-
-Return JSON:
-{{
-  "validations": [
-    {{
-      "fact_index": 0,
-      "quote_supports": "yes",
-      "attribution": "target",
-      "evidence_strength": "self_identification",
-      "confidence": 0.8,
-      "reject": false,
-      "reject_reason": null
-    }}
-  ]
-}}
-
-Candidate facts:
-{facts_json}
-
-Original context:
-{context}"""
-
-            try:
-                response = await self.ollama_client.generate_json(
-                    prompt=prompt,
-                    temperature=0.1,
-                    max_tokens=2048,
-                )
-
-                validations = response.get("validations", [])
-
-                for validation in validations:
-                    fact_index = validation.get("fact_index", -1)
-                    if fact_index < 0 or fact_index >= len(batch):
-                        continue
-
-                    if validation.get("reject", False):
-                        logger.debug(
-                            f"Rejected fact: {batch[fact_index].get('key')} - "
-                            f"{validation.get('reject_reason', 'no reason')}"
-                        )
-                        continue
-
-                    candidate = batch[fact_index]
-
-                    # Get calibrated confidence from evidence strength
-                    evidence = validation.get("evidence_strength", "single_mention")
-                    conf_range = self.CONFIDENCE_MAP.get(evidence, (0.3, 0.5))
-                    confidence = validation.get("confidence", conf_range[0])
-                    # Clamp to the appropriate range
-                    confidence = max(conf_range[0], min(conf_range[1], confidence))
-
-                    # Build the fact
-                    source_id = candidate.get("source_id")
-                    source_link = None
-                    if source_id and source_id in interaction_lookup:
-                        source_link = interaction_lookup[source_id].get("source_link")
-
-                    fact = PersonFact(
-                        person_id=person_id,
-                        category=candidate.get("category", ""),
-                        key=candidate.get("key", ""),
-                        value=str(candidate.get("value", "")),
-                        confidence=confidence,
-                        source_interaction_id=source_id,
-                        source_quote=candidate.get("quote"),
-                        source_link=source_link,
-                    )
-                    validated_facts.append(fact)
-
-            except Exception as e:
-                logger.error(f"Stage 3 validation batch failed: {e}")
-                # Fallback: include facts with reduced confidence
-                for candidate in batch:
-                    source_id = candidate.get("source_id")
-                    source_link = None
-                    if source_id and source_id in interaction_lookup:
-                        source_link = interaction_lookup[source_id].get("source_link")
-
-                    fact = PersonFact(
-                        person_id=person_id,
-                        category=candidate.get("category", ""),
-                        key=candidate.get("key", ""),
-                        value=str(candidate.get("value", "")),
-                        confidence=0.4,  # Reduced confidence for unvalidated
-                        source_interaction_id=source_id,
-                        source_quote=candidate.get("quote"),
-                        source_link=source_link,
-                    )
-                    validated_facts.append(fact)
-
-        return validated_facts
 
     def _sample_interactions(self, interactions: list) -> list:
         """
-        Strategic sampling of interactions for analysis.
+        Intelligently sample interactions with dynamic budget distribution.
 
-        Ensures we cover:
-        - Recent activity (last 100)
-        - Historical breadth (random 100 from older)
-        - All high-value sources (calendar, vault, granola)
+        The budget (300 interactions) is distributed across source types based on
+        how many sources the person has:
+        - 1 source: gets all 300
+        - 3 sources: ~100 each (with priority bonus for calendar/vault/granola)
+        - 10 sources: ~30 each (with priority bonuses)
+
+        This ensures someone who only uses iMessage gets more iMessages sampled
+        than someone who uses 7 different channels.
         """
-        import random
-
-        if len(interactions) <= self.MAX_INTERACTIONS_PER_BATCH * 2:
+        if len(interactions) <= self.MAX_INTERACTIONS_PER_BATCH:
             return interactions
 
         # Sort by timestamp (most recent first)
@@ -971,36 +732,42 @@ Original context:
             reverse=True
         )
 
-        sampled = []
-        sampled_ids = set()
-
-        # 1. Add all priority source types (calendar events, vault notes)
+        # Group by source type
+        by_source: dict[str, list] = {}
         for interaction in sorted_interactions:
-            if interaction.get("source_type") in self.PRIORITY_SOURCE_TYPES:
-                if interaction.get("id") not in sampled_ids:
-                    sampled.append(interaction)
-                    sampled_ids.add(interaction.get("id"))
+            source_type = interaction.get("source_type", "other")
+            if source_type not in by_source:
+                by_source[source_type] = []
+            by_source[source_type].append(interaction)
 
-        # 2. Add recent interactions
-        for interaction in sorted_interactions[:self.RECENT_SAMPLE_SIZE]:
-            if interaction.get("id") not in sampled_ids:
-                sampled.append(interaction)
-                sampled_ids.add(interaction.get("id"))
+        # Calculate budget per source (with priority bonuses)
+        num_sources = len(by_source)
+        priority_count = sum(1 for s in by_source if s in self.PRIORITY_SOURCES)
+        non_priority_count = num_sources - priority_count
 
-        # 3. Add random sample from historical interactions
-        historical = [
-            i for i in sorted_interactions[self.RECENT_SAMPLE_SIZE:]
-            if i.get("id") not in sampled_ids
-        ]
-        if historical:
-            sample_size = min(self.RANDOM_SAMPLE_SIZE, len(historical))
-            random_sample = random.sample(historical, sample_size)
-            for interaction in random_sample:
-                sampled.append(interaction)
-                sampled_ids.add(interaction.get("id"))
+        # Total "shares" = non_priority + (priority * bonus)
+        total_shares = non_priority_count + (priority_count * self.PRIORITY_BONUS)
+        budget_per_share = self.MAX_INTERACTIONS_PER_BATCH / total_shares if total_shares > 0 else self.MAX_INTERACTIONS_PER_BATCH
 
-        # Sort final sample by timestamp
+        # Sample from each source type
+        sampled = []
+        for source_type, source_interactions in by_source.items():
+            is_priority = source_type in self.PRIORITY_SOURCES
+            allocation = int(budget_per_share * (self.PRIORITY_BONUS if is_priority else 1.0))
+            sampled.extend(source_interactions[:allocation])
+
+        # Final cap and sort by timestamp
+        if len(sampled) > self.MAX_INTERACTIONS_PER_BATCH:
+            sampled = sampled[:self.MAX_INTERACTIONS_PER_BATCH]
         sampled.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
+
+        # Log breakdown
+        breakdown = []
+        for k, v in by_source.items():
+            is_priority = k in self.PRIORITY_SOURCES
+            allocation = int(budget_per_share * (self.PRIORITY_BONUS if is_priority else 1.0))
+            breakdown.append(f"{k}:{min(len(v), allocation)}/{len(v)}")
+        logger.info(f"Sampled {len(sampled)} from {len(interactions)} ({', '.join(breakdown)})")
 
         return sampled
 
