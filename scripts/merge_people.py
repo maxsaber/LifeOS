@@ -232,6 +232,14 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
                 primary.sources = []
             primary.sources.append(source)
 
+    # Merge category using hierarchy: family > work > personal > unknown
+    category_priority = {"family": 0, "work": 1, "personal": 2, "unknown": 3}
+    primary_cat_priority = category_priority.get(primary.category, 3)
+    secondary_cat_priority = category_priority.get(secondary.category, 3)
+    if secondary_cat_priority < primary_cat_priority:
+        logger.info(f"   ~ Category: {primary.category} -> {secondary.category}")
+        primary.category = secondary.category
+
     # 2. Update interactions
     logger.info("\n2. Updating interactions...")
     interactions_db = get_interaction_db_path()
