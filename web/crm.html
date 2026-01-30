@@ -3898,20 +3898,22 @@
         // End Split Modal Functions
         // ===============================
 
-        // Select a person
-        async function selectPerson(personId, stayOnCurrentTab = false, skipUrlUpdate = false) {
+        // Select a person - IMMEDIATELY updates UI, loads data in background
+        function selectPerson(personId, stayOnCurrentTab = false, skipUrlUpdate = false) {
             selectedPersonId = personId;
             renderPeopleList();
-            await loadPersonDetail(personId, stayOnCurrentTab);
 
-            // Update URL (unless called from popstate or initial load)
+            // Update URL immediately (unless called from popstate or initial load)
             if (!skipUrlUpdate) {
                 const currentTab = document.querySelector('.tab.active')?.dataset.tab || 'overview';
                 updateUrl(personId, currentTab);
             }
+
+            // Show detail panel with loading state, load data in background (don't await)
+            loadPersonDetail(personId, stayOnCurrentTab);
         }
 
-        // Load person detail
+        // Load person detail - shows skeleton immediately, loads data progressively
         async function loadPersonDetail(personId, stayOnCurrentTab = false) {
             // Clear any date filter when loading a new person
             window.timelineDateFilter = null;
@@ -3924,22 +3926,77 @@
             contentEl.style.flexDirection = 'column';
             contentEl.style.height = '100%';
 
+            // Show loading skeleton immediately
+            showPersonLoadingSkeleton();
+
             // Remember current tab if we should stay on it
             const currentTab = document.querySelector('.tab.active')?.dataset.tab || 'overview';
 
             try {
-                const person = await api(`/people/${personId}?include_related=true`);
+                // First: Load basic person data (fast, no related data)
+                const person = await api(`/people/${personId}`);
                 renderPersonDetail(person);
+
+                // Background: Load related data (source entities, relationships)
+                loadRelatedData(personId);
 
                 // Load data for the active tab
                 const activeTab = stayOnCurrentTab ? currentTab : document.querySelector('.tab.active')?.dataset.tab;
                 if (activeTab === 'timeline') {
-                    await loadTimeline(personId);
+                    loadTimeline(personId); // Don't await
                 } else if (activeTab === 'graph') {
-                    await loadGraph(personId);
+                    loadGraph(personId); // Don't await
                 }
             } catch (error) {
                 console.error('Failed to load person detail:', error);
+                hidePersonLoadingSkeleton();
+            }
+        }
+
+        // Show loading skeleton for person detail
+        function showPersonLoadingSkeleton() {
+            document.getElementById('detailName').textContent = 'Loading...';
+            document.getElementById('detailCompany').textContent = '';
+            document.getElementById('detailAvatar').textContent = '...';
+            document.getElementById('detailContactQuick').innerHTML = '';
+        }
+
+        // Hide loading skeleton
+        function hidePersonLoadingSkeleton() {
+            // Called implicitly when renderPersonDetail populates the fields
+        }
+
+        // Load related data in background (source entities, relationships)
+        async function loadRelatedData(personId) {
+            try {
+                const person = await api(`/people/${personId}?include_related=true`);
+                // Update source entities if still on same person
+                if (selectedPersonId === personId) {
+                    updateSourceEntities(person.source_entities || [], person.source_entity_count || 0);
+                }
+            } catch (error) {
+                console.error('Failed to load related data:', error);
+            }
+        }
+
+        // Update source entities section
+        function updateSourceEntities(sourceEntities, count) {
+            document.getElementById('sourceEntitiesCount').textContent = count.toLocaleString();
+            const listEl = document.getElementById('sourceEntitiesList');
+
+            if (sourceEntities.length > 0) {
+                listEl.innerHTML = sourceEntities.map(se => `
+                    <div class="source-entity-item">
+                        <span class="source-entity-badge">${se.source_badge}</span>
+                        <div class="source-entity-info">
+                            <div class="source-entity-name">${escapeHtml(se.observed_name || se.observed_email || 'Unknown')}</div>
+                            <div class="source-entity-meta">${se.source_type} · ${formatDate(se.observed_at)}</div>
+                        </div>
+                        <span class="source-entity-status ${se.link_status}">${se.link_status}</span>
+                    </div>
+                `).join('');
+            } else {
+                listEl.innerHTML = '<div class="empty-state"><p>No source entities</p></div>';
             }
         }
 
@@ -4012,23 +4069,18 @@
             // Notes
             document.getElementById('notesArea').value = person.notes || '';
 
-            // Source entities - use the count field, not array length (array may not be fully loaded)
-            const sourceEntities = person.source_entities || [];
-            const sourceEntityCount = person.source_entity_count || sourceEntities.length;
+            // Source entities - show count if available, loading state for list
+            // (full list is loaded in background by loadRelatedData)
+            const sourceEntityCount = person.source_entity_count || 0;
             document.getElementById('sourceEntitiesCount').textContent = sourceEntityCount.toLocaleString();
             const listEl = document.getElementById('sourceEntitiesList');
 
-            if (sourceEntities.length > 0) {
-                listEl.innerHTML = sourceEntities.map(se => `
-                    <div class="source-entity-item">
-                        <span class="source-entity-badge">${se.source_badge}</span>
-                        <div class="source-entity-info">
-                            <div class="source-entity-name">${escapeHtml(se.observed_name || se.observed_email || 'Unknown')}</div>
-                            <div class="source-entity-meta">${se.source_type} · ${formatDate(se.observed_at)}</div>
-                        </div>
-                        <span class="source-entity-status ${se.link_status}">${se.link_status}</span>
-                    </div>
-                `).join('');
+            // If source_entities included (from include_related=true), render them
+            // Otherwise show loading state - they'll be loaded by loadRelatedData
+            if (person.source_entities && person.source_entities.length > 0) {
+                updateSourceEntities(person.source_entities, sourceEntityCount);
+            } else if (sourceEntityCount > 0) {
+                listEl.innerHTML = '<div class="empty-state"><p>Loading source entities...</p></div>';
             } else {
                 listEl.innerHTML = '<div class="empty-state"><p>No source entities</p></div>';
             }
