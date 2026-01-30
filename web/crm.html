@@ -72,14 +72,53 @@
             font-weight: 600;
         }
 
-        .header-left a {
-            color: var(--text-secondary);
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
             text-decoration: none;
-            font-size: 0.875rem;
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 1rem;
+            padding: 0.375rem 0.5rem;
+            border-radius: 6px;
+            transition: background 0.2s;
         }
 
-        .header-left a:hover {
+        .header-brand:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .header-nav {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            margin-left: 0.5rem;
+            padding-left: 0.75rem;
+            border-left: 1px solid var(--border);
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.375rem 0.75rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: var(--bg-tertiary);
             color: var(--text-primary);
+        }
+
+        .nav-link.active {
+            background: var(--accent);
+            color: white;
         }
 
         .header-right {
@@ -2303,8 +2342,11 @@
 <body>
     <header class="header">
         <div class="header-left">
-            <h1>👥 CRM</h1>
-            <a href="/">← Back to Chat</a>
+            <a href="/" class="header-brand">LifeOS</a>
+            <nav class="header-nav">
+                <a href="/chat" class="nav-link">💬 Chat</a>
+                <a href="/crm" class="nav-link active">👥 CRM</a>
+            </nav>
         </div>
         <div class="header-right">
             <div class="stats-display">
@@ -4036,6 +4078,7 @@
         let showLabelsEnabled = true;
         let currentZoomScale = 1;
         let isRenderingGraph = false; // Guard against infinite render loops
+        let filterDebounceTimer = null; // Debounce timer for filter changes
 
         // Preserved filter state (for node-to-node navigation)
         let preservedEdgeStrength = null;
@@ -4086,7 +4129,11 @@
                 label.textContent = `${selected.length} sources`;
             }
 
-            applyGraphFilters();
+            // Debounce to avoid rapid rebuilds
+            if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
+            filterDebounceTimer = setTimeout(() => {
+                applyGraphFilters();
+            }, 300);
         }
 
         function restoreSourceFilter(sources) {
@@ -4176,7 +4223,7 @@
                     return;
                 }
 
-                // Store ORIGINAL unfiltered data
+                // Store ORIGINAL unfiltered data for filtering
                 graphNodesAll = nodes;
                 graphLinksAll = links;
                 graphContainer = container;
@@ -4509,32 +4556,59 @@
             const slider = document.getElementById('edgeStrengthSlider');
             const degreeFilterEl = document.getElementById('degreeFilter');
 
-            // Use preserved values if available, otherwise reset to defaults
-            const edgeStrengthValue = preservedEdgeStrength !== null ? preservedEdgeStrength : 15;
-            const degreeFilterValue = preservedDegreeFilter !== null ? preservedDegreeFilter : 'all';
-            const sourceFilterValue = preservedSourceFilter !== null ? preservedSourceFilter : ['calendar', 'email', 'imessage', 'whatsapp', 'slack', 'linkedin'];
+            // Use preserved values if available (for node-to-node navigation),
+            // otherwise keep current DOM values (for filter-triggered rebuilds),
+            // otherwise use defaults (for initial load)
+            const currentSliderValue = slider ? parseInt(slider.value) : null;
+            const currentDegreeValue = degreeFilterEl ? degreeFilterEl.value : null;
+            const currentSourceCheckboxes = document.querySelectorAll('#sourceFilterOptions input[type="checkbox"]:checked');
+            const currentSourceValue = currentSourceCheckboxes.length > 0 ?
+                Array.from(currentSourceCheckboxes).map(cb => cb.value) : null;
 
-            if (slider) {
+            const edgeStrengthValue = preservedEdgeStrength !== null ? preservedEdgeStrength :
+                                      (currentSliderValue !== null ? currentSliderValue : 15);
+            const degreeFilterValue = preservedDegreeFilter !== null ? preservedDegreeFilter :
+                                      (currentDegreeValue !== null ? currentDegreeValue : 'all');
+            const sourceFilterValue = preservedSourceFilter !== null ? preservedSourceFilter :
+                                      (currentSourceValue !== null ? currentSourceValue :
+                                       ['calendar', 'email', 'imessage', 'whatsapp', 'slack', 'linkedin']);
+
+            // Only update DOM if we're using preserved values (navigation scenario)
+            // Don't overwrite what the user just set for filter-triggered rebuilds
+            if (preservedEdgeStrength !== null && slider) {
                 slider.value = edgeStrengthValue;
                 document.getElementById('edgeStrengthValue').textContent = edgeStrengthValue + '%';
             }
 
-            if (degreeFilterEl) {
+            if (preservedDegreeFilter !== null && degreeFilterEl) {
                 degreeFilterEl.value = degreeFilterValue;
             }
 
-            // Restore source filter checkboxes
-            restoreSourceFilter(sourceFilterValue);
+            // Only restore source filter checkboxes if we have preserved values
+            if (preservedSourceFilter !== null) {
+                const checkboxes = document.querySelectorAll('#sourceFilterOptions input[type="checkbox"]');
+                checkboxes.forEach(cb => {
+                    cb.checked = sourceFilterValue.includes(cb.value);
+                });
+                // Update label without triggering filter
+                const sourceLabel = document.getElementById('sourceFilterLabel');
+                if (sourceLabel) {
+                    if (sourceFilterValue.length === 6) {
+                        sourceLabel.textContent = 'All Sources';
+                    } else if (sourceFilterValue.length === 0) {
+                        sourceLabel.textContent = 'None';
+                    } else if (sourceFilterValue.length <= 2) {
+                        sourceLabel.textContent = sourceFilterValue.join(', ');
+                    } else {
+                        sourceLabel.textContent = `${sourceFilterValue.length} sources`;
+                    }
+                }
+            }
 
             // Clear preserved values after using them
             preservedEdgeStrength = null;
             preservedDegreeFilter = null;
             preservedSourceFilter = null;
-
-            // Apply the filters after a short delay to let the graph settle
-            setTimeout(() => {
-                applyGraphFilters();
-            }, 100);
 
             // Drag functions - gentler reanimation
             function dragstarted(event, d) {
@@ -4615,7 +4689,8 @@
                 // Update panel content
                 document.getElementById('edgePanelPersonA').textContent = data.person_a_name;
                 document.getElementById('edgePanelPersonB').textContent = data.person_b_name;
-                document.getElementById('edgePanelWeight').textContent = data.weight;
+                // Backend returns normalized 0-100 weight
+                document.getElementById('edgePanelWeight').textContent = (data.weight || 0) + '%';
 
                 // Source breakdown
                 document.getElementById('edgePanelEvents').textContent = data.shared_events_count || 0;
@@ -4699,127 +4774,136 @@
             }
         }
 
-        // Unified function to apply filters and REBUILD graph with only visible nodes
+        // Apply filters and REBUILD graph with only visible nodes for compact layouts
         function applyGraphFilters() {
             if (!graphNodesAll || !graphLinksAll || !graphContainer) return;
 
-            // Prevent infinite loops from slider events during render
+            // Prevent infinite loops from events during render
             if (isRenderingGraph) return;
             isRenderingGraph = true;
 
-            // Get current filter values
-            const slider = document.getElementById('edgeStrengthSlider');
-            const degreeSelect = document.getElementById('degreeFilter');
-            const thresholdPercent = slider ? parseInt(slider.value) : 15;
-            const showOnlyFirstDegree = degreeSelect ? (degreeSelect.value === 'first') : false;
-            const selectedSources = getSelectedSources();
+            try {
+                // Get current filter values
+                const slider = document.getElementById('edgeStrengthSlider');
+                const degreeSelect = document.getElementById('degreeFilter');
+                const thresholdPercent = slider ? parseInt(slider.value) : 15;
+                const showOnlyFirstDegree = degreeSelect ? (degreeSelect.value === 'first') : false;
+                const selectedSources = getSelectedSources();
 
-            // Calculate weight threshold from the FULL dataset
-            const allWeights = graphLinksAll.map(l => l.weight);
-            const maxWeight = Math.max(1, ...allWeights);
-            const minWeight = Math.min(...allWeights);
-            const weightRange = Math.max(1, maxWeight - minWeight);
-            const threshold = minWeight + (weightRange * (thresholdPercent / 100));
+                // Calculate weight threshold from the FULL dataset
+                const allWeights = graphLinksAll.map(l => l.weight);
+                const maxWeight = Math.max(1, ...allWeights);
+                const minWeight = allWeights.length > 0 ? Math.min(...allWeights) : 0;
+                const weightRange = Math.max(1, maxWeight - minWeight);
+                const threshold = minWeight + (weightRange * (thresholdPercent / 100));
 
-            // Build node lookup by ID from ORIGINAL data
-            const nodeById = {};
-            graphNodesAll.forEach(n => { nodeById[n.id] = n; });
+                // Build node lookup by ID from ORIGINAL data
+                const nodeById = {};
+                graphNodesAll.forEach(n => { nodeById[n.id] = n; });
 
-            // Step 1: Determine which first-degree nodes pass the edge strength and source filter
-            const visibleNodeIds = new Set();
-            visibleNodeIds.add(graphCenterId); // Center node always visible
-
-            graphLinksAll.forEach(linkData => {
-                if (!linkData) return;
-
-                const sourceId = linkData.source;
-                const targetId = linkData.target;
-                const isFirstDegree = sourceId === graphCenterId || targetId === graphCenterId;
-
-                // Check if edge has signal from any selected source
-                const hasSelectedSource = edgeHasSelectedSource(linkData, selectedSources);
-
-                // Calculate filtered weight for this edge
-                const filteredWeight = calculateFilteredWeight(linkData, selectedSources);
-
-                // First-degree edges with sufficient weight make the OTHER node visible
-                if (isFirstDegree && hasSelectedSource && filteredWeight >= threshold) {
-                    visibleNodeIds.add(sourceId);
-                    visibleNodeIds.add(targetId);
-                }
-            });
-
-            // Step 2: If showing 2nd degree too, add second-degree nodes connected to visible first-degree
-            if (!showOnlyFirstDegree) {
-                const firstDegreeIds = new Set(visibleNodeIds);
+                // Step 1: Determine which first-degree nodes pass the edge strength and source filter
+                const visibleNodeIds = new Set();
+                visibleNodeIds.add(graphCenterId); // Center node always visible
 
                 graphLinksAll.forEach(linkData => {
                     if (!linkData) return;
 
                     const sourceId = linkData.source;
                     const targetId = linkData.target;
-                    const sourceNode = nodeById[sourceId];
-                    const targetNode = nodeById[targetId];
+                    const isFirstDegree = sourceId === graphCenterId || targetId === graphCenterId;
 
-                    // Edge must pass source filter
+                    // Check if edge has signal from any selected source
                     const hasSelectedSource = edgeHasSelectedSource(linkData, selectedSources);
-                    if (!hasSelectedSource) return;
 
-                    // If one end is a visible first-degree node and other is second-degree, add it
-                    if (firstDegreeIds.has(sourceId) && targetNode && targetNode.degree === 2) {
+                    // Calculate filtered weight for this edge
+                    const filteredWeight = calculateFilteredWeight(linkData, selectedSources);
+
+                    // First-degree edges with sufficient weight make the OTHER node visible
+                    if (isFirstDegree && hasSelectedSource && filteredWeight >= threshold) {
+                        visibleNodeIds.add(sourceId);
                         visibleNodeIds.add(targetId);
                     }
-                    if (firstDegreeIds.has(targetId) && sourceNode && sourceNode.degree === 2) {
-                        visibleNodeIds.add(sourceId);
-                    }
                 });
-            }
 
-            // Step 3: Create filtered node and link arrays
-            const filteredNodes = graphNodesAll
-                .filter(n => visibleNodeIds.has(n.id))
-                .map(n => ({...n, x: undefined, y: undefined, fx: undefined, fy: undefined})); // Reset positions
+                // Step 2: If showing 2nd degree too, add second-degree nodes connected to visible first-degree
+                if (!showOnlyFirstDegree) {
+                    const firstDegreeIds = new Set(visibleNodeIds);
 
-            const filteredLinks = graphLinksAll.filter(l => {
-                const sourceId = l.source;
-                const targetId = l.target;
-                const bothVisible = visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId);
-                const hasSelectedSource = edgeHasSelectedSource(l, selectedSources);
-                return bothVisible && hasSelectedSource;
-            }).map(l => ({...l})); // Clone to avoid mutating original
+                    graphLinksAll.forEach(linkData => {
+                        if (!linkData) return;
 
-            // Store filtered data as current view
-            graphNodes = filteredNodes;
-            graphLinks = filteredLinks;
-            graphWeightRange = { min: minWeight, max: maxWeight, range: weightRange };
+                        const sourceId = linkData.source;
+                        const targetId = linkData.target;
+                        const sourceNode = nodeById[sourceId];
+                        const targetNode = nodeById[targetId];
 
-            // Check if we have anything to show
-            if (filteredNodes.length <= 1) {
-                // Stop any existing simulation before clearing
-                if (graphSimulation) {
-                    graphSimulation.stop();
+                        // Edge must pass source filter
+                        const hasSelectedSource = edgeHasSelectedSource(linkData, selectedSources);
+                        if (!hasSelectedSource) return;
+
+                        // If one end is a visible first-degree node and other is second-degree, add it
+                        if (firstDegreeIds.has(sourceId) && targetNode && targetNode.degree === 2) {
+                            visibleNodeIds.add(targetId);
+                        }
+                        if (firstDegreeIds.has(targetId) && sourceNode && sourceNode.degree === 2) {
+                            visibleNodeIds.add(sourceId);
+                        }
+                    });
                 }
-                graphContainer.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔗</div><p>No connections match current filters</p></div>';
-                graphSvg = null;
-                graphSimulation = null;
-                isRenderingGraph = false;
-                return;
-            }
 
-            // Rebuild the graph with only filtered data
-            renderGraph(graphContainer, filteredNodes, filteredLinks, graphCenterId);
-            isRenderingGraph = false;
+                // Step 3: Create filtered node and link arrays
+                const filteredNodes = graphNodesAll
+                    .filter(n => visibleNodeIds.has(n.id))
+                    .map(n => ({...n, x: undefined, y: undefined, fx: undefined, fy: undefined})); // Reset positions
+
+                const filteredLinks = graphLinksAll.filter(l => {
+                    const sourceId = l.source;
+                    const targetId = l.target;
+                    const bothVisible = visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId);
+                    const hasSelectedSource = edgeHasSelectedSource(l, selectedSources);
+                    return bothVisible && hasSelectedSource;
+                }).map(l => ({...l})); // Clone to avoid mutating original
+
+                // Store filtered data as current view
+                graphNodes = filteredNodes;
+                graphLinks = filteredLinks;
+                graphWeightRange = { min: minWeight, max: maxWeight, range: weightRange };
+
+                // Check if we have anything to show
+                if (filteredNodes.length <= 1) {
+                    if (graphSimulation) {
+                        graphSimulation.stop();
+                    }
+                    graphContainer.innerHTML = '<div class="empty-state"><div class="empty-state-icon">🔗</div><p>No connections match current filters</p></div>';
+                    graphSvg = null;
+                    graphSimulation = null;
+                    return;
+                }
+
+                // Rebuild the graph with only filtered data
+                renderGraph(graphContainer, filteredNodes, filteredLinks, graphCenterId);
+            } finally {
+                isRenderingGraph = false;
+            }
         }
 
         // Update edge visibility - wrapper that calls unified filter
         function updateEdgeVisibility(thresholdPercent) {
             document.getElementById('edgeStrengthValue').textContent = thresholdPercent + '%';
-            applyGraphFilters();
+            // Debounce filter application to avoid rebuilding graph while dragging slider
+            if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
+            filterDebounceTimer = setTimeout(() => {
+                applyGraphFilters();
+            }, 500);
         }
 
         // Update degree filter - wrapper that calls unified filter
         function updateDegreeFilter(value) {
-            applyGraphFilters();
+            // Debounce to avoid rapid rebuilds
+            if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
+            filterDebounceTimer = setTimeout(() => {
+                applyGraphFilters();
+            }, 300);
         }
 
         // Helper to truncate name

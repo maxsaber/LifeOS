@@ -205,6 +205,55 @@
             gap: 0.75rem;
         }
 
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            text-decoration: none;
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 1rem;
+            padding: 0.375rem 0.5rem;
+            border-radius: 6px;
+            transition: background 0.2s;
+        }
+
+        .header-brand:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .header-nav {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            margin-left: 0.5rem;
+            padding-left: 0.75rem;
+            border-left: 1px solid var(--border);
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.375rem 0.75rem;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .nav-link.active {
+            background: var(--accent);
+            color: white;
+        }
+
         .menu-btn {
             display: none;
             width: 40px;
@@ -2460,12 +2509,14 @@
         <header class="header">
             <div class="header-left">
                 <button class="menu-btn" id="menuBtn" onclick="toggleSidebar()">☰</button>
-                <span class="chat-title" id="chatTitle">New conversation</span>
+                <a href="/" class="header-brand">LifeOS</a>
+                <nav class="header-nav">
+                    <a href="/chat" class="nav-link active">💬 Chat</a>
+                    <a href="/crm" class="nav-link">👥 CRM</a>
+                </nav>
             </div>
             <div class="header-right">
-                <a href="#/crm" class="remember-btn" style="text-decoration:none" title="People CRM" onclick="navigateToPage('crm'); return false;">
-                    <span>👥</span> CRM
-                </a>
+                <span class="chat-title" id="chatTitle">New conversation</span>
                 <button class="remember-btn" onclick="openRememberModal()" title="Remember something">
                     <span>💭</span> Remember
                 </button>
