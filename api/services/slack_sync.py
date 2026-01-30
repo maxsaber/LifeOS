@@ -360,8 +360,8 @@ class SlackSync:
         source_id = f"{self._workspace_id}:{slack_user_id}"
         source_entity = self.entity_store.get_by_source("slack", source_id)
 
-        if source_entity and source_entity.person_id:
-            return source_entity.person_id
+        if source_entity and source_entity.canonical_person_id:
+            return source_entity.canonical_person_id
 
         return None
 
