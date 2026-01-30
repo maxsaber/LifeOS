@@ -184,6 +184,50 @@ Configured in `config/people_config.py`:
 
 ---
 
+## Relationship Discovery
+
+The relationship discovery system scans interactions to build person-to-person relationship edges.
+
+### Discovery Methods
+
+| Method | Source | Signal |
+|--------|--------|--------|
+| `discover_from_calendar` | Calendar events | Shared attendees |
+| `discover_from_calendar_direct` | Calendar events | User ↔ each attendee |
+| `discover_from_email_threads` | Gmail threads | Co-recipients in threads |
+| `discover_from_vault_comments` | Vault notes | Co-mentioned people |
+| `discover_from_imessage_direct` | iMessage | User ↔ message recipient |
+| `discover_from_whatsapp_direct` | WhatsApp | User ↔ chat participant |
+| `discover_from_phone_calls` | Phone history | User ↔ caller/callee |
+| `discover_from_slack_direct` | Slack DMs | User ↔ DM participant |
+| `discover_linkedin_connections` | LinkedIn | Mark is_linkedin_connection |
+
+### Discovery Window
+
+- Default: 180 days lookback
+- Configurable via `DISCOVERY_WINDOW_DAYS`
+- Future calendar events excluded from last_seen_together
+
+### Daily Sync Integration
+
+Relationship discovery runs as part of the daily sync pipeline:
+```
+06:00 - Gmail/Calendar sync
+06:05 - Contacts, Phone, WhatsApp sync
+06:06 - iMessage, Slack sync
+06:07 - Person stats update
+06:08 - Relationship discovery ← discovers/updates relationships
+06:09 - Strength recalculation
+```
+
+### Triggering Discovery
+
+- **Automatic**: Daily sync at 06:08 AM
+- **Manual**: `POST /api/crm/relationships/discover`
+- **Script**: `uv run python scripts/sync_relationship_discovery.py`
+
+---
+
 ## Search Pipeline
 
 ```

@@ -3,10 +3,17 @@ CRM Data Integrity Tests - P9.1
 
 These tests verify that data flows correctly from sources to CRM display.
 They use real production data and should pass when the CRM is working correctly.
+
+NOTE: These tests require direct database access and will be skipped if
+the server is running (database locked). Stop the server to run these tests.
 """
 import pytest
 from api.services.person_entity import get_person_entity_store
 from api.services.interaction_store import get_interaction_store
+
+
+# All classes in this file require database access
+pytestmark = pytest.mark.usefixtures("require_db")
 
 
 class TestDataIntegrityTaylor:

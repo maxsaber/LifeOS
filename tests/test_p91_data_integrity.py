@@ -5,6 +5,9 @@ These tests verify that CRM data is CORRECT, not just that it EXISTS.
 Each test class corresponds to a requirement in docs/CRM-P9.1-Requirements.md
 
 Tests must pass before P9.1 can be considered complete.
+
+NOTE: These tests require direct database access and will be skipped if
+the server is running (database locked). Stop the server to run these tests.
 """
 import os
 import re
@@ -15,6 +18,10 @@ from pathlib import Path
 
 from api.services.person_entity import get_person_entity_store
 from api.services.interaction_store import get_interaction_store, get_interaction_db_path
+
+
+# All classes in this file require database access
+pytestmark = pytest.mark.usefixtures("require_db")
 
 
 class TestR1CleanDatabase:

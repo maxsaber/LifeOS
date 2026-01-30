@@ -355,6 +355,147 @@ List disambiguation rules that prevent future entity mis-linking.
 
 Delete a link override rule.
 
+### POST /api/crm/people/merge
+
+Merge two person records. Combines all interactions, relationships, and source entities from the secondary person into the primary person.
+
+**Request:**
+```json
+{
+  "primary_person_id": "uuid",
+  "secondary_person_id": "uuid"
+}
+```
+
+**Response:**
+```json
+{
+  "status": "completed",
+  "primary_person_id": "uuid",
+  "secondary_person_id": "uuid",
+  "merged": {
+    "emails": 3,
+    "phones": 1,
+    "aliases": 2,
+    "sources": 4,
+    "interactions": 156,
+    "source_entities": 12,
+    "relationships": 8,
+    "facts": 5
+  }
+}
+```
+
+### POST /api/crm/relationships/discover
+
+Trigger full relationship discovery. Scans interactions to find/update relationships between people.
+
+**Response:**
+```json
+{
+  "status": "completed",
+  "duration_seconds": 12.5,
+  "relationships_created": 45,
+  "relationships_updated": 120
+}
+```
+
+### POST /api/crm/strengths/update
+
+Recalculate relationship strength for all people.
+
+**Response:**
+```json
+{
+  "status": "completed",
+  "updated": 542,
+  "failed": 0,
+  "total": 542
+}
+```
+
+### GET /api/crm/discover
+
+Get suggested connections and relationship insights for UI.
+
+**Query Parameters:**
+- `person_id` (string, optional): Focus on specific person
+- `limit` (int): Max suggestions to return
+
+**Response:**
+```json
+{
+  "suggested_connections": [
+    {
+      "person_a": {"id": "uuid", "name": "Alex"},
+      "person_b": {"id": "uuid", "name": "Jordan"},
+      "reason": "3 shared calendar events, 5 email threads",
+      "confidence": 0.85
+    }
+  ],
+  "network_insights": {
+    "total_people": 542,
+    "connected_people": 380,
+    "bridge_people": ["uuid1", "uuid2"]
+  }
+}
+```
+
+### GET /api/crm/people/{id}/facts
+
+Get extracted facts about a person (auto-extracted from interactions).
+
+**Response:**
+```json
+{
+  "person_id": "uuid",
+  "person_name": "Alex Johnson",
+  "facts": [
+    {
+      "id": "uuid",
+      "category": "work",
+      "content": "Works at Acme Corp as VP Engineering",
+      "confidence": 0.9,
+      "source": "calendar:meeting-uuid",
+      "created_at": "2026-01-15T...",
+      "confirmed": false
+    }
+  ]
+}
+```
+
+### POST /api/crm/people/{id}/facts/extract
+
+Trigger fact extraction for a person using LLM.
+
+### PUT /api/crm/people/{id}/facts/{fact_id}
+
+Update a fact's content or category.
+
+### DELETE /api/crm/people/{id}/facts/{fact_id}
+
+Delete a fact.
+
+### POST /api/crm/people/{id}/facts/{fact_id}/confirm
+
+Mark a fact as confirmed/verified.
+
+### GET /api/crm/review-queue
+
+Get pending entity links requiring human review.
+
+**Query Parameters:**
+- `min_confidence` (float): Minimum confidence threshold
+- `limit` (int): Max items to return
+
+### POST /api/crm/review-queue/{entity_id}/confirm
+
+Confirm an entity link (mark as correct).
+
+### POST /api/crm/review-queue/{entity_id}/reject
+
+Reject an entity link (mark as incorrect, will be unlinked).
+
 ### GET /api/crm/data-health
 
 Data coverage and sync health report.

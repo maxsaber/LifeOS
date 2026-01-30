@@ -445,6 +445,48 @@ The EntityResolver uses a **three-pass algorithm** with weighted scoring:
 
 ---
 
+## Person Merge and Split Operations
+
+### Person Merge
+
+When duplicate person records are discovered, they can be merged using `POST /api/crm/people/merge`. The merge operation combines all data from the secondary person into the primary person.
+
+**Merge Order of Operations:**
+
+1. **PersonEntity fields**: Combine emails, phones, aliases, sources, tags
+2. **Interactions**: Update all interaction person_id references
+3. **SourceEntities**: Redirect canonical_person_id links
+4. **PersonFacts**: Update fact associations
+5. **Relationships**: Merge or transfer relationship records (handling self-loops)
+6. **Durability**: Record merged ID in `data/merged_person_ids.json`
+7. **Delete**: Remove secondary PersonEntity
+8. **Recalculate**: Update relationship strength for primary person
+
+**Durability Tracking:**
+
+Merged person IDs are tracked to prevent recreation during entity resolution:
+```json
+// data/merged_person_ids.json
+{
+  "secondary-uuid-1": "primary-uuid-1",
+  "secondary-uuid-2": "primary-uuid-1"
+}
+```
+
+The EntityResolver checks this mapping and returns the primary ID when a previously-merged person would be recreated.
+
+### Entity Split
+
+When a PersonEntity incorrectly combines two different people, source entities can be split using `POST /api/crm/people/split`. This moves specific contact identifiers (email, phone) to a different person.
+
+**Split Operation:**
+1. Move selected SourceEntities to target person (existing or new)
+2. Update interaction person_id for affected source_entity_ids
+3. Optionally create LinkOverride rules to prevent future mis-linking
+4. Recalculate counts and strength for both people
+
+---
+
 ## Relationship Strength Scoring
 
 ### Strength Formula
@@ -517,6 +559,22 @@ The EntityResolver uses a **three-pass algorithm** with weighted scoring:
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Relationship Strength Bonuses
+
+The base strength calculation is augmented with bonuses for special relationships:
+
+| Bonus | Points | Condition |
+|-------|--------|-----------|
+| LinkedIn Connection | +5 | Person is a 1st-degree LinkedIn connection |
+| Family Member | +8 | Relationship type is "family" |
+
+**Final Strength Calculation:**
+```
+final_strength = min(100, base_strength + linkedin_bonus + family_bonus)
+```
+
+These bonuses only apply to relationships with the user (my_person_id) and are capped at 100.
 
 ### Strength Visualization
 
@@ -612,14 +670,14 @@ The network graph UI supports filtering edges by source type:
 | Control | Description |
 |---------|-------------|
 | Show Labels | Toggle node name labels |
-| Edge Strength | Filter by minimum edge weight (0-100%) |
+| Edge Weight | Filter by minimum edge weight (0-100%) |
 | Degree Filter | Show 1st degree only or 1st & 2nd degree |
 | Sources | Multi-select: Calendar, Email, iMessage, WhatsApp, Slack, LinkedIn |
 
 **Filter Behavior:**
 - Edge visible if ANY selected source has count > 0
-- Edge weight recalculated using only selected sources
-- Edge strength threshold applies to filtered weight
+- Edge weight threshold applies to normalized edge weight (0-100)
+- Source filter determines which edges are visible based on signal presence
 - Filter state preserved when navigating between nodes
 
 ### Edge Panel

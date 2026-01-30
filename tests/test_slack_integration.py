@@ -162,6 +162,7 @@ class TestSlackTokenStore:
         assert store2.get_token("T12345") == "xoxb-test-token"
 
 
+@patch("api.services.slack_integration.SLACK_USER_TOKEN", "")
 class TestSlackClient:
     """Tests for SlackClient."""
 
@@ -199,7 +200,7 @@ class TestSlackClient:
         with pytest.raises(SlackAPIError) as exc_info:
             client._api_call("test.method", workspace_id="default")
 
-        assert "No token" in str(exc_info.value)
+        assert "No token available" in str(exc_info.value)
 
 
 class TestCreateSlackSourceEntity:

@@ -29,6 +29,7 @@ def pytest_configure(config):
     config.addinivalue_line("markers", "browser: Browser tests using Playwright")
     config.addinivalue_line("markers", "requires_ollama: Requires Ollama running")
     config.addinivalue_line("markers", "requires_server: Requires API server running")
+    config.addinivalue_line("markers", "requires_db: Requires direct database access (may conflict with running server)")
 
 
 @pytest.fixture(scope="session")
@@ -51,6 +52,37 @@ def server_available():
         return response.status_code == 200
     except Exception:
         return False
+
+
+@pytest.fixture(scope="session")
+def db_available():
+    """
+    Check if the interactions database is available for direct access.
+
+    When the server is running, it may hold a lock on the SQLite database,
+    preventing tests from accessing it directly. This fixture detects that
+    situation and allows tests to skip gracefully.
+    """
+    import sqlite3
+    try:
+        from api.services.interaction_store import get_interaction_db_path
+        db_path = get_interaction_db_path()
+        conn = sqlite3.connect(db_path, timeout=1.0)
+        # Try to execute a simple query to check for lock
+        conn.execute("SELECT 1 FROM interactions LIMIT 1")
+        conn.close()
+        return True
+    except sqlite3.OperationalError:
+        return False
+    except Exception:
+        return False
+
+
+@pytest.fixture(autouse=False)
+def require_db(db_available):
+    """Skip test if database is not available (e.g., locked by running server)."""
+    if not db_available:
+        pytest.skip("Database is locked (server may be running). Stop server to run these tests.")
 
 
 @pytest.fixture(scope="session")

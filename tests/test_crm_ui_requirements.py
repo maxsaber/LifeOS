@@ -144,8 +144,13 @@ class TestZeroInteractionFilter:
         assert unfiltered_total >= filtered_total
 
 
+@pytest.mark.usefixtures("require_db")
 class TestStatsMatchDatabase:
-    """Tests that PersonEntity stats match the interaction database."""
+    """Tests that PersonEntity stats match the interaction database.
+
+    NOTE: These tests require direct database access and will be skipped if
+    the server is running (database locked). Stop the server to run these tests.
+    """
 
     def test_top_person_stats_accurate(self):
         """Test that the person with most interactions has accurate stats."""

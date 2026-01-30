@@ -150,7 +150,7 @@ D3.js force-directed graph visualization:
 
 **Filters:**
 - Show Labels toggle
-- Edge Strength slider (0-100%)
+- Edge Weight slider (0-100%)
 - Degree filter (1st only vs 1st & 2nd)
 - Source filter (Calendar, Email, iMessage, WhatsApp, Slack, LinkedIn)
 
@@ -179,6 +179,27 @@ function calculateEdgeWeight(edge, selectedSources) {
   return weight;
 }
 ```
+
+**Dynamic Edge Threshold:**
+
+When opening the graph view, the edge weight slider is automatically set to show approximately 25 nodes. This ensures a readable graph regardless of how many connections a person has:
+
+```javascript
+function calculateOptimalEdgeThreshold(nodes, links, centerId, targetNodeCount = 25) {
+  // Get first-degree edges connected to center
+  const firstDegreeEdges = links.filter(l =>
+    l.source === centerId || l.target === centerId
+  );
+
+  // If fewer than target, show all (threshold = 0)
+  if (firstDegreeNodeCount <= targetNodeCount) return 0;
+
+  // Binary search for threshold that shows ~25 nodes
+  // Returns percentage (0-100) for slider position
+}
+```
+
+The threshold is recalculated each time a different person is selected as the center node.
 
 ### Relationship Strength Visualization
 

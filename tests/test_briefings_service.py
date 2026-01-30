@@ -125,8 +125,13 @@ class TestBriefingContext:
         assert "Recent Activity" in context.interaction_history
 
 
+@pytest.mark.usefixtures("require_db")
 class TestBriefingsServiceV2Integration:
-    """Tests for v2 entity resolver and interaction store integration."""
+    """Tests for v2 entity resolver and interaction store integration.
+
+    NOTE: These tests require database access and will be skipped if
+    the server is running (database locked).
+    """
 
     def test_service_has_v2_properties(self):
         """Test that service exposes v2 properties."""
@@ -224,8 +229,13 @@ class TestBriefingsServiceV2Integration:
         assert context.resolved_name == "Yoni Landau"
 
 
+@pytest.mark.usefixtures("require_db")
 class TestBriefingsServiceGenerateBriefing:
-    """Tests for generate_briefing method."""
+    """Tests for generate_briefing method.
+
+    NOTE: These tests require database access and will be skipped if
+    the server is running (database locked).
+    """
 
     @pytest.mark.asyncio
     async def test_generate_briefing_includes_v2_fields(
@@ -295,8 +305,13 @@ class TestBriefingsServiceGenerateBriefing:
         assert result["person_name"] == "Yoni Landau"
 
 
+@pytest.mark.usefixtures("require_db")
 class TestVaultSearchImprovement:
-    """Tests for improved vault search behavior."""
+    """Tests for improved vault search behavior.
+
+    NOTE: These tests require database access and will be skipped if
+    the server is running (database locked).
+    """
 
     def test_vault_search_without_people_dictionary_restriction(self):
         """Test that vault search works for people not in PEOPLE_DICTIONARY."""
