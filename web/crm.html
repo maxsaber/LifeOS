@@ -1644,11 +1644,60 @@
         }
 
         /* Timeline tab */
+        .timeline-controls {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
         .timeline-filters {
             display: flex;
             gap: 0.5rem;
-            margin-bottom: 1rem;
             flex-wrap: wrap;
+        }
+
+        .timeline-date-range {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .timeline-date-range label {
+            color: var(--text-muted);
+        }
+
+        .timeline-date-range input[type="date"] {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            color: var(--text-primary);
+            color-scheme: dark;
+        }
+
+        .timeline-date-range input[type="date"]:focus {
+            outline: none;
+            border-color: var(--people);
+        }
+
+        .timeline-date-range button {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            transition: all 0.2s;
+        }
+
+        .timeline-date-range button:hover {
+            border-color: var(--people);
+            color: var(--people);
         }
 
         .timeline-filter-chip {
@@ -2891,12 +2940,25 @@
                     </div>
 
                     <div id="tabTimeline" class="tab-content" style="display:none">
-                        <div class="timeline-filters">
-                            <div class="timeline-filter-chip active" data-source="all" onclick="filterTimeline('all')">All</div>
-                            <div class="timeline-filter-chip" data-source="email" onclick="filterTimeline('email')">📧 Email</div>
-                            <div class="timeline-filter-chip" data-source="calendar" onclick="filterTimeline('calendar')">📅 Calendar</div>
-                            <div class="timeline-filter-chip" data-source="drive" onclick="filterTimeline('drive')">📄 Drive</div>
-                            <div class="timeline-filter-chip" data-source="message" onclick="filterTimeline('message')">💬 Message</div>
+                        <div class="timeline-controls">
+                            <div class="timeline-filters">
+                                <div class="timeline-filter-chip active" data-source="all" onclick="filterTimeline('all')">All</div>
+                                <div class="timeline-filter-chip" data-source="gmail" onclick="filterTimeline('gmail')">📧 Emails</div>
+                                <div class="timeline-filter-chip" data-source="calendar" onclick="filterTimeline('calendar')">📅 Events</div>
+                                <div class="timeline-filter-chip" data-source="messages" onclick="filterTimeline('messages')">💬 Messages</div>
+                                <div class="timeline-filter-chip" data-source="phone" onclick="filterTimeline('phone')">📞 Calls</div>
+                                <div class="timeline-filter-chip" data-source="slack" onclick="filterTimeline('slack')">💼 Slack</div>
+                                <div class="timeline-filter-chip" data-source="notes" onclick="filterTimeline('notes')">📝 Notes</div>
+                                <div class="timeline-filter-chip" data-source="contacts" onclick="filterTimeline('contacts')">📇 Contacts</div>
+                                <div class="timeline-filter-chip" data-source="linkedin" onclick="filterTimeline('linkedin')">🔗 LinkedIn</div>
+                            </div>
+                            <div class="timeline-date-range">
+                                <label>From:</label>
+                                <input type="date" id="timelineDateFrom" onchange="applyTimelineDateRange()">
+                                <label>To:</label>
+                                <input type="date" id="timelineDateTo" onchange="applyTimelineDateRange()">
+                                <button onclick="clearTimelineDateRange()" id="clearDateRangeBtn" style="display: none;">Clear</button>
+                            </div>
                         </div>
                         <div class="timeline" id="timelineContainer">
                             <div class="loading">Loading timeline...</div>
@@ -4114,12 +4176,15 @@
         const SOURCE_BADGES = {
             'imessage': { badge: String.fromCodePoint(0x1F4AC), label: 'iMessages' },
             'gmail': { badge: String.fromCodePoint(0x1F4E7), label: 'Emails' },
-            'calendar': { badge: String.fromCodePoint(0x1F4C5), label: 'Meetings' },
-            'slack': { badge: String.fromCodePoint(0x1F4DD), label: 'Slack' },
-            'linkedin': { badge: String.fromCodePoint(0x1F465), label: 'LinkedIn' },
-            'vault': { badge: String.fromCodePoint(0x1F4C4), label: 'Notes' },
+            'calendar': { badge: String.fromCodePoint(0x1F4C5), label: 'Events' },
+            'slack': { badge: String.fromCodePoint(0x1F4BC), label: 'Slack' },
+            'linkedin': { badge: String.fromCodePoint(0x1F517), label: 'LinkedIn' },
+            'vault': { badge: String.fromCodePoint(0x1F4DD), label: 'Notes' },
+            'granola': { badge: String.fromCodePoint(0x1F4DD), label: 'Notes' },
             'whatsapp': { badge: String.fromCodePoint(0x1F4F1), label: 'WhatsApp' },
-            'signal': { badge: String.fromCodePoint(0x1F510), label: 'Signal' }
+            'signal': { badge: String.fromCodePoint(0x1F510), label: 'Signal' },
+            'phone': { badge: String.fromCodePoint(0x1F4DE), label: 'Calls' },
+            'contacts': { badge: String.fromCodePoint(0x1F4C7), label: 'Contacts' }
         };
 
         // Load and render heat map
@@ -4333,7 +4398,13 @@
             if (timelineFilter !== 'all') {
                 items = timelineData.filter(item => {
                     const sourceType = (item.source_type || '').toLowerCase();
-                    return sourceType.includes(timelineFilter);
+                    // Handle combined filters
+                    if (timelineFilter === 'messages') {
+                        return sourceType === 'imessage' || sourceType === 'whatsapp';
+                    } else if (timelineFilter === 'notes') {
+                        return sourceType === 'vault' || sourceType === 'granola';
+                    }
+                    return sourceType === timelineFilter;
                 });
             }
 
@@ -4364,21 +4435,32 @@
                     <span>Showing ${formattedDate} (${items.length} interaction${items.length !== 1 ? 's' : ''})</span>
                     <button onclick="clearTimelineDateFilter()">Clear filter</button>
                 </div>
-            ` + items.map(item => `
+            ` + items.map(item => {
+                // Check if snippet is duplicate of title
+                const title = item.title || '';
+                const snippet = item.snippet || '';
+                const isDuplicate = snippet && (
+                    snippet === title ||
+                    snippet.trim() === title.trim() ||
+                    title.includes(snippet) ||
+                    snippet.includes(title)
+                );
+
+                return `
                 <div class="timeline-item">
                     <div class="timeline-badge">${item.source_badge || String.fromCodePoint(0x1F4C4)}</div>
                     <div class="timeline-content">
                         <div class="timeline-title">
-                            ${item.source_link ? `<a href="${item.source_link}" target="_blank">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
+                            ${item.source_link ? `<a href="${item.source_link}" target="_blank">${escapeHtml(title)}</a>` : escapeHtml(title)}
                         </div>
-                        ${item.snippet ? `<div class="timeline-snippet">${escapeHtml(item.snippet)}</div>` : ''}
+                        ${snippet && !isDuplicate ? `<div class="timeline-snippet">${escapeHtml(snippet)}</div>` : ''}
                         <div class="timeline-meta">
                             ${formatDate(item.timestamp)}
                             <span class="timeline-source-badge">${escapeHtml(item.source_type || 'Unknown')}</span>
                         </div>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
         }
 
         // Clear timeline date filter
@@ -4411,6 +4493,10 @@
         }
 
         // Render timeline with current filter
+        // Timeline date range state
+        let timelineDateRangeFrom = null;
+        let timelineDateRangeTo = null;
+
         function renderTimeline() {
             // If date filter is active, use the date-filtered render
             if (window.timelineDateFilter) {
@@ -4420,12 +4506,29 @@
 
             const container = document.getElementById('timelineContainer');
 
-            // Filter items
+            // Filter items by source type
             let items = timelineData;
             if (timelineFilter !== 'all') {
                 items = timelineData.filter(item => {
                     const sourceType = (item.source_type || '').toLowerCase();
-                    return sourceType.includes(timelineFilter);
+                    // Handle combined filters
+                    if (timelineFilter === 'messages') {
+                        return sourceType === 'imessage' || sourceType === 'whatsapp';
+                    } else if (timelineFilter === 'notes') {
+                        return sourceType === 'vault' || sourceType === 'granola';
+                    }
+                    return sourceType === timelineFilter;
+                });
+            }
+
+            // Apply date range filter if set
+            if (timelineDateRangeFrom || timelineDateRangeTo) {
+                items = items.filter(item => {
+                    const itemDate = new Date(item.timestamp);
+                    itemDate.setHours(0, 0, 0, 0);
+                    if (timelineDateRangeFrom && itemDate < timelineDateRangeFrom) return false;
+                    if (timelineDateRangeTo && itemDate > timelineDateRangeTo) return false;
+                    return true;
                 });
             }
 
@@ -4434,24 +4537,35 @@
                 return;
             }
 
-            container.innerHTML = items.map(item => `
+            container.innerHTML = items.map(item => {
+                // Check if snippet is duplicate of title (common for iMessage, WhatsApp)
+                const title = item.title || '';
+                const snippet = item.snippet || '';
+                const isDuplicate = snippet && (
+                    snippet === title ||
+                    snippet.trim() === title.trim() ||
+                    title.includes(snippet) ||
+                    snippet.includes(title)
+                );
+
+                return `
                 <div class="timeline-item">
                     <div class="timeline-badge">${item.source_badge || '📄'}</div>
                     <div class="timeline-content">
                         <div class="timeline-title">
-                            ${item.source_link ? `<a href="${item.source_link}" target="_blank">${escapeHtml(item.title)}</a>` : escapeHtml(item.title)}
+                            ${item.source_link ? `<a href="${item.source_link}" target="_blank">${escapeHtml(title)}</a>` : escapeHtml(title)}
                         </div>
-                        ${item.snippet ? `<div class="timeline-snippet">${escapeHtml(item.snippet)}</div>` : ''}
+                        ${snippet && !isDuplicate ? `<div class="timeline-snippet">${escapeHtml(snippet)}</div>` : ''}
                         <div class="timeline-meta">
                             ${formatDate(item.timestamp)}
                             <span class="timeline-source-badge">${escapeHtml(item.source_type || 'Unknown')}</span>
                         </div>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
         }
 
-        // Filter timeline
+        // Filter timeline by source type
         function filterTimeline(source) {
             timelineFilter = source;
 
@@ -4459,6 +4573,35 @@
             document.querySelectorAll('.timeline-filter-chip').forEach(c => c.classList.remove('active'));
             document.querySelector(`[data-source="${source}"]`).classList.add('active');
 
+            renderTimeline();
+        }
+
+        // Apply date range filter
+        function applyTimelineDateRange() {
+            const fromInput = document.getElementById('timelineDateFrom');
+            const toInput = document.getElementById('timelineDateTo');
+            const clearBtn = document.getElementById('clearDateRangeBtn');
+
+            timelineDateRangeFrom = fromInput.value ? new Date(fromInput.value + 'T00:00:00') : null;
+            timelineDateRangeTo = toInput.value ? new Date(toInput.value + 'T23:59:59') : null;
+
+            // Show/hide clear button
+            if (timelineDateRangeFrom || timelineDateRangeTo) {
+                clearBtn.style.display = '';
+            } else {
+                clearBtn.style.display = 'none';
+            }
+
+            renderTimeline();
+        }
+
+        // Clear date range filter
+        function clearTimelineDateRange() {
+            document.getElementById('timelineDateFrom').value = '';
+            document.getElementById('timelineDateTo').value = '';
+            document.getElementById('clearDateRangeBtn').style.display = 'none';
+            timelineDateRangeFrom = null;
+            timelineDateRangeTo = null;
             renderTimeline();
         }
 
