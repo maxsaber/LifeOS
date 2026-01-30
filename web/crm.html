@@ -2558,6 +2558,10 @@
                                             <span class="source-icon">💼</span> Slack
                                         </label>
                                         <label class="source-option">
+                                            <input type="checkbox" value="phone" checked onchange="updateSourceFilter()">
+                                            <span class="source-icon">📞</span> Phone
+                                        </label>
+                                        <label class="source-option">
                                             <input type="checkbox" value="linkedin" checked onchange="updateSourceFilter()">
                                             <span class="source-icon">🔗</span> LinkedIn
                                         </label>
@@ -2603,6 +2607,10 @@
                                 <div class="edge-panel-stat">
                                     <span class="edge-panel-stat-label">💼 Slack DMs</span>
                                     <span class="edge-panel-stat-value" id="edgePanelSlack">0</span>
+                                </div>
+                                <div class="edge-panel-stat">
+                                    <span class="edge-panel-stat-label">📞 Phone Calls</span>
+                                    <span class="edge-panel-stat-value" id="edgePanelPhone">0</span>
                                 </div>
                                 <div class="edge-panel-stat">
                                     <span class="edge-panel-stat-label">🔗 LinkedIn</span>
@@ -2834,7 +2842,7 @@
                         <div class="person-company">${escapeHtml(person.company || '')}</div>
                     </div>
                     <div class="person-strength">
-                        <div class="person-strength-bar" style="width: ${person.edge_weight_with_me || 0}%"></div>
+                        <div class="person-strength-bar" style="width: ${person.relationship_strength || 0}%"></div>
                     </div>
                 </div>
             `).join('');
@@ -2984,8 +2992,8 @@
         // Split Modal Functions
         // ===============================
 
-        let splitSourceEntities = [];
-        let selectedSplitSources = new Set();
+        let splitContactSources = [];  // Aggregated contact sources (emails, phones, etc.)
+        let selectedContactSources = new Set();  // Set of identifier keys (e.g., "email:foo@bar.com")
         let splitTargetType = null;  // 'existing' or 'new'
         let splitTargetPersonId = null;
         let splitFromPersonId = null;
@@ -2994,7 +3002,7 @@
             if (!selectedPersonId) return;
 
             splitFromPersonId = selectedPersonId;
-            selectedSplitSources.clear();
+            selectedContactSources.clear();
             splitTargetType = null;
             splitTargetPersonId = null;
 
@@ -3004,52 +3012,95 @@
 
             // Show modal
             document.getElementById('splitModal').classList.add('visible');
-            document.getElementById('splitSourceList').innerHTML = '<div class="loading">Loading sources...</div>';
+            document.getElementById('splitSourceList').innerHTML = '<div class="loading">Loading contact sources...</div>';
             updateSplitButton();
 
-            // Load source entities
+            // Load contact sources (aggregated by identifier: email, phone, etc.)
             try {
-                const data = await api(`/people/${selectedPersonId}/source-entities`);
-                splitSourceEntities = data.source_entities;
+                const data = await api(`/people/${selectedPersonId}/contact-sources`);
+                splitContactSources = data.contact_sources;
                 renderSplitSourceList();
             } catch (error) {
-                console.error('Failed to load source entities:', error);
+                console.error('Failed to load contact sources:', error);
                 document.getElementById('splitSourceList').innerHTML =
-                    '<div style="padding: 1rem; color: var(--error);">Failed to load sources</div>';
+                    '<div style="padding: 1rem; color: var(--error);">Failed to load contact sources</div>';
             }
         }
 
         function renderSplitSourceList() {
             const listEl = document.getElementById('splitSourceList');
 
-            if (splitSourceEntities.length === 0) {
-                listEl.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No source entities found</div>';
+            if (splitContactSources.length === 0) {
+                listEl.innerHTML = '<div style="padding: 1rem; color: var(--text-secondary);">No contact sources found</div>';
                 return;
             }
 
-            listEl.innerHTML = splitSourceEntities.map(se => `
-                <div class="split-source-item ${selectedSplitSources.has(se.id) ? 'selected' : ''}"
-                     onclick="toggleSplitSource('${se.id}')">
-                    <input type="checkbox" class="split-source-checkbox"
-                           ${selectedSplitSources.has(se.id) ? 'checked' : ''}
-                           onclick="event.stopPropagation(); toggleSplitSource('${se.id}')">
-                    <span class="split-source-badge">${se.source_type}</span>
-                    <div class="split-source-info">
-                        <div class="split-source-name">${escapeHtml(se.observed_name || se.observed_email || 'Unknown')}</div>
-                        <div class="split-source-meta">${escapeHtml(se.source_id_display || '')}</div>
+            // Icons for identifier types
+            const typeIcons = {
+                'email': '📧',
+                'phone': '📱',
+                'slack_user': '💬',
+                'linkedin_profile': '💼',
+                'name_only': '👤'
+            };
+
+            // Display names for identifier types
+            const typeLabels = {
+                'email': 'Email',
+                'phone': 'Phone',
+                'slack_user': 'Slack',
+                'linkedin_profile': 'LinkedIn',
+                'name_only': 'Name'
+            };
+
+            listEl.innerHTML = splitContactSources.map(cs => {
+                const key = `${cs.identifier_type}:${cs.identifier}`;
+                const isSelected = selectedContactSources.has(key);
+                const icon = typeIcons[cs.identifier_type] || '📄';
+                const label = typeLabels[cs.identifier_type] || cs.identifier_type;
+                const names = cs.observed_names?.length > 0 ? cs.observed_names.join(', ') : '';
+                const sources = cs.source_types?.join(', ') || '';
+
+                return `
+                    <div class="split-source-item ${isSelected ? 'selected' : ''}"
+                         onclick="toggleContactSource('${escapeHtml(key)}')">
+                        <input type="checkbox" class="split-source-checkbox"
+                               ${isSelected ? 'checked' : ''}
+                               onclick="event.stopPropagation(); toggleContactSource('${escapeHtml(key)}')">
+                        <span class="split-source-badge">${icon} ${label}</span>
+                        <div class="split-source-info">
+                            <div class="split-source-name">${escapeHtml(cs.identifier)}</div>
+                            <div class="split-source-meta">
+                                ${names ? `Names: ${escapeHtml(names)} · ` : ''}
+                                Sources: ${escapeHtml(sources)} ·
+                                ${cs.observation_count} observation${cs.observation_count !== 1 ? 's' : ''}
+                            </div>
+                        </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
-        function toggleSplitSource(sourceId) {
-            if (selectedSplitSources.has(sourceId)) {
-                selectedSplitSources.delete(sourceId);
+        function toggleContactSource(key) {
+            if (selectedContactSources.has(key)) {
+                selectedContactSources.delete(key);
             } else {
-                selectedSplitSources.add(sourceId);
+                selectedContactSources.add(key);
             }
             renderSplitSourceList();
             updateSplitButton();
+        }
+
+        // Get all source_entity_ids for selected contact sources
+        function getSelectedSourceEntityIds() {
+            const allIds = [];
+            for (const key of selectedContactSources) {
+                const cs = splitContactSources.find(c => `${c.identifier_type}:${c.identifier}` === key);
+                if (cs && cs.source_entity_ids) {
+                    allIds.push(...cs.source_entity_ids);
+                }
+            }
+            return allIds;
         }
 
         function setSplitTarget(type) {
@@ -3110,36 +3161,38 @@
             const btn = document.getElementById('splitConfirmBtn');
             const countEl = document.getElementById('splitCount');
 
-            countEl.textContent = selectedSplitSources.size;
+            countEl.textContent = selectedContactSources.size;
 
             // Enable if we have sources selected AND a valid target
             const hasTarget = (splitTargetType === 'existing' && splitTargetPersonId) ||
                               (splitTargetType === 'new' && document.getElementById('splitNewPersonName').value.trim());
-            const hasSelection = selectedSplitSources.size > 0;
+            const hasSelection = selectedContactSources.size > 0;
 
             btn.disabled = !(hasSelection && hasTarget);
         }
 
         function closeSplitModal() {
             document.getElementById('splitModal').classList.remove('visible');
-            splitSourceEntities = [];
-            selectedSplitSources.clear();
+            splitContactSources = [];
+            selectedContactSources.clear();
             splitTargetType = null;
             splitTargetPersonId = null;
             splitFromPersonId = null;
         }
 
         async function confirmSplit() {
-            if (selectedSplitSources.size === 0) return;
+            if (selectedContactSources.size === 0) return;
 
             const btn = document.getElementById('splitConfirmBtn');
             btn.disabled = true;
             btn.textContent = 'Splitting...';
 
             try {
+                // Get all source entity IDs from selected contact sources
+                const sourceEntityIds = getSelectedSourceEntityIds();
                 const requestBody = {
                     from_person_id: splitFromPersonId,
-                    source_entity_ids: [...selectedSplitSources],
+                    source_entity_ids: sourceEntityIds,
                     create_overrides: document.getElementById('splitCreateOverrides').checked
                 };
 
@@ -3491,9 +3544,10 @@
                     if (count >= 10) level = 4;
                     if (count >= 20) level = 5;
 
-                    // Track month changes for labels
+                    // Track month changes - place label when we hit the 1st of a month
                     const currentMonth = currentDate.getMonth();
-                    if (currentMonth !== lastMonth && day === 0) {
+                    const isFirstOfMonth = currentDate.getDate() === 1;
+                    if (currentMonth !== lastMonth && isFirstOfMonth && currentDate >= startDate && currentDate <= endDate) {
                         const monthName = currentDate.toLocaleDateString('en-US', { month: 'short' });
                         monthLabels.push({ weekIndex, monthName });
                         lastMonth = currentMonth;
@@ -3515,9 +3569,15 @@
 
             grid.innerHTML = weeksHtml;
 
-            // Generate month labels
+            // Generate month labels - position them where the 1st of each month appears
             const totalWeeks = weekIndex;
             let monthsHtml = '';
+
+            // Add initial spacer if first month doesn't start at week 0
+            if (monthLabels.length > 0 && monthLabels[0].weekIndex > 0) {
+                monthsHtml += `<div class="heatmap-month-label" style="flex: ${monthLabels[0].weekIndex}"></div>`;
+            }
+
             for (let i = 0; i < monthLabels.length; i++) {
                 const label = monthLabels[i];
                 const nextLabel = monthLabels[i + 1];
@@ -4129,6 +4189,9 @@
             if (selectedSources.includes('slack')) {
                 weight += (edge.shared_slack_count || 0);
             }
+            if (selectedSources.includes('phone')) {
+                weight += (edge.shared_phone_calls_count || 0) * 4;
+            }
             if (selectedSources.includes('linkedin') && edge.is_linkedin_connection) {
                 weight += 10;
             }
@@ -4142,8 +4205,64 @@
             if (selectedSources.includes('imessage') && (edge.shared_messages_count || 0) > 0) return true;
             if (selectedSources.includes('whatsapp') && (edge.shared_whatsapp_count || 0) > 0) return true;
             if (selectedSources.includes('slack') && (edge.shared_slack_count || 0) > 0) return true;
+            if (selectedSources.includes('phone') && (edge.shared_phone_calls_count || 0) > 0) return true;
             if (selectedSources.includes('linkedin') && edge.is_linkedin_connection) return true;
             return false;
+        }
+
+        // Calculate optimal edge strength threshold to show approximately targetNodeCount nodes
+        function calculateOptimalEdgeThreshold(nodes, links, centerId, targetNodeCount = 25) {
+            // Get all first-degree edges (connected to center)
+            const firstDegreeEdges = links.filter(l => l.source === centerId || l.target === centerId);
+
+            if (firstDegreeEdges.length === 0) return 0;
+
+            // Get weights of first-degree edges
+            const weights = firstDegreeEdges.map(l => l.weight);
+            const maxWeight = Math.max(1, ...weights);
+            const minWeight = Math.min(...weights);
+            const weightRange = Math.max(1, maxWeight - minWeight);
+
+            // Count first-degree nodes (excluding center)
+            const firstDegreeNodeIds = new Set();
+            firstDegreeEdges.forEach(l => {
+                if (l.source !== centerId) firstDegreeNodeIds.add(l.source);
+                if (l.target !== centerId) firstDegreeNodeIds.add(l.target);
+            });
+            const totalFirstDegree = firstDegreeNodeIds.size;
+
+            // If we have fewer than target, show all (threshold = 0)
+            if (totalFirstDegree <= targetNodeCount) return 0;
+
+            // Binary search for threshold that gives closest to target node count
+            let bestThreshold = 0;
+            let bestDiff = Infinity;
+
+            for (let percent = 0; percent <= 100; percent += 5) {
+                const threshold = minWeight + (weightRange * (percent / 100));
+
+                // Count nodes that would pass this threshold
+                const visibleNodes = new Set();
+                firstDegreeEdges.forEach(l => {
+                    if (l.weight >= threshold) {
+                        if (l.source !== centerId) visibleNodes.add(l.source);
+                        if (l.target !== centerId) visibleNodes.add(l.target);
+                    }
+                });
+
+                const nodeCount = visibleNodes.size;
+                const diff = Math.abs(nodeCount - targetNodeCount);
+
+                if (diff < bestDiff) {
+                    bestDiff = diff;
+                    bestThreshold = percent;
+                }
+
+                // If we're below target, higher thresholds will only show fewer nodes
+                if (nodeCount < targetNodeCount) break;
+            }
+
+            return bestThreshold;
         }
 
         // Load graph visualization using 2-degree network
@@ -4182,6 +4301,7 @@
                     shared_messages_count: edge.shared_messages_count || 0,
                     shared_whatsapp_count: edge.shared_whatsapp_count || 0,
                     shared_slack_count: edge.shared_slack_count || 0,
+                    shared_phone_calls_count: edge.shared_phone_calls_count || 0,
                     is_linkedin_connection: edge.is_linkedin_connection || false
                 }));
 
@@ -4195,6 +4315,16 @@
                 graphLinksAll = links;
                 graphContainer = container;
                 graphCenterId = personId;
+
+                // Calculate optimal edge strength threshold to show ~25 nodes
+                const optimalThreshold = calculateOptimalEdgeThreshold(nodes, links, personId, 25);
+
+                // Set the slider to the optimal value
+                const slider = document.getElementById('edgeStrengthSlider');
+                if (slider) {
+                    slider.value = optimalThreshold;
+                    document.getElementById('edgeStrengthValue').textContent = optimalThreshold + '%';
+                }
 
                 // Apply filters and render (will compute filtered subset)
                 applyGraphFilters();
@@ -4463,10 +4593,8 @@
                     .on('end', dragended))
                 .on('click', (event, d) => {
                     event.stopPropagation();
-                    // Save current filter values before navigating
-                    const slider = document.getElementById('edgeStrengthSlider');
+                    // Save current filter values before navigating (except edge strength - recalculated per person)
                     const degreeSelect = document.getElementById('degreeFilter');
-                    preservedEdgeStrength = slider ? parseInt(slider.value) : 0;
                     preservedDegreeFilter = degreeSelect ? degreeSelect.value : 'all';
                     preservedSourceFilter = getSelectedSources();
                     // Switch to this person's detail view, stay on Graph tab, and reload their graph
@@ -4678,6 +4806,7 @@
                 document.getElementById('edgePanelMessages').textContent = data.shared_messages_count || 0;
                 document.getElementById('edgePanelWhatsapp').textContent = data.shared_whatsapp_count || 0;
                 document.getElementById('edgePanelSlack').textContent = data.shared_slack_count || 0;
+                document.getElementById('edgePanelPhone').textContent = data.shared_phone_calls_count || 0;
                 document.getElementById('edgePanelLinkedin').textContent = data.is_linkedin_connection ? '✓ Connected' : '—';
 
                 // Format dates

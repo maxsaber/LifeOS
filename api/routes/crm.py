@@ -272,7 +272,6 @@ class PersonDetailResponse(BaseModel):
     first_seen: Optional[str] = None
     last_seen: Optional[str] = None
     relationship_strength: float = 0.0
-    edge_weight_with_me: int = 0  # Normalized edge weight (0-100) with the CRM owner
     source_entity_count: int = 0
     meeting_count: int = 0
     email_count: int = 0
@@ -399,11 +398,12 @@ class NetworkEdge(BaseModel):
     weight: int = 0
     type: str = "inferred"
     # Multi-source breakdown for filtering
-    shared_events_count: int = 0      # Calendar events
-    shared_threads_count: int = 0     # Email threads
-    shared_messages_count: int = 0    # iMessage/SMS
-    shared_whatsapp_count: int = 0    # WhatsApp
-    shared_slack_count: int = 0       # Slack DMs
+    shared_events_count: int = 0       # Calendar events
+    shared_threads_count: int = 0      # Email threads
+    shared_messages_count: int = 0     # iMessage/SMS
+    shared_whatsapp_count: int = 0     # WhatsApp
+    shared_slack_count: int = 0        # Slack DMs
+    shared_phone_calls_count: int = 0  # Phone calls
     is_linkedin_connection: bool = False
 
 
@@ -522,7 +522,6 @@ def _relationship_to_response(
 def _person_to_detail_response(
     person: PersonEntity,
     include_related: bool = True,
-    edge_weight_with_me: int = 0,
 ) -> PersonDetailResponse:
     """Convert PersonEntity to detailed API response."""
     # Fetch source entities first for category computation
@@ -553,7 +552,6 @@ def _person_to_detail_response(
         first_seen=person.first_seen.isoformat() if person.first_seen else None,
         last_seen=person.last_seen.isoformat() if person.last_seen else None,
         relationship_strength=computed_strength,
-        edge_weight_with_me=edge_weight_with_me,
         source_entity_count=person.source_entity_count,
         meeting_count=person.meeting_count,
         email_count=person.email_count,
@@ -657,21 +655,9 @@ async def list_people(
     has_more = offset + limit < total
     people = people[offset:offset + limit]
 
-    # Fetch edge weights with "me" for all people in one batch
-    rel_store = get_relationship_store()
-    my_person_id = settings.my_person_id
-    edge_weights = {}
-    if my_person_id:
-        # Get all relationships for "me" to build lookup
-        my_relationships = rel_store.get_for_person(my_person_id, limit=10000)
-        for rel in my_relationships:
-            other_id = rel.other_person(my_person_id)
-            if other_id:
-                edge_weights[other_id] = rel.edge_weight
-
     result = PersonListResponse(
         people=[
-            _person_to_detail_response(p, include_related=False, edge_weight_with_me=edge_weights.get(p.id, 0))
+            _person_to_detail_response(p, include_related=False)
             for p in people
         ],
         count=len(people),
@@ -844,6 +830,153 @@ class PersonSplitResponse(BaseModel):
     source_entities_moved: int
     interactions_moved: int
     overrides_created: int
+
+
+class ContactSource(BaseModel):
+    """An aggregated contact source - a unique identifier linked to a person.
+
+    This represents a meaningful unit for entity splitting:
+    - An email address (across gmail, calendar, etc.)
+    - A phone number (across iMessage, WhatsApp, calls)
+    - A Slack user ID
+    - A LinkedIn profile
+    """
+    identifier: str  # email address, phone number, or ID
+    identifier_type: str  # 'email', 'phone', 'slack_user', 'linkedin_profile'
+    source_types: list[str]  # Where this identifier appears (gmail, calendar, slack, etc.)
+    observation_count: int  # Number of individual observations
+    source_entity_ids: list[str]  # IDs for split operation
+    observed_names: list[str]  # Names seen with this identifier
+    first_seen: Optional[str] = None
+    last_seen: Optional[str] = None
+
+
+@router.get("/people/{person_id}/contact-sources")
+async def get_person_contact_sources(person_id: str):
+    """
+    Get aggregated contact sources linked to a person.
+
+    Unlike source-entities which returns individual observations,
+    this returns unique contact identifiers (emails, phones, etc.)
+    that can be meaningfully split to another person.
+
+    For entity resolution, what matters is:
+    - This email address is linked to Person A
+    - This phone number is linked to Person A
+
+    Not: "Message #12345 is linked to Person A"
+    """
+    import sqlite3
+    from pathlib import Path
+    from collections import defaultdict
+
+    person_store = get_person_entity_store()
+    person = person_store.get_by_id(person_id)
+
+    if not person:
+        raise HTTPException(status_code=404, detail=f"Person '{person_id}' not found")
+
+    crm_db = Path(__file__).parent.parent.parent / "data" / "crm.db"
+    conn = sqlite3.connect(crm_db)
+    conn.row_factory = sqlite3.Row
+
+    # Get all source entities for this person
+    cursor = conn.execute("""
+        SELECT id, source_type, source_id, observed_name, observed_email, observed_phone,
+               observed_at
+        FROM source_entities
+        WHERE canonical_person_id = ?
+    """, (person_id,))
+
+    # Aggregate by unique identifier
+    # Key: (identifier_type, identifier) -> list of source entity info
+    aggregated: dict[tuple[str, str], dict] = {}
+
+    for row in cursor:
+        source_type = row['source_type']
+        observed_email = row['observed_email']
+        observed_phone = row['observed_phone']
+        source_id = row['source_id']
+        observed_name = row['observed_name']
+        observed_at = row['observed_at']
+        entity_id = row['id']
+
+        # Determine the identifier based on source type
+        # Email-based sources
+        if observed_email:
+            key = ('email', observed_email.lower())
+        # Phone-based sources
+        elif observed_phone:
+            key = ('phone', observed_phone)
+        # ID-based sources (Slack, LinkedIn)
+        elif source_type == 'slack' and source_id:
+            key = ('slack_user', source_id)
+        elif source_type == 'linkedin' and source_id:
+            key = ('linkedin_profile', source_id)
+        elif source_type in ('vault', 'granola') and observed_name:
+            # For vault/granola, group by name since there's no email/phone
+            key = ('name_only', observed_name.lower())
+        else:
+            # Skip entities without meaningful identifiers
+            continue
+
+        if key not in aggregated:
+            aggregated[key] = {
+                'identifier': key[1],
+                'identifier_type': key[0],
+                'source_types': set(),
+                'source_entity_ids': [],
+                'observed_names': set(),
+                'first_seen': observed_at,
+                'last_seen': observed_at,
+            }
+
+        agg = aggregated[key]
+        agg['source_types'].add(source_type)
+        agg['source_entity_ids'].append(entity_id)
+        if observed_name:
+            agg['observed_names'].add(observed_name)
+
+        # Update first/last seen
+        if observed_at:
+            if not agg['first_seen'] or observed_at < agg['first_seen']:
+                agg['first_seen'] = observed_at
+            if not agg['last_seen'] or observed_at > agg['last_seen']:
+                agg['last_seen'] = observed_at
+
+    conn.close()
+
+    # Convert to response format
+    contact_sources = []
+    for key, agg in aggregated.items():
+        contact_sources.append(ContactSource(
+            identifier=agg['identifier'],
+            identifier_type=agg['identifier_type'],
+            source_types=sorted(agg['source_types']),
+            observation_count=len(agg['source_entity_ids']),
+            source_entity_ids=agg['source_entity_ids'],
+            observed_names=sorted(agg['observed_names'])[:5],  # Limit to 5 names
+            first_seen=agg['first_seen'],
+            last_seen=agg['last_seen'],
+        ))
+
+    # Sort: emails first, then phones, then by observation count
+    type_order = {'email': 0, 'phone': 1, 'slack_user': 2, 'linkedin_profile': 3, 'name_only': 4}
+    contact_sources.sort(key=lambda cs: (
+        type_order.get(cs.identifier_type, 99),
+        -cs.observation_count
+    ))
+
+    # Summary counts
+    total_observations = sum(cs.observation_count for cs in contact_sources)
+
+    return {
+        'person_id': person_id,
+        'person_name': person.canonical_name,
+        'contact_sources': [cs.model_dump() for cs in contact_sources],
+        'total_contact_sources': len(contact_sources),
+        'total_observations': total_observations,
+    }
 
 
 @router.get("/people/{person_id}/source-entities")
@@ -1946,6 +2079,7 @@ async def get_network_graph(
             shared_messages_count=rel.shared_messages_count or 0,
             shared_whatsapp_count=rel.shared_whatsapp_count or 0,
             shared_slack_count=rel.shared_slack_count or 0,
+            shared_phone_calls_count=rel.shared_phone_calls_count or 0,
             is_linkedin_connection=rel.is_linkedin_connection,
         ))
 

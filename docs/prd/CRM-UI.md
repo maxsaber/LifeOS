@@ -53,7 +53,7 @@ Signal export  ──┘                                    │  /crm page  │
 Verify that existing People System v2 data flows correctly through to CRM display. The CRM must accurately reflect data from all integrated sources.
 
 **Canonical Test Case:**
-Taylor (partner) - `annetaylorwalker@gmail.com`, `+19012295017`
+Alex (example contact) - `alex.johnson@email.com`, `+15551234567`
 
 This person should show:
 - ✓ Correct name, email, phone from multiple sources
@@ -65,7 +65,7 @@ This person should show:
 **Verification Query:**
 ```python
 # This should return populated data, not zeros
-person = person_store.find_by_email("annetaylorwalker@gmail.com")
+person = person_store.find_by_email("alex.johnson@email.com")
 assert person is not None
 assert person.interaction_count > 0
 assert len(person.sources) > 1
@@ -85,8 +85,8 @@ assert len(interactions) > 0
 [ ] PersonEntity.last_seen reflects most recent interaction
 [ ] Interaction store has records for Gmail, Calendar, Vault, iMessage
 [ ] Interactions correctly linked to PersonEntity by person_id
-[ ] Taylor test case passes with >50 interactions across >2 sources
-[ ] Yoni test case passes with calendar meetings and vault mentions
+[ ] Alex test case passes with >50 interactions across >2 sources
+[ ] Sam test case passes with calendar meetings and vault mentions
 [ ] Top 10 contacts by interaction count all have >0 interactions
 ```
 
@@ -120,10 +120,10 @@ API endpoint to list people with filtering, sorting, and pagination.
   "people": [
     {
       "id": "uuid",
-      "canonical_name": "Taylor Walker",
-      "display_name": "Taylor Walker",
-      "emails": ["annetaylorwalker@gmail.com"],
-      "phone_numbers": ["+19012295017"],
+      "canonical_name": "Alex Johnson",
+      "display_name": "Alex Johnson",
+      "emails": ["alex.johnson@email.com"],
+      "phone_numbers": ["+15551234567"],
       "company": null,
       "position": null,
       "category": "personal",
@@ -180,9 +180,9 @@ API endpoints to get full person detail and interaction timeline.
 ```json
 {
   "id": "uuid",
-  "canonical_name": "Taylor Walker",
-  "emails": ["annetaylorwalker@gmail.com"],
-  "phone_numbers": ["+19012295017"],
+  "canonical_name": "Alex Johnson",
+  "emails": ["alex.johnson@email.com"],
+  "phone_numbers": ["+15551234567"],
   "company": null,
   "category": "personal",
   "vault_contexts": ["Personal/Relationship/"],
@@ -197,7 +197,7 @@ API endpoints to get full person detail and interaction timeline.
   "first_seen": "2024-01-15T...",
   "last_seen": "2026-01-27T...",
   "relationship_strength": 0.92,
-  "aliases": ["Tay", "Anne Taylor Walker"]
+  "aliases": ["AJ", "A. Johnson"]
 }
 ```
 
@@ -220,7 +220,7 @@ API endpoints to get full person detail and interaction timeline.
       "source_type": "imessage",
       "title": "Text conversation",
       "snippet": "Hey, are you coming home for dinner?",
-      "source_link": "imessage://+19012295017"
+      "source_link": "imessage://+15551234567"
     },
     {
       "id": "interaction-uuid",
@@ -280,12 +280,12 @@ API endpoints to discover and display relationships between people.
   "connections": [
     {
       "person_id": "uuid",
-      "name": "Yoni Goldstein",
-      "company": "Movement Labs",
+      "name": "Sam Chen",
+      "company": "Acme Corp",
       "relationship_type": "coworker",
       "shared_events_count": 45,
       "shared_threads_count": 12,
-      "shared_contexts": ["Work/ML/"],
+      "shared_contexts": ["Work/Acme/"],
       "connection_strength": 0.78
     }
   ],
@@ -329,12 +329,12 @@ def discover_relationships(person_id: str) -> list[Relationship]:
 [ ] Connections discovered from shared email threads
 [ ] Connections discovered from vault co-mentions
 [ ] Connection strength calculated from interaction frequency
-[ ] Relationship type inferred from context (coworker if Work/ML/)
+[ ] Relationship type inferred from context (coworker if Work/Acme/)
 [ ] Connections sorted by strength descending
 [ ] No self-connections returned
 [ ] Performance: <1s for person with 50 connections
-[ ] Test: Yoni has connections to other ML employees
-[ ] Test: Taylor has connections to family members
+[ ] Test: Sam has connections to other Acme employees
+[ ] Test: Alex has connections to family members
 ```
 
 **Test File:** `tests/test_crm_connections.py`
@@ -361,8 +361,8 @@ Where:
 **Example Calculations:**
 | Person | Days Since | Interactions (90d) | Sources | Recency | Frequency | Diversity | Strength |
 |--------|------------|-------------------|---------|---------|-----------|-----------|----------|
-| Taylor | 1 | 50 | 4 (gmail, cal, imsg, vault) | 0.99 | 1.0 | 0.67 | 0.90 |
-| Yoni | 3 | 30 | 3 (gmail, cal, vault) | 0.97 | 1.0 | 0.50 | 0.84 |
+| Alex | 1 | 50 | 4 (gmail, cal, imsg, vault) | 0.99 | 1.0 | 0.67 | 0.90 |
+| Sam | 3 | 30 | 3 (gmail, cal, vault) | 0.97 | 1.0 | 0.50 | 0.84 |
 | Old friend | 60 | 2 | 1 (gmail) | 0.33 | 0.10 | 0.17 | 0.19 |
 
 **Acceptance Criteria:**
@@ -376,7 +376,7 @@ Where:
 [ ] Strength updates when new interactions recorded
 [ ] Strength persisted on PersonEntity
 [ ] Strength used for default sort in people list
-[ ] Test: Taylor strength > 0.8
+[ ] Test: Alex strength > 0.8
 [ ] Test: Inactive contact strength < 0.3
 ```
 
@@ -404,13 +404,13 @@ Main CRM page showing filterable, searchable list of people.
 ├───────────────────────┤                                     │
 │                       │                                     │
 │  ┌─────────────────┐  │  Select a person to view details    │
-│  │ 🔵 Taylor Walker│  │                                     │
+│  │ 🔵 Alex Johnson│  │                                     │
 │  │ Personal · 847  │  │                                     │
 │  │ ████████████░░ │  │                                     │
 │  └─────────────────┘  │                                     │
 │  ┌─────────────────┐  │                                     │
-│  │ 🔵 Yoni         │  │                                     │
-│  │ Movement Labs   │  │                                     │
+│  │ 🔵 Sam         │  │                                     │
+│  │ Acme Corp   │  │                                     │
 │  │ ████████░░░░░░ │  │                                     │
 │  └─────────────────┘  │                                     │
 │  ...                  │                                     │
@@ -448,16 +448,16 @@ Detail panel showing full information about selected person.
 **UI Components:**
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Taylor Walker                                    [← Back]  │
-│  annetaylorwalker@gmail.com · +1 901-229-5017              │
+│  Alex Johnson                                    [← Back]  │
+│  alex.johnson@email.com · +1 555-123-4567              │
 │  Personal · 847 interactions · Last seen: Today             │
 ├─────────────────────────────────────────────────────────────┤
 │  [Overview] [Timeline] [Connections] [Graph]                │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  Contact Information                                        │
-│  📧 annetaylorwalker@gmail.com                             │
-│  📱 +1 901-229-5017                                        │
+│  📧 alex.johnson@email.com                             │
+│  📱 +1 555-123-4567                                        │
 │                                                             │
 │  Statistics                                                 │
 │  📧 156 emails · 📅 23 meetings · 💬 656 texts             │
@@ -514,7 +514,7 @@ Chronological list of all interactions with a person.
 │  │                                                          │
 │  Jan 25                                                     │
 │  ├─ 📝 Mentioned in "Daily Note 2026-01-25"                │
-│  │  Discussed vacation plans with Taylor · [Open Note]     │
+│  │  Discussed vacation plans with Alex · [Open Note]     │
 │  │                                                          │
 │  [Load more...]                                             │
 └─────────────────────────────────────────────────────────────┘
@@ -533,7 +533,7 @@ Chronological list of all interactions with a person.
 [ ] iMessage shows conversation snippet
 [ ] Infinite scroll loads older interactions
 [ ] "No interactions" shown when empty
-[ ] Test: Taylor has >50 timeline items
+[ ] Test: Alex has >50 timeline items
 ```
 
 **Test File:** `tests/test_crm_ui_timeline.py`
@@ -555,7 +555,7 @@ D3.js force-directed graph showing relationship network.
 │                                                             │
 │              ○ Madi                                         │
 │             /    \                                          │
-│         ○ Yoni ── ● Taylor ── ○ Mom                        │
+│         ○ Sam ── ● Alex ── ○ Mom                        │
 │           \                   /                             │
 │            ○ Hayley ─────────○ Dad                         │
 │                                                             │
@@ -718,20 +718,20 @@ Parse exported chat files from WhatsApp (.txt) and Signal (.json).
 
 These tests verify end-to-end functionality using real data.
 
-### Test: Taylor Data Integrity
+### Test: Alex Data Integrity
 
 ```python
-def test_taylor_data_integrity():
+def test_primary_contact_data_integrity():
     """
-    Taylor is the primary test case - should have highest interaction count.
+    Alex is the primary test case - should have highest interaction count.
     """
     # Find by email
-    person = crm_api.search_people(q="annetaylorwalker@gmail.com")[0]
+    person = crm_api.search_people(q="alex.johnson@email.com")[0]
 
     # Basic info
-    assert person.canonical_name in ["Tay", "Taylor", "Anne Taylor Walker"]
-    assert "annetaylorwalker@gmail.com" in person.emails
-    assert "+19012295017" in person.phone_numbers
+    assert person.canonical_name in ["AJ", "Alex", "A. Johnson"]
+    assert "alex.johnson@email.com" in person.emails
+    assert "+15551234567" in person.phone_numbers
 
     # Interaction counts (should NOT be zero)
     assert person.interaction_count > 100, f"Expected >100 interactions, got {person.interaction_count}"
@@ -769,8 +769,8 @@ def test_work_contacts_have_context():
     """
     people = crm_api.list_people(category="work", limit=20)
 
-    ml_count = sum(1 for p in people if p.company == "Movement Labs" or "Work/ML/" in p.vault_contexts)
-    assert ml_count > 5, f"Expected >5 ML employees, got {ml_count}"
+    ml_count = sum(1 for p in people if p.company == "Acme Corp" or "Work/Acme/" in p.vault_contexts)
+    assert ml_count > 5, f"Expected >5 Acme employees, got {ml_count}"
 ```
 
 ---
@@ -791,7 +791,7 @@ def test_work_contacts_have_context():
 
 The CRM is complete when:
 
-1. **Taylor test passes**: >100 interactions, >3 sources, strength >0.8
+1. **Alex test passes**: >100 interactions, >3 sources, strength >0.8
 2. **Top 10 test passes**: All top contacts have non-zero interaction counts
 3. **Timeline works**: Shows real Gmail, Calendar, iMessage, Vault interactions
 4. **Graph renders**: Shows actual relationships from shared events
@@ -832,15 +832,16 @@ Track relationship signals from all communication sources, not just calendar and
 @dataclass
 class Relationship:
     # Existing fields
-    shared_events_count: int = 0      # Calendar events together
-    shared_threads_count: int = 0     # Email threads together
+    shared_events_count: int = 0       # Calendar events together
+    shared_threads_count: int = 0      # Email threads together
 
-    # NEW: Direct messaging counts
-    shared_messages_count: int = 0    # iMessage/SMS direct threads
-    shared_whatsapp_count: int = 0    # WhatsApp direct threads
-    shared_slack_count: int = 0       # Slack DM message count
+    # Direct messaging counts
+    shared_messages_count: int = 0     # iMessage/SMS direct threads
+    shared_whatsapp_count: int = 0     # WhatsApp direct threads
+    shared_slack_count: int = 0        # Slack DM message count
+    shared_phone_calls_count: int = 0  # Phone calls (synchronous voice)
 
-    # NEW: LinkedIn connection flag
+    # LinkedIn connection flag
     is_linkedin_connection: bool = False
 ```
 
@@ -904,11 +905,12 @@ class RelationshipDetailResponse(BaseModel):
     shared_contexts: list[str] = []
 
     # Source breakdown
-    shared_events_count: int = 0      # Calendar
-    shared_threads_count: int = 0     # Email
-    shared_messages_count: int = 0    # iMessage
-    shared_whatsapp_count: int = 0    # WhatsApp
-    shared_slack_count: int = 0       # Slack DMs
+    shared_events_count: int = 0       # Calendar
+    shared_threads_count: int = 0      # Email
+    shared_messages_count: int = 0     # iMessage
+    shared_whatsapp_count: int = 0     # WhatsApp
+    shared_slack_count: int = 0        # Slack DMs
+    shared_phone_calls_count: int = 0  # Phone calls
     is_linkedin_connection: bool = False
 
     # Computed totals
@@ -942,6 +944,7 @@ Edge Strength: [===|=======] 15%    Sources: [▼ All Sources]
                                            ☑ iMessage
                                            ☑ WhatsApp
                                            ☑ Slack
+                                           ☑ Phone
                                            ☑ LinkedIn
 ```
 
@@ -970,11 +973,12 @@ Update edge weight to sum contributions from all sources.
 **Weight Formula:**
 ```python
 weight = (
-    shared_events_count * 3 +      # Calendar meetings (high signal)
-    shared_threads_count * 2 +     # Email threads
-    shared_messages_count * 2 +    # iMessage threads
-    shared_whatsapp_count * 2 +    # WhatsApp threads
-    shared_slack_count * 1 +       # Slack DMs (weaker signal per message)
+    shared_events_count * 3 +       # Calendar meetings (high signal)
+    shared_threads_count * 2 +      # Email threads
+    shared_messages_count * 2 +     # iMessage threads
+    shared_whatsapp_count * 2 +     # WhatsApp threads
+    shared_slack_count * 1 +        # Slack DMs (weaker signal per message)
+    shared_phone_calls_count * 4 +  # Phone calls (highest - synchronous voice)
     (10 if is_linkedin_connection else 0)  # LinkedIn connection bonus
 )
 ```
@@ -985,3 +989,221 @@ weight = (
 [ ] Configurable weights per source type
 [ ] Graph filters respect new weight calculation
 ```
+
+---
+
+## Phase 13: Entity Management & Splitting
+
+### Conceptual Model
+
+The CRM uses a two-tier data model for managing people:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│                           TIER 1: Source Entities                        │
+│  Raw observations from data sources. Each message/event creates one.     │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  Gmail Message #123     Calendar Event #456     iMessage +15551234567   │
+│  ├─ observed_email      ├─ observed_email       ├─ observed_phone       │
+│  └─ observed_name       └─ observed_name        └─ observed_name        │
+│                                                                          │
+│         │                       │                       │                │
+│         └───────────────────────┼───────────────────────┘                │
+│                                 │                                        │
+│                                 ▼                                        │
+│                    ┌────────────────────────┐                            │
+│                    │   Entity Resolution    │                            │
+│                    │   (email/phone anchor) │                            │
+│                    └────────────────────────┘                            │
+│                                 │                                        │
+│                                 ▼                                        │
+├─────────────────────────────────────────────────────────────────────────┤
+│                        TIER 2: PersonEntity                              │
+│  Unified person record. Multiple identifiers link to one person.         │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  PersonEntity: "Alex Johnson"                                           │
+│  ├─ emails: ["alex.johnson@email.com"]                              │
+│  ├─ phone_numbers: ["+15551234567", "+15559876543"]                     │
+│  ├─ sources: [gmail, calendar, imessage, whatsapp, ...]                 │
+│  └─ interaction_count: 50,000+                                          │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Entity Resolution: How It Works
+
+When a new observation arrives (email, message, calendar event), the resolver determines which PersonEntity it belongs to:
+
+**Resolution Priority:**
+1. **Email exact match** - If observation has email, look up `_email_index[email]`
+2. **Phone exact match** - If observation has phone, look up `_phone_index[phone]`
+3. **Name fuzzy match** - Fall back to fuzzy name matching with context boost
+4. **Create new** - If no match, create new PersonEntity
+
+**Key Insight:** The **identifier** (email or phone) is the anchor for entity resolution, not the source type. If `foo@bar.com` is linked to Person A, ALL future observations with that email will link to Person A.
+
+### Contact Sources: The Splittable Unit
+
+When viewing/splitting a person's data, we aggregate SourceEntities into **Contact Sources** - the meaningful units for entity management:
+
+| Contact Source | Description | Example |
+|----------------|-------------|---------|
+| Email address | All observations with this email | `foo@bar.com` across Gmail, Calendar, Contacts |
+| Phone number | All observations with this phone | `+15551234567` across iMessage, WhatsApp, Phone |
+| Slack user | Slack workspace user ID | `U012345` in Slack |
+| LinkedIn profile | LinkedIn profile URL | LinkedIn connection |
+| Name only | Vault/Granola mentions (no email/phone) | Name mentions in notes |
+
+**Why not individual messages?**
+
+A person like Alex Johnson might have 50,000+ individual SourceEntities (one per message/email/event). But for entity resolution purposes, what matters is:
+- This email address belongs to Alex
+- This phone number belongs to Alex
+
+When splitting, you're saying "actually, this phone number belongs to a different person" - not "this specific text message belongs to a different person."
+
+### P13.1: Contact Sources API
+
+**Endpoint:** `GET /api/crm/people/{id}/contact-sources`
+
+Returns aggregated contact sources for a person, suitable for the split UI.
+
+**Response Schema:**
+```json
+{
+  "person_id": "uuid",
+  "person_name": "Alex Johnson",
+  "contact_sources": [
+    {
+      "identifier": "alex.johnson@email.com",
+      "identifier_type": "email",
+      "source_types": ["gmail", "calendar", "contacts", "linkedin"],
+      "observation_count": 49984,
+      "source_entity_ids": ["uuid1", "uuid2", ...],
+      "observed_names": ["Alex Johnson", "AJ"],
+      "first_seen": "2024-01-15T...",
+      "last_seen": "2026-01-29T..."
+    },
+    {
+      "identifier": "+15551234567",
+      "identifier_type": "phone",
+      "source_types": ["imessage", "whatsapp", "phone"],
+      "observation_count": 2,
+      "source_entity_ids": ["uuid3", "uuid4"],
+      "observed_names": ["AJ"],
+      "first_seen": "2024-06-01T...",
+      "last_seen": "2026-01-28T..."
+    }
+  ],
+  "total_contact_sources": 3,
+  "total_observations": 49987
+}
+```
+
+**Benefits over raw source-entities:**
+- Fast response (3 items vs 50,000+)
+- Meaningful units for splitting
+- Shows which data sources use each identifier
+- Aggregates all source_entity_ids for split operation
+
+### P13.2: Split Operation
+
+**Endpoint:** `POST /api/crm/people/split`
+
+Moves contact sources from one person to another.
+
+**Request:**
+```json
+{
+  "from_person_id": "uuid",
+  "to_person_id": "uuid",           // OR
+  "new_person_name": "New Person",  // Create new person
+  "source_entity_ids": ["uuid1", "uuid2", ...],  // All IDs from selected contact sources
+  "create_overrides": true          // Create disambiguation rules
+}
+```
+
+**What happens when you split:**
+1. All SourceEntities with selected IDs move to target person
+2. Related interactions move to target person
+3. PersonEntity email/phone lists update on both people
+4. Email/phone indexes update to point to new owner
+5. Link override rules created to prevent future mis-linking
+
+**Example Use Case:**
+You have two people both named "John" incorrectly merged. One John uses `john@company.com`, the other uses `john.smith@gmail.com`. To fix:
+1. Open split modal for merged "John"
+2. Select contact source `john.smith@gmail.com`
+3. Split to new person "John Smith"
+4. Now future emails from `john.smith@gmail.com` resolve to John Smith
+
+### P13.3: Link Overrides
+
+When you split contact sources, the system optionally creates **Link Override** rules that prevent future mis-linking.
+
+**Endpoint:** `GET /api/crm/link-overrides`
+
+**Override Types:**
+- Email-based: "email `x@y.com` should always link to Person B"
+- Name+context: "name `John` in Work/Acme/ context should link to Person A"
+
+**Why needed:**
+Without overrides, fuzzy name matching might re-link a split entity to the wrong person. Overrides ensure the split is durable.
+
+### UI: Split Modal
+
+The split modal shows contact sources (not individual messages):
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Split Sources from Alex Johnson                              [✕]     │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  Select contact sources to move:                                         │
+│                                                                          │
+│  ☐ 📧 Email: alex.johnson@email.com                                 │
+│     Sources: gmail, calendar, contacts · 49,984 observations            │
+│                                                                          │
+│  ☐ 📱 Phone: +15551234567                                               │
+│     Sources: imessage, whatsapp · 2 observations                        │
+│                                                                          │
+│  ☐ 📱 Phone: +15559876543                                               │
+│     Sources: whatsapp · 1 observation                                   │
+│                                                                          │
+├─────────────────────────────────────────────────────────────────────────┤
+│  Move to:                                                                │
+│  ○ Existing person: [Search...]                                         │
+│  ○ New person: [Name...]                                                │
+│                                                                          │
+│  ☑ Create override rules (prevents future mis-linking)                  │
+│                                                                          │
+│                                         [Cancel]  [Split 0 sources]     │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Acceptance Criteria
+
+```
+[ ] Contact sources endpoint aggregates by identifier (email, phone, etc.)
+[ ] Response includes all source_entity_ids for selected contact sources
+[ ] Split operation moves all source entities for selected contact sources
+[ ] Split updates email/phone indexes on both PersonEntities
+[ ] Link overrides created when requested
+[ ] UI shows contact sources, not individual messages
+[ ] UI displays identifier type icon (📧, 📱, 💬, 💼)
+[ ] UI shows which data sources use each identifier
+[ ] UI shows observation count per contact source
+[ ] Split modal loads in <500ms even for people with 50K+ observations
+```
+
+### Implementation Files
+
+| File | Purpose |
+|------|---------|
+| `api/routes/crm.py` | Contact sources endpoint, split endpoint |
+| `api/services/entity_resolver.py` | Entity resolution by email/phone |
+| `api/services/source_entity.py` | SourceEntity model and store |
+| `api/services/link_override.py` | Link override rules |
+| `web/crm.html` | Split modal UI |

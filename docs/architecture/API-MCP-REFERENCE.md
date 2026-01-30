@@ -57,7 +57,7 @@ Vector similarity search across indexed content.
   "query": "budget planning",
   "filters": {
     "note_type": ["meeting"],
-    "people": ["Yoni"],
+    "people": ["John"],
     "date_from": "2026-01-01",
     "date_to": "2026-01-31"
   },
@@ -257,26 +257,68 @@ Dashboard stats (counts by category, source, strength distribution).
 
 ### GET /api/crm/people/{id}/source-entities
 
-Get all source entities linked to a person (for split modal).
+Get raw source entities linked to a person (low-level, paginated).
+
+**Query Parameters:**
+- `limit` (int): Max entities to return (default: 500, max: 5000)
+- `offset` (int): Pagination offset
 
 **Response:**
 ```json
 {
   "person_id": "uuid",
   "person_name": "Name",
-  "total_count": 175,
-  "source_entities": [
+  "total_count": 49987,
+  "returned_count": 500,
+  "has_more": true,
+  "source_entities": [...]
+}
+```
+
+### GET /api/crm/people/{id}/contact-sources
+
+**Recommended for split UI.** Get aggregated contact sources (emails, phones, etc.) linked to a person.
+
+Contact sources are the meaningful units for entity splitting - each represents a unique identifier (email address, phone number) rather than individual messages.
+
+**Response:**
+```json
+{
+  "person_id": "uuid",
+  "person_name": "Alex Johnson",
+  "total_contact_sources": 3,
+  "total_observations": 49987,
+  "contact_sources": [
     {
-      "id": "uuid",
-      "source_type": "gmail",
-      "source_id": "message-id",
-      "observed_name": "Name",
-      "observed_email": "email@example.com",
-      "link_status": "auto|confirmed|rejected"
+      "identifier": "alex.johnson@email.com",
+      "identifier_type": "email",
+      "source_types": ["gmail", "calendar", "contacts"],
+      "observation_count": 49984,
+      "source_entity_ids": ["uuid1", "uuid2", "..."],
+      "observed_names": ["Alex Johnson", "Alex"],
+      "first_seen": "2024-01-15T...",
+      "last_seen": "2026-01-29T..."
+    },
+    {
+      "identifier": "+15551234567",
+      "identifier_type": "phone",
+      "source_types": ["imessage", "whatsapp"],
+      "observation_count": 2,
+      "source_entity_ids": ["uuid3", "uuid4"],
+      "observed_names": ["Alex"],
+      "first_seen": "2024-06-01T...",
+      "last_seen": "2026-01-28T..."
     }
   ]
 }
 ```
+
+**Identifier Types:**
+- `email` - Email address (appears in gmail, calendar, contacts, etc.)
+- `phone` - Phone number in E.164 format (appears in imessage, whatsapp, phone)
+- `slack_user` - Slack workspace user ID
+- `linkedin_profile` - LinkedIn profile URL
+- `name_only` - Vault/Granola mentions with no email/phone
 
 ### POST /api/crm/people/split
 
