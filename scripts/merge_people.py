@@ -177,9 +177,14 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
     if not secondary:
         raise ValueError(f"Secondary person not found: {secondary_id}")
 
+    # Use the canonical IDs from the resolved entities (follows merge chains)
+    # This ensures if B was already merged into C, merging A→B actually goes to C
+    canonical_primary_id = primary.id
+    canonical_secondary_id = secondary.id
+
     logger.info(f"Merging: '{secondary.canonical_name}' -> '{primary.canonical_name}'")
-    logger.info(f"  Primary ID: {primary_id}")
-    logger.info(f"  Secondary ID: {secondary_id}")
+    logger.info(f"  Primary ID: {primary_id}" + (f" (canonical: {canonical_primary_id})" if canonical_primary_id != primary_id else ""))
+    logger.info(f"  Secondary ID: {secondary_id}" + (f" (canonical: {canonical_secondary_id})" if canonical_secondary_id != secondary_id else ""))
 
     # 1. Merge identifying info into primary
     logger.info("\n1. Merging identifying info...")
@@ -234,7 +239,7 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
 
     cursor = int_conn.execute(
         "SELECT COUNT(*) FROM interactions WHERE person_id = ?",
-        (secondary_id,)
+        (canonical_secondary_id,)
     )
     count = cursor.fetchone()[0]
     stats['interactions_updated'] = count
@@ -243,7 +248,7 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
     if not dry_run and count > 0:
         int_conn.execute(
             "UPDATE interactions SET person_id = ? WHERE person_id = ?",
-            (primary_id, secondary_id)
+            (canonical_primary_id, canonical_secondary_id)
         )
         int_conn.commit()
     int_conn.close()
@@ -255,7 +260,7 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
 
     cursor = crm_conn.execute(
         "SELECT COUNT(*) FROM source_entities WHERE canonical_person_id = ?",
-        (secondary_id,)
+        (canonical_secondary_id,)
     )
     count = cursor.fetchone()[0]
     stats['source_entities_updated'] = count
@@ -264,7 +269,7 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
     if not dry_run and count > 0:
         crm_conn.execute(
             "UPDATE source_entities SET canonical_person_id = ? WHERE canonical_person_id = ?",
-            (primary_id, secondary_id)
+            (canonical_primary_id, canonical_secondary_id)
         )
         crm_conn.commit()
 
@@ -272,7 +277,7 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
     logger.info("\n4. Updating facts...")
     cursor = crm_conn.execute(
         "SELECT COUNT(*) FROM person_facts WHERE person_id = ?",
-        (secondary_id,)
+        (canonical_secondary_id,)
     )
     count = cursor.fetchone()[0]
     stats['facts_updated'] = count
@@ -281,7 +286,7 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
     if not dry_run and count > 0:
         crm_conn.execute(
             "UPDATE person_facts SET person_id = ? WHERE person_id = ?",
-            (primary_id, secondary_id)
+            (canonical_primary_id, canonical_secondary_id)
         )
         crm_conn.commit()
 
@@ -297,17 +302,17 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
     rel_store = get_relationship_store()
 
     # Get all relationships involving the secondary person
-    secondary_rels = rel_store.get_for_person(secondary_id)
+    secondary_rels = rel_store.get_for_person(canonical_secondary_id)
     logger.info(f"   {len(secondary_rels)} relationships to process")
 
     for rel in secondary_rels:
         # Find the "other" person in this relationship
-        other_id = rel.other_person(secondary_id)
+        other_id = rel.other_person(canonical_secondary_id)
         if not other_id:
             continue
 
         # Skip if other person is the primary (self-relationship after merge)
-        if other_id == primary_id:
+        if other_id == canonical_primary_id:
             # Delete this relationship - it would be a self-loop
             if not dry_run:
                 rel_store.delete(rel.id)
@@ -316,7 +321,7 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
             continue
 
         # Check if primary already has a relationship with the other person
-        existing = rel_store.get_between(primary_id, other_id)
+        existing = rel_store.get_between(canonical_primary_id, other_id)
 
         if existing:
             # Merge relationship data into existing
@@ -325,6 +330,7 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
             existing.shared_messages_count = (existing.shared_messages_count or 0) + (rel.shared_messages_count or 0)
             existing.shared_whatsapp_count = (existing.shared_whatsapp_count or 0) + (rel.shared_whatsapp_count or 0)
             existing.shared_slack_count = (existing.shared_slack_count or 0) + (rel.shared_slack_count or 0)
+            existing.shared_phone_calls_count = (existing.shared_phone_calls_count or 0) + (rel.shared_phone_calls_count or 0)
 
             # Merge shared contexts
             for ctx in (rel.shared_contexts or []):
@@ -354,8 +360,8 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
         else:
             # Transfer relationship to primary - create new to trigger normalization
             new_rel = Relationship(
-                person_a_id=primary_id if rel.person_a_id == secondary_id else rel.person_a_id,
-                person_b_id=primary_id if rel.person_b_id == secondary_id else rel.person_b_id,
+                person_a_id=canonical_primary_id if rel.person_a_id == canonical_secondary_id else rel.person_a_id,
+                person_b_id=canonical_primary_id if rel.person_b_id == canonical_secondary_id else rel.person_b_id,
                 relationship_type=rel.relationship_type,
                 shared_contexts=rel.shared_contexts,
                 shared_events_count=rel.shared_events_count,
@@ -363,6 +369,7 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
                 shared_messages_count=rel.shared_messages_count,
                 shared_whatsapp_count=rel.shared_whatsapp_count,
                 shared_slack_count=rel.shared_slack_count,
+                shared_phone_calls_count=rel.shared_phone_calls_count,
                 is_linkedin_connection=rel.is_linkedin_connection,
                 first_seen_together=rel.first_seen_together,
                 last_seen_together=rel.last_seen_together,
@@ -379,9 +386,13 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
     logger.info("\n6. Recording merge for durability...")
     if not dry_run:
         merged_ids = load_merged_ids()
-        merged_ids[secondary_id] = primary_id
+        # Record both the original secondary_id and canonical_secondary_id pointing to canonical primary
+        # This ensures lookups for either ID resolve correctly
+        merged_ids[secondary_id] = canonical_primary_id
+        if canonical_secondary_id != secondary_id:
+            merged_ids[canonical_secondary_id] = canonical_primary_id
         save_merged_ids(merged_ids)
-        logger.info(f"   Recorded: {secondary_id} -> {primary_id}")
+        logger.info(f"   Recorded: {secondary_id} -> {canonical_primary_id}")
 
     # 7. Update primary stats and delete secondary
     logger.info("\n7. Updating stats and cleaning up...")
@@ -407,7 +418,7 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
         store.update(primary)
 
         # Delete secondary
-        store.delete(secondary_id)
+        store.delete(canonical_secondary_id)
 
         # Save store
         store.save()
@@ -429,8 +440,8 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
 
     # Summary
     logger.info(f"\n=== Merge Summary ===")
-    logger.info(f"Primary: {primary.canonical_name} ({primary_id})")
-    logger.info(f"Secondary: {secondary.canonical_name} ({secondary_id})")
+    logger.info(f"Primary: {primary.canonical_name} ({canonical_primary_id})")
+    logger.info(f"Secondary: {secondary.canonical_name} ({canonical_secondary_id})")
     logger.info(f"Interactions updated: {stats['interactions_updated']}")
     logger.info(f"Source entities updated: {stats['source_entities_updated']}")
     logger.info(f"Facts updated: {stats['facts_updated']}")
