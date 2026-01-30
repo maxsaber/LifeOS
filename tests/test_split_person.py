@@ -249,3 +249,105 @@ class TestSplitPersonConsistency:
         # - Merge: primary.email_count = primary.email_count + secondary.email_count
         # - Split: primary.email_count = COUNT(*) FROM interactions WHERE person_id = primary
         pass
+
+
+class TestVaultSourceEntityCreation:
+    """Tests for vault/granola source entity factory functions."""
+
+    def test_vault_source_entity_has_correct_type(self):
+        """Vault source entity has source_type='vault'."""
+        from api.services.source_entity import create_vault_source_entity
+
+        entity = create_vault_source_entity(
+            file_path="/vault/note.md",
+            person_name="John Doe",
+        )
+
+        assert entity.source_type == "vault"
+
+    def test_vault_source_entity_has_unique_source_id(self):
+        """Source ID combines file path and person name."""
+        from api.services.source_entity import create_vault_source_entity
+
+        entity = create_vault_source_entity(
+            file_path="/vault/note.md",
+            person_name="John Doe",
+        )
+
+        assert entity.source_id == "/vault/note.md:John Doe"
+
+    def test_vault_source_entity_captures_observed_name(self):
+        """observed_name is set to the person name."""
+        from api.services.source_entity import create_vault_source_entity
+
+        entity = create_vault_source_entity(
+            file_path="/vault/note.md",
+            person_name="John Doe",
+        )
+
+        assert entity.observed_name == "John Doe"
+
+    def test_vault_source_entity_preserves_metadata(self):
+        """Metadata is stored on the entity."""
+        from api.services.source_entity import create_vault_source_entity
+
+        entity = create_vault_source_entity(
+            file_path="/vault/note.md",
+            person_name="John Doe",
+            metadata={"note_title": "Meeting Notes", "is_granola": False},
+        )
+
+        assert entity.metadata["note_title"] == "Meeting Notes"
+        assert entity.metadata["is_granola"] is False
+
+    def test_granola_source_entity_has_correct_type(self):
+        """Granola source entity has source_type='granola'."""
+        from api.services.source_entity import create_granola_source_entity
+
+        entity = create_granola_source_entity(
+            file_path="/vault/meeting.md",
+            person_name="Jane Smith",
+        )
+
+        assert entity.source_type == "granola"
+
+    def test_granola_source_entity_has_unique_source_id(self):
+        """Granola source ID combines file path and person name."""
+        from api.services.source_entity import create_granola_source_entity
+
+        entity = create_granola_source_entity(
+            file_path="/vault/meeting.md",
+            person_name="Jane Smith",
+        )
+
+        assert entity.source_id == "/vault/meeting.md:Jane Smith"
+
+    def test_source_entities_are_distinguishable_per_person_per_file(self):
+        """Different people in same file get different source entities."""
+        from api.services.source_entity import create_vault_source_entity
+
+        entity1 = create_vault_source_entity(
+            file_path="/vault/meeting.md",
+            person_name="Alice",
+        )
+        entity2 = create_vault_source_entity(
+            file_path="/vault/meeting.md",
+            person_name="Bob",
+        )
+
+        assert entity1.source_id != entity2.source_id
+        assert entity1.source_id == "/vault/meeting.md:Alice"
+        assert entity2.source_id == "/vault/meeting.md:Bob"
+
+    def test_source_entities_use_observed_at_for_timestamp(self):
+        """observed_at is set from the provided timestamp."""
+        from api.services.source_entity import create_vault_source_entity
+
+        note_date = datetime(2024, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+        entity = create_vault_source_entity(
+            file_path="/vault/note.md",
+            person_name="John Doe",
+            observed_at=note_date,
+        )
+
+        assert entity.observed_at == note_date

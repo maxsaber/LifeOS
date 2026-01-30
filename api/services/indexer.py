@@ -9,7 +9,7 @@ import time
 import threading
 import logging
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
 
@@ -26,6 +26,11 @@ try:
         get_interaction_store,
         create_vault_interaction,
         build_obsidian_link,
+    )
+    from api.services.source_entity import (
+        get_source_entity_store,
+        create_vault_source_entity,
+        create_granola_source_entity,
     )
     HAS_V2_PEOPLE = True
 except ImportError:
@@ -330,12 +335,13 @@ class IndexerService:
         is_granola: bool = False,
     ) -> None:
         """
-        Resolve extracted people and create vault mention interactions.
+        Resolve extracted people and create vault mention interactions and source entities.
 
         Hooks into the v2 people system to:
         1. Resolve each person name to a PersonEntity (creating if needed)
         2. Create an interaction record for the vault mention
-        3. Update entity stats (mention_count, related_notes)
+        3. Create a source entity for the vault/granola mention (for split UI)
+        4. Update entity stats (mention_count, related_notes)
 
         Args:
             path: Path to the note file
@@ -348,6 +354,7 @@ class IndexerService:
 
         resolver = get_entity_resolver()
         interaction_store = get_interaction_store()
+        source_entity_store = get_source_entity_store()
         file_path_str = str(path.resolve())
         note_title = path.stem  # filename without .md
 
@@ -383,6 +390,35 @@ class IndexerService:
 
                 # Add interaction (avoiding duplicates on re-index)
                 _, was_added = interaction_store.add_if_not_exists(interaction)
+
+                # Create source entity for split UI visibility
+                # This uses add_or_update so re-indexing won't create duplicates
+                source_metadata = {
+                    "note_title": note_title,
+                    "is_granola": is_granola,
+                }
+                if is_granola:
+                    source_entity = create_granola_source_entity(
+                        file_path=file_path_str,
+                        person_name=person_name,
+                        observed_at=note_date,
+                        metadata=source_metadata,
+                    )
+                else:
+                    source_entity = create_vault_source_entity(
+                        file_path=file_path_str,
+                        person_name=person_name,
+                        observed_at=note_date,
+                        metadata=source_metadata,
+                    )
+
+                # Link to the resolved person
+                source_entity.canonical_person_id = entity.id
+                source_entity.link_confidence = result.confidence
+                source_entity.linked_at = datetime.now(timezone.utc)
+
+                # Add or update (handles duplicates on re-index)
+                source_entity_store.add_or_update(source_entity)
 
                 if was_added:
                     # Update entity stats

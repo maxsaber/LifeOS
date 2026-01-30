@@ -892,3 +892,62 @@ def create_linkedin_source_entity(
         observed_at=observed_at or datetime.now(timezone.utc),
         metadata=metadata or {},
     )
+
+
+def create_vault_source_entity(
+    file_path: str,
+    person_name: str,
+    observed_at: Optional[datetime] = None,
+    metadata: Optional[dict] = None,
+) -> SourceEntity:
+    """
+    Create a source entity from a vault mention.
+
+    Args:
+        file_path: Path to the vault note file
+        person_name: Name of the person mentioned
+        observed_at: When the note was created/modified
+        metadata: Additional metadata (note_title, is_granola, etc.)
+
+    Returns:
+        SourceEntity for this vault mention
+    """
+    # Use file_path:person_name as unique source_id
+    # This ensures each person mention per note is tracked separately
+    source_id = f"{file_path}:{person_name}"
+    return SourceEntity(
+        source_type="vault",
+        source_id=source_id,
+        observed_name=person_name,
+        observed_at=observed_at or datetime.now(timezone.utc),
+        metadata=metadata or {},
+    )
+
+
+def create_granola_source_entity(
+    file_path: str,
+    person_name: str,
+    observed_at: Optional[datetime] = None,
+    metadata: Optional[dict] = None,
+) -> SourceEntity:
+    """
+    Create a source entity from a Granola meeting note mention.
+
+    Args:
+        file_path: Path to the Granola note file
+        person_name: Name of the person mentioned
+        observed_at: When the meeting occurred
+        metadata: Additional metadata (note_title, granola_id, etc.)
+
+    Returns:
+        SourceEntity for this Granola mention
+    """
+    # Use file_path:person_name as unique source_id
+    source_id = f"{file_path}:{person_name}"
+    return SourceEntity(
+        source_type="granola",
+        source_id=source_id,
+        observed_name=person_name,
+        observed_at=observed_at or datetime.now(timezone.utc),
+        metadata=metadata or {},
+    )
