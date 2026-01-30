@@ -292,6 +292,28 @@
             transition: width 0.3s;
         }
 
+        .dunbar-badge {
+            font-size: 0.625rem;
+            font-weight: 600;
+            min-width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: var(--bg-primary);
+            color: var(--text-secondary);
+            margin-left: 0.5rem;
+        }
+
+        .dunbar-badge.circle-0 { background: #e94560; color: white; }
+        .dunbar-badge.circle-1 { background: #ff6b6b; color: white; }
+        .dunbar-badge.circle-2 { background: #ffa502; color: white; }
+        .dunbar-badge.circle-3 { background: #2ed573; color: white; }
+        .dunbar-badge.circle-4 { background: #1e90ff; color: white; }
+        .dunbar-badge.circle-5 { background: #5352ed; color: white; }
+        .dunbar-badge.circle-6 { background: #747d8c; color: white; }
+
         .source-badges {
             display: flex;
             gap: 0.25rem;
@@ -1040,12 +1062,150 @@
             color: var(--text-primary);
         }
 
-        /* Quick stats cards */
+        /* Hero Stats Row - Compact inline stats */
+        .hero-stats {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.875rem 1rem;
+            background: linear-gradient(135deg, rgba(22, 33, 62, 0.6) 0%, rgba(15, 52, 96, 0.4) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .hero-stat {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.3rem 0.625rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 16px;
+            font-size: 0.8125rem;
+            transition: all 0.2s ease;
+            cursor: default;
+        }
+
+        .hero-stat:hover {
+            background: rgba(0, 188, 212, 0.15);
+        }
+
+        .hero-stat-icon {
+            font-size: 0.8125rem;
+            opacity: 0.9;
+        }
+
+        .hero-stat-value {
+            font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+            font-weight: 600;
+            color: var(--people);
+        }
+
+        .hero-stat-label {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+        }
+
+        .hero-stat-divider {
+            width: 1px;
+            height: 18px;
+            background: var(--border);
+            margin: 0 0.125rem;
+        }
+
+        /* Strength ring in hero stats */
+        .hero-strength {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: auto;
+            padding-left: 0.5rem;
+        }
+
+        .strength-ring {
+            position: relative;
+            width: 32px;
+            height: 32px;
+        }
+
+        .strength-ring svg {
+            transform: rotate(-90deg);
+        }
+
+        .strength-ring-bg {
+            fill: none;
+            stroke: var(--bg-tertiary);
+            stroke-width: 3;
+        }
+
+        .strength-ring-fill {
+            fill: none;
+            stroke: var(--people);
+            stroke-width: 3;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.5s ease;
+        }
+
+        .strength-ring-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+            font-size: 0.5625rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .hero-strength-label {
+            font-size: 0.625rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        /* Dunbar circle in hero stats */
+        .hero-dunbar {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding-left: 0.75rem;
+            border-left: 1px solid var(--border);
+            margin-left: 0.5rem;
+        }
+
+        .dunbar-circle-indicator {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .dunbar-circle-indicator.circle-0 { background: #e94560; }
+        .dunbar-circle-indicator.circle-1 { background: #ff6b6b; }
+        .dunbar-circle-indicator.circle-2 { background: #ffa502; }
+        .dunbar-circle-indicator.circle-3 { background: #2ed573; }
+        .dunbar-circle-indicator.circle-4 { background: #1e90ff; }
+        .dunbar-circle-indicator.circle-5 { background: #5352ed; }
+        .dunbar-circle-indicator.circle-6 { background: #747d8c; }
+
+        .hero-dunbar-label {
+            font-size: 0.625rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        /* Legacy stats cards - hidden by default, kept for backwards compatibility */
         .stats-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-            gap: 0.75rem;
-            margin-bottom: 1.5rem;
+            display: none;
         }
 
         .stat-card {
@@ -1085,7 +1245,7 @@
             border: 1px solid var(--border);
             border-radius: 8px;
             padding: 1rem;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
             overflow-x: auto;
         }
 
@@ -1116,18 +1276,29 @@
             border-radius: 2px;
         }
 
+        .heatmap-scroll-wrapper {
+            overflow-x: auto;
+            overflow-y: hidden;
+        }
+
+        .heatmap-inner {
+            min-width: fit-content;
+        }
+
         .heatmap-months {
             display: flex;
-            padding-left: 24px;
             margin-bottom: 4px;
             font-size: 0.625rem;
             color: var(--text-muted);
+            padding-left: 28px; /* Aligns with grid (weekday labels width + margin) */
+            gap: 2px; /* Match the grid gap */
         }
 
         .heatmap-month-label {
-            flex: 1;
             text-align: left;
-            min-width: 0;
+            white-space: nowrap;
+            overflow: hidden;
+            /* Width set dynamically via JS to match week columns */
         }
 
         .heatmap-body {
@@ -1142,12 +1313,13 @@
             margin-right: 4px;
             font-size: 0.5625rem;
             color: var(--text-muted);
+            flex-shrink: 0;
         }
 
         .heatmap-weekday {
             height: 10px;
             line-height: 10px;
-            width: 20px;
+            width: 24px;
             text-align: right;
         }
 
@@ -1158,6 +1330,7 @@
         .heatmap-grid {
             display: flex;
             gap: 2px;
+            flex: 1;
         }
 
         .heatmap-week {
@@ -1290,6 +1463,187 @@
         .notes-area:focus {
             outline: none;
             border-color: var(--people);
+        }
+
+        /* Two-column content grid for Overview tab */
+        .overview-content-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 900px) {
+            .overview-content-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .overview-panel {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .overview-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .overview-panel-title {
+            font-size: 0.6875rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* Contact info compact styling */
+        .contact-grid-compact {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .contact-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.625rem;
+        }
+
+        .contact-icon-box {
+            flex-shrink: 0;
+            width: 26px;
+            height: 26px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            font-size: 0.75rem;
+        }
+
+        .contact-values {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .contact-value-link {
+            font-size: 0.8125rem;
+            color: var(--people);
+            text-decoration: none;
+            display: block;
+            padding: 0.0625rem 0;
+            transition: color 0.2s;
+            word-break: break-all;
+        }
+
+        .contact-value-link:hover {
+            color: var(--people-hover);
+        }
+
+        .contact-meta-row {
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 0.75rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .contact-meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.125rem;
+        }
+
+        .contact-meta-label {
+            font-size: 0.5625rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .contact-meta-value {
+            font-size: 0.8125rem;
+            color: var(--text-secondary);
+        }
+
+        /* Notes panel collapsed state */
+        .notes-panel-compact {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+
+        .notes-panel-compact .notes-area {
+            min-height: 70px;
+            margin-top: 0.5rem;
+            background: rgba(0, 0, 0, 0.15);
+        }
+
+        /* Source entities footer (collapsed by default) */
+        .source-entities-footer {
+            background: rgba(0, 0, 0, 0.1);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+            margin-top: 0.5rem;
+        }
+
+        .source-entities-toggle-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.625rem 1rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .source-entities-toggle-bar:hover {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        .source-entities-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .source-entities-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .source-entities-count-badge {
+            font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+            font-size: 0.6875rem;
+            color: var(--text-secondary);
+            padding: 0.125rem 0.375rem;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+        }
+
+        .source-entities-chevron {
+            color: var(--text-muted);
+            font-size: 0.5rem;
+            transition: transform 0.2s;
+        }
+
+        .source-entities-footer.expanded .source-entities-chevron {
+            transform: rotate(180deg);
+        }
+
+        .source-entities-expanded-content {
+            display: none;
+            padding: 0 1rem 1rem;
+        }
+
+        .source-entities-footer.expanded .source-entities-expanded-content {
+            display: block;
         }
 
         /* Timeline tab */
@@ -2375,49 +2729,43 @@
 
                 <div class="detail-content">
                     <div id="tabOverview" class="tab-content">
-                        <!-- Quick Facts section -->
-                        <div class="quick-facts-section">
-                            <div class="quick-facts-header">
-                                <div class="quick-facts-title">Quick Facts</div>
-                                <button class="extract-facts-btn" id="extractFactsBtn" onclick="extractFacts()">
-                                    <span>Extract Facts</span>
-                                </button>
+                        <!-- Hero Stats Row -->
+                        <div class="hero-stats" id="heroStats">
+                            <div class="hero-stat">
+                                <span class="hero-stat-icon">📧</span>
+                                <span class="hero-stat-value" id="heroStatEmails">0</span>
+                                <span class="hero-stat-label">emails</span>
                             </div>
-                            <div class="facts-categories" id="factsContainer">
-                                <div class="facts-empty">No facts extracted yet. Click "Extract Facts" to analyze interactions.</div>
+                            <div class="hero-stat">
+                                <span class="hero-stat-icon">📅</span>
+                                <span class="hero-stat-value" id="heroStatEvents">0</span>
+                                <span class="hero-stat-label">events</span>
                             </div>
-                        </div>
-
-                        <!-- Relationship strength breakdown -->
-                        <div class="strength-breakdown">
-                            <div class="info-section-title" style="margin-bottom: 0.75rem;">Relationship Strength</div>
-                            <div class="strength-bar-main">
-                                <div class="strength-bar-fill" id="strengthBarFill" style="width: 0%"></div>
+                            <div class="hero-stat">
+                                <span class="hero-stat-icon">💬</span>
+                                <span class="hero-stat-value" id="heroStatMessages">0</span>
+                                <span class="hero-stat-label">messages</span>
                             </div>
-                            <div class="strength-components" id="strengthComponents"></div>
-                        </div>
-
-                        <!-- Quick stats cards -->
-                        <div class="stats-cards">
-                            <div class="stat-card">
-                                <div class="stat-card-icon">📧</div>
-                                <div class="stat-card-value" id="statEmails">0</div>
-                                <div class="stat-card-label">Emails</div>
+                            <div class="hero-stat-divider"></div>
+                            <div class="hero-stat">
+                                <span class="hero-stat-icon">📍</span>
+                                <span class="hero-stat-label">Since</span>
+                                <span class="hero-stat-value" id="heroStatFirstSeen">—</span>
                             </div>
-                            <div class="stat-card">
-                                <div class="stat-card-icon">📅</div>
-                                <div class="stat-card-value" id="statMeetings">0</div>
-                                <div class="stat-card-label">Meetings</div>
+                            <div class="hero-strength">
+                                <div class="strength-ring">
+                                    <svg width="32" height="32" viewBox="0 0 32 32">
+                                        <circle class="strength-ring-bg" cx="16" cy="16" r="13"/>
+                                        <circle class="strength-ring-fill" id="strengthRingFill" cx="16" cy="16" r="13"
+                                                stroke-dasharray="81.68" stroke-dashoffset="81.68"/>
+                                    </svg>
+                                    <span class="strength-ring-value" id="strengthRingValue">0</span>
+                                </div>
+                                <span class="hero-strength-label">Strength</span>
                             </div>
-                            <div class="stat-card">
-                                <div class="stat-card-icon">💬</div>
-                                <div class="stat-card-value" id="statMessages">0</div>
-                                <div class="stat-card-label">Messages</div>
-                            </div>
-                            <div class="stat-card">
-                                <div class="stat-card-icon">📝</div>
-                                <div class="stat-card-value" id="statNotes">0</div>
-                                <div class="stat-card-label">Notes</div>
+                            <div class="hero-dunbar">
+                                <div class="dunbar-circle-indicator" id="dunbarCircleIndicator">0</div>
+                                <span class="hero-dunbar-label" id="dunbarCircleLabel">Intimate</span>
                             </div>
                         </div>
 
@@ -2436,44 +2784,87 @@
                                     <span>More</span>
                                 </div>
                             </div>
-                            <div class="heatmap-months" id="heatmapMonths"></div>
-                            <div class="heatmap-body">
-                                <div class="heatmap-weekdays">
-                                    <div class="heatmap-weekday">Sun</div>
-                                    <div class="heatmap-weekday">Mon</div>
-                                    <div class="heatmap-weekday">Tue</div>
-                                    <div class="heatmap-weekday">Wed</div>
-                                    <div class="heatmap-weekday">Thu</div>
-                                    <div class="heatmap-weekday">Fri</div>
-                                    <div class="heatmap-weekday">Sat</div>
+                            <div class="heatmap-scroll-wrapper">
+                                <div class="heatmap-inner">
+                                    <div class="heatmap-months" id="heatmapMonths"></div>
+                                    <div class="heatmap-body">
+                                        <div class="heatmap-weekdays">
+                                            <div class="heatmap-weekday">Sun</div>
+                                            <div class="heatmap-weekday">Mon</div>
+                                            <div class="heatmap-weekday">Tue</div>
+                                            <div class="heatmap-weekday">Wed</div>
+                                            <div class="heatmap-weekday">Thu</div>
+                                            <div class="heatmap-weekday">Fri</div>
+                                            <div class="heatmap-weekday">Sat</div>
+                                        </div>
+                                        <div class="heatmap-grid" id="heatmapGrid"></div>
+                                    </div>
                                 </div>
-                                <div class="heatmap-grid" id="heatmapGrid"></div>
                             </div>
                         </div>
                         <div class="heatmap-tooltip" id="heatmapTooltip"></div>
 
-                        <!-- Contact information -->
-                        <div class="info-section">
-                            <div class="info-section-title">Contact Information</div>
-                            <div class="info-grid" id="contactInfo"></div>
-                        </div>
-
-                        <!-- Notes -->
-                        <div class="info-section">
-                            <div class="info-section-title">Notes</div>
-                            <textarea class="notes-area" id="notesArea" placeholder="Add notes about this person..." onchange="saveNotes()"></textarea>
-                        </div>
-
-                        <!-- Source entities -->
-                        <div class="source-entities-section">
-                            <div class="source-entities-header">
-                                <div style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;" onclick="toggleSourceEntities()">
-                                    <div class="source-entities-title">Source Entities <span id="sourceEntitiesCount">(0)</span></div>
-                                    <div class="source-entities-toggle" id="sourceEntitiesToggle">▶</div>
+                        <!-- Two-column content grid -->
+                        <div class="overview-content-grid">
+                            <!-- Quick Facts - Left Column -->
+                            <div class="quick-facts-section overview-panel">
+                                <div class="overview-panel-header">
+                                    <span class="overview-panel-title">Quick Facts</span>
+                                    <button class="extract-facts-btn" id="extractFactsBtn" onclick="extractFacts()">
+                                        <span>Extract Facts</span>
+                                    </button>
                                 </div>
-                                <button class="split-btn" onclick="event.stopPropagation(); openSplitModal()">Split Sources</button>
+                                <div class="facts-categories" id="factsContainer">
+                                    <div class="facts-empty">No facts extracted yet. Click "Extract Facts" to analyze interactions.</div>
+                                </div>
                             </div>
-                            <div class="source-entities-list" id="sourceEntitiesList"></div>
+
+                            <!-- Contact & Notes - Right Column -->
+                            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                                <!-- Contact Info -->
+                                <div class="overview-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">Contact</span>
+                                    </div>
+                                    <div class="contact-grid-compact" id="contactInfoCompact"></div>
+                                </div>
+
+                                <!-- Notes -->
+                                <div class="notes-panel-compact">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">Notes</span>
+                                    </div>
+                                    <textarea class="notes-area" id="notesArea" placeholder="Add notes about this person..." onchange="saveNotes()"></textarea>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Source entities footer (collapsed) -->
+                        <div class="source-entities-footer" id="sourceEntitiesFooter">
+                            <div class="source-entities-toggle-bar" onclick="toggleSourceEntities()">
+                                <div class="source-entities-info">
+                                    <span class="source-entities-label">Source Entities</span>
+                                    <span class="source-entities-count-badge" id="sourceEntitiesCount">0</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                                    <button class="split-btn" onclick="event.stopPropagation(); openSplitModal()">Split Sources</button>
+                                    <span class="source-entities-chevron" id="sourceEntitiesToggle">▼</span>
+                                </div>
+                            </div>
+                            <div class="source-entities-expanded-content">
+                                <div class="source-entities-list" id="sourceEntitiesList"></div>
+                            </div>
+                        </div>
+
+                        <!-- Hidden elements for backwards compatibility -->
+                        <div style="display:none">
+                            <div id="strengthBarFill"></div>
+                            <div id="strengthComponents"></div>
+                            <div id="contactInfo"></div>
+                            <div id="statEmails"></div>
+                            <div id="statMeetings"></div>
+                            <div id="statMessages"></div>
+                            <div id="statNotes"></div>
                         </div>
                     </div>
 
@@ -2694,6 +3085,67 @@
         let searchQuery = '';
         let selectedForMerge = new Set();  // IDs selected for merge
         let mergePrimaryId = null;  // Primary person for merge
+        let dunbarCircleMap = new Map();  // Map person ID to Dunbar circle
+
+        // Dunbar Circle Configuration
+        // Circle sizes: 0=3 (manual), 1=5, 2=15, 3=50, 4=150, 5=500, 6=1500, 7+=rest
+        const DUNBAR_CONFIG = {
+            myPersonId: '3f41e143-719f-4dc9-a9f1-389b2db5b166',
+            manualCircleZero: ['Taylor Walker', 'Malea Ramia'],  // Always in circle 0
+            // Cumulative thresholds (excluding circle 0 manual entries and self)
+            thresholds: [0, 5, 20, 70, 220, 720, 2220]  // Circle 1-6 boundaries
+        };
+
+        // Compute Dunbar circle for each person based on relationship strength rank
+        function assignDunbarCircles(peopleList) {
+            // Sort by relationship strength descending
+            const sorted = [...peopleList].sort((a, b) =>
+                (b.relationship_strength || 0) - (a.relationship_strength || 0)
+            );
+
+            // Create a map for quick lookup
+            const circleMap = new Map();
+
+            // Assign circle 0 to self and manual entries
+            circleMap.set(DUNBAR_CONFIG.myPersonId, 0);
+            sorted.forEach(p => {
+                if (DUNBAR_CONFIG.manualCircleZero.includes(p.canonical_name)) {
+                    circleMap.set(p.id, 0);
+                }
+            });
+
+            // Assign circles to remaining people based on rank
+            let rank = 0;
+            for (const person of sorted) {
+                if (circleMap.has(person.id)) continue;  // Skip already assigned
+
+                // Find which circle this rank falls into
+                let circle = DUNBAR_CONFIG.thresholds.length;  // Default to outer circle
+                for (let i = 0; i < DUNBAR_CONFIG.thresholds.length; i++) {
+                    if (rank < DUNBAR_CONFIG.thresholds[i]) {
+                        circle = i;
+                        break;
+                    }
+                }
+                circleMap.set(person.id, circle);
+                rank++;
+            }
+
+            // Update global map for use in detail view
+            dunbarCircleMap = circleMap;
+
+            // Apply circles to original list
+            return peopleList.map(p => ({
+                ...p,
+                dunbar_circle: circleMap.get(p.id) ?? 7
+            }));
+        }
+
+        // Get Dunbar circle label for display
+        function getDunbarCircleLabel(circle) {
+            const labels = ['Intimate', 'Close', 'Good Friends', 'Friends', 'Acquaintances', 'Known', 'Familiar', 'Contacts'];
+            return labels[circle] || 'Contacts';
+        }
 
         // API helpers
         async function api(path, options = {}) {
@@ -2784,7 +3236,7 @@
                 params.set('limit', '100');
 
                 const data = await api(`/people?${params}`);
-                people = data.people;
+                people = assignDunbarCircles(data.people);
                 renderPeopleList();
             } catch (error) {
                 console.error('Failed to load people:', error);
@@ -2821,6 +3273,7 @@
                         <div class="person-name">${escapeHtml(person.canonical_name)}</div>
                         <div class="person-company">${escapeHtml(person.company || '')}</div>
                     </div>
+                    <div class="dunbar-badge circle-${person.dunbar_circle ?? 7}" title="Dunbar Circle ${person.dunbar_circle ?? 7}">${person.dunbar_circle ?? 7}</div>
                     <div class="person-strength">
                         <div class="person-strength-bar" style="width: ${person.relationship_strength || 0}%"></div>
                     </div>
@@ -3286,22 +3739,28 @@
             // Editable tags in header
             renderEditableTags(person.tags || []);
 
-            // Load Quick Facts
+            // Load Quick Facts (will auto-extract if none exist)
             loadFacts(person.id);
 
-            // Relationship strength breakdown
-            renderStrengthBreakdown(person);
+            // Hero stats row
+            renderHeroStats(person);
 
-            // Quick stats cards
-            document.getElementById('statEmails').textContent = person.email_count || 0;
-            document.getElementById('statMeetings').textContent = person.meeting_count || 0;
-            document.getElementById('statMessages').textContent = person.message_count || 0;
-            document.getElementById('statNotes').textContent = person.notes ? 1 : 0;
+            // Relationship strength ring
+            renderStrengthRing(person.relationship_strength || 0);
+
+            // Dunbar circle display
+            renderDunbarCircle(person.id);
+
+            // Backwards compatibility for old strength breakdown (hidden)
+            renderStrengthBreakdown(person);
 
             // Heat map calendar - load from timeline or generate empty
             loadAndRenderHeatMap(person.id);
 
-            // Contact info (all emails, phones, LinkedIn)
+            // Compact contact info for new layout
+            renderCompactContactInfo(person);
+
+            // Legacy contact info (hidden for backwards compatibility)
             const contactEl = document.getElementById('contactInfo');
             let contactHtml = '';
 
@@ -3332,7 +3791,7 @@
             // Source entities - use the count field, not array length (array may not be fully loaded)
             const sourceEntities = person.source_entities || [];
             const sourceEntityCount = person.source_entity_count || sourceEntities.length;
-            document.getElementById('sourceEntitiesCount').textContent = `(${sourceEntityCount.toLocaleString()})`;
+            document.getElementById('sourceEntitiesCount').textContent = sourceEntityCount.toLocaleString();
             const listEl = document.getElementById('sourceEntitiesList');
 
             if (sourceEntities.length > 0) {
@@ -3362,6 +3821,146 @@
             `).join('');
             html += `<span class="detail-tag-add" onclick="addTag()">+ Add tag</span>`;
             container.innerHTML = html;
+        }
+
+        // Format large numbers compactly (e.g., 46049 -> "46K")
+        function formatCompactNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+            return num.toString();
+        }
+
+        // Render hero stats row
+        function renderHeroStats(person) {
+            const emailCount = person.email_count || 0;
+            const eventCount = person.meeting_count || 0; // "events" instead of "meetings"
+            const messageCount = person.message_count || 0; // iMessage + WhatsApp combined
+
+            document.getElementById('heroStatEmails').textContent = formatCompactNumber(emailCount);
+            document.getElementById('heroStatEvents').textContent = formatCompactNumber(eventCount);
+            document.getElementById('heroStatMessages').textContent = formatCompactNumber(messageCount);
+
+            // First seen date
+            if (person.first_seen) {
+                const firstSeenDate = new Date(person.first_seen);
+                const options = { month: 'short', day: 'numeric' };
+                // Add year if not current year
+                if (firstSeenDate.getFullYear() !== new Date().getFullYear()) {
+                    options.year = 'numeric';
+                }
+                document.getElementById('heroStatFirstSeen').textContent = firstSeenDate.toLocaleDateString('en-US', options);
+            } else {
+                document.getElementById('heroStatFirstSeen').textContent = '—';
+            }
+
+            // Backwards compat for hidden stats
+            document.getElementById('statEmails').textContent = emailCount;
+            document.getElementById('statMeetings').textContent = eventCount;
+            document.getElementById('statMessages').textContent = messageCount;
+            document.getElementById('statNotes').textContent = person.notes ? 1 : 0;
+        }
+
+        // Render strength ring (circular progress indicator)
+        function renderStrengthRing(strength) {
+            const strengthValue = Math.round(strength);
+            const ringFill = document.getElementById('strengthRingFill');
+            const ringValueEl = document.getElementById('strengthRingValue');
+
+            // Circle circumference = 2 * PI * r = 2 * 3.14159 * 13 = 81.68
+            const circumference = 81.68;
+            const offset = circumference - (circumference * strengthValue / 100);
+
+            ringFill.style.strokeDashoffset = offset;
+            ringValueEl.textContent = strengthValue;
+        }
+
+        // Render Dunbar circle indicator
+        function renderDunbarCircle(personId) {
+            const indicatorEl = document.getElementById('dunbarCircleIndicator');
+            const labelEl = document.getElementById('dunbarCircleLabel');
+            if (!indicatorEl || !labelEl) return;
+
+            const circle = dunbarCircleMap.get(personId) ?? 7;
+            indicatorEl.textContent = circle;
+            indicatorEl.className = `dunbar-circle-indicator circle-${circle}`;
+            labelEl.textContent = getDunbarCircleLabel(circle);
+        }
+
+        // Render compact contact info for new two-column layout
+        function renderCompactContactInfo(person) {
+            const container = document.getElementById('contactInfoCompact');
+            if (!container) return;
+
+            let html = '';
+
+            // Emails
+            if (person.emails && person.emails.length > 0) {
+                html += `
+                    <div class="contact-row">
+                        <div class="contact-icon-box">📧</div>
+                        <div class="contact-values">
+                            ${person.emails.map(e => `<a href="mailto:${e}" class="contact-value-link">${escapeHtml(e)}</a>`).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Phone numbers
+            if (person.phone_numbers && person.phone_numbers.length > 0) {
+                html += `
+                    <div class="contact-row">
+                        <div class="contact-icon-box">📞</div>
+                        <div class="contact-values">
+                            ${person.phone_numbers.map(p => `<a href="tel:${p}" class="contact-value-link">${escapeHtml(p)}</a>`).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            // LinkedIn
+            if (person.linkedin_url) {
+                html += `
+                    <div class="contact-row">
+                        <div class="contact-icon-box">🔗</div>
+                        <div class="contact-values">
+                            <a href="${person.linkedin_url}" target="_blank" class="contact-value-link">LinkedIn Profile</a>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Meta info (First Seen, Last Seen, Category)
+            const metaItems = [];
+            if (person.first_seen) {
+                metaItems.push(`
+                    <div class="contact-meta-item">
+                        <span class="contact-meta-label">First seen</span>
+                        <span class="contact-meta-value">${formatDate(person.first_seen)}</span>
+                    </div>
+                `);
+            }
+            if (person.last_seen) {
+                metaItems.push(`
+                    <div class="contact-meta-item">
+                        <span class="contact-meta-label">Last seen</span>
+                        <span class="contact-meta-value">${formatDate(person.last_seen)}</span>
+                    </div>
+                `);
+            }
+            if (person.category) {
+                metaItems.push(`
+                    <div class="contact-meta-item">
+                        <span class="contact-meta-label">Category</span>
+                        <span class="contact-meta-value">${escapeHtml(person.category)}</span>
+                    </div>
+                `);
+            }
+
+            if (metaItems.length > 0) {
+                html += `<div class="contact-meta-row">${metaItems.join('')}</div>`;
+            }
+
+            container.innerHTML = html || '<div style="color: var(--text-muted); font-size: 0.8125rem;">No contact info</div>';
         }
 
         // Add tag
@@ -3501,6 +4100,11 @@
             const startDayOfWeek = startDate.getDay();
             startDate.setDate(startDate.getDate() - startDayOfWeek);
 
+            // Constants for pixel calculations
+            const daySize = 10; // px
+            const gap = 2; // px between days/weeks
+            const weekWidth = daySize + gap; // width per week column
+
             // Generate weeks (columns)
             let weeksHtml = '';
             let currentDate = new Date(startDate);
@@ -3524,13 +4128,15 @@
                     if (count >= 10) level = 4;
                     if (count >= 20) level = 5;
 
-                    // Track month changes - place label when we hit the 1st of a month
-                    const currentMonth = currentDate.getMonth();
-                    const isFirstOfMonth = currentDate.getDate() === 1;
-                    if (currentMonth !== lastMonth && isFirstOfMonth && currentDate >= startDate && currentDate <= endDate) {
-                        const monthName = currentDate.toLocaleDateString('en-US', { month: 'short' });
-                        monthLabels.push({ weekIndex, monthName });
-                        lastMonth = currentMonth;
+                    // Track month changes at the START of each week (Sunday)
+                    // This way the label aligns with the week column
+                    if (day === 0) {
+                        const currentMonth = currentDate.getMonth();
+                        if (currentMonth !== lastMonth && currentDate >= startDate && currentDate <= endDate) {
+                            const monthName = currentDate.toLocaleDateString('en-US', { month: 'short' });
+                            monthLabels.push({ weekIndex, monthName, month: currentMonth });
+                            lastMonth = currentMonth;
+                        }
                     }
 
                     // Only render if within valid date range
@@ -3549,20 +4155,20 @@
 
             grid.innerHTML = weeksHtml;
 
-            // Generate month labels - position them where the 1st of each month appears
+            // Generate month labels with precise pixel positioning
             const totalWeeks = weekIndex;
             let monthsHtml = '';
-
-            // Add initial spacer if first month doesn't start at week 0
-            if (monthLabels.length > 0 && monthLabels[0].weekIndex > 0) {
-                monthsHtml += `<div class="heatmap-month-label" style="flex: ${monthLabels[0].weekIndex}"></div>`;
-            }
 
             for (let i = 0; i < monthLabels.length; i++) {
                 const label = monthLabels[i];
                 const nextLabel = monthLabels[i + 1];
-                const span = nextLabel ? nextLabel.weekIndex - label.weekIndex : totalWeeks - label.weekIndex;
-                monthsHtml += `<div class="heatmap-month-label" style="flex: ${span}">${label.monthName}</div>`;
+
+                // Calculate width based on weeks this month spans
+                const nextWeekIndex = nextLabel ? nextLabel.weekIndex : totalWeeks;
+                const weeksSpan = nextWeekIndex - label.weekIndex;
+                const widthPx = weeksSpan * weekWidth - gap; // subtract gap for last column
+
+                monthsHtml += `<div class="heatmap-month-label" style="width: ${widthPx}px; min-width: ${widthPx}px;">${label.monthName}</div>`;
             }
             monthsContainer.innerHTML = monthsHtml;
 
@@ -3630,14 +4236,12 @@
 
         // Navigate to timeline tab filtered to a specific date
         async function navigateToTimelineDate(dateKey) {
-            // Switch to timeline tab
-            await switchTab('timeline');
-
-            // Store the target date for filtering
+            // IMPORTANT: Set the filter BEFORE switching tabs
+            // This ensures the filter is active when loadTimeline() runs
             window.timelineDateFilter = dateKey;
 
-            // Re-render timeline with date filter applied
-            renderTimelineWithDateFilter();
+            // Switch to timeline tab - this will load and render timeline with the filter applied
+            await switchTab('timeline');
         }
 
         // Render timeline filtered to a specific date
@@ -3724,7 +4328,15 @@
             container.innerHTML = '<div class="loading">Loading timeline...</div>';
 
             try {
-                const data = await api(`/people/${personId}/timeline?limit=100`);
+                // If date filter is active, load full year of data to match heatmap
+                // Otherwise, use default limit for performance
+                let url = `/people/${personId}/timeline`;
+                if (window.timelineDateFilter) {
+                    url += '?days_back=365&limit=500';
+                } else {
+                    url += '?limit=100';
+                }
+                const data = await api(url);
                 timelineData = data.items || [];
                 renderTimeline();
             } catch (error) {
@@ -3787,6 +4399,7 @@
 
         // Quick Facts state
         let factsData = [];
+        let autoExtractInProgress = false; // Prevent multiple auto-extracts
 
         // Load facts for a person
         async function loadFacts(personId) {
@@ -3795,7 +4408,21 @@
             try {
                 const data = await api(`/people/${personId}/facts`);
                 factsData = data.facts || [];
-                renderFacts(data.by_category || {});
+                const byCategory = data.by_category || {};
+                renderFacts(byCategory);
+
+                // Auto-trigger extraction if no facts exist
+                const hasAnyFacts = Object.values(byCategory).some(facts => facts && facts.length > 0);
+                if (!hasAnyFacts && !autoExtractInProgress && selectedPersonId === personId) {
+                    autoExtractInProgress = true;
+                    console.log('No facts found, auto-triggering extraction...');
+                    // Small delay to let the UI render first
+                    setTimeout(() => {
+                        extractFacts().finally(() => {
+                            autoExtractInProgress = false;
+                        });
+                    }, 500);
+                }
             } catch (error) {
                 console.error('Failed to load facts:', error);
                 container.innerHTML = '<div class="facts-empty">Failed to load facts.</div>';
