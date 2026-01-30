@@ -343,8 +343,8 @@ class EntityResolver:
             display_name=name,
             vault_contexts=vault_contexts,
             category=category,
-            first_seen=datetime.now(timezone.utc),
-            last_seen=datetime.now(timezone.utc),
+            first_seen=None,  # Will be set from actual interactions
+            last_seen=None,   # Will be set from actual interactions
         )
 
         stored = self._store.add(entity)
@@ -387,8 +387,8 @@ class EntityResolver:
             display_name=display_name,
             vault_contexts=vault_contexts,
             category=category,
-            first_seen=datetime.now(timezone.utc),
-            last_seen=datetime.now(timezone.utc),
+            first_seen=None,  # Will be set from actual interactions
+            last_seen=None,   # Will be set from actual interactions
             confidence_score=0.7,  # Slightly lower for disambiguated
         )
 
@@ -535,8 +535,8 @@ class EntityResolver:
                 phone_primary=phone,
                 vault_contexts=vault_contexts,
                 category=category,
-                first_seen=datetime.now(timezone.utc),
-                last_seen=datetime.now(timezone.utc),
+                first_seen=None,  # Will be set from actual interactions
+                last_seen=None,   # Will be set from actual interactions
             )
 
             stored = self._store.add(entity)
