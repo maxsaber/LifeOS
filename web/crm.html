@@ -1653,17 +1653,12 @@
         }
 
         /* Timeline tab */
-        .timeline-controls {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
-            margin-bottom: 1rem;
-        }
-
         .timeline-filters {
             display: flex;
             gap: 0.5rem;
             flex-wrap: wrap;
+            align-items: center;
+            margin-bottom: 1rem;
         }
 
         .timeline-date-range {
@@ -1672,6 +1667,7 @@
             gap: 0.5rem;
             font-size: 0.75rem;
             color: var(--text-secondary);
+            margin-left: auto;
         }
 
         .timeline-date-range label {
@@ -2949,18 +2945,14 @@
                     </div>
 
                     <div id="tabTimeline" class="tab-content" style="display:none">
-                        <div class="timeline-controls">
-                            <div class="timeline-filters">
-                                <div class="timeline-filter-chip active" data-source="all" onclick="filterTimeline('all')">All</div>
-                                <div class="timeline-filter-chip" data-source="gmail" onclick="filterTimeline('gmail')">📧 Emails</div>
-                                <div class="timeline-filter-chip" data-source="calendar" onclick="filterTimeline('calendar')">📅 Events</div>
-                                <div class="timeline-filter-chip" data-source="messages" onclick="filterTimeline('messages')">💬 Messages</div>
-                                <div class="timeline-filter-chip" data-source="phone" onclick="filterTimeline('phone')">📞 Calls</div>
-                                <div class="timeline-filter-chip" data-source="slack" onclick="filterTimeline('slack')">💼 Slack</div>
-                                <div class="timeline-filter-chip" data-source="notes" onclick="filterTimeline('notes')">📝 Notes</div>
-                                <div class="timeline-filter-chip" data-source="contacts" onclick="filterTimeline('contacts')">📇 Contacts</div>
-                                <div class="timeline-filter-chip" data-source="linkedin" onclick="filterTimeline('linkedin')">🔗 LinkedIn</div>
-                            </div>
+                        <div class="timeline-filters">
+                            <div class="timeline-filter-chip active" data-source="all" onclick="filterTimeline('all')">All</div>
+                            <div class="timeline-filter-chip" data-source="gmail" onclick="filterTimeline('gmail')">📧 Emails</div>
+                            <div class="timeline-filter-chip" data-source="calendar" onclick="filterTimeline('calendar')">📅 Events</div>
+                            <div class="timeline-filter-chip" data-source="messages" onclick="filterTimeline('messages')">💬 Messages</div>
+                            <div class="timeline-filter-chip" data-source="phone" onclick="filterTimeline('phone')">📞 Calls</div>
+                            <div class="timeline-filter-chip" data-source="slack" onclick="filterTimeline('slack')">💼 Slack</div>
+                            <div class="timeline-filter-chip" data-source="notes" onclick="filterTimeline('notes')">📝 Notes</div>
                             <div class="timeline-date-range">
                                 <label>From:</label>
                                 <input type="date" id="timelineDateFrom" onchange="applyTimelineDateRange()">
