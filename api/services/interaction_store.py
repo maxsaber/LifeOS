@@ -344,6 +344,7 @@ class InteractionStore:
         days_back: int = None,
         limit: int = None,
         source_type: Optional[str] = None,
+        specific_date: Optional[str] = None,
     ) -> list[Interaction]:
         """
         Get interactions for a person.
@@ -353,39 +354,66 @@ class InteractionStore:
             days_back: Only return interactions from last N days (default from config)
             limit: Maximum interactions to return (default from config)
             source_type: Filter by source type (optional)
+            specific_date: Filter to a specific date (YYYY-MM-DD format, optional)
 
         Returns:
             List of interactions, most recent first
         """
-        if days_back is None:
-            days_back = InteractionConfig.DEFAULT_WINDOW_DAYS
         if limit is None:
             limit = InteractionConfig.MAX_INTERACTIONS_PER_QUERY
 
-        cutoff = datetime.now() - timedelta(days=days_back)
-
         conn = self._get_connection()
         try:
-            if source_type:
-                cursor = conn.execute(
-                    """
-                    SELECT * FROM interactions
-                    WHERE person_id = ? AND timestamp > ? AND source_type = ?
-                    ORDER BY timestamp DESC
-                    LIMIT ?
-                """,
-                    (person_id, cutoff.isoformat(), source_type, limit),
-                )
+            # Build query based on filters
+            if specific_date:
+                # Filter to a specific day
+                date_start = f"{specific_date}T00:00:00"
+                date_end = f"{specific_date}T23:59:59"
+                if source_type:
+                    cursor = conn.execute(
+                        """
+                        SELECT * FROM interactions
+                        WHERE person_id = ? AND timestamp >= ? AND timestamp <= ? AND source_type = ?
+                        ORDER BY timestamp DESC
+                        LIMIT ?
+                    """,
+                        (person_id, date_start, date_end, source_type, limit),
+                    )
+                else:
+                    cursor = conn.execute(
+                        """
+                        SELECT * FROM interactions
+                        WHERE person_id = ? AND timestamp >= ? AND timestamp <= ?
+                        ORDER BY timestamp DESC
+                        LIMIT ?
+                    """,
+                        (person_id, date_start, date_end, limit),
+                    )
             else:
-                cursor = conn.execute(
-                    """
-                    SELECT * FROM interactions
-                    WHERE person_id = ? AND timestamp > ?
-                    ORDER BY timestamp DESC
-                    LIMIT ?
-                """,
-                    (person_id, cutoff.isoformat(), limit),
-                )
+                # Use days_back cutoff
+                if days_back is None:
+                    days_back = InteractionConfig.DEFAULT_WINDOW_DAYS
+                cutoff = datetime.now() - timedelta(days=days_back)
+                if source_type:
+                    cursor = conn.execute(
+                        """
+                        SELECT * FROM interactions
+                        WHERE person_id = ? AND timestamp > ? AND source_type = ?
+                        ORDER BY timestamp DESC
+                        LIMIT ?
+                    """,
+                        (person_id, cutoff.isoformat(), source_type, limit),
+                    )
+                else:
+                    cursor = conn.execute(
+                        """
+                        SELECT * FROM interactions
+                        WHERE person_id = ? AND timestamp > ?
+                        ORDER BY timestamp DESC
+                        LIMIT ?
+                    """,
+                        (person_id, cutoff.isoformat(), limit),
+                    )
 
             return [Interaction.from_row(row) for row in cursor.fetchall()]
         finally:

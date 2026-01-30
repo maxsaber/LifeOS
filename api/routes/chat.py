@@ -1255,7 +1255,8 @@ async def ask_stream(request: AskStreamRequest):
 
 Please continue your response, incorporating this additional information. Do NOT repeat your previous response - just provide the additional insights from this new content."""
 
-                    yield f"data: {json.dumps({'type': 'content', 'content': '\\n\\n---\\n*Additional content retrieved:*\\n\\n'})}\n\n"
+                    separator = '\n\n---\n*Additional content retrieved:*\n\n'
+                    yield f"data: {json.dumps({'type': 'content', 'content': separator})}\n\n"
 
                     async for chunk in synthesizer.stream_response(follow_up_prompt, attachments=None):
                         if isinstance(chunk, dict) and chunk.get("type") == "usage":

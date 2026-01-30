@@ -1308,6 +1308,7 @@ async def get_person_timeline(
         le=InteractionConfig.MAX_WINDOW_DAYS,
         description="Days to look back (default 365, max 3650)"
     ),
+    date: Optional[str] = Query(default=None, description="Filter to specific date (YYYY-MM-DD)"),
     offset: int = Query(default=0, ge=0, description="Offset for pagination"),
     limit: int = Query(default=50, ge=1, le=2000, description="Max results"),
 ):
@@ -1330,6 +1331,7 @@ async def get_person_timeline(
         days_back=days_back,
         limit=limit + offset + 1,  # Fetch one extra to check has_more
         source_type=source_type,
+        specific_date=date,
     )
 
     has_more = len(interactions) > offset + limit
@@ -1957,8 +1959,14 @@ async def trigger_relationship_discovery():
 
     Analyzes shared calendar events, email threads, and vault mentions
     to discover connections between people.
+    Automatically recalculates relationship strengths after discovery.
     """
     results = run_full_discovery()
+
+    # Automatically recalculate relationship strengths after discovery
+    strength_results = update_all_strengths()
+    results["strengths_updated"] = strength_results.get("updated", 0)
+
     return {
         "status": "completed",
         "discovered": results,

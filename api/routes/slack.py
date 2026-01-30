@@ -277,6 +277,7 @@ async def sync_slack(full: bool = False):
     Sync Slack data to LifeOS.
 
     Performs message indexing and optionally creates CRM interactions.
+    Automatically recalculates relationship strengths after sync.
 
     Args:
         full: If True, re-sync all history. If False, incremental sync only.
@@ -304,6 +305,14 @@ async def sync_slack(full: bool = False):
             # Incremental sync returns flat structure
             messages_indexed = result.get("messages_indexed", 0)
             interactions_created = result.get("interactions_created", 0)
+
+        # Automatically recalculate relationship strengths if interactions were created
+        if interactions_created > 0:
+            from api.services.relationship_metrics import update_all_strengths
+            try:
+                update_all_strengths()
+            except Exception as e:
+                errors.append(f"Strength update failed: {e}")
 
         return SlackSyncResponse(
             status=result.get("status", "success"),

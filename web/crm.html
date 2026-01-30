@@ -802,6 +802,93 @@
             border-bottom: 1px solid var(--border);
         }
 
+        /* Header indicators (strength ring + dunbar circle) */
+        .header-indicators {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            margin-left: auto;
+            padding-left: 1rem;
+        }
+
+        .header-strength,
+        .header-dunbar {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .header-strength-ring {
+            position: relative;
+            width: 44px;
+            height: 44px;
+        }
+
+        .header-strength-ring svg {
+            transform: rotate(-90deg);
+        }
+
+        .header-strength-ring .strength-ring-bg {
+            fill: none;
+            stroke: var(--bg-tertiary);
+            stroke-width: 4;
+        }
+
+        .header-strength-ring .strength-ring-fill {
+            fill: none;
+            stroke: var(--people);
+            stroke-width: 4;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 0.6s ease;
+        }
+
+        .header-strength-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+        }
+
+        .header-dunbar-circle {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: var(--bg-tertiary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            font-weight: 700;
+            color: white;
+            font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+        }
+
+        .header-dunbar-circle.circle-0 { background: #e94560; }
+        .header-dunbar-circle.circle-1 { background: #ff6b6b; }
+        .header-dunbar-circle.circle-2 { background: #ffa502; }
+        .header-dunbar-circle.circle-3 { background: #2ed573; }
+        .header-dunbar-circle.circle-4 { background: #1e90ff; }
+        .header-dunbar-circle.circle-5 { background: #5352ed; }
+        .header-dunbar-circle.circle-6 { background: #747d8c; }
+        .header-dunbar-circle.circle-7 { background: #747d8c; }
+
+        .header-indicator-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Hide header indicators in graph mode */
+        .graph-mode .header-indicators {
+            display: none;
+        }
+
         /* Compact header for graph mode */
         .graph-mode .detail-header {
             padding: 0.75rem 1.5rem;
@@ -1339,7 +1426,7 @@
             display: flex;
             flex-direction: column;
             flex: 1;
-            gap: 1px;
+            gap: 2px;
         }
 
         .heatmap-day {
@@ -1351,7 +1438,7 @@
             border-radius: 2px;
             cursor: pointer;
             transition: all 0.15s;
-            margin: 0 0.5px;
+            margin: 0 1px;
         }
 
         .heatmap-day:hover {
@@ -2770,6 +2857,23 @@
                         <div class="detail-contact-quick" id="detailContactQuick"></div>
                         <div class="detail-tags" id="detailTagsChips"></div>
                     </div>
+                    <div class="header-indicators">
+                        <div class="header-strength">
+                            <div class="header-strength-ring">
+                                <svg width="44" height="44" viewBox="0 0 44 44">
+                                    <circle class="strength-ring-bg" cx="22" cy="22" r="18"/>
+                                    <circle class="strength-ring-fill" id="headerStrengthRingFill" cx="22" cy="22" r="18"
+                                            stroke-dasharray="113.1" stroke-dashoffset="113.1"/>
+                                </svg>
+                                <span class="header-strength-value" id="headerStrengthValue">0</span>
+                            </div>
+                            <span class="header-indicator-label">Strength</span>
+                        </div>
+                        <div class="header-dunbar">
+                            <div class="header-dunbar-circle" id="headerDunbarCircle">0</div>
+                            <span class="header-indicator-label" id="headerDunbarLabel">Intimate</span>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="detail-tabs">
@@ -2825,23 +2929,8 @@
                             <div class="hero-stat-divider"></div>
                             <div class="hero-stat">
                                 <span class="hero-stat-icon">📍</span>
-                                <span class="hero-stat-label">Since</span>
-                                <span class="hero-stat-value" id="heroStatFirstSeen">—</span>
-                            </div>
-                            <div class="hero-strength">
-                                <div class="strength-ring">
-                                    <svg width="32" height="32" viewBox="0 0 32 32">
-                                        <circle class="strength-ring-bg" cx="16" cy="16" r="13"/>
-                                        <circle class="strength-ring-fill" id="strengthRingFill" cx="16" cy="16" r="13"
-                                                stroke-dasharray="81.68" stroke-dashoffset="81.68"/>
-                                    </svg>
-                                    <span class="strength-ring-value" id="strengthRingValue">0</span>
-                                </div>
-                                <span class="hero-strength-label">Strength</span>
-                            </div>
-                            <div class="hero-dunbar">
-                                <div class="dunbar-circle-indicator" id="dunbarCircleIndicator">0</div>
-                                <span class="hero-dunbar-label" id="dunbarCircleLabel">Intimate</span>
+                                <span class="hero-stat-label">Last seen</span>
+                                <span class="hero-stat-value" id="heroStatLastSeen">—</span>
                             </div>
                         </div>
 
@@ -2945,14 +3034,14 @@
                     </div>
 
                     <div id="tabTimeline" class="tab-content" style="display:none">
-                        <div class="timeline-filters">
+                        <div class="timeline-filters" id="timelineFilters">
                             <div class="timeline-filter-chip active" data-source="all" onclick="filterTimeline('all')">All</div>
-                            <div class="timeline-filter-chip" data-source="gmail" onclick="filterTimeline('gmail')">📧 Emails</div>
-                            <div class="timeline-filter-chip" data-source="calendar" onclick="filterTimeline('calendar')">📅 Events</div>
-                            <div class="timeline-filter-chip" data-source="messages" onclick="filterTimeline('messages')">💬 Messages</div>
-                            <div class="timeline-filter-chip" data-source="phone" onclick="filterTimeline('phone')">📞 Calls</div>
-                            <div class="timeline-filter-chip" data-source="slack" onclick="filterTimeline('slack')">💼 Slack</div>
-                            <div class="timeline-filter-chip" data-source="notes" onclick="filterTimeline('notes')">📝 Notes</div>
+                            <div class="timeline-filter-chip" data-source="gmail" id="filterGmail" onclick="filterTimeline('gmail')">📧 Emails</div>
+                            <div class="timeline-filter-chip" data-source="calendar" id="filterCalendar" onclick="filterTimeline('calendar')">📅 Events</div>
+                            <div class="timeline-filter-chip" data-source="messages" id="filterMessages" onclick="filterTimeline('messages')">💬 Messages</div>
+                            <div class="timeline-filter-chip" data-source="phone" id="filterPhone" onclick="filterTimeline('phone')">📞 Calls</div>
+                            <div class="timeline-filter-chip" data-source="slack" id="filterSlack" onclick="filterTimeline('slack')">💼 Slack</div>
+                            <div class="timeline-filter-chip" data-source="notes" id="filterNotes" onclick="filterTimeline('notes')">📝 Notes</div>
                             <div class="timeline-date-range">
                                 <label>From:</label>
                                 <input type="date" id="timelineDateFrom" onchange="applyTimelineDateRange()">
@@ -3932,17 +4021,17 @@
             document.getElementById('heroStatEvents').textContent = formatCompactNumber(eventCount);
             document.getElementById('heroStatMessages').textContent = formatCompactNumber(messageCount);
 
-            // First seen date
-            if (person.first_seen) {
-                const firstSeenDate = new Date(person.first_seen);
+            // Last seen date
+            if (person.last_seen) {
+                const lastSeenDate = new Date(person.last_seen);
                 const options = { month: 'short', day: 'numeric' };
                 // Add year if not current year
-                if (firstSeenDate.getFullYear() !== new Date().getFullYear()) {
+                if (lastSeenDate.getFullYear() !== new Date().getFullYear()) {
                     options.year = 'numeric';
                 }
-                document.getElementById('heroStatFirstSeen').textContent = firstSeenDate.toLocaleDateString('en-US', options);
+                document.getElementById('heroStatLastSeen').textContent = lastSeenDate.toLocaleDateString('en-US', options);
             } else {
-                document.getElementById('heroStatFirstSeen').textContent = '—';
+                document.getElementById('heroStatLastSeen').textContent = '—';
             }
 
             // Backwards compat for hidden stats
@@ -3994,31 +4083,58 @@
             document.getElementById('statMeetings').textContent = eventCount;
             document.getElementById('statMessages').textContent = messageCount;
             document.getElementById('statNotes').textContent = notesCount;
+
+            // Update timeline filter visibility based on available data
+            updateTimelineFilterVisibility();
         }
 
-        // Render strength ring (circular progress indicator)
+        // Update timeline filter chip visibility based on source data
+        function updateTimelineFilterVisibility() {
+            const emailCount = (sourceTotals['gmail'] || 0);
+            const eventCount = (sourceTotals['calendar'] || 0);
+            const messageCount = (sourceTotals['imessage'] || 0) + (sourceTotals['whatsapp'] || 0);
+            const phoneCount = (sourceTotals['phone'] || 0);
+            const slackCount = (sourceTotals['slack'] || 0);
+            const notesCount = (sourceTotals['vault'] || 0) + (sourceTotals['granola'] || 0);
+
+            // Show/hide filter chips based on whether there's data
+            const updateFilter = (id, count) => {
+                const el = document.getElementById(id);
+                if (el) el.style.display = count > 0 ? '' : 'none';
+            };
+
+            updateFilter('filterGmail', emailCount);
+            updateFilter('filterCalendar', eventCount);
+            updateFilter('filterMessages', messageCount);
+            updateFilter('filterPhone', phoneCount);
+            updateFilter('filterSlack', slackCount);
+            updateFilter('filterNotes', notesCount);
+        }
+
+        // Render strength ring (circular progress indicator in header)
         function renderStrengthRing(strength) {
             const strengthValue = Math.round(strength);
-            const ringFill = document.getElementById('strengthRingFill');
-            const ringValueEl = document.getElementById('strengthRingValue');
+            const ringFill = document.getElementById('headerStrengthRingFill');
+            const ringValueEl = document.getElementById('headerStrengthValue');
+            if (!ringFill || !ringValueEl) return;
 
-            // Circle circumference = 2 * PI * r = 2 * 3.14159 * 13 = 81.68
-            const circumference = 81.68;
+            // Circle circumference = 2 * PI * r = 2 * 3.14159 * 18 = 113.1
+            const circumference = 113.1;
             const offset = circumference - (circumference * strengthValue / 100);
 
             ringFill.style.strokeDashoffset = offset;
             ringValueEl.textContent = strengthValue;
         }
 
-        // Render Dunbar circle indicator
+        // Render Dunbar circle indicator (in header)
         function renderDunbarCircle(personId) {
-            const indicatorEl = document.getElementById('dunbarCircleIndicator');
-            const labelEl = document.getElementById('dunbarCircleLabel');
-            if (!indicatorEl || !labelEl) return;
+            const circleEl = document.getElementById('headerDunbarCircle');
+            const labelEl = document.getElementById('headerDunbarLabel');
+            if (!circleEl || !labelEl) return;
 
             const circle = dunbarCircleMap.get(personId) ?? 7;
-            indicatorEl.textContent = circle;
-            indicatorEl.className = `dunbar-circle-indicator circle-${circle}`;
+            circleEl.textContent = circle;
+            circleEl.className = `header-dunbar-circle circle-${circle}`;
             labelEl.textContent = getDunbarCircleLabel(circle);
         }
 
@@ -5458,14 +5574,17 @@
             // Node circles with degree-based styling
             node.append('circle')
                 .attr('r', d => getNodeRadius(d))
-                .attr('fill', d => categoryColors[d.category] || categoryColors.unknown)
+                .attr('fill', d => {
+                    if (d.degree === 0) return '#000';  // Selected node is black
+                    return categoryColors[d.category] || categoryColors.unknown;
+                })
                 .attr('fill-opacity', d => d.degree === 2 ? 0.7 : 1)
                 .attr('stroke', d => {
-                    if (d.degree === 0) return 'var(--accent)';
+                    if (d.degree === 0) return '#ef4444';  // Red border for selected
                     if (d.category === 'self') return '#4f46e5';  // Indigo stroke for white self node
                     return 'var(--bg-primary)';
                 })
-                .attr('stroke-width', d => (d.degree === 0 || d.category === 'self') ? 3 : 2);
+                .attr('stroke-width', d => d.degree === 0 ? 3 : (d.category === 'self' ? 3 : 2));
 
             // Node labels - add to ALL nodes, visibility controlled by zoom
             node.append('text')
@@ -5579,16 +5698,24 @@
 
             legend.html(`
                 <div class="graph-legend-item">
-                    <div class="graph-legend-color" style="background: var(--accent); border: 2px solid var(--accent);"></div>
-                    <span>Center (Selected)</span>
+                    <div class="graph-legend-color" style="background: #000; border: 3px solid #ef4444;"></div>
+                    <span>Selected</span>
+                </div>
+                <div class="graph-legend-item">
+                    <div class="graph-legend-color" style="background: ${categoryColors.self};"></div>
+                    <span>Me</span>
+                </div>
+                <div class="graph-legend-item">
+                    <div class="graph-legend-color" style="background: ${categoryColors.family};"></div>
+                    <span>Family</span>
                 </div>
                 <div class="graph-legend-item">
                     <div class="graph-legend-color" style="background: ${categoryColors.work};"></div>
-                    <span>1st Degree</span>
+                    <span>Work</span>
                 </div>
                 <div class="graph-legend-item">
-                    <div class="graph-legend-color" style="background: ${categoryColors.unknown}; opacity: 0.6;"></div>
-                    <span>2nd Degree</span>
+                    <div class="graph-legend-color" style="background: ${categoryColors.personal};"></div>
+                    <span>Personal</span>
                 </div>
             `);
         }
