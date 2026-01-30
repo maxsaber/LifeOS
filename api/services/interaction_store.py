@@ -473,6 +473,157 @@ class InteractionStore:
         finally:
             conn.close()
 
+    def get_conversation_context(
+        self,
+        interaction_id: str,
+        window: int = 5,
+        time_window_hours: int = 24,
+    ) -> list[Interaction]:
+        """
+        Get messages surrounding an interaction in the same conversation.
+
+        For message-based interactions (iMessage, WhatsApp, Slack), this returns
+        neighboring messages to provide context for fact extraction.
+
+        Args:
+            interaction_id: The target interaction's ID
+            window: Number of messages to fetch before and after
+            time_window_hours: Max time span to consider same conversation
+
+        Returns:
+            List of interactions: [N before] + [target] + [N after], sorted by timestamp
+        """
+        # Message-based source types that benefit from context
+        MESSAGE_SOURCES = {"imessage", "whatsapp", "slack"}
+
+        conn = self._get_connection()
+        try:
+            # Get the target interaction
+            cursor = conn.execute(
+                "SELECT * FROM interactions WHERE id = ?", (interaction_id,)
+            )
+            row = cursor.fetchone()
+            if not row:
+                return []
+
+            target = Interaction.from_row(row)
+
+            # Only fetch context for message-based sources
+            if target.source_type not in MESSAGE_SOURCES:
+                return [target]
+
+            # Calculate time window boundaries
+            from datetime import timedelta
+            time_delta = timedelta(hours=time_window_hours)
+            window_start = (target.timestamp - time_delta).isoformat()
+            window_end = (target.timestamp + time_delta).isoformat()
+
+            # Get messages before the target
+            cursor = conn.execute(
+                """
+                SELECT * FROM interactions
+                WHERE person_id = ?
+                  AND source_type = ?
+                  AND timestamp < ?
+                  AND timestamp >= ?
+                ORDER BY timestamp DESC
+                LIMIT ?
+            """,
+                (
+                    target.person_id,
+                    target.source_type,
+                    target.timestamp.isoformat(),
+                    window_start,
+                    window,
+                ),
+            )
+            before = [Interaction.from_row(r) for r in cursor.fetchall()]
+            before.reverse()  # Reverse to chronological order
+
+            # Get messages after the target
+            cursor = conn.execute(
+                """
+                SELECT * FROM interactions
+                WHERE person_id = ?
+                  AND source_type = ?
+                  AND timestamp > ?
+                  AND timestamp <= ?
+                ORDER BY timestamp ASC
+                LIMIT ?
+            """,
+                (
+                    target.person_id,
+                    target.source_type,
+                    target.timestamp.isoformat(),
+                    window_end,
+                    window,
+                ),
+            )
+            after = [Interaction.from_row(r) for r in cursor.fetchall()]
+
+            # Combine: before + target + after
+            return before + [target] + after
+
+        finally:
+            conn.close()
+
+    def enrich_interactions_with_context(
+        self,
+        interactions: list[dict],
+        window: int = 5,
+    ) -> list[dict]:
+        """
+        Enrich a list of interactions with conversation context.
+
+        For message-based interactions (iMessage, WhatsApp, Slack), adds
+        surrounding messages to provide better context for fact extraction.
+
+        Args:
+            interactions: List of interaction dicts (with 'id' field)
+            window: Number of messages to include before/after
+
+        Returns:
+            Enriched list where message-based interactions include 'context' field
+        """
+        MESSAGE_SOURCES = {"imessage", "whatsapp", "slack"}
+
+        enriched = []
+        seen_context_ids = set()
+
+        for interaction in interactions:
+            interaction_id = interaction.get("id")
+            source_type = interaction.get("source_type", "")
+
+            if source_type in MESSAGE_SOURCES and interaction_id:
+                # Get context for this message
+                context = self.get_conversation_context(interaction_id, window)
+
+                if len(context) > 1:
+                    # Format context as a thread
+                    context_snippets = []
+                    for ctx in context:
+                        if ctx.id == interaction_id:
+                            context_snippets.append(f">>> {ctx.snippet or ctx.title}")
+                        else:
+                            context_snippets.append(f"  {ctx.snippet or ctx.title}")
+
+                    # Add context to the interaction
+                    enriched_interaction = dict(interaction)
+                    enriched_interaction["context"] = "\n".join(context_snippets)
+                    enriched_interaction["context_count"] = len(context)
+
+                    # Track context IDs to avoid duplicate processing
+                    for ctx in context:
+                        seen_context_ids.add(ctx.id)
+
+                    enriched.append(enriched_interaction)
+                else:
+                    enriched.append(interaction)
+            else:
+                enriched.append(interaction)
+
+        return enriched
+
     def delete(self, interaction_id: str) -> bool:
         """
         Delete an interaction by ID.

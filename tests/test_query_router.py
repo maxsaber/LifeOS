@@ -93,12 +93,15 @@ class TestOllamaClient:
             assert "connection" in str(exc_info.value).lower()
 
     def test_is_available_true(self):
-        """is_available should return True when Ollama is running."""
+        """is_available should return True when Ollama is running with models."""
         from api.services.ollama_client import OllamaClient
 
         with patch('httpx.get') as mock_get:
             mock_response = MagicMock()
             mock_response.status_code = 200
+            mock_response.json.return_value = {
+                "models": [{"name": "llama3.2:3b"}]
+            }
             mock_get.return_value = mock_response
 
             client = OllamaClient()
