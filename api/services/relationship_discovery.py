@@ -400,8 +400,9 @@ def discover_from_email_threads(
                     except (ValueError, TypeError):
                         pass
 
-            first_seen = min(all_dates) if all_dates else datetime.now(timezone.utc)
-            last_seen = max(all_dates) if all_dates else datetime.now(timezone.utc)
+            # Use None if no dates available (don't default to now())
+            first_seen = min(all_dates) if all_dates else None
+            last_seen = max(all_dates) if all_dates else None
 
             existing = relationship_store.get_between(person_a_id, person_b_id)
 
@@ -662,9 +663,9 @@ def discover_from_imessage_direct(
         first_message = row['first_message']
         last_message = row['last_message']
 
-        # Parse dates
-        first_seen = datetime.fromisoformat(first_message.replace('Z', '+00:00')) if first_message else datetime.now(timezone.utc)
-        last_seen = datetime.fromisoformat(last_message.replace('Z', '+00:00')) if last_message else datetime.now(timezone.utc)
+        # Parse dates - use None if no date, never default to today
+        first_seen = datetime.fromisoformat(first_message.replace('Z', '+00:00')) if first_message else None
+        last_seen = datetime.fromisoformat(last_message.replace('Z', '+00:00')) if last_message else None
 
         # Normalize pair order (my_person_id vs other)
         if my_person_id < other_person_id:
@@ -764,9 +765,9 @@ def discover_from_whatsapp_direct(
         first_message = row['first_message']
         last_message = row['last_message']
 
-        # Parse dates
-        first_seen = datetime.fromisoformat(first_message.replace('Z', '+00:00')) if first_message else datetime.now(timezone.utc)
-        last_seen = datetime.fromisoformat(last_message.replace('Z', '+00:00')) if last_message else datetime.now(timezone.utc)
+        # Parse dates - use None if no date, never default to today
+        first_seen = datetime.fromisoformat(first_message.replace('Z', '+00:00')) if first_message else None
+        last_seen = datetime.fromisoformat(last_message.replace('Z', '+00:00')) if last_message else None
 
         # Normalize pair order
         if my_person_id < other_person_id:
@@ -863,9 +864,9 @@ def discover_from_phone_calls(
         first_call = row['first_call']
         last_call = row['last_call']
 
-        # Parse dates
-        first_seen = datetime.fromisoformat(first_call.replace('Z', '+00:00')) if first_call else datetime.now(timezone.utc)
-        last_seen = datetime.fromisoformat(last_call.replace('Z', '+00:00')) if last_call else datetime.now(timezone.utc)
+        # Parse dates - use None if no date, never default to today
+        first_seen = datetime.fromisoformat(first_call.replace('Z', '+00:00')) if first_call else None
+        last_seen = datetime.fromisoformat(last_call.replace('Z', '+00:00')) if last_call else None
 
         # Normalize pair order
         if my_person_id < other_person_id:
@@ -1065,8 +1066,9 @@ def discover_from_slack_direct(
         first_date = person_first_seen.get(other_person_id)
         last_date = person_last_seen.get(other_person_id)
 
-        first_seen = datetime.strptime(first_date, '%Y-%m-%d').replace(tzinfo=timezone.utc) if first_date else datetime.now(timezone.utc)
-        last_seen = datetime.strptime(last_date, '%Y-%m-%d').replace(tzinfo=timezone.utc) if last_date else datetime.now(timezone.utc)
+        # Parse dates - use None if no date available (don't default to now())
+        first_seen = datetime.strptime(first_date, '%Y-%m-%d').replace(tzinfo=timezone.utc) if first_date else None
+        last_seen = datetime.strptime(last_date, '%Y-%m-%d').replace(tzinfo=timezone.utc) if last_date else None
 
         # Normalize pair order
         if my_person_id < other_person_id:
