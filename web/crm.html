@@ -1290,30 +1290,23 @@
             margin-bottom: 4px;
             font-size: 0.625rem;
             color: var(--text-muted);
-            padding-left: 28px; /* Aligns with grid (weekday labels width + margin) */
-            gap: 2px; /* Match the grid gap */
+            padding-left: 0;
+            justify-content: space-between;
         }
 
         .heatmap-month-label {
             text-align: left;
             white-space: nowrap;
             overflow: hidden;
-            /* Width set dynamically via JS to match week columns */
+            flex: 1;
         }
 
         .heatmap-body {
             display: flex;
-            gap: 2px;
         }
 
         .heatmap-weekdays {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            margin-right: 4px;
-            font-size: 0.5625rem;
-            color: var(--text-muted);
-            flex-shrink: 0;
+            display: none; /* Hide weekday labels for cleaner full-width look */
         }
 
         .heatmap-weekday {
@@ -1329,23 +1322,27 @@
 
         .heatmap-grid {
             display: flex;
-            gap: 2px;
             flex: 1;
+            justify-content: space-between;
         }
 
         .heatmap-week {
             display: flex;
             flex-direction: column;
-            gap: 2px;
+            flex: 1;
+            gap: 1px;
         }
 
         .heatmap-day {
-            width: 10px;
-            height: 10px;
+            aspect-ratio: 1;
+            flex: 1;
+            min-height: 8px;
+            max-height: 14px;
             background: var(--bg-tertiary);
             border-radius: 2px;
             cursor: pointer;
             transition: all 0.15s;
+            margin: 0 0.5px;
         }
 
         .heatmap-day:hover {
@@ -2731,20 +2728,45 @@
                     <div id="tabOverview" class="tab-content">
                         <!-- Hero Stats Row -->
                         <div class="hero-stats" id="heroStats">
-                            <div class="hero-stat">
+                            <div class="hero-stat" id="heroStatEmailsContainer">
                                 <span class="hero-stat-icon">📧</span>
                                 <span class="hero-stat-value" id="heroStatEmails">0</span>
                                 <span class="hero-stat-label">emails</span>
                             </div>
-                            <div class="hero-stat">
+                            <div class="hero-stat" id="heroStatEventsContainer">
                                 <span class="hero-stat-icon">📅</span>
                                 <span class="hero-stat-value" id="heroStatEvents">0</span>
                                 <span class="hero-stat-label">events</span>
                             </div>
-                            <div class="hero-stat">
+                            <div class="hero-stat" id="heroStatMessagesContainer">
                                 <span class="hero-stat-icon">💬</span>
                                 <span class="hero-stat-value" id="heroStatMessages">0</span>
                                 <span class="hero-stat-label">messages</span>
+                            </div>
+                            <div class="hero-stat" id="heroStatPhoneContainer" style="display: none;">
+                                <span class="hero-stat-icon">📞</span>
+                                <span class="hero-stat-value" id="heroStatPhone">0</span>
+                                <span class="hero-stat-label">calls</span>
+                            </div>
+                            <div class="hero-stat" id="heroStatSlackContainer" style="display: none;">
+                                <span class="hero-stat-icon">💼</span>
+                                <span class="hero-stat-value" id="heroStatSlack">0</span>
+                                <span class="hero-stat-label">slack</span>
+                            </div>
+                            <div class="hero-stat" id="heroStatNotesContainer" style="display: none;">
+                                <span class="hero-stat-icon">📝</span>
+                                <span class="hero-stat-value" id="heroStatNotes">0</span>
+                                <span class="hero-stat-label">notes</span>
+                            </div>
+                            <div class="hero-stat" id="heroStatContactsContainer" style="display: none;">
+                                <span class="hero-stat-icon">📇</span>
+                                <span class="hero-stat-value" id="heroStatContacts">0</span>
+                                <span class="hero-stat-label">contacts</span>
+                            </div>
+                            <div class="hero-stat" id="heroStatLinkedInContainer" style="display: none;">
+                                <span class="hero-stat-icon">🔗</span>
+                                <span class="hero-stat-value" id="heroStatLinkedIn">0</span>
+                                <span class="hero-stat-label">linkedin</span>
                             </div>
                             <div class="hero-stat-divider"></div>
                             <div class="hero-stat">
@@ -3860,6 +3882,50 @@
             document.getElementById('statNotes').textContent = person.notes ? 1 : 0;
         }
 
+        // Update hero stats from aggregated source totals (called after heatmap loads)
+        function updateHeroStatsFromSources() {
+            // Combined counts from source totals
+            const emailCount = (sourceTotals['gmail'] || 0);
+            const eventCount = (sourceTotals['calendar'] || 0);
+            const messageCount = (sourceTotals['imessage'] || 0) + (sourceTotals['whatsapp'] || 0);
+            const phoneCount = (sourceTotals['phone'] || 0);
+            const slackCount = (sourceTotals['slack'] || 0);
+            const notesCount = (sourceTotals['vault'] || 0) + (sourceTotals['granola'] || 0);
+            const contactsCount = (sourceTotals['contacts'] || 0);
+            const linkedinCount = (sourceTotals['linkedin'] || 0);
+
+            // Update main stats (always shown)
+            document.getElementById('heroStatEmails').textContent = formatCompactNumber(emailCount);
+            document.getElementById('heroStatEvents').textContent = formatCompactNumber(eventCount);
+            document.getElementById('heroStatMessages').textContent = formatCompactNumber(messageCount);
+
+            // Show/hide and update additional stats based on whether they have data
+            const updateStat = (containerId, valueId, count) => {
+                const container = document.getElementById(containerId);
+                const value = document.getElementById(valueId);
+                if (container && value) {
+                    if (count > 0) {
+                        container.style.display = '';
+                        value.textContent = formatCompactNumber(count);
+                    } else {
+                        container.style.display = 'none';
+                    }
+                }
+            };
+
+            updateStat('heroStatPhoneContainer', 'heroStatPhone', phoneCount);
+            updateStat('heroStatSlackContainer', 'heroStatSlack', slackCount);
+            updateStat('heroStatNotesContainer', 'heroStatNotes', notesCount);
+            updateStat('heroStatContactsContainer', 'heroStatContacts', contactsCount);
+            updateStat('heroStatLinkedInContainer', 'heroStatLinkedIn', linkedinCount);
+
+            // Also update backwards compat stats
+            document.getElementById('statEmails').textContent = emailCount;
+            document.getElementById('statMeetings').textContent = eventCount;
+            document.getElementById('statMessages').textContent = messageCount;
+            document.getElementById('statNotes').textContent = notesCount;
+        }
+
         // Render strength ring (circular progress indicator)
         function renderStrengthRing(strength) {
             const strengthValue = Math.round(strength);
@@ -4042,6 +4108,7 @@
 
         // Heatmap data store for tooltips
         let heatmapData = {};
+        let sourceTotals = {}; // Total counts per source type from aggregated data
 
         // Source type badges mapping
         const SOURCE_BADGES = {
@@ -4065,21 +4132,26 @@
                 const data = await api(`/people/${personId}/timeline/aggregated?days_back=372`);
                 const days = data.days || [];
 
-                // Build interaction history with source breakdown
+                // Build interaction history with source breakdown and calculate totals
                 heatmapData = {};
+                sourceTotals = {};
                 days.forEach(day => {
                     const dateKey = day.date;
                     heatmapData[dateKey] = { total: day.total_count, sources: {} };
                     (day.groups || []).forEach(group => {
                         const sourceType = (group.source_type || 'unknown').toLowerCase();
                         heatmapData[dateKey].sources[sourceType] = group.count;
+                        // Accumulate totals
+                        sourceTotals[sourceType] = (sourceTotals[sourceType] || 0) + group.count;
                     });
                 });
 
                 renderHeatMap();
+                updateHeroStatsFromSources();
             } catch (error) {
                 console.error('Failed to load heat map:', error);
                 heatmapData = {};
+                sourceTotals = {};
                 renderHeatMap();
             }
         }
@@ -4163,12 +4235,11 @@
                 const label = monthLabels[i];
                 const nextLabel = monthLabels[i + 1];
 
-                // Calculate width based on weeks this month spans
+                // Calculate flex-grow based on weeks this month spans
                 const nextWeekIndex = nextLabel ? nextLabel.weekIndex : totalWeeks;
                 const weeksSpan = nextWeekIndex - label.weekIndex;
-                const widthPx = weeksSpan * weekWidth - gap; // subtract gap for last column
 
-                monthsHtml += `<div class="heatmap-month-label" style="width: ${widthPx}px; min-width: ${widthPx}px;">${label.monthName}</div>`;
+                monthsHtml += `<div class="heatmap-month-label" style="flex: ${weeksSpan};">${label.monthName}</div>`;
             }
             monthsContainer.innerHTML = monthsHtml;
 
@@ -4254,19 +4325,13 @@
                 return;
             }
 
-            // Filter items to the specific date
+            // API already filtered to the specific date, use timelineData directly
             const targetDate = new Date(dateKey + 'T00:00:00');
-            const nextDate = new Date(targetDate);
-            nextDate.setDate(nextDate.getDate() + 1);
-
-            let items = timelineData.filter(item => {
-                const itemDate = new Date(item.timestamp);
-                return itemDate >= targetDate && itemDate < nextDate;
-            });
+            let items = timelineData;
 
             // Apply source filter if active
             if (timelineFilter !== 'all') {
-                items = items.filter(item => {
+                items = timelineData.filter(item => {
                     const sourceType = (item.source_type || '').toLowerCase();
                     return sourceType.includes(timelineFilter);
                 });
@@ -4328,11 +4393,11 @@
             container.innerHTML = '<div class="loading">Loading timeline...</div>';
 
             try {
-                // If date filter is active, load full year of data to match heatmap
+                // If date filter is active, fetch that specific date directly
                 // Otherwise, use default limit for performance
                 let url = `/people/${personId}/timeline`;
                 if (window.timelineDateFilter) {
-                    url += '?days_back=372&limit=1500';
+                    url += `?date=${window.timelineDateFilter}&limit=500`;
                 } else {
                     url += '?limit=100';
                 }
