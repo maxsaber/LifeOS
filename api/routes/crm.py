@@ -847,11 +847,16 @@ class PersonSplitResponse(BaseModel):
 
 
 @router.get("/people/{person_id}/source-entities")
-async def get_person_source_entities(person_id: str):
+async def get_person_source_entities(
+    person_id: str,
+    limit: int = Query(default=500, ge=1, le=5000, description="Max source entities to return"),
+    offset: int = Query(default=0, ge=0, description="Offset for pagination"),
+):
     """
-    Get all source entities linked to a person.
+    Get source entities linked to a person with pagination.
 
     Used by the split UI to show what sources comprise a person record.
+    Default limit is 500 to prevent performance issues with large records.
     """
     import sqlite3
     from pathlib import Path
@@ -866,13 +871,20 @@ async def get_person_source_entities(person_id: str):
     conn = sqlite3.connect(crm_db)
     conn.row_factory = sqlite3.Row
 
+    # Get total count first
+    count_cursor = conn.execute("""
+        SELECT COUNT(*) as cnt FROM source_entities WHERE canonical_person_id = ?
+    """, (person_id,))
+    total_count = count_cursor.fetchone()['cnt']
+
     cursor = conn.execute("""
         SELECT id, source_type, source_id, observed_name, observed_email, observed_phone,
                link_confidence, link_status, observed_at
         FROM source_entities
         WHERE canonical_person_id = ?
         ORDER BY source_type, observed_at DESC
-    """, (person_id,))
+        LIMIT ? OFFSET ?
+    """, (person_id, limit, offset))
 
     source_entities = []
     for row in cursor:
@@ -911,7 +923,11 @@ async def get_person_source_entities(person_id: str):
     return {
         'person_id': person_id,
         'person_name': person.canonical_name,
-        'total_count': len(source_entities),
+        'total_count': total_count,
+        'returned_count': len(source_entities),
+        'offset': offset,
+        'limit': limit,
+        'has_more': offset + len(source_entities) < total_count,
         'source_entities': source_entities,
         'by_type': by_type,
     }
