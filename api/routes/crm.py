@@ -56,6 +56,8 @@ FAMILY_EXACT_NAMES = {
     "taylor walker",
     "cissy",
     "ethan van drimmelen",
+    "evie lyras",
+    "jordan haddad",
     "lucy jones",
     "grandparents jones",
     "bryce jones",
