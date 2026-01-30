@@ -2870,7 +2870,7 @@
                             <span class="header-indicator-label">Strength</span>
                         </div>
                         <div class="header-dunbar">
-                            <div class="header-dunbar-circle" id="headerDunbarCircle">0</div>
+                            <div class="header-dunbar-circle" id="headerDunbarCircle" title="Dunbar Circle">0</div>
                             <span class="header-indicator-label" id="headerDunbarLabel">Intimate</span>
                         </div>
                     </div>
@@ -3260,6 +3260,7 @@
         let selectedForMerge = new Set();  // IDs selected for merge
         let mergePrimaryId = null;  // Primary person for merge
         let dunbarCircleMap = new Map();  // Map person ID to Dunbar circle
+        let dunbarCirclesInitialized = false;  // Track if global circles have been calculated
 
         // Dunbar Circle Configuration
         // Circle sizes: 0=3 (manual), 1=5, 2=15, 3=50, 4=150, 5=500, 6=1500, 7+=rest
@@ -3270,48 +3271,61 @@
             thresholds: [0, 5, 20, 70, 220, 720, 2220]  // Circle 1-6 boundaries
         };
 
-        // Compute Dunbar circle for each person based on relationship strength rank
-        function assignDunbarCircles(peopleList) {
-            // Sort by relationship strength descending
-            const sorted = [...peopleList].sort((a, b) =>
-                (b.relationship_strength || 0) - (a.relationship_strength || 0)
-            );
+        // Initialize Dunbar circles globally (called once on page load with ALL people)
+        async function initializeDunbarCircles() {
+            if (dunbarCirclesInitialized) return;
 
-            // Create a map for quick lookup
-            const circleMap = new Map();
+            try {
+                // Fetch ALL people sorted by strength to calculate global circles
+                const data = await api('/people?sort=strength&limit=5000');
+                const allPeople = data.people;
 
-            // Assign circle 0 to self and manual entries
-            circleMap.set(DUNBAR_CONFIG.myPersonId, 0);
-            sorted.forEach(p => {
-                if (DUNBAR_CONFIG.manualCircleZero.includes(p.canonical_name)) {
-                    circleMap.set(p.id, 0);
-                }
-            });
+                // Sort by relationship strength descending
+                const sorted = [...allPeople].sort((a, b) =>
+                    (b.relationship_strength || 0) - (a.relationship_strength || 0)
+                );
 
-            // Assign circles to remaining people based on rank
-            let rank = 0;
-            for (const person of sorted) {
-                if (circleMap.has(person.id)) continue;  // Skip already assigned
+                // Create a map for quick lookup
+                const circleMap = new Map();
 
-                // Find which circle this rank falls into
-                let circle = DUNBAR_CONFIG.thresholds.length;  // Default to outer circle
-                for (let i = 0; i < DUNBAR_CONFIG.thresholds.length; i++) {
-                    if (rank < DUNBAR_CONFIG.thresholds[i]) {
-                        circle = i;
-                        break;
+                // Assign circle 0 to self and manual entries
+                circleMap.set(DUNBAR_CONFIG.myPersonId, 0);
+                sorted.forEach(p => {
+                    if (DUNBAR_CONFIG.manualCircleZero.includes(p.canonical_name)) {
+                        circleMap.set(p.id, 0);
                     }
+                });
+
+                // Assign circles to remaining people based on rank
+                let rank = 0;
+                for (const person of sorted) {
+                    if (circleMap.has(person.id)) continue;  // Skip already assigned
+
+                    // Find which circle this rank falls into
+                    let circle = DUNBAR_CONFIG.thresholds.length;  // Default to outer circle
+                    for (let i = 0; i < DUNBAR_CONFIG.thresholds.length; i++) {
+                        if (rank < DUNBAR_CONFIG.thresholds[i]) {
+                            circle = i;
+                            break;
+                        }
+                    }
+                    circleMap.set(person.id, circle);
+                    rank++;
                 }
-                circleMap.set(person.id, circle);
-                rank++;
+
+                // Update global map
+                dunbarCircleMap = circleMap;
+                dunbarCirclesInitialized = true;
+            } catch (error) {
+                console.error('Failed to initialize Dunbar circles:', error);
             }
+        }
 
-            // Update global map for use in detail view
-            dunbarCircleMap = circleMap;
-
-            // Apply circles to original list
+        // Apply pre-calculated Dunbar circles to a list of people
+        function applyDunbarCircles(peopleList) {
             return peopleList.map(p => ({
                 ...p,
-                dunbar_circle: circleMap.get(p.id) ?? 7
+                dunbar_circle: dunbarCircleMap.get(p.id) ?? 7
             }));
         }
 
@@ -3319,6 +3333,12 @@
         function getDunbarCircleLabel(circle) {
             const labels = ['Intimate', 'Close', 'Good Friends', 'Friends', 'Acquaintances', 'Known', 'Familiar', 'Contacts'];
             return labels[circle] || 'Contacts';
+        }
+
+        // Get Dunbar circle size description (e.g., "Top 5")
+        function getDunbarCircleSize(circle) {
+            const sizes = ['Top 3', 'Top 5', 'Top 20', 'Top 70', 'Top 220', 'Top 720', 'Top 2220', '2220+'];
+            return sizes[circle] || '2220+';
         }
 
         // API helpers
@@ -3401,6 +3421,9 @@
             listEl.innerHTML = '<div class="loading">Loading people...</div>';
 
             try {
+                // Initialize global Dunbar circles on first load
+                await initializeDunbarCircles();
+
                 const params = new URLSearchParams();
                 if (searchQuery) params.set('q', searchQuery);
                 if (currentFilter !== 'all') {
@@ -3410,7 +3433,7 @@
                 params.set('limit', '100');
 
                 const data = await api(`/people?${params}`);
-                people = assignDunbarCircles(data.people);
+                people = applyDunbarCircles(data.people);
                 // Sort by Dunbar circle first, then by relationship strength within each circle
                 people.sort((a, b) => {
                     const circleA = a.dunbar_circle ?? 7;
@@ -3454,7 +3477,7 @@
                         <div class="person-name">${escapeHtml(person.canonical_name)}</div>
                         <div class="person-company">${escapeHtml(person.company || '')}</div>
                     </div>
-                    <div class="dunbar-badge circle-${person.dunbar_circle ?? 7}" title="Dunbar Circle ${person.dunbar_circle ?? 7}">${person.dunbar_circle ?? 7}</div>
+                    <div class="dunbar-badge circle-${person.dunbar_circle ?? 7}" title="Dunbar Circle ${person.dunbar_circle ?? 7} (${getDunbarCircleSize(person.dunbar_circle ?? 7)})">${person.dunbar_circle ?? 7}</div>
                     <div class="person-strength">
                         <div class="person-strength-bar" style="width: ${person.relationship_strength || 0}%"></div>
                     </div>
@@ -4135,6 +4158,7 @@
             const circle = dunbarCircleMap.get(personId) ?? 7;
             circleEl.textContent = circle;
             circleEl.className = `header-dunbar-circle circle-${circle}`;
+            circleEl.title = `Dunbar Circle ${circle} (${getDunbarCircleSize(circle)})`;
             labelEl.textContent = getDunbarCircleLabel(circle);
         }
 
