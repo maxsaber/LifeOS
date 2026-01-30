@@ -62,8 +62,10 @@ SYNC_ORDER = [
     "phone",
     "whatsapp",
     "imessage",
-    "person_stats",  # Must run after other syncs
-    "strengths",  # Must run after person_stats
+    "slack",           # Sync Slack users and messages
+    "link_slack",      # Link Slack entities by email (must run after slack)
+    "person_stats",    # Must run after other syncs
+    "strengths",       # Must run after person_stats
 ]
 
 # Scripts that can be run directly
@@ -74,6 +76,8 @@ SYNC_SCRIPTS = {
     "phone": ("scripts/sync_phone_calls.py", ["--execute"]),
     "whatsapp": ("scripts/sync_whatsapp.py", ["--execute"]),
     "imessage": ("scripts/sync_imessage_interactions.py", ["--execute"]),
+    "slack": ("scripts/sync_slack.py", ["--execute"]),
+    "link_slack": ("scripts/link_slack_entities.py", ["--execute"]),
     "person_stats": ("scripts/sync_person_stats.py", ["--execute"]),
     "strengths": ("scripts/sync_strengths.py", ["--execute"]),
 }

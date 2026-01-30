@@ -52,6 +52,17 @@ SYNC_SOURCES = {
         "script": "scripts/sync_imessage_interactions.py",
         "frequency": "daily",
     },
+    "slack": {
+        "description": "Slack users and DM messages",
+        "script": "scripts/sync_slack.py",
+        "frequency": "daily",
+    },
+    "link_slack": {
+        "description": "Link Slack entities to people by email",
+        "script": "scripts/link_slack_entities.py",
+        "frequency": "daily",
+        "depends_on": ["slack"],  # Must run after slack sync
+    },
     "person_stats": {
         "description": "Update person interaction counts",
         "script": "scripts/sync_person_stats.py",

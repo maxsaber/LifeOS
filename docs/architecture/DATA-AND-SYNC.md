@@ -58,6 +58,7 @@ How LifeOS ingests, stores, and resolves data from multiple sources.
 
 ```
 00:00 - 03:00  System running, handling API requests, watching vault changes
+
 03:00          Nightly sync starts
 03:00          └─ Step 1: Vault reindex (all files → ChromaDB + BM25)
 03:01          └─ Step 2: People v2 sync (LinkedIn + Gmail + Calendar)
@@ -66,6 +67,17 @@ How LifeOS ingests, stores, and resolves data from multiple sources.
 03:04          └─ Step 5: Google Sheets sync (form responses → vault)
 03:05          └─ Step 6: Slack sync (incremental → ChromaDB + Interactions)
 03:06          Nightly sync complete
+
+06:00          CRM sync starts (via run_all_syncs.py)
+06:00          └─ Gmail interactions
+06:01          └─ Calendar interactions
+06:02          └─ Contacts (Apple CSV)
+06:03          └─ Phone calls
+06:04          └─ WhatsApp (contacts + messages)
+06:05          └─ iMessage interactions
+06:06          └─ Slack users + entity linking
+06:07          └─ Person stats + strengths
+06:08          CRM sync complete
 
 08:00          Calendar sync (Google Calendar → ChromaDB)
 12:00          Calendar sync
@@ -83,6 +95,7 @@ How LifeOS ingests, stores, and resolves data from multiple sources.
 | ChromaDB Server | Continuous (boot) | HTTP requests | Vector data |
 | Launchd API Service | Continuous (boot) | All data | API logs |
 | Nightly Sync | Daily 3:00 AM ET | Vault, Gmail, Calendar, LinkedIn, iMessages, Slack | ChromaDB, BM25, Vault, PersonEntity |
+| CRM Sync | Daily 6:00 AM ET | Gmail, Calendar, Contacts, Phone, WhatsApp, iMessage, Slack | SourceEntity, Interactions, Relationships |
 | Calendar Indexer | 8 AM, 12 PM, 3 PM ET | Google Calendar | ChromaDB (`lifeos_calendar`) |
 | Vault File Watcher | Continuous | Vault filesystem | ChromaDB, BM25 |
 | Granola Processor | Every 5 minutes | `Granola/` folder | Vault (classified) |
@@ -248,9 +261,11 @@ All sync scripts in `scripts/` follow the pattern:
 |--------|---------|-------------|
 | `sync_gmail_calendar_interactions.py` | Sync emails and calendar | Gmail API |
 | `sync_imessage_interactions.py` | Sync iMessage | `data/imessage.db` |
-| `sync_whatsapp.py` | Sync WhatsApp | `~/.wacli/wacli.db` |
+| `sync_whatsapp.py` | Sync WhatsApp contacts and messages | `~/.wacli/wacli.db` |
 | `sync_phone_calls.py` | Sync phone calls | macOS CallHistoryDB |
 | `sync_contacts_csv.py` | Import Apple Contacts | CSV export |
+| `sync_slack.py` | Sync Slack users and DMs | Slack API |
+| `link_slack_entities.py` | Link Slack users to people by email | `data/crm.db` |
 | `sync_person_stats.py` | Update interaction counts | `data/interactions.db` |
 
 ### Unified Sync Runner
@@ -283,3 +298,73 @@ uv run python scripts/run_comprehensive_sync.py --execute
 | `SLACK_TEAM_ID` | Slack workspace ID | None |
 
 All scheduled times use **America/New_York** (Eastern Time).
+
+---
+
+## Messaging Source Details
+
+### WhatsApp Sync
+
+**Data Source:** `~/.wacli/wacli.db` (wacli CLI tool database)
+
+**Sync Process:**
+1. Sync contacts from wacli's contact database
+2. Sync messages from wacli's message database
+3. Create interactions for each message thread
+4. Link to PersonEntity via phone number (E.164 format)
+
+**Phone Number Format:**
+- Expected: E.164 format (`+15551234567`)
+- JID extraction: `15551234567@s.whatsapp.net` → `+15551234567`
+- 10-digit US numbers get `+1` prefix automatically
+
+**Message Types:**
+- DMs: `title = "WhatsApp DM: {contact_name}"`
+- Groups: `title = "WhatsApp group: {group_name}"`
+
+**Entity Resolution:**
+- Messages sync uses `create_if_missing=True` to create PersonEntity for new contacts
+- Ensures message history from unknown contacts is not lost
+
+### Slack Sync
+
+**Data Source:** Slack API via OAuth token
+
+**Required Environment:**
+```bash
+SLACK_USER_TOKEN=xoxp-...  # User OAuth token with scopes: users:read, conversations.history, im:history
+SLACK_TEAM_ID=T02F5DW71LY  # Workspace ID
+```
+
+**Sync Process:**
+1. `sync_slack.py` - Syncs Slack users to SourceEntity, indexes DMs to ChromaDB
+2. `link_slack_entities.py` - Links Slack users to PersonEntity by matching email addresses
+
+**Entity Linking:**
+- Slack users are matched to existing PersonEntity records by email address
+- Email matching is case-insensitive
+- Unmatched users remain as SourceEntity only (can be manually linked later)
+
+**Interaction Counts:**
+- `shared_slack_count` is populated by relationship discovery after entity linking
+- Counts DM message exchanges between linked users
+
+### Daily Sync Order
+
+The unified sync runner (`run_all_syncs.py`) executes in this order:
+
+1. `gmail` - Email sync
+2. `calendar` - Calendar sync
+3. `contacts` - Apple Contacts
+4. `phone` - Phone calls
+5. `whatsapp` - WhatsApp contacts and messages
+6. `imessage` - iMessage sync
+7. `slack` - Slack users and DMs
+8. `link_slack` - Link Slack entities by email
+9. `person_stats` - Update interaction counts
+10. `strengths` - Recalculate relationship strengths
+
+**Automated via launchd:**
+- Service: `com.lifeos.crm-sync`
+- Schedule: Daily at 6:00 AM
+- Script: `scripts/run_all_syncs.py`

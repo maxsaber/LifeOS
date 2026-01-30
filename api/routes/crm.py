@@ -343,6 +343,10 @@ class ConnectionResponse(BaseModel):
     relationship_type: str
     shared_events_count: int = 0
     shared_threads_count: int = 0
+    shared_messages_count: int = 0      # iMessage/SMS
+    shared_whatsapp_count: int = 0      # WhatsApp
+    shared_slack_count: int = 0         # Slack DMs
+    shared_phone_calls_count: int = 0   # Phone calls
     shared_contexts: list[str] = []
     relationship_strength: float = 0.0
     last_seen_together: Optional[str] = None
@@ -1525,16 +1529,27 @@ async def get_person_connections(
             name=other.canonical_name,
             company=other.company,
             relationship_type=rel.relationship_type,
-            shared_events_count=rel.shared_events_count,
-            shared_threads_count=rel.shared_threads_count,
+            shared_events_count=rel.shared_events_count or 0,
+            shared_threads_count=rel.shared_threads_count or 0,
+            shared_messages_count=rel.shared_messages_count or 0,
+            shared_whatsapp_count=rel.shared_whatsapp_count or 0,
+            shared_slack_count=rel.shared_slack_count or 0,
+            shared_phone_calls_count=rel.shared_phone_calls_count or 0,
             shared_contexts=rel.shared_contexts,
             relationship_strength=other.relationship_strength,
             last_seen_together=rel.last_seen_together.isoformat() if rel.last_seen_together else None,
         ))
 
-    # Sort by total shared interactions
+    # Sort by total shared interactions (all sources)
     connections.sort(
-        key=lambda c: c.shared_events_count + c.shared_threads_count,
+        key=lambda c: (
+            c.shared_events_count +
+            c.shared_threads_count +
+            c.shared_messages_count +
+            c.shared_whatsapp_count +
+            c.shared_slack_count +
+            c.shared_phone_calls_count
+        ),
         reverse=True
     )
 

@@ -403,7 +403,7 @@ def sync_whatsapp_messages(dry_run: bool = True) -> dict:
             result = resolver.resolve(
                 name=sender_name if sender_name else None,
                 phone=phone,
-                create_if_missing=False,  # Only link to existing people
+                create_if_missing=True,  # Create new person if not found (matches contact sync)
             )
 
             if not result or not result.entity:
