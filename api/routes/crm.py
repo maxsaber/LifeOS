@@ -141,6 +141,60 @@ def compute_person_category(person: PersonEntity, source_entities: list = None) 
     return "personal"
 
 
+def _tokenize(text: str) -> list[str]:
+    """Split text into lowercase tokens, removing punctuation."""
+    import re
+    # Split on whitespace and punctuation, keep only alphanumeric
+    return [t.lower() for t in re.split(r'[\s.,;:\-\'\"()]+', text) if t]
+
+
+def _fuzzy_name_match(query: str, name: str) -> bool:
+    """
+    Check if query tokens match name tokens as prefixes.
+
+    Examples:
+    - "ryan jones" matches "Ryan A. Jones" (exact word matches)
+    - "ry jo" matches "Ryan A. Jones" (prefix matches)
+    - "jo ry" matches "Ryan A. Jones" (order doesn't matter)
+    """
+    if not query or not name:
+        return False
+
+    query_tokens = _tokenize(query)
+    name_tokens = _tokenize(name)
+
+    if not query_tokens:
+        return False
+
+    # Each query token must match the start of at least one name token
+    for qt in query_tokens:
+        if not any(nt.startswith(qt) for nt in name_tokens):
+            return False
+    return True
+
+
+def _search_matches(query: str, person) -> bool:
+    """Check if a person matches the search query."""
+    q_lower = query.lower()
+
+    # Try fuzzy name matching first
+    if _fuzzy_name_match(query, person.canonical_name):
+        return True
+    if _fuzzy_name_match(query, person.display_name):
+        return True
+    for alias in person.aliases:
+        if _fuzzy_name_match(query, alias):
+            return True
+
+    # Fall back to substring matching for emails and company
+    if any(q_lower in email.lower() for email in person.emails):
+        return True
+    if person.company and q_lower in person.company.lower():
+        return True
+
+    return False
+
+
 # Response Models
 
 
@@ -517,16 +571,9 @@ async def list_people(
     # Get all people
     people = person_store.get_all()
 
-    # Apply search filter
+    # Apply search filter (fuzzy token-based matching for names)
     if q:
-        q_lower = q.lower()
-        people = [
-            p for p in people
-            if q_lower in p.canonical_name.lower()
-            or any(q_lower in email.lower() for email in p.emails)
-            or any(q_lower in alias.lower() for alias in p.aliases)
-            or (p.company and q_lower in p.company.lower())
-        ]
+        people = [p for p in people if _search_matches(q, p)]
 
     # Apply category filter (uses computed category based on work domain/slack)
     if category:
