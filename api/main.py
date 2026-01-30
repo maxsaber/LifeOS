@@ -47,36 +47,37 @@ _people_v2_sync_thread = None
 _people_v2_stop_event = threading.Event()
 
 
-def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, timezone: str = "America/New_York"):
+def _health_check_loop(stop_event: threading.Event, schedule_times: list[tuple[int, int]] = None, timezone: str = "America/New_York"):
     """
-    Background thread for nightly health checks and failure notifications.
+    Background thread for health checks and failure notifications.
 
-    NOTE: All sync operations have been consolidated into the unified daily sync
-    (scripts/run_all_syncs.py) which runs via launchd. This loop now only:
-    1. Collects processor failures from the last 24 hours
-    2. Sends alert notifications if failures occurred
+    Runs at scheduled times to check sync health and processor status.
+    Default schedule: 2:30 AM (pre-sync) and 7:00 AM (post-sync).
 
-    The unified daily sync handles (in order):
-    - Phase 1: Data Collection (Gmail, Calendar, LinkedIn, Contacts, Phone, WhatsApp, iMessage, Slack)
-    - Phase 2: Entity Processing (link Slack entities)
-    - Phase 3: Relationship Building (discovery, stats, strengths)
-    - Phase 4: Vector Store Indexing (vault reindex)
-    - Phase 5: Content Sync (Google Docs, Google Sheets)
+    NOTE: All sync operations run via launchd at 3:00 AM (scripts/run_all_syncs.py).
+    This loop only monitors health and sends alerts.
 
     Args:
         stop_event: Event to signal thread shutdown
-        schedule_hour: Hour to run health check (24h format, default 3 AM)
+        schedule_times: List of (hour, minute) tuples for when to run health checks
         timezone: Timezone for scheduling
     """
+    if schedule_times is None:
+        schedule_times = [(2, 30), (7, 0)]  # 2:30 AM pre-sync, 7:00 AM post-sync
+
     tz = ZoneInfo(timezone)
 
     while not stop_event.is_set():
         now = datetime.now(tz)
 
-        # Calculate next run time
-        next_run = now.replace(hour=schedule_hour, minute=0, second=0, microsecond=0)
-        if now >= next_run:
-            next_run += timedelta(days=1)
+        # Calculate next run time from all scheduled times
+        candidates = []
+        for hour, minute in schedule_times:
+            candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if now >= candidate:
+                candidate += timedelta(days=1)
+            candidates.append(candidate)
+        next_run = min(candidates)
 
         # Sleep until next run (check every 60 seconds for stop signal)
         while datetime.now(tz) < next_run and not stop_event.is_set():
@@ -85,7 +86,8 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
         if stop_event.is_set():
             break
 
-        logger.info("Nightly health check: Starting...")
+        check_time = datetime.now(tz).strftime("%H:%M")
+        logger.info(f"Health check ({check_time}): Starting...")
 
         # Track failures for notification
         failures = []
@@ -118,7 +120,7 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
 
         # Send notification if any failures occurred
         if failures:
-            logger.warning(f"Nightly health check: {len(failures)} issue(s), sending alert...")
+            logger.warning(f"Health check: {len(failures)} issue(s), sending alert...")
             try:
                 from api.services.notifications import send_alert
                 failure_lines = [f"- {name}: {error}" for name, error in failures]
@@ -129,9 +131,9 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
             except Exception as e:
                 logger.error(f"Failed to send failure notification: {e}")
         else:
-            logger.info("Nightly health check: All systems healthy")
+            logger.info("Health check: All systems healthy")
 
-        logger.info("Nightly health check: Complete")
+        logger.info("Health check: Complete")
 
 
 @asynccontextmanager
@@ -170,21 +172,21 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to start Calendar indexer: {e}")
 
-    # Startup: Initialize and start nightly sync scheduler (3 AM Eastern)
-    # Runs: vault reindex → LinkedIn sync → Gmail sync → Calendar sync
+    # Startup: Initialize health check scheduler (2:30 AM and 7:00 AM Eastern)
+    # Unified sync runs via launchd at 3:00 AM
     try:
         _people_v2_stop_event.clear()
         _people_v2_sync_thread = threading.Thread(
-            target=_nightly_sync_loop,
+            target=_health_check_loop,
             args=(_people_v2_stop_event,),
-            kwargs={"schedule_hour": 3, "timezone": "America/New_York"},
+            kwargs={"schedule_times": [(2, 30), (7, 0)], "timezone": "America/New_York"},
             daemon=True,
-            name="NightlySyncThread"
+            name="HealthCheckThread"
         )
         _people_v2_sync_thread.start()
-        logger.info("Nightly sync scheduler started (3:00 AM Eastern): vault reindex + people v2 sync")
+        logger.info("Health check scheduler started (2:30 AM + 7:00 AM Eastern)")
     except Exception as e:
-        logger.error(f"Failed to start People v2 sync scheduler: {e}")
+        logger.error(f"Failed to start health check scheduler: {e}")
 
     yield  # Application runs here
 

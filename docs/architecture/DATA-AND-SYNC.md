@@ -59,40 +59,42 @@ How LifeOS ingests, stores, and resolves data from multiple sources.
 All data syncing is consolidated into a single daily sync with proper phase ordering. This ensures downstream processes always have access to fresh upstream data.
 
 ```
-06:00          Unified sync starts (via run_all_syncs.py)
+02:30          Pre-sync health check (API server)
+03:00          Unified sync starts (via run_all_syncs.py)
 
                === PHASE 1: Data Collection ===
                Pull fresh data from all external sources
-06:00          └─ Gmail (sent + received + CC emails)
-06:01          └─ Calendar (Google Calendar events)
-06:02          └─ LinkedIn (connections CSV export)
-06:03          └─ Contacts (Apple Contacts CSV)
-06:04          └─ Phone (macOS CallHistoryDB)
-06:05          └─ WhatsApp (wacli database)
-06:06          └─ iMessage (macOS chat.db)
-06:07          └─ Slack (users + DM messages)
+03:00          └─ Gmail (sent + received + CC emails)
+03:01          └─ Calendar (Google Calendar events)
+03:02          └─ LinkedIn (connections CSV export)
+03:03          └─ Contacts (Apple Contacts CSV)
+03:04          └─ Phone (macOS CallHistoryDB)
+03:05          └─ WhatsApp (wacli database)
+03:06          └─ iMessage (macOS chat.db)
+03:07          └─ Slack (users + DM messages)
 
                === PHASE 2: Entity Processing ===
                Link source entities to canonical PersonEntity records
-06:08          └─ Link Slack (match by email)
-06:08          └─ Link iMessage (match by phone)
+03:08          └─ Link Slack (match by email)
+03:08          └─ Link iMessage (match by phone)
 
                === PHASE 3: Relationship Building ===
                Build relationships using all collected interaction data
-06:09          └─ Relationship discovery (populate edge weights)
-06:10          └─ Person stats (update interaction counts)
-06:11          └─ Strengths (calculate relationship scores)
+03:09          └─ Relationship discovery (populate edge weights)
+03:10          └─ Person stats (update interaction counts)
+03:11          └─ Strengths (calculate relationship scores)
 
                === PHASE 4: Vector Store Indexing ===
                Index content with fresh people data available
-06:12          └─ Vault reindex (ChromaDB + BM25)
+03:12          └─ Vault reindex (ChromaDB + BM25)
 
                === PHASE 5: Content Sync ===
                Pull external content into vault
-06:13          └─ Google Docs (configured docs → vault)
-06:14          └─ Google Sheets (form responses → vault)
+03:13          └─ Google Docs (configured docs → vault)
+03:14          └─ Google Sheets (form responses → vault)
 
-06:15          Unified sync complete
+~03:15         Unified sync complete
+07:00          Post-sync health check (API server)
 
 08:00          Calendar sync (Google Calendar → ChromaDB)
 12:00          Calendar sync
@@ -119,7 +121,7 @@ The 5-phase structure ensures correct data flow:
 |---------|----------|------------|-----------|
 | ChromaDB Server | Continuous (boot) | HTTP requests | Vector data |
 | Launchd API Service | Continuous (boot) | All data | API logs |
-| Unified Sync | Daily 6:00 AM ET | All sources | All stores |
+| Unified Sync | Daily 3:00 AM ET | All sources | All stores |
 | Calendar Indexer | 8 AM, 12 PM, 3 PM ET | Google Calendar | ChromaDB (`lifeos_calendar`) |
 | Vault File Watcher | Continuous | Vault filesystem | ChromaDB, BM25 |
 | Granola Processor | Every 5 minutes | `Granola/` folder | Vault (classified) |
@@ -483,5 +485,5 @@ The unified sync runner (`run_all_syncs.py`) executes in this order:
 
 **Automated via launchd:**
 - Service: `com.lifeos.crm-sync`
-- Schedule: Daily at 6:00 AM
+- Schedule: Daily at 3:00 AM
 - Script: `scripts/run_all_syncs.py`
