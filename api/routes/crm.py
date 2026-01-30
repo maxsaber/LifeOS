@@ -817,6 +817,181 @@ async def merge_people(request: PersonMergeRequest):
     )
 
 
+# ============================================================================
+# Split Helper Functions
+# ============================================================================
+
+def _recalculate_person_stats(person_id: str, int_conn, person_store) -> dict:
+    """
+    Recalculate person stats from the interactions table.
+
+    Returns dict of updated stats for logging.
+    """
+    from datetime import datetime, timezone
+
+    person = person_store.get_by_id(person_id)
+    if not person:
+        return {}
+
+    # Query interaction counts by source_type
+    cursor = int_conn.execute("""
+        SELECT source_type, COUNT(*) as count
+        FROM interactions
+        WHERE person_id = ?
+        GROUP BY source_type
+    """, (person_id,))
+
+    counts = {row[0]: row[1] for row in cursor.fetchall()}
+
+    # Map source_types to person stats
+    old_stats = {
+        'email_count': person.email_count,
+        'meeting_count': person.meeting_count,
+        'message_count': person.message_count,
+        'mention_count': person.mention_count,
+    }
+
+    person.email_count = counts.get('gmail', 0)
+    person.meeting_count = counts.get('calendar', 0)
+    person.message_count = (
+        counts.get('imessage', 0) +
+        counts.get('whatsapp', 0) +
+        counts.get('phone', 0)
+    )
+    person.mention_count = counts.get('vault', 0) + counts.get('granola', 0)
+
+    # Update first_seen/last_seen from interactions
+    cursor = int_conn.execute("""
+        SELECT MIN(timestamp), MAX(timestamp)
+        FROM interactions
+        WHERE person_id = ?
+    """, (person_id,))
+    row = cursor.fetchone()
+    if row and row[0]:
+        person.first_seen = datetime.fromisoformat(row[0]).replace(tzinfo=timezone.utc)
+    if row and row[1]:
+        person.last_seen = datetime.fromisoformat(row[1]).replace(tzinfo=timezone.utc)
+
+    person_store.update(person)
+
+    new_stats = {
+        'email_count': person.email_count,
+        'meeting_count': person.meeting_count,
+        'message_count': person.message_count,
+        'mention_count': person.mention_count,
+    }
+
+    return {'old': old_stats, 'new': new_stats}
+
+
+def _recalculate_relationship_with_me(person_id: str, my_person_id: str, int_conn) -> dict:
+    """
+    Recalculate the relationship between person_id and my_person_id.
+
+    Queries interactions to get accurate shared_* counts.
+    Returns dict with relationship changes for logging.
+    """
+    from api.services.relationship import get_relationship_store, Relationship
+    from datetime import datetime, timezone
+
+    if not my_person_id or person_id == my_person_id:
+        return {}
+
+    rel_store = get_relationship_store()
+
+    # Query interaction counts by source_type for this person
+    cursor = int_conn.execute("""
+        SELECT source_type, COUNT(*) as count
+        FROM interactions
+        WHERE person_id = ?
+        GROUP BY source_type
+    """, (person_id,))
+
+    counts = {row[0]: row[1] for row in cursor.fetchall()}
+
+    # Get timestamps
+    cursor = int_conn.execute("""
+        SELECT MIN(timestamp), MAX(timestamp)
+        FROM interactions
+        WHERE person_id = ?
+    """, (person_id,))
+    row = cursor.fetchone()
+    first_seen = datetime.fromisoformat(row[0]).replace(tzinfo=timezone.utc) if row and row[0] else None
+    last_seen = datetime.fromisoformat(row[1]).replace(tzinfo=timezone.utc) if row and row[1] else None
+
+    # Calculate shared counts (interactions with this person = shared with me)
+    shared_events = counts.get('calendar', 0)
+    shared_threads = counts.get('gmail', 0)
+    shared_messages = counts.get('imessage', 0)
+    shared_whatsapp = counts.get('whatsapp', 0)
+    shared_phone = counts.get('phone', 0)
+    shared_slack = counts.get('slack', 0)
+
+    total_interactions = sum(counts.values())
+
+    # Get or create relationship
+    existing = rel_store.get_between(my_person_id, person_id)
+
+    if total_interactions == 0:
+        # No interactions - delete relationship if exists
+        if existing:
+            rel_store.delete(existing.id)
+            return {'action': 'deleted', 'person_id': person_id}
+        return {'action': 'none', 'person_id': person_id}
+
+    if existing:
+        # Update existing relationship
+        old_total = existing.total_shared_interactions
+
+        existing.shared_events_count = shared_events
+        existing.shared_threads_count = shared_threads
+        existing.shared_messages_count = shared_messages
+        existing.shared_whatsapp_count = shared_whatsapp
+        existing.shared_phone_calls_count = shared_phone
+        existing.shared_slack_count = shared_slack
+
+        if first_seen and (not existing.first_seen_together or first_seen < existing.first_seen_together):
+            existing.first_seen_together = first_seen
+        if last_seen and (not existing.last_seen_together or last_seen > existing.last_seen_together):
+            existing.last_seen_together = last_seen
+
+        rel_store.update(existing)
+
+        return {
+            'action': 'updated',
+            'person_id': person_id,
+            'old_total': old_total,
+            'new_total': existing.total_shared_interactions,
+        }
+    else:
+        # Create new relationship
+        # Normalize IDs (person_a_id < person_b_id)
+        if my_person_id < person_id:
+            person_a_id, person_b_id = my_person_id, person_id
+        else:
+            person_a_id, person_b_id = person_id, my_person_id
+
+        new_rel = Relationship(
+            person_a_id=person_a_id,
+            person_b_id=person_b_id,
+            shared_events_count=shared_events,
+            shared_threads_count=shared_threads,
+            shared_messages_count=shared_messages,
+            shared_whatsapp_count=shared_whatsapp,
+            shared_phone_calls_count=shared_phone,
+            shared_slack_count=shared_slack,
+            first_seen_together=first_seen,
+            last_seen_together=last_seen,
+        )
+        rel_store.add(new_rel)
+
+        return {
+            'action': 'created',
+            'person_id': person_id,
+            'total': new_rel.total_shared_interactions,
+        }
+
+
 class PersonSplitRequest(BaseModel):
     """Request to split source entities from a person to another."""
     from_person_id: str
@@ -1281,6 +1456,57 @@ async def split_person(request: PersonSplitRequest):
                 )
                 override_store.add(override)
                 overrides_created += 1
+
+    # Recalculate stats and relationships for both persons
+    # (Consistent with merge behavior - recalculate after moving data)
+    logger.info("Recalculating stats and relationships...")
+
+    int_db = Path(__file__).parent.parent.parent / "data" / "interactions.db"
+    int_conn_stats = sqlite3.connect(int_db)
+
+    # Recalculate stats for both persons
+    from_stats = _recalculate_person_stats(from_person.id, int_conn_stats, person_store)
+    to_stats = _recalculate_person_stats(to_person.id, int_conn_stats, person_store)
+
+    if from_stats:
+        logger.info(f"  {from_person.canonical_name} stats: {from_stats['old']} -> {from_stats['new']}")
+    if to_stats:
+        logger.info(f"  {to_person.canonical_name} stats: {to_stats['old']} -> {to_stats['new']}")
+
+    # Recalculate relationships with my_person_id
+    my_person_id = settings.my_person_id
+    if my_person_id:
+        from_rel = _recalculate_relationship_with_me(from_person.id, my_person_id, int_conn_stats)
+        to_rel = _recalculate_relationship_with_me(to_person.id, my_person_id, int_conn_stats)
+
+        if from_rel.get('action') != 'none':
+            logger.info(f"  {from_person.canonical_name} relationship: {from_rel}")
+        if to_rel.get('action') != 'none':
+            logger.info(f"  {to_person.canonical_name} relationship: {to_rel}")
+
+    int_conn_stats.close()
+
+    # Recalculate relationship strength for both persons
+    from api.services.relationship_metrics import compute_strength_for_person
+
+    from_person_refreshed = person_store.get_by_id(from_person.id)
+    to_person_refreshed = person_store.get_by_id(to_person.id)
+
+    if from_person_refreshed:
+        new_strength = compute_strength_for_person(from_person_refreshed)
+        if new_strength != from_person_refreshed._relationship_strength:
+            from_person_refreshed._relationship_strength = new_strength
+            person_store.update(from_person_refreshed)
+            logger.info(f"  {from_person.canonical_name} strength: {new_strength}")
+
+    if to_person_refreshed:
+        new_strength = compute_strength_for_person(to_person_refreshed)
+        if new_strength != to_person_refreshed._relationship_strength:
+            to_person_refreshed._relationship_strength = new_strength
+            person_store.update(to_person_refreshed)
+            logger.info(f"  {to_person.canonical_name} strength: {new_strength}")
+
+    person_store.save()
 
     logger.info(
         f"Split {source_entities_moved} source entities from {from_person.canonical_name} "
