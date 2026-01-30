@@ -63,6 +63,12 @@ SYNC_SOURCES = {
         "frequency": "daily",
         "depends_on": ["slack"],  # Must run after slack sync
     },
+    "relationship_discovery": {
+        "description": "Discover relationships and populate edge weights",
+        "script": "scripts/sync_relationship_discovery.py",
+        "frequency": "daily",
+        "depends_on": ["gmail", "calendar", "imessage", "whatsapp", "slack", "link_slack", "phone"],
+    },
     "person_stats": {
         "description": "Update person interaction counts",
         "script": "scripts/sync_person_stats.py",
