@@ -560,16 +560,16 @@ async def full_health_check():
 
 @app.get("/")
 async def root():
-    """Serve the chat UI."""
-    index_path = Path(__file__).parent.parent / "web" / "index.html"
-    if index_path.exists():
-        return FileResponse(str(index_path))
+    """Serve the homepage."""
+    home_path = Path(__file__).parent.parent / "web" / "home.html"
+    if home_path.exists():
+        return FileResponse(str(home_path))
     return {"message": "LifeOS API", "version": "0.3.0"}
 
 
 @app.get("/chat")
 async def chat_page():
-    """Serve the chat UI (alias for root)."""
+    """Serve the chat UI."""
     index_path = Path(__file__).parent.parent / "web" / "index.html"
     if index_path.exists():
         return FileResponse(str(index_path))
