@@ -131,7 +131,7 @@ LifeOS/
 
 | File | Purpose |
 |------|---------|
-| `api/main.py` | FastAPI app + nightly sync scheduler |
+| `api/main.py` | FastAPI app + health check scheduler |
 | `config/settings.py` | Environment configuration |
 | `config/people_dictionary.json` | Known people and aliases |
 
