@@ -65,6 +65,7 @@ run_unit_tests() {
     log_step "Running unit tests..."
     python -m pytest tests/ -v \
         --ignore=tests/test_ui_browser.py \
+        --ignore=tests/archive \
         -m "not browser and not requires_server and not integration and not slow" \
         --tb=short \
         -q
@@ -102,6 +103,7 @@ run_browser_tests() {
     fi
 
     python -m pytest tests/test_ui_browser.py tests/test_e2e_flow.py -v \
+        --ignore=tests/archive \
         -m "browser" \
         --tb=short \
         --browser chromium

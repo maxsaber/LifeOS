@@ -1,7 +1,7 @@
 # Test & Script Infrastructure Overhaul Plan
 
 **Date**: 2026-01-30
-**Status**: Phase C In Progress
+**Status**: Phase D Complete + Test Orchestration Verified
 
 ## Executive Summary
 
@@ -226,41 +226,65 @@ pytest -m 'unit and not slow' tests/
 2. Test commit → server restart flow
 3. Document ChromaDB workaround in README
 
-### Phase C: Test Coverage - Critical (Days 2-3)
-1. Add `test_person_facts.py` (893 lines untested!)
-2. Add `test_conversation_store.py`
-3. Add `test_briefings_api.py`
-4. Add markers to existing test files
+### Phase C: Test Coverage - Critical (Days 2-3) ✅ COMPLETE
+1. ✅ Add `test_person_facts.py` (43 tests)
+2. ✅ Add `test_conversation_store.py` (54 tests)
+3. ✅ Add `test_briefings_api.py` (17 tests)
+4. Add markers to existing test files (pending)
 
-### Phase D: Test Coverage - High (Days 4-5)
-1. Add `test_memory_store.py`
-2. Add `test_chunker.py`
-3. Add `test_conversations_api.py`
-4. Add `test_slack_api.py`
+### Phase D: Test Coverage - High (Days 4-5) ✅ COMPLETE
+1. ✅ Add `test_memory_store.py` (64 tests)
+2. ✅ Add `test_chunker.py` (47 tests)
+3. ✅ Add `test_conversations_api.py` (23 tests)
+4. ✅ Add `test_slack_api.py` (28 tests)
 
 ### Phase E: Test Coverage - Medium (Days 6-7)
 1. Add remaining API route tests
 2. Add remaining service tests
 3. Add `test_bm25_index.py`
 
-### Phase F: Orchestration (Day 8)
-1. Add ruff linting to pre-commit
-2. Fix deploy.sh file staging
-3. Update test.sh documentation
+### Phase F: Orchestration (Day 8) ✅ PARTIAL
+1. Add ruff linting to pre-commit (pending)
+2. Fix deploy.sh file staging (pending)
+3. ✅ Update test.sh to ignore tests/archive
+4. ✅ Update pyproject.toml with norecursedirs
+
+### Test Orchestration Verification ✅ COMPLETE
+1. ✅ Verified test.sh runs correct tests (unit, smoke, browser, all modes)
+2. ✅ Verified deploy.sh calls test.sh smoke correctly
+3. ✅ Archived redundant test files:
+   - `test_chunking.py` → superseded by `test_chunker.py`
+   - `test_conversations.py` → superseded by `test_conversation_store.py` + `test_conversations_api.py`
+4. ✅ Created tests/archive/ with README documenting archived tests
+5. ✅ Updated pyproject.toml to auto-ignore tests/archive via norecursedirs
 
 ---
 
 ## Success Metrics
 
-| Metric | Current | Target |
-|--------|---------|--------|
-| Test files | 68 | 85+ |
-| Total tests | 1,110 | 1,400+ |
-| Service coverage | 74% | 92% |
-| API route coverage | 43% | 90% |
-| Data store coverage | 56% | 90% |
-| Scripts in archive | 0 | 25 |
-| Orphaned scripts | 25 | 0 |
+| Metric | Original | Current | Target |
+|--------|----------|---------|--------|
+| Test files | 68 | 73 (+7 new, -2 archived) | 85+ |
+| Total tests | 1,110 | 1,331 (+276 new, -52 archived) | 1,400+ |
+| Unit tests passing | ~373 | 597 | 650+ |
+| Service coverage | 74% | ~88% | 92% |
+| API route coverage | 43% | ~65% | 90% |
+| Data store coverage | 56% | ~80% | 90% |
+| Scripts in archive | 0 | 23 | 25 |
+| Orphaned scripts | 25 | 2 | 0 |
+
+**New test files added:**
+- `test_person_facts.py` - 43 tests (893 LOC service)
+- `test_conversation_store.py` - 54 tests (453 LOC store)
+- `test_briefings_api.py` - 17 tests (85 LOC API)
+- `test_memory_store.py` - 64 tests (428 LOC store)
+- `test_chunker.py` - 47 tests (375 LOC service)
+- `test_conversations_api.py` - 23 tests (264 LOC API)
+- `test_slack_api.py` - 28 tests (372 LOC API)
+
+**Archived test files (redundant):**
+- `test_chunking.py` - 25 tests → covered by test_chunker.py
+- `test_conversations.py` - 27 tests → covered by test_conversation_store.py + test_conversations_api.py
 
 ---
 

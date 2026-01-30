@@ -23,6 +23,7 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+norecursedirs = ["tests/archive", ".git", "__pycache__", ".venv"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 addopts = "-v"
