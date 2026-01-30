@@ -7,8 +7,9 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/nathanramia/.venvs/lifeos/bin/python</string>
+        <string>/Users/nathanramia/Documents/Code/LifeOS/.venv/bin/python</string>
         <string>/Users/nathanramia/Documents/Code/LifeOS/scripts/run_all_syncs.py</string>
+        <string>--force</string>
     </array>
 
     <key>WorkingDirectory</key>
@@ -16,11 +17,17 @@
 
     <key>EnvironmentVariables</key>
     <dict>
+        <key>HOME</key>
+        <string>/Users/nathanramia</string>
         <key>PATH</key>
-        <string>/Users/nathanramia/.venvs/lifeos/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>/Users/nathanramia/Documents/Code/LifeOS/.venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
         <key>PYTHONPATH</key>
         <string>/Users/nathanramia/Documents/Code/LifeOS</string>
     </dict>
+
+    <!-- Run in Aqua session for better permissions (iMessage, Contacts access) -->
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
 
     <!-- Run daily at 6 AM -->
     <key>StartCalendarInterval</key>

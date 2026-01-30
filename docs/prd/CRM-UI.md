@@ -938,7 +938,7 @@ Add multi-select dropdown to filter graph edges by source type.
 
 **UI Component:**
 ```
-Edge Strength: [===|=======] 15%    Sources: [▼ All Sources]
+Edge Weight: [===|=======] 15%    Sources: [▼ All Sources]
                                            ☑ Calendar
                                            ☑ Email
                                            ☑ iMessage

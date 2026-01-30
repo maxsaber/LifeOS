@@ -27,6 +27,12 @@ from config.people_config import (
     get_vault_contexts_for_company,
     normalize_domain,
 )
+from config.relationship_weights import (
+    RELATIONSHIP_STRENGTH_BOOST_MAX,
+    RELATIONSHIP_STRENGTH_BOOST_WEIGHT,
+    FIRST_NAME_ONLY_BOOST_MULTIPLIER,
+)
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -226,6 +232,10 @@ class EntityResolver:
         candidates = []
         name_lower = name.lower()
 
+        # Check if this is a first-name-only match (single word, no spaces)
+        # First-name mentions in notes usually refer to close contacts
+        is_first_name_only = ' ' not in name.strip()
+
         for entity in self._store.get_all():
             score = 0.0
             match_type = "fuzzy"
@@ -252,6 +262,23 @@ class EntityResolver:
                 days_since = (datetime.now(timezone.utc) - _make_aware(entity.last_seen)).days
                 if days_since < EntityResolutionConfig.RECENCY_THRESHOLD_DAYS:
                     score += EntityResolutionConfig.RECENCY_BOOST_POINTS
+
+            # Relationship strength boost
+            # People you have strong relationships with are more likely to be
+            # mentioned by first name in your notes
+            rel_strength = entity.relationship_strength  # 0-100 scale
+            if rel_strength > 0:
+                # Calculate boost: strength (0-100) * weight -> points (0-25 default)
+                rel_boost = min(
+                    rel_strength * RELATIONSHIP_STRENGTH_BOOST_WEIGHT,
+                    RELATIONSHIP_STRENGTH_BOOST_MAX
+                )
+                # Apply stronger boost for first-name-only matches
+                if is_first_name_only:
+                    rel_boost *= FIRST_NAME_ONLY_BOOST_MULTIPLIER
+                score += rel_boost
+                if rel_boost > 5:  # Significant boost
+                    match_type = "fuzzy_relationship" if match_type == "fuzzy" else f"{match_type}_relationship"
 
             # Only add if there's meaningful similarity
             if name_sim > 50:  # At least 50% name match

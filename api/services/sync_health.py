@@ -20,66 +20,121 @@ SYNC_HEALTH_DB_PATH = Path(__file__).parent.parent.parent / "data" / "sync_healt
 # Maximum age before a sync is considered stale (24 hours)
 SYNC_STALE_HOURS = 24
 
+# =============================================================================
 # All data sources that should sync regularly
+# Organized by phase to match run_all_syncs.py
+# =============================================================================
 SYNC_SOURCES = {
+    # === Phase 1: Data Collection ===
     "gmail": {
-        "description": "Gmail emails via Google API",
+        "description": "Gmail emails (sent + received + CC) via Google API",
         "script": "scripts/sync_gmail_calendar_interactions.py",
         "frequency": "daily",
+        "phase": 1,
     },
     "calendar": {
         "description": "Google Calendar events",
         "script": "scripts/sync_gmail_calendar_interactions.py",
         "frequency": "daily",
+        "phase": 1,
+    },
+    "linkedin": {
+        "description": "LinkedIn connections from CSV export",
+        "script": "scripts/sync_linkedin.py",
+        "frequency": "daily",
+        "phase": 1,
     },
     "contacts": {
         "description": "Apple Contacts via CSV export",
         "script": "scripts/sync_contacts_csv.py",
         "frequency": "weekly",
+        "phase": 1,
     },
     "phone": {
         "description": "Phone call history from CallHistoryDB",
         "script": "scripts/sync_phone_calls.py",
         "frequency": "daily",
+        "phase": 1,
     },
     "whatsapp": {
-        "description": "WhatsApp contacts via wacli",
+        "description": "WhatsApp contacts and messages via wacli",
         "script": "scripts/sync_whatsapp.py",
         "frequency": "daily",
+        "phase": 1,
     },
     "imessage": {
-        "description": "iMessage conversations",
+        "description": "iMessage/SMS conversations",
         "script": "scripts/sync_imessage_interactions.py",
         "frequency": "daily",
+        "phase": 1,
     },
     "slack": {
         "description": "Slack users and DM messages",
         "script": "scripts/sync_slack.py",
         "frequency": "daily",
+        "phase": 1,
     },
+
+    # === Phase 2: Entity Processing ===
     "link_slack": {
         "description": "Link Slack entities to people by email",
         "script": "scripts/link_slack_entities.py",
         "frequency": "daily",
-        "depends_on": ["slack"],  # Must run after slack sync
+        "phase": 2,
+        "depends_on": ["slack"],
     },
+    "link_imessage": {
+        "description": "Link iMessage handles to people by phone",
+        "script": "scripts/link_imessage_entities.py",
+        "frequency": "daily",
+        "phase": 2,
+        "depends_on": ["imessage"],
+    },
+
+    # === Phase 3: Relationship Building ===
     "relationship_discovery": {
         "description": "Discover relationships and populate edge weights",
         "script": "scripts/sync_relationship_discovery.py",
         "frequency": "daily",
-        "depends_on": ["gmail", "calendar", "imessage", "whatsapp", "slack", "link_slack", "phone"],
+        "phase": 3,
+        "depends_on": ["gmail", "calendar", "imessage", "whatsapp", "slack", "link_slack", "link_imessage", "phone"],
     },
     "person_stats": {
         "description": "Update person interaction counts",
         "script": "scripts/sync_person_stats.py",
         "frequency": "daily",
-        "depends_on": ["gmail", "calendar", "imessage", "phone"],  # Must run after interaction syncs
+        "phase": 3,
+        "depends_on": ["relationship_discovery"],
     },
     "strengths": {
         "description": "Recalculate relationship strengths for all people",
         "script": "scripts/sync_strengths.py",
         "frequency": "daily",
-        "depends_on": ["person_stats"],  # Must run after stats update
+        "phase": 3,
+        "depends_on": ["person_stats"],
+    },
+
+    # === Phase 4: Vector Store Indexing ===
+    "vault_reindex": {
+        "description": "Reindex vault notes to ChromaDB and BM25",
+        "script": "scripts/sync_vault_reindex.py",
+        "frequency": "daily",
+        "phase": 4,
+        "depends_on": ["strengths"],  # Run after all CRM processing
+    },
+
+    # === Phase 5: Content Sync ===
+    "google_docs": {
+        "description": "Sync Google Docs to vault as markdown",
+        "script": "scripts/sync_google_docs.py",
+        "frequency": "daily",
+        "phase": 5,
+    },
+    "google_sheets": {
+        "description": "Sync Google Sheets to vault as markdown",
+        "script": "scripts/sync_google_sheets.py",
+        "frequency": "daily",
+        "phase": 5,
     },
 }
 

@@ -33,6 +33,7 @@ class EmailMessage:
     source_account: str
     body: Optional[str] = None
     to: Optional[str] = None
+    cc: Optional[str] = None
     labels: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -318,6 +319,7 @@ class GmailService:
             to_header = ""
             date_str = ""
 
+            cc_header = ""
             for header in headers:
                 name = header.get("name", "").lower()
                 value = header.get("value", "")
@@ -327,6 +329,8 @@ class GmailService:
                     from_header = value
                 elif name == "to":
                     to_header = value
+                elif name == "cc":
+                    cc_header = value
                 elif name == "date":
                     date_str = value
 
@@ -354,6 +358,7 @@ class GmailService:
                 snippet=snippet,
                 body=body,
                 to=to_header,
+                cc=cc_header if cc_header else None,
                 labels=labels,
                 source_account=self.account_type.value,
             )

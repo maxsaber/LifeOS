@@ -1132,7 +1132,7 @@ async def split_person(request: PersonSplitRequest):
 
     placeholders = ','.join('?' * len(request.source_entity_ids))
     cursor = conn.execute(f"""
-        SELECT id, source_type, source_id, observed_name
+        SELECT id, source_type, source_id, observed_name, observed_email, observed_phone
         FROM source_entities
         WHERE id IN ({placeholders})
         AND canonical_person_id = ?
@@ -1183,13 +1183,47 @@ async def split_person(request: PersonSplitRequest):
         WHERE canonical_person_id = ?
     """, (from_person.id,))
     from_person.sources = [row[0] for row in cursor]
-    person_store.update(from_person)
 
     cursor = conn.execute("""
         SELECT DISTINCT source_type FROM source_entities
         WHERE canonical_person_id = ?
     """, (to_person.id,))
     to_person.sources = [row[0] for row in cursor]
+
+    # Update phone_numbers and emails based on remaining source entities
+    # Get phones/emails that were moved
+    moved_phones = {se.get('observed_phone') for se in source_entity_details if se.get('observed_phone')}
+    moved_emails = {se.get('observed_email', '').lower() for se in source_entity_details if se.get('observed_email')}
+
+    # Add moved phones/emails to to_person
+    for phone in moved_phones:
+        if phone and phone not in to_person.phone_numbers:
+            to_person.phone_numbers.append(phone)
+            if not to_person.phone_primary:
+                to_person.phone_primary = phone
+    for email in moved_emails:
+        if email and not to_person.has_email(email):
+            to_person.emails.append(email)
+
+    # Remove phones from from_person that no longer have source entities
+    cursor = conn.execute("""
+        SELECT DISTINCT observed_phone FROM source_entities
+        WHERE canonical_person_id = ? AND observed_phone IS NOT NULL
+    """, (from_person.id,))
+    remaining_phones = {row[0] for row in cursor}
+    from_person.phone_numbers = [p for p in from_person.phone_numbers if p in remaining_phones]
+    if from_person.phone_primary and from_person.phone_primary not in remaining_phones:
+        from_person.phone_primary = from_person.phone_numbers[0] if from_person.phone_numbers else None
+
+    # Remove emails from from_person that no longer have source entities
+    cursor = conn.execute("""
+        SELECT DISTINCT LOWER(observed_email) FROM source_entities
+        WHERE canonical_person_id = ? AND observed_email IS NOT NULL
+    """, (from_person.id,))
+    remaining_emails = {row[0] for row in cursor}
+    from_person.emails = [e for e in from_person.emails if e.lower() in remaining_emails]
+
+    person_store.update(from_person)
     person_store.update(to_person)
     person_store.save()
 

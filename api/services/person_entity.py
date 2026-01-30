@@ -377,6 +377,25 @@ class PersonEntityStore:
     Storage layer for PersonEntity objects.
 
     Provides CRUD operations and persistence to JSON file.
+
+    IMPORTANT - ID DURABILITY WARNING:
+    ==================================
+    Person IDs (UUIDs) are generated ONCE when a person is first created and
+    are persisted in the storage file. These IDs are:
+    - Referenced by relationships, interactions, and source entities
+    - Hardcoded in settings (e.g., my_person_id for the CRM owner)
+    - Used in merged_person_ids.json to track person merges
+
+    NEVER delete or rebuild people_entities.json from scratch unless absolutely
+    necessary. Doing so will:
+    - Generate NEW IDs for everyone, breaking all relationships
+    - Invalidate hardcoded IDs like my_person_id in settings
+    - Break the merge history tracking
+
+    If you need to fix data issues, prefer:
+    - Editing individual entities via the API or directly in the JSON
+    - Using the merge/split functionality to reorganize people
+    - Running incremental syncs (which look up existing entities by email/phone/name)
     """
 
     # Path to merged IDs file (secondary_id -> primary_id mapping)

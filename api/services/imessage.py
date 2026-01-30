@@ -397,7 +397,36 @@ class IMessageStore:
                 )
                 total_updated += cursor.rowcount
 
-        logger.info(f"Updated entity mappings for {total_updated} messages")
+        logger.info(f"Updated entity mappings for {total_updated} messages (by phone)")
+        return total_updated
+
+    def update_entity_mappings_by_handle(self, handle_to_entity: dict[str, str]) -> int:
+        """
+        Update person_entity_id for messages based on raw handle (email) mappings.
+
+        Args:
+            handle_to_entity: Dict mapping email handles to entity IDs
+
+        Returns:
+            Number of messages updated
+        """
+        total_updated = 0
+
+        with sqlite3.connect(self.storage_path) as conn:
+            for handle, entity_id in handle_to_entity.items():
+                # Match case-insensitively on handle
+                cursor = conn.execute(
+                    """
+                    UPDATE messages
+                    SET person_entity_id = ?
+                    WHERE LOWER(handle) = LOWER(?)
+                    AND (person_entity_id IS NULL OR person_entity_id != ?)
+                    """,
+                    (entity_id, handle, entity_id),
+                )
+                total_updated += cursor.rowcount
+
+        logger.info(f"Updated entity mappings for {total_updated} messages (by email handle)")
         return total_updated
 
     def get_messages_for_phone(
@@ -809,10 +838,10 @@ def sync_imessages() -> dict:
 
 def join_imessages_to_entities() -> dict:
     """
-    Join iMessage records to PersonEntity records by phone number.
+    Join iMessage records to PersonEntity records by phone number or email.
 
-    Looks up all unique phone numbers in the iMessage store and maps them
-    to PersonEntity records via the phone index.
+    Looks up all unique handles in the iMessage store and maps them
+    to PersonEntity records via phone or email lookup.
 
     Returns:
         Dict with join statistics
@@ -833,30 +862,61 @@ def join_imessages_to_entities() -> dict:
         )
         phones = [row[0] for row in cursor]
 
-    logger.info(f"Found {len(phones)} unique phone numbers to map")
+        # Also get unique email-like handles (those without normalized phone)
+        cursor = conn.execute(
+            """
+            SELECT DISTINCT handle
+            FROM messages
+            WHERE handle_normalized IS NULL
+            AND handle LIKE '%@%'
+            """
+        )
+        emails = [row[0].lower() for row in cursor]
+
+    logger.info(f"Found {len(phones)} unique phone numbers and {len(emails)} unique emails to map")
 
     # Build phone -> entity_id mapping
     phone_to_entity: dict[str, str] = {}
-    matched = 0
-    unmatched = 0
+    phones_matched = 0
+    phones_unmatched = 0
 
     for phone in phones:
         entity = entity_store.get_by_phone(phone)
         if entity:
             phone_to_entity[phone] = entity.id
-            matched += 1
+            phones_matched += 1
         else:
-            unmatched += 1
+            phones_unmatched += 1
 
-    # Update messages with entity mappings
+    # Build email -> entity_id mapping
+    email_to_entity: dict[str, str] = {}
+    emails_matched = 0
+    emails_unmatched = 0
+
+    for email in emails:
+        entity = entity_store.get_by_email(email)
+        if entity:
+            email_to_entity[email] = entity.id
+            emails_matched += 1
+        else:
+            emails_unmatched += 1
+
+    # Update messages with entity mappings (phones via handle_normalized)
     messages_updated = 0
     if phone_to_entity:
         messages_updated = store.update_entity_mappings(phone_to_entity)
 
+    # Update messages with entity mappings (emails via handle)
+    if email_to_entity:
+        messages_updated += store.update_entity_mappings_by_handle(email_to_entity)
+
     stats = {
         "unique_phones": len(phones),
-        "phones_matched": matched,
-        "phones_unmatched": unmatched,
+        "phones_matched": phones_matched,
+        "phones_unmatched": phones_unmatched,
+        "unique_emails": len(emails),
+        "emails_matched": emails_matched,
+        "emails_unmatched": emails_unmatched,
         "messages_updated": messages_updated,
     }
 

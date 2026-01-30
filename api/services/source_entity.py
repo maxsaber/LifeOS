@@ -381,6 +381,10 @@ class SourceEntityStore:
         Automatically follows merge chain - if the person_id was merged into
         another person, links to the surviving primary instead.
 
+        IMPORTANT: Confirmed links are protected from being overwritten by auto
+        resolution. This prevents sync scripts from undoing explicit user actions
+        like split operations. To update a confirmed link, pass status='confirmed'.
+
         Args:
             entity_id: Source entity ID
             canonical_person_id: Canonical person ID (will be resolved through merge chain)
@@ -388,7 +392,7 @@ class SourceEntityStore:
             status: Link status (auto, confirmed, rejected)
 
         Returns:
-            True if updated, False if entity not found
+            True if updated, False if entity not found or link is protected
         """
         # Follow merge chain to get the canonical ID
         from api.services.person_entity import get_person_entity_store
@@ -397,6 +401,21 @@ class SourceEntityStore:
 
         conn = self._get_connection()
         try:
+            # Check if existing link is confirmed (protected from auto re-linking)
+            if status != LINK_STATUS_CONFIRMED:
+                cursor = conn.execute(
+                    "SELECT link_status, canonical_person_id FROM source_entities WHERE id = ?",
+                    (entity_id,)
+                )
+                row = cursor.fetchone()
+                if row and row[0] == LINK_STATUS_CONFIRMED:
+                    # Don't overwrite confirmed links with auto links
+                    logger.debug(
+                        f"Skipping link update for {entity_id}: existing confirmed link "
+                        f"to {row[1][:8]}... protected from auto re-linking"
+                    )
+                    return False
+
             cursor = conn.execute("""
                 UPDATE source_entities SET
                     canonical_person_id = ?,

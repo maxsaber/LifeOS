@@ -31,7 +31,15 @@ from config.relationship_weights import (
     get_interaction_weight,
     compute_weighted_interaction_count,
     INTERACTION_TYPE_WEIGHTS,
+    USE_LOG_FREQUENCY_SCALING,
+    LIFETIME_FREQUENCY_ENABLED,
+    LIFETIME_FREQUENCY_WEIGHT,
+    RECENT_FREQUENCY_WEIGHT,
+    LIFETIME_FREQUENCY_TARGET,
+    MIN_INTERACTIONS_FOR_FULL_RECENCY,
+    ZERO_INTERACTION_RECENCY_MULTIPLIER,
 )
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +66,11 @@ def compute_recency_score(last_seen: Optional[datetime]) -> float:
     if last_seen.tzinfo is None:
         last_seen = last_seen.replace(tzinfo=timezone.utc)
 
-    days_since = (now - last_seen).days
+    # Cap future dates at today (e.g., from future calendar events)
+    if last_seen > now:
+        last_seen = now
 
-    if days_since < 0:
-        # Future date (shouldn't happen, but handle gracefully)
-        return 1.0
+    days_since = (now - last_seen).days
 
     return max(0.0, 1.0 - (days_since / RECENCY_WINDOW_DAYS))
 
@@ -71,8 +79,12 @@ def compute_frequency_score(interaction_count: float) -> float:
     """
     Compute frequency score (0.0-1.0).
 
-    Score increases linearly from 0 to 1.0 as interactions approach
-    FREQUENCY_TARGET in the 90-day window.
+    With linear scaling: Score increases linearly from 0 to 1.0 as interactions
+    approach FREQUENCY_TARGET.
+
+    With logarithmic scaling (USE_LOG_FREQUENCY_SCALING=True): Uses log scale
+    to better differentiate between casual (10 interactions) and close (100+)
+    contacts. Formula: log(1 + count) / log(1 + target)
 
     Args:
         interaction_count: Number of interactions (can be weighted, so float)
@@ -83,7 +95,15 @@ def compute_frequency_score(interaction_count: float) -> float:
     if interaction_count <= 0:
         return 0.0
 
-    return min(1.0, interaction_count / FREQUENCY_TARGET)
+    if USE_LOG_FREQUENCY_SCALING:
+        # Logarithmic scaling spreads out the distribution
+        # log(1 + 10) / log(1 + 150) ≈ 0.48
+        # log(1 + 50) / log(1 + 150) ≈ 0.78
+        # log(1 + 100) / log(1 + 150) ≈ 0.92
+        # log(1 + 150) / log(1 + 150) = 1.0
+        return min(1.0, math.log(1 + interaction_count) / math.log(1 + FREQUENCY_TARGET))
+    else:
+        return min(1.0, interaction_count / FREQUENCY_TARGET)
 
 
 def compute_weighted_frequency_score(interactions_by_type: dict[str, int]) -> float:
@@ -106,6 +126,46 @@ def compute_weighted_frequency_score(interactions_by_type: dict[str, int]) -> fl
     """
     weighted_count = compute_weighted_interaction_count(interactions_by_type)
     return compute_frequency_score(weighted_count)
+
+
+def compute_hybrid_frequency_score(
+    recent_interactions: dict[str, int],
+    lifetime_interactions: dict[str, int],
+) -> float:
+    """
+    Compute frequency score combining recent and lifetime interactions.
+
+    Formula: (recent_score * RECENT_WEIGHT) + (lifetime_score * LIFETIME_WEIGHT)
+
+    This ensures historical relationships don't completely vanish while
+    still prioritizing recent activity.
+
+    Args:
+        recent_interactions: Interactions within FREQUENCY_WINDOW_DAYS
+        lifetime_interactions: All-time interactions
+
+    Returns:
+        Frequency score between 0.0 and 1.0
+    """
+    if not LIFETIME_FREQUENCY_ENABLED:
+        return compute_weighted_frequency_score(recent_interactions)
+
+    # Recent frequency score (uses FREQUENCY_TARGET)
+    recent_weighted = compute_weighted_interaction_count(recent_interactions)
+    if USE_LOG_FREQUENCY_SCALING and recent_weighted > 0:
+        recent_score = min(1.0, math.log(1 + recent_weighted) / math.log(1 + FREQUENCY_TARGET))
+    else:
+        recent_score = min(1.0, recent_weighted / FREQUENCY_TARGET) if recent_weighted > 0 else 0.0
+
+    # Lifetime frequency score (uses higher LIFETIME_FREQUENCY_TARGET)
+    lifetime_weighted = compute_weighted_interaction_count(lifetime_interactions)
+    if USE_LOG_FREQUENCY_SCALING and lifetime_weighted > 0:
+        lifetime_score = min(1.0, math.log(1 + lifetime_weighted) / math.log(1 + LIFETIME_FREQUENCY_TARGET))
+    else:
+        lifetime_score = min(1.0, lifetime_weighted / LIFETIME_FREQUENCY_TARGET) if lifetime_weighted > 0 else 0.0
+
+    # Combine with weights
+    return (recent_score * RECENT_FREQUENCY_WEIGHT) + (lifetime_score * LIFETIME_FREQUENCY_WEIGHT)
 
 
 def compute_diversity_score(sources: list[str]) -> float:
@@ -199,35 +259,82 @@ def compute_strength_for_person(person: PersonEntity) -> float:
     Compute relationship strength for a PersonEntity.
 
     Fetches interaction data from stores and computes the score
-    using weighted interaction counts by type.
+    using weighted interaction counts by type. Uses hybrid frequency
+    that combines recent and lifetime interactions. Adds small bonuses
+    for LinkedIn connections and family members.
 
     Args:
         person: PersonEntity to compute strength for
 
     Returns:
-        Relationship strength between 0.0 and 1.0
+        Relationship strength between 0 and 100
     """
+    from api.services.relationship import get_relationship_store, TYPE_FAMILY
+    from config.settings import settings
+
     interaction_store = get_interaction_store()
 
-    # Get interaction counts by type
-    interactions_by_type = interaction_store.get_interaction_counts(
+    # Get recent interaction counts (within frequency window)
+    recent_interactions = interaction_store.get_interaction_counts(
         person.id,
         days_back=FREQUENCY_WINDOW_DAYS,
     )
 
+    # Get lifetime interaction counts (all-time, 10 years)
+    lifetime_interactions = interaction_store.get_interaction_counts(
+        person.id,
+        days_back=3650,  # 10 years
+    )
+
     # Get source types from interactions
-    sources = list(interactions_by_type.keys())
+    sources = list(lifetime_interactions.keys())
 
     # Also include sources from the person's source list
     sources.extend(person.sources)
     sources = list(set(sources))
 
-    # Compute and return strength using weighted method
-    return compute_relationship_strength_weighted(
-        last_seen=person.last_seen,
-        interactions_by_type=interactions_by_type,
-        sources=sources,
-    )
+    # Compute component scores
+    recency_score = compute_recency_score(person.last_seen)
+    frequency_score = compute_hybrid_frequency_score(recent_interactions, lifetime_interactions)
+    diversity_score = compute_diversity_score(sources)
+
+    # Apply recency discount for low/zero interaction contacts
+    # Prevents contact syncs from inflating scores for people you've never actually interacted with
+    total_interactions = sum(lifetime_interactions.values())
+    if total_interactions < MIN_INTERACTIONS_FOR_FULL_RECENCY:
+        if total_interactions == 0:
+            recency_multiplier = ZERO_INTERACTION_RECENCY_MULTIPLIER
+        else:
+            # Linear interpolation: 0 interactions → 25%, MIN_INTERACTIONS → 100%
+            recency_multiplier = ZERO_INTERACTION_RECENCY_MULTIPLIER + (
+                (1.0 - ZERO_INTERACTION_RECENCY_MULTIPLIER) *
+                (total_interactions / MIN_INTERACTIONS_FOR_FULL_RECENCY)
+            )
+        recency_score *= recency_multiplier
+
+    # Combine into overall strength
+    base_strength = (
+        recency_score * RECENCY_WEIGHT +
+        frequency_score * FREQUENCY_WEIGHT +
+        diversity_score * DIVERSITY_WEIGHT
+    ) * 100  # Scale to 0-100
+
+    # Add bonuses for LinkedIn connection and family (only for relationships with me)
+    bonus = 0.0
+    my_person_id = settings.my_person_id
+    if my_person_id and person.id != my_person_id:
+        rel_store = get_relationship_store()
+        rel = rel_store.get_between(my_person_id, person.id)
+        if rel:
+            # LinkedIn connection bonus: +5 points
+            if rel.is_linkedin_connection:
+                bonus += 5.0
+            # Family bonus: +8 points
+            if rel.relationship_type == TYPE_FAMILY:
+                bonus += 8.0
+
+    # Cap at 100
+    return min(100.0, round(base_strength + bonus, 1))
 
 
 def update_strength_for_person(person_id: str) -> Optional[float]:

@@ -54,30 +54,45 @@ How LifeOS ingests, stores, and resolves data from multiple sources.
 
 ## Sync Schedule
 
-### Daily Timeline (Eastern Time)
+### Unified Daily Sync (5 Phases)
+
+All data syncing is consolidated into a single daily sync with proper phase ordering. This ensures downstream processes always have access to fresh upstream data.
 
 ```
-00:00 - 03:00  System running, handling API requests, watching vault changes
+06:00          Unified sync starts (via run_all_syncs.py)
 
-03:00          Nightly sync starts
-03:00          └─ Step 1: Vault reindex (all files → ChromaDB + BM25)
-03:01          └─ Step 2: People v2 sync (LinkedIn + Gmail + Calendar)
-03:02          └─ Step 3: Google Docs sync (configured docs → vault)
-03:03          └─ Step 4: iMessage sync (macOS Messages → local store)
-03:04          └─ Step 5: Google Sheets sync (form responses → vault)
-03:05          └─ Step 6: Slack sync (incremental → ChromaDB + Interactions)
-03:06          Nightly sync complete
+               === PHASE 1: Data Collection ===
+               Pull fresh data from all external sources
+06:00          └─ Gmail (sent + received + CC emails)
+06:01          └─ Calendar (Google Calendar events)
+06:02          └─ LinkedIn (connections CSV export)
+06:03          └─ Contacts (Apple Contacts CSV)
+06:04          └─ Phone (macOS CallHistoryDB)
+06:05          └─ WhatsApp (wacli database)
+06:06          └─ iMessage (macOS chat.db)
+06:07          └─ Slack (users + DM messages)
 
-06:00          CRM sync starts (via run_all_syncs.py)
-06:00          └─ Gmail interactions
-06:01          └─ Calendar interactions
-06:02          └─ Contacts (Apple CSV)
-06:03          └─ Phone calls
-06:04          └─ WhatsApp (contacts + messages)
-06:05          └─ iMessage interactions
-06:06          └─ Slack users + entity linking
-06:07          └─ Person stats + strengths
-06:08          CRM sync complete
+               === PHASE 2: Entity Processing ===
+               Link source entities to canonical PersonEntity records
+06:08          └─ Link Slack (match by email)
+06:08          └─ Link iMessage (match by phone)
+
+               === PHASE 3: Relationship Building ===
+               Build relationships using all collected interaction data
+06:09          └─ Relationship discovery (populate edge weights)
+06:10          └─ Person stats (update interaction counts)
+06:11          └─ Strengths (calculate relationship scores)
+
+               === PHASE 4: Vector Store Indexing ===
+               Index content with fresh people data available
+06:12          └─ Vault reindex (ChromaDB + BM25)
+
+               === PHASE 5: Content Sync ===
+               Pull external content into vault
+06:13          └─ Google Docs (configured docs → vault)
+06:14          └─ Google Sheets (form responses → vault)
+
+06:15          Unified sync complete
 
 08:00          Calendar sync (Google Calendar → ChromaDB)
 12:00          Calendar sync
@@ -88,14 +103,23 @@ How LifeOS ingests, stores, and resolves data from multiple sources.
 24/7           Omi processor (every 5 min, Omi/Events/ → vault)
 ```
 
+### Phase Dependencies
+
+The 5-phase structure ensures correct data flow:
+
+1. **Data Collection** runs first so all external data is fresh
+2. **Entity Processing** links source entities after they exist
+3. **Relationship Building** computes metrics using linked entities
+4. **Vector Store Indexing** indexes content with fresh CRM data available for entity resolution
+5. **Content Sync** pulls external content (indexed on next run)
+
 ### Process Summary
 
 | Process | Schedule | Reads From | Writes To |
 |---------|----------|------------|-----------|
 | ChromaDB Server | Continuous (boot) | HTTP requests | Vector data |
 | Launchd API Service | Continuous (boot) | All data | API logs |
-| Nightly Sync | Daily 3:00 AM ET | Vault, Gmail, Calendar, LinkedIn, iMessages, Slack | ChromaDB, BM25, Vault, PersonEntity |
-| CRM Sync | Daily 6:00 AM ET | Gmail, Calendar, Contacts, Phone, WhatsApp, iMessage, Slack | SourceEntity, Interactions, Relationships |
+| Unified Sync | Daily 6:00 AM ET | All sources | All stores |
 | Calendar Indexer | 8 AM, 12 PM, 3 PM ET | Google Calendar | ChromaDB (`lifeos_calendar`) |
 | Vault File Watcher | Continuous | Vault filesystem | ChromaDB, BM25 |
 | Granola Processor | Every 5 minutes | `Granola/` folder | Vault (classified) |
@@ -204,27 +228,29 @@ The relationship discovery system scans interactions to build person-to-person r
 
 ### Discovery Window
 
-- Default: 180 days lookback
-- Configurable via `DISCOVERY_WINDOW_DAYS`
+- Default: 3650 days (~10 years) - processes all available historical data
+- Configurable via `DISCOVERY_WINDOW_DAYS` in `relationship_discovery.py`
 - Future calendar events excluded from last_seen_together
 
 ### Daily Sync Integration
 
-Relationship discovery runs as part of the daily sync pipeline:
+Relationship discovery runs as Phase 3 of the unified daily sync:
 ```
-06:00 - Gmail/Calendar sync
-06:05 - Contacts, Phone, WhatsApp sync
-06:06 - iMessage, Slack sync
-06:07 - Person stats update
-06:08 - Relationship discovery ← discovers/updates relationships
-06:09 - Strength recalculation
+Phase 1 - Data Collection (Gmail, Calendar, Contacts, Phone, WhatsApp, iMessage, Slack)
+Phase 2 - Entity Processing (Link Slack entities by email)
+Phase 3 - Relationship Building:
+  └─ relationship_discovery ← discovers/updates relationships
+  └─ person_stats ← update interaction counts
+  └─ strengths ← recalculate relationship strengths
+Phase 4 - Vector Store Indexing
+Phase 5 - Content Sync
 ```
 
 ### Triggering Discovery
 
-- **Automatic**: Daily sync at 06:08 AM
+- **Automatic**: Daily sync Phase 3
 - **Manual**: `POST /api/crm/relationships/discover`
-- **Script**: `uv run python scripts/sync_relationship_discovery.py`
+- **Script**: `uv run python scripts/sync_relationship_discovery.py --execute`
 
 ---
 
@@ -301,28 +327,60 @@ All sync scripts in `scripts/` follow the pattern:
 - Dry run by default (shows what would change)
 - Use `--execute` flag to apply changes
 
+### Phase 1: Data Collection
+
 | Script | Purpose | Data Source |
 |--------|---------|-------------|
-| `sync_gmail_calendar_interactions.py` | Sync emails and calendar | Gmail API |
-| `sync_imessage_interactions.py` | Sync iMessage | `data/imessage.db` |
-| `sync_whatsapp.py` | Sync WhatsApp contacts and messages | `~/.wacli/wacli.db` |
-| `sync_phone_calls.py` | Sync phone calls | macOS CallHistoryDB |
+| `sync_gmail_calendar_interactions.py` | Sync emails (sent+received+CC) and calendar | Gmail/Calendar API |
+| `sync_linkedin.py` | Sync LinkedIn connections | CSV export |
 | `sync_contacts_csv.py` | Import Apple Contacts | CSV export |
+| `sync_phone_calls.py` | Sync phone calls | macOS CallHistoryDB |
+| `sync_whatsapp.py` | Sync WhatsApp contacts and messages | `~/.wacli/wacli.db` |
+| `sync_imessage_interactions.py` | Sync iMessage | macOS chat.db |
 | `sync_slack.py` | Sync Slack users and DMs | Slack API |
+
+### Phase 2: Entity Processing
+
+| Script | Purpose | Data Source |
+|--------|---------|-------------|
 | `link_slack_entities.py` | Link Slack users to people by email | `data/crm.db` |
+| `link_imessage_entities.py` | Link iMessage handles to people by phone | `data/imessage.db` |
+
+### Phase 3: Relationship Building
+
+| Script | Purpose | Data Source |
+|--------|---------|-------------|
+| `sync_relationship_discovery.py` | Discover relationships and populate edge weights | All interactions |
 | `sync_person_stats.py` | Update interaction counts | `data/interactions.db` |
+| `sync_strengths.py` | Recalculate relationship strengths | `data/crm.db` |
+
+### Phase 4: Vector Store Indexing
+
+| Script | Purpose | Data Source |
+|--------|---------|-------------|
+| `sync_vault_reindex.py` | Reindex vault to ChromaDB + BM25 | Vault files |
+
+### Phase 5: Content Sync
+
+| Script | Purpose | Data Source |
+|--------|---------|-------------|
+| `sync_google_docs.py` | Sync Google Docs to vault | Google Docs API |
+| `sync_google_sheets.py` | Sync Google Sheets to vault | Google Sheets API |
 
 ### Unified Sync Runner
 
 ```bash
-# View current stats
-uv run python scripts/run_comprehensive_sync.py --stats-only
+# View sync health status
+uv run python scripts/run_all_syncs.py --status
 
-# Dry run
-uv run python scripts/run_comprehensive_sync.py
+# Dry run (shows what would run)
+uv run python scripts/run_all_syncs.py --dry-run
 
-# Execute full sync
-uv run python scripts/run_comprehensive_sync.py --execute
+# Run specific source only
+uv run python scripts/run_all_syncs.py --source gmail --force
+
+# Execute full sync (all 5 phases)
+uv run python scripts/run_all_syncs.py --force
 ```
 
 ---
@@ -397,16 +455,31 @@ SLACK_TEAM_ID=T02F5DW71LY  # Workspace ID
 
 The unified sync runner (`run_all_syncs.py`) executes in this order:
 
-1. `gmail` - Email sync
+**Phase 1: Data Collection**
+1. `gmail` - Email sync (sent + received + CC)
 2. `calendar` - Calendar sync
-3. `contacts` - Apple Contacts
-4. `phone` - Phone calls
-5. `whatsapp` - WhatsApp contacts and messages
-6. `imessage` - iMessage sync
-7. `slack` - Slack users and DMs
-8. `link_slack` - Link Slack entities by email
-9. `person_stats` - Update interaction counts
-10. `strengths` - Recalculate relationship strengths
+3. `linkedin` - LinkedIn connections
+4. `contacts` - Apple Contacts
+5. `phone` - Phone calls
+6. `whatsapp` - WhatsApp contacts and messages
+7. `imessage` - iMessage sync
+8. `slack` - Slack users and DMs
+
+**Phase 2: Entity Processing**
+9. `link_slack` - Link Slack entities by email
+10. `link_imessage` - Link iMessage handles by phone
+
+**Phase 3: Relationship Building**
+11. `relationship_discovery` - Discover relationships, populate edge weights
+12. `person_stats` - Update interaction counts
+13. `strengths` - Recalculate relationship strengths
+
+**Phase 4: Vector Store Indexing**
+14. `vault_reindex` - Reindex vault to ChromaDB + BM25
+
+**Phase 5: Content Sync**
+15. `google_docs` - Sync Google Docs to vault
+16. `google_sheets` - Sync Google Sheets to vault
 
 **Automated via launchd:**
 - Service: `com.lifeos.crm-sync`

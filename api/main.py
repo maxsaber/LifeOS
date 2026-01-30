@@ -49,16 +49,23 @@ _people_v2_stop_event = threading.Event()
 
 def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, timezone: str = "America/New_York"):
     """
-    Background thread that runs nightly sync operations at a scheduled time.
+    Background thread for nightly health checks and failure notifications.
 
-    Operations performed (in order):
-    1. Vault reindex - indexes all vault notes, triggering v2 people extraction
-    2. People v2 sync - LinkedIn CSV, Gmail sent emails, Calendar attendees
-    3. Google Docs sync - syncs configured docs to vault as Markdown
+    NOTE: All sync operations have been consolidated into the unified daily sync
+    (scripts/run_all_syncs.py) which runs via launchd. This loop now only:
+    1. Collects processor failures from the last 24 hours
+    2. Sends alert notifications if failures occurred
+
+    The unified daily sync handles (in order):
+    - Phase 1: Data Collection (Gmail, Calendar, LinkedIn, Contacts, Phone, WhatsApp, iMessage, Slack)
+    - Phase 2: Entity Processing (link Slack entities)
+    - Phase 3: Relationship Building (discovery, stats, strengths)
+    - Phase 4: Vector Store Indexing (vault reindex)
+    - Phase 5: Content Sync (Google Docs, Google Sheets)
 
     Args:
         stop_event: Event to signal thread shutdown
-        schedule_hour: Hour to run sync (24h format, default 3 AM)
+        schedule_hour: Hour to run health check (24h format, default 3 AM)
         timezone: Timezone for scheduling
     """
     tz = ZoneInfo(timezone)
@@ -78,103 +85,13 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
         if stop_event.is_set():
             break
 
-        # Stagger sync operations with delays to avoid database contention
-        import time
-        STEP_DELAY = 60  # seconds between steps
+        logger.info("Nightly health check: Starting...")
 
         # Track failures for notification
         failures = []
 
-        # === Step 1: Vault Reindex ===
-        # This indexes all vault notes, which triggers _sync_people_to_v2() hook
-        # for each file, extracting people mentions and creating interactions
-        try:
-            logger.info("Nightly sync: Starting vault reindex...")
-            from api.services.indexer import IndexerService
-            indexer = IndexerService(vault_path=settings.vault_path)
-            files_indexed = indexer.index_all()
-            logger.info(f"Nightly sync: Vault reindex complete ({files_indexed} files)")
-        except Exception as e:
-            logger.error(f"Nightly sync: Vault reindex failed: {e}")
-            failures.append(("Vault reindex", str(e)))
-
-        time.sleep(STEP_DELAY)  # Let ChromaDB settle
-
-        # === Step 2: LinkedIn + Gmail + Calendar Sync ===
-        try:
-            logger.info("Nightly sync: Starting People v2 sync (LinkedIn, Gmail, Calendar)...")
-            from api.services.people_aggregator import sync_people_v2
-            from api.services.gmail import get_gmail_service
-
-            gmail_service = get_gmail_service()
-
-            stats = sync_people_v2(
-                gmail_service=gmail_service,
-                linkedin_csv_path="./data/LinkedInConnections.csv",
-                days_back=1  # Incremental: last 24 hours
-            )
-            logger.info(f"Nightly sync: People v2 sync completed: {stats}")
-        except Exception as e:
-            logger.error(f"Nightly sync: People v2 sync failed: {e}")
-            failures.append(("People v2 sync", str(e)))
-
-        time.sleep(STEP_DELAY)  # Let APIs settle
-
-        # === Step 3: Google Docs Sync ===
-        # Syncs configured Google Docs to Obsidian vault as Markdown
-        try:
-            logger.info("Nightly sync: Starting Google Docs sync...")
-            from api.services.gdoc_sync import sync_gdocs
-            gdoc_stats = sync_gdocs()
-            logger.info(f"Nightly sync: Google Docs sync completed: {gdoc_stats}")
-        except Exception as e:
-            logger.error(f"Nightly sync: Google Docs sync failed: {e}")
-            failures.append(("Google Docs sync", str(e)))
-
-        time.sleep(STEP_DELAY)  # Let filesystem settle
-
-        # === Step 4: Google Sheets Sync ===
-        # Syncs configured Google Sheets (e.g., daily journals) to vault
-        try:
-            logger.info("Nightly sync: Starting Google Sheets sync...")
-            from api.services.gsheet_sync import sync_gsheets
-            gsheet_stats = sync_gsheets()
-            logger.info(f"Nightly sync: Google Sheets sync completed: {gsheet_stats}")
-        except Exception as e:
-            logger.error(f"Nightly sync: Google Sheets sync failed: {e}")
-            failures.append(("Google Sheets sync", str(e)))
-
-        time.sleep(STEP_DELAY)  # Let APIs settle
-
-        # === Step 5: iMessage Sync ===
-        # Exports new messages and joins with PersonEntity records
-        try:
-            logger.info("Nightly sync: Starting iMessage sync...")
-            from api.services.imessage import sync_and_join_imessages
-            imessage_stats = sync_and_join_imessages()
-            logger.info(f"Nightly sync: iMessage sync completed: {imessage_stats}")
-        except Exception as e:
-            logger.error(f"Nightly sync: iMessage sync failed: {e}")
-            failures.append(("iMessage sync", str(e)))
-
-        time.sleep(STEP_DELAY)  # Let APIs settle
-
-        # === Step 6: Slack Sync ===
-        # Indexes Slack DMs and creates interactions for CRM
-        try:
-            from api.services.slack_integration import is_slack_enabled
-            if is_slack_enabled():
-                logger.info("Nightly sync: Starting Slack sync...")
-                from api.services.slack_sync import run_slack_sync
-                slack_stats = run_slack_sync(full=False)  # Incremental sync
-                logger.info(f"Nightly sync: Slack sync completed: {slack_stats}")
-            else:
-                logger.info("Nightly sync: Slack not enabled, skipping")
-        except Exception as e:
-            logger.error(f"Nightly sync: Slack sync failed: {e}")
-            failures.append(("Slack sync", str(e)))
-
         # Collect processor failures from the last 24 hours
+        # (Granola processor, Omi processor, file watcher, etc.)
         try:
             from api.services.notifications import get_recent_failures, clear_failures
             processor_failures = get_recent_failures(hours=24)
@@ -186,20 +103,35 @@ def _nightly_sync_loop(stop_event: threading.Event, schedule_hour: int = 3, time
         except Exception as e:
             logger.error(f"Failed to collect processor failures: {e}")
 
+        # Check sync health from the unified daily sync
+        try:
+            from api.services.sync_health import get_stale_syncs, get_failed_syncs
+            stale = get_stale_syncs()
+            failed = get_failed_syncs(hours=24)
+
+            for sync in stale:
+                failures.append((f"{sync.source} (stale)", f"Last sync: {sync.hours_since_sync:.1f}h ago"))
+            for sync in failed:
+                failures.append((f"{sync['source']} (failed)", sync.get('error_message', 'Unknown error')[:100]))
+        except Exception as e:
+            logger.error(f"Failed to check sync health: {e}")
+
         # Send notification if any failures occurred
         if failures:
-            logger.warning(f"Nightly sync: {len(failures)} failure(s), sending alert...")
+            logger.warning(f"Nightly health check: {len(failures)} issue(s), sending alert...")
             try:
                 from api.services.notifications import send_alert
                 failure_lines = [f"- {name}: {error}" for name, error in failures]
                 send_alert(
-                    subject=f"Nightly sync: {len(failures)} failure(s)",
-                    body=f"The following operations failed in the last 24 hours:\n\n" + "\n".join(failure_lines),
+                    subject=f"LifeOS: {len(failures)} sync issue(s)",
+                    body=f"The following issues were detected in the last 24 hours:\n\n" + "\n".join(failure_lines),
                 )
             except Exception as e:
                 logger.error(f"Failed to send failure notification: {e}")
+        else:
+            logger.info("Nightly health check: All systems healthy")
 
-        logger.info("Nightly sync: All steps complete")
+        logger.info("Nightly health check: Complete")
 
 
 @asynccontextmanager

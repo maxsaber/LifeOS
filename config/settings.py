@@ -74,6 +74,10 @@ class Settings(BaseSettings):
     )
 
     # CRM Owner (the user's person ID for relationship tracking)
+    # WARNING: This ID is from people_entities.json and must remain stable.
+    # If you rebuild people_entities.json from scratch, this ID will become
+    # invalid and you'll need to find your new ID and update this value.
+    # See data/README.md for why you should NEVER rebuild from scratch.
     my_person_id: str = Field(
         default="3f41e143-719f-4dc9-a9f1-389b2db5b166",  # Nathan Ramia
         alias="LIFEOS_MY_PERSON_ID",

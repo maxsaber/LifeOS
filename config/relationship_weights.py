@@ -14,14 +14,31 @@ Edit this file to tune relationship scoring behavior.
 # =============================================================================
 # Formula: strength = (recency × RECENCY_WEIGHT) + (frequency × FREQUENCY_WEIGHT) + (diversity × DIVERSITY_WEIGHT)
 
-RECENCY_WEIGHT = 0.3      # How much recent contact matters
-FREQUENCY_WEIGHT = 0.4    # How much total interaction volume matters
-DIVERSITY_WEIGHT = 0.3    # How much multi-channel communication matters
+RECENCY_WEIGHT = 0.4      # How much recent contact matters
+FREQUENCY_WEIGHT = 0.55   # How much total interaction volume matters
+DIVERSITY_WEIGHT = 0.05   # How much multi-channel communication matters (low to avoid capping single-channel relationships)
 
 # Parameters for component scores
-RECENCY_WINDOW_DAYS = 90      # Days after which recency score drops to 0
-FREQUENCY_TARGET = 20         # Interactions in 90 days for max frequency score (before weighting)
-FREQUENCY_WINDOW_DAYS = 90    # Window for counting interactions
+RECENCY_WINDOW_DAYS = 365     # Days after which recency score drops to 0 (1 year gentle decay)
+FREQUENCY_TARGET = 150        # Weighted interactions for max frequency score (higher = better spread)
+FREQUENCY_WINDOW_DAYS = 365   # Window for counting recent interactions
+
+# Logarithmic frequency scaling - spreads out scores between casual and close contacts
+# With log scaling: log(1+count)/log(1+target) instead of count/target
+USE_LOG_FREQUENCY_SCALING = True
+
+# Lifetime frequency component - ensures historical relationships don't completely vanish
+# Combines: (recent_freq * RECENT_WEIGHT) + (lifetime_freq * LIFETIME_WEIGHT)
+LIFETIME_FREQUENCY_ENABLED = True
+LIFETIME_FREQUENCY_WEIGHT = 0.3   # 30% of frequency score from lifetime interactions
+RECENT_FREQUENCY_WEIGHT = 0.7    # 70% of frequency score from recent (365-day) interactions
+LIFETIME_FREQUENCY_TARGET = 500  # Higher target for all-time (harder to max out)
+
+# Recency discount for zero-interaction contacts
+# People with no tracked interactions get NO recency credit
+# (contacts list and LinkedIn connections shouldn't inflate scores)
+MIN_INTERACTIONS_FOR_FULL_RECENCY = 3  # Need at least 3 interactions for full recency credit
+ZERO_INTERACTION_RECENCY_MULTIPLIER = 0.0  # Zero interactions = 0% recency (contacts/LinkedIn don't count)
 
 
 # =============================================================================
@@ -88,6 +105,16 @@ RECENCY_BOOST_THRESHOLD_DAYS = 30 # Days to consider someone "recently seen"
 # Disambiguation
 DISAMBIGUATION_THRESHOLD = 15     # If top two candidates within this score, it's ambiguous
 MIN_MATCH_SCORE = 40.0           # Minimum score to consider a valid match
+
+# Relationship strength boost for name-only resolution
+# When resolving by name only (no email/phone), prefer people with existing relationship
+RELATIONSHIP_STRENGTH_BOOST_MAX = 25    # Max points for relationship strength boost (0-100 strength -> 0-25 points)
+RELATIONSHIP_STRENGTH_BOOST_WEIGHT = 0.25  # Multiplier: strength * weight = boost points
+
+# First-name-only boost multiplier
+# When matching just "Ben" instead of "Ben Calvin", apply stronger relationship boost
+# because first-name-only mentions in notes usually refer to close contacts
+FIRST_NAME_ONLY_BOOST_MULTIPLIER = 1.5  # Multiply relationship boost by this for single-word names
 
 # Cache settings
 ENTITY_CACHE_TTL_SECONDS = 1800  # 30 minutes

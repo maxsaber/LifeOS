@@ -62,6 +62,7 @@ class Relationship:
     shared_messages_count: int = 0  # iMessage/SMS direct threads
     shared_whatsapp_count: int = 0  # WhatsApp direct threads
     shared_slack_count: int = 0  # Slack DM message count
+    shared_phone_calls_count: int = 0  # Phone calls (high value - synchronous)
     is_linkedin_connection: bool = False  # LinkedIn connection flag
 
     # Timestamps
@@ -118,6 +119,7 @@ class Relationship:
         shared_whatsapp_count = row[12] if len(row) > 12 else 0
         shared_slack_count = row[13] if len(row) > 13 else 0
         is_linkedin_connection = bool(row[14]) if len(row) > 14 else False
+        shared_phone_calls_count = row[15] if len(row) > 15 else 0
 
         return cls(
             id=row[0],
@@ -135,6 +137,7 @@ class Relationship:
             shared_whatsapp_count=shared_whatsapp_count or 0,
             shared_slack_count=shared_slack_count or 0,
             is_linkedin_connection=is_linkedin_connection,
+            shared_phone_calls_count=shared_phone_calls_count or 0,
         )
 
     @property
@@ -145,20 +148,44 @@ class Relationship:
             self.shared_threads_count +
             self.shared_messages_count +
             self.shared_whatsapp_count +
-            self.shared_slack_count
+            self.shared_slack_count +
+            self.shared_phone_calls_count
+        )
+
+    @property
+    def edge_weight_raw(self) -> int:
+        """Calculate raw edge weight (sum of weighted interactions)."""
+        return (
+            self.shared_events_count * 3 +       # Calendar meetings (high signal)
+            self.shared_threads_count * 2 +      # Email threads
+            self.shared_messages_count * 2 +     # iMessage threads
+            self.shared_whatsapp_count * 2 +     # WhatsApp threads
+            self.shared_slack_count * 1 +        # Slack DMs (weaker per-message signal)
+            self.shared_phone_calls_count * 4 +  # Phone calls (highest - synchronous voice)
+            (10 if self.is_linkedin_connection else 0)  # LinkedIn connection bonus
         )
 
     @property
     def edge_weight(self) -> int:
-        """Calculate edge weight for graph visualization."""
-        return (
-            self.shared_events_count * 3 +      # Calendar meetings (high signal)
-            self.shared_threads_count * 2 +     # Email threads
-            self.shared_messages_count * 2 +    # iMessage threads
-            self.shared_whatsapp_count * 2 +    # WhatsApp threads
-            self.shared_slack_count * 1 +       # Slack DMs (weaker per-message signal)
-            (10 if self.is_linkedin_connection else 0)  # LinkedIn connection bonus
-        )
+        """
+        Calculate normalized edge weight (0-100 scale).
+
+        Uses logarithmic scaling to spread values evenly:
+        - Raw weight 1 → ~15%
+        - Raw weight 10 → ~40%
+        - Raw weight 50 → ~60%
+        - Raw weight 200 → ~75%
+        - Raw weight 1000 → ~90%
+        - Raw weight 5000+ → 95-100%
+        """
+        import math
+        raw = self.edge_weight_raw
+        if raw <= 0:
+            return 0
+        # Log scale with base that gives good spread
+        # log(1 + raw) / log(1 + 10000) * 100, capped at 100
+        normalized = math.log1p(raw) / math.log1p(10000) * 100
+        return min(100, round(normalized))
 
     def involves(self, person_id: str) -> bool:
         """Check if this relationship involves a specific person."""
@@ -217,6 +244,7 @@ class RelationshipStore:
                 ("shared_whatsapp_count", "INTEGER DEFAULT 0"),
                 ("shared_slack_count", "INTEGER DEFAULT 0"),
                 ("is_linkedin_connection", "INTEGER DEFAULT 0"),
+                ("shared_phone_calls_count", "INTEGER DEFAULT 0"),
             ]
             for col_name, col_type in new_columns:
                 try:
@@ -275,8 +303,9 @@ class RelationshipStore:
                 (id, person_a_id, person_b_id, relationship_type, shared_contexts,
                  shared_events_count, shared_threads_count, first_seen_together,
                  last_seen_together, created_at, updated_at,
-                 shared_messages_count, shared_whatsapp_count, shared_slack_count, is_linkedin_connection)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 shared_messages_count, shared_whatsapp_count, shared_slack_count,
+                 is_linkedin_connection, shared_phone_calls_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 relationship.id,
                 relationship.person_a_id,
@@ -293,6 +322,7 @@ class RelationshipStore:
                 relationship.shared_whatsapp_count,
                 relationship.shared_slack_count,
                 1 if relationship.is_linkedin_connection else 0,
+                relationship.shared_phone_calls_count,
             ))
             conn.commit()
             return relationship
@@ -355,7 +385,8 @@ class RelationshipStore:
                     shared_messages_count = ?,
                     shared_whatsapp_count = ?,
                     shared_slack_count = ?,
-                    is_linkedin_connection = ?
+                    is_linkedin_connection = ?,
+                    shared_phone_calls_count = ?
                 WHERE id = ?
             """, (
                 relationship.relationship_type,
@@ -369,6 +400,7 @@ class RelationshipStore:
                 relationship.shared_whatsapp_count,
                 relationship.shared_slack_count,
                 1 if relationship.is_linkedin_connection else 0,
+                relationship.shared_phone_calls_count,
                 relationship.id,
             ))
             conn.commit()
