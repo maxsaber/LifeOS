@@ -1760,7 +1760,7 @@ async def get_network_graph(
         nodes.append(NetworkNode(
             id=person.id,
             name=person.display_name or person.canonical_name,
-            category=person.category,
+            category=compute_person_category(person, []),
             strength=person.relationship_strength,
             interaction_count=interaction_count,
             degree=degree,
