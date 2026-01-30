@@ -85,6 +85,7 @@ FAMILY_EXACT_NAMES = {
 # Manual strength overrides (name -> strength 0-100)
 STRENGTH_OVERRIDES = {
     "taylor walker": 100.0,
+    "nathan ramia": 100.0,
 }
 
 
@@ -1952,6 +1953,7 @@ class RelationshipDetailResponse(BaseModel):
     shared_messages_count: int = 0    # iMessage/SMS
     shared_whatsapp_count: int = 0    # WhatsApp
     shared_slack_count: int = 0       # Slack DMs
+    shared_phone_calls_count: int = 0  # Phone calls
     is_linkedin_connection: bool = False
     # Computed totals
     total_interactions: int = 0
@@ -1995,6 +1997,7 @@ async def get_relationship_details(person_a_id: str, person_b_id: str):
                 shared_messages_count=0,
                 shared_whatsapp_count=0,
                 shared_slack_count=0,
+                shared_phone_calls_count=0,
                 is_linkedin_connection=False,
                 total_interactions=0,
                 first_seen_together=None,
@@ -2017,6 +2020,7 @@ async def get_relationship_details(person_a_id: str, person_b_id: str):
             shared_messages_count=rel.shared_messages_count or 0,
             shared_whatsapp_count=rel.shared_whatsapp_count or 0,
             shared_slack_count=rel.shared_slack_count or 0,
+            shared_phone_calls_count=rel.shared_phone_calls_count or 0,
             is_linkedin_connection=rel.is_linkedin_connection,
             total_interactions=rel.total_shared_interactions or 0,
             first_seen_together=rel.first_seen_together.isoformat() if rel.first_seen_together else None,

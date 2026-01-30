@@ -2828,7 +2828,7 @@
                      onclick="selectPerson('${person.id}')">
                     <div class="person-checkbox ${selectedForMerge.has(person.id) ? 'checked' : ''}"
                          onclick="event.stopPropagation(); toggleMergeSelection('${person.id}')"></div>
-                    <div class="person-avatar">${getInitials(person.canonical_name)}</div>
+                    <div class="person-avatar" style="${getAvatarStyle(person.category)}">${getInitials(person.canonical_name)}</div>
                     <div class="person-info">
                         <div class="person-name">${escapeHtml(person.canonical_name)}</div>
                         <div class="person-company">${escapeHtml(person.company || '')}</div>
@@ -4224,7 +4224,7 @@
             self: '#ffffff',      // White (CRM owner)
             family: '#daa520',    // Goldenrod
             work: '#4f46e5',      // Indigo
-            personal: '#10b981',  // Emerald
+            personal: '#00bcd4',  // Light blue (cyan)
             unknown: '#6b7280'    // Gray
         };
 
@@ -4985,6 +4985,19 @@
             if (parts.length === 0) return '?';
             if (parts.length === 1) return parts[0][0].toUpperCase();
             return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+        }
+
+        // Avatar colors by category
+        const avatarColors = {
+            self: { bg: '#ffffff', text: '#1a1a2e' },           // White with dark text
+            family: { bg: '#daa520', text: '#1a1a2e' },         // Goldenrod
+            work: { bg: '#4f46e5', text: '#ffffff' },           // Indigo
+            personal: { bg: '#00bcd4', text: '#1a1a2e' },       // Light blue (cyan)
+        };
+
+        function getAvatarStyle(category) {
+            const colors = avatarColors[category] || avatarColors.personal;
+            return `background: ${colors.bg}; color: ${colors.text};`;
         }
 
         function escapeHtml(text) {
