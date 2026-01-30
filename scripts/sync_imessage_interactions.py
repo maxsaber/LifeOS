@@ -18,6 +18,10 @@ from datetime import datetime, timezone
 
 from api.services.interaction_store import get_interaction_db_path
 from api.services.person_entity import get_person_entity_store
+from api.services.source_entity import (
+    get_source_entity_store,
+    create_imessage_source_entity,
+)
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -42,12 +46,14 @@ def sync_imessage_interactions(dry_run: bool = True, limit: int = None) -> dict:
     imessage_db = get_imessage_db_path()
     interactions_db = get_interaction_db_path()
     person_store = get_person_entity_store()
+    source_entity_store = get_source_entity_store()
 
     stats = {
         'messages_checked': 0,
         'already_exists': 0,
         'person_not_found': 0,
         'inserted': 0,
+        'source_entities_created': 0,
         'errors': 0,
     }
 
@@ -133,6 +139,20 @@ def sync_imessage_interactions(dry_run: bool = True, limit: int = None) -> dict:
             datetime.now(timezone.utc).isoformat(),
         ))
 
+        # Create source entity for this handle (deduped by add_or_update)
+        if not dry_run and handle:
+            source_entity = create_imessage_source_entity(
+                handle=handle_normalized or handle,
+                display_name=person.canonical_name,
+                observed_at=ts,
+                metadata={"service": service},
+            )
+            source_entity.canonical_person_id = person_id
+            source_entity.link_confidence = 1.0
+            source_entity.linked_at = datetime.now(timezone.utc)
+            source_entity_store.add_or_update(source_entity)
+            stats['source_entities_created'] += 1
+
         # Insert in batches
         if len(batch) >= batch_size:
             if not dry_run:
@@ -158,6 +178,7 @@ def sync_imessage_interactions(dry_run: bool = True, limit: int = None) -> dict:
     logger.info(f"Already exists: {stats['already_exists']}")
     logger.info(f"Person not found: {stats['person_not_found']}")
     logger.info(f"Inserted: {stats['inserted']}")
+    logger.info(f"Source entities created: {stats['source_entities_created']}")
     logger.info(f"Errors: {stats['errors']}")
 
     if dry_run:

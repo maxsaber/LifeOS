@@ -30,6 +30,10 @@ from api.services.interaction_store import (
     create_gmail_interaction,
     create_calendar_interaction,
 )
+from api.services.source_entity import (
+    get_source_entity_store,
+    create_linkedin_source_entity,
+)
 from api.services.google_auth import GoogleAccount
 
 logger = logging.getLogger(__name__)
@@ -399,7 +403,10 @@ def sync_linkedin_to_v2(
         "entities_updated": 0,
         "connections_processed": 0,
         "connections_skipped": 0,
+        "source_entities_created": 0,
     }
+
+    source_entity_store = get_source_entity_store()
 
     csv_file = Path(csv_path)
     if not csv_file.exists():
@@ -435,6 +442,34 @@ def sync_linkedin_to_v2(
                     stats["entities_created"] += 1
                 else:
                     stats["entities_updated"] += 1
+
+                # Create source entity for this LinkedIn connection
+                linkedin_url = conn.get("linkedin_url")
+                if linkedin_url and result.entity:
+                    full_name = f"{first_name} {last_name}".strip()
+                    connected_on = conn.get("connected_on")
+                    try:
+                        connected_at = datetime.strptime(connected_on, "%d %b %Y") if connected_on else None
+                        if connected_at:
+                            connected_at = connected_at.replace(tzinfo=timezone.utc)
+                    except (ValueError, TypeError):
+                        connected_at = None
+
+                    source_entity = create_linkedin_source_entity(
+                        profile_url=linkedin_url,
+                        name=full_name,
+                        email=conn.get("email"),
+                        observed_at=connected_at,
+                        metadata={
+                            "company": conn.get("company"),
+                            "position": conn.get("position"),
+                        },
+                    )
+                    source_entity.canonical_person_id = result.entity.id
+                    source_entity.link_confidence = result.confidence
+                    source_entity.linked_at = datetime.now(timezone.utc)
+                    source_entity_store.add_or_update(source_entity)
+                    stats["source_entities_created"] += 1
 
     except Exception as e:
         logger.error(f"Failed to sync LinkedIn to v2: {e}")

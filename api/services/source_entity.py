@@ -265,16 +265,44 @@ class SourceEntityStore:
         """Get a database connection."""
         return sqlite3.connect(self.db_path)
 
-    def add(self, entity: SourceEntity) -> SourceEntity:
+    def add(self, entity: SourceEntity, validate_person: bool = True) -> SourceEntity:
         """
         Add a new source entity.
 
+        If entity has a canonical_person_id, validates the person exists and
+        follows any merge chain to the canonical ID. This prevents orphaned
+        source entities pointing to deleted or merged person IDs.
+
         Args:
             entity: SourceEntity to add
+            validate_person: If True, validate and resolve person ID (default True)
 
         Returns:
             The added entity
         """
+        # Validate and resolve person ID to prevent orphans
+        if validate_person and entity.canonical_person_id:
+            from api.services.person_entity import get_person_entity_store
+            person_store = get_person_entity_store()
+
+            # Follow merge chain to get canonical ID
+            resolved_id = person_store.get_canonical_id(entity.canonical_person_id)
+
+            # Verify the person actually exists
+            person = person_store.get_by_id(resolved_id)
+            if not person:
+                logger.warning(
+                    f"Cannot add source entity {entity.source_type}:{entity.source_id} - "
+                    f"person {entity.canonical_person_id} not found (resolved: {resolved_id})"
+                )
+                # Clear the person link rather than creating an orphan
+                entity.canonical_person_id = None
+                entity.link_confidence = 0.0
+                entity.linked_at = None
+            else:
+                # Use the resolved ID
+                entity.canonical_person_id = resolved_id
+
         conn = self._get_connection()
         try:
             conn.execute("""
@@ -303,16 +331,48 @@ class SourceEntityStore:
         finally:
             conn.close()
 
-    def add_or_update(self, entity: SourceEntity) -> tuple[SourceEntity, bool]:
+    def add_or_update(self, entity: SourceEntity, validate_person: bool = True) -> tuple[SourceEntity, bool]:
         """
         Add entity or update if source_type+source_id already exists.
 
+        If entity has a canonical_person_id, validates the person exists and
+        follows any merge chain to the canonical ID. This prevents orphaned
+        source entities pointing to deleted or merged person IDs.
+
         Args:
             entity: SourceEntity to add/update
+            validate_person: If True, validate and resolve person ID (default True)
 
         Returns:
             Tuple of (entity, was_created)
         """
+        # Validate and resolve person ID to prevent orphans
+        if validate_person and entity.canonical_person_id:
+            from api.services.person_entity import get_person_entity_store
+            person_store = get_person_entity_store()
+
+            # Follow merge chain to get canonical ID
+            resolved_id = person_store.get_canonical_id(entity.canonical_person_id)
+
+            # Verify the person actually exists
+            person = person_store.get_by_id(resolved_id)
+            if not person:
+                logger.warning(
+                    f"Skipping source entity {entity.source_type}:{entity.source_id} - "
+                    f"person {entity.canonical_person_id} not found (resolved: {resolved_id})"
+                )
+                # Don't create orphan - return existing if any, or a dummy result
+                existing = self.get_by_source(entity.source_type, entity.source_id)
+                if existing:
+                    return existing, False
+                # Clear the person link rather than creating an orphan
+                entity.canonical_person_id = None
+                entity.link_confidence = 0.0
+                entity.linked_at = None
+            else:
+                # Use the resolved ID
+                entity.canonical_person_id = resolved_id
+
         existing = self.get_by_source(entity.source_type, entity.source_id)
         if existing:
             # Update existing - preserve ID and creation timestamp

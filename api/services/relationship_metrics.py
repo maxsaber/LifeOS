@@ -319,22 +319,23 @@ def compute_strength_for_person(person: PersonEntity) -> float:
         diversity_score * DIVERSITY_WEIGHT
     ) * 100  # Scale to 0-100
 
-    # Add bonuses for LinkedIn connection and family (only for relationships with me)
-    bonus = 0.0
+    # Apply multiplier bonuses for LinkedIn connection and family (only for relationships with me)
+    # Using multipliers instead of flat additions prevents low-strength contacts from being inflated
+    multiplier = 1.0
     my_person_id = settings.my_person_id
     if my_person_id and person.id != my_person_id:
         rel_store = get_relationship_store()
         rel = rel_store.get_between(my_person_id, person.id)
         if rel:
-            # LinkedIn connection bonus: +5 points
+            # LinkedIn connection bonus: 3% boost
             if rel.is_linkedin_connection:
-                bonus += 5.0
-            # Family bonus: +8 points
+                multiplier *= 1.03
+            # Family bonus: 5% boost
             if rel.relationship_type == TYPE_FAMILY:
-                bonus += 8.0
+                multiplier *= 1.05
 
     # Cap at 100
-    return min(100.0, round(base_strength + bonus, 1))
+    return min(100.0, round(base_strength * multiplier, 1))
 
 
 def update_strength_for_person(person_id: str) -> Optional[float]:

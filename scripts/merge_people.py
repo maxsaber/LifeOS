@@ -162,7 +162,7 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
     stats = {
         'interactions_updated': 0,
         'source_entities_updated': 0,
-        'facts_updated': 0,
+        'facts_cleared': 0,
         'emails_merged': 0,
         'phones_merged': 0,
         'aliases_added': 0,
@@ -281,19 +281,19 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
         )
         crm_conn.commit()
 
-    # 4. Update facts
-    logger.info("\n4. Updating facts...")
+    # 4. Clear facts (will be regenerated from combined interactions)
+    logger.info("\n4. Clearing facts for regeneration...")
     cursor = crm_conn.execute(
-        "SELECT COUNT(*) FROM person_facts WHERE person_id = ?",
-        (canonical_secondary_id,)
+        "SELECT COUNT(*) FROM person_facts WHERE person_id IN (?, ?)",
+        (canonical_primary_id, canonical_secondary_id)
     )
     count = cursor.fetchone()[0]
-    stats['facts_updated'] = count
-    logger.info(f"   {count} facts to update")
+    stats['facts_cleared'] = count
+    logger.info(f"   {count} facts to clear (will regenerate from combined interactions)")
 
     if not dry_run and count > 0:
         crm_conn.execute(
-            "UPDATE person_facts SET person_id = ? WHERE person_id = ?",
+            "DELETE FROM person_facts WHERE person_id IN (?, ?)",
             (canonical_primary_id, canonical_secondary_id)
         )
         crm_conn.commit()
@@ -452,7 +452,7 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
     logger.info(f"Secondary: {secondary.canonical_name} ({canonical_secondary_id})")
     logger.info(f"Interactions updated: {stats['interactions_updated']}")
     logger.info(f"Source entities updated: {stats['source_entities_updated']}")
-    logger.info(f"Facts updated: {stats['facts_updated']}")
+    logger.info(f"Facts cleared: {stats['facts_cleared']} (will regenerate)")
     logger.info(f"Relationships: {stats['relationships_updated']} transferred, {stats['relationships_merged']} merged, {stats['relationships_deleted']} deleted")
     logger.info(f"Emails merged: {stats['emails_merged']}")
     logger.info(f"Phones merged: {stats['phones_merged']}")

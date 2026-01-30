@@ -19,6 +19,11 @@ from api.services.calendar import CalendarService
 from api.services.google_auth import GoogleAccount
 from api.services.entity_resolver import get_entity_resolver
 from api.services.interaction_store import get_interaction_db_path
+from api.services.source_entity import (
+    get_source_entity_store,
+    create_gmail_source_entity,
+    create_calendar_source_entity,
+)
 from config.settings import settings
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -50,11 +55,13 @@ def sync_gmail_interactions(
         'already_exists': 0,
         'no_person': 0,
         'errors': 0,
+        'source_entities_created': 0,
     }
 
     db_path = get_interaction_db_path()
     conn = sqlite3.connect(db_path)
     resolver = get_entity_resolver()
+    source_entity_store = get_source_entity_store()
     my_person_id = settings.my_person_id
 
     # Get existing interactions to avoid duplicates
@@ -153,6 +160,21 @@ def sync_gmail_interactions(
                         message_id,
                         datetime.now(timezone.utc).isoformat(),
                     ))
+
+                    # Create source entity for the sender
+                    if not dry_run:
+                        source_entity = create_gmail_source_entity(
+                            message_id=message_id,
+                            sender_email=email.sender,
+                            sender_name=email.sender_name if email.sender_name != email.sender else None,
+                            observed_at=email.date,
+                            metadata={"subject": subject[:100] if subject else None},
+                        )
+                        source_entity.canonical_person_id = sender_person_id
+                        source_entity.link_confidence = sender_result.confidence if sender_result else 1.0
+                        source_entity.linked_at = datetime.now(timezone.utc)
+                        source_entity_store.add_or_update(source_entity)
+                        stats['source_entities_created'] += 1
                 else:
                     # SENT EMAIL: Create interactions for ALL recipients (To + CC)
                     recipients = []
@@ -199,6 +221,21 @@ def sync_gmail_interactions(
                             datetime.now(timezone.utc).isoformat(),
                         ))
                         created_for_this_email += 1
+
+                        # Create source entity for the recipient
+                        if not dry_run:
+                            source_entity = create_gmail_source_entity(
+                                message_id=source_id,  # Use email-specific source_id
+                                sender_email=recipient_email,
+                                sender_name=recipient_name,
+                                observed_at=email.date,
+                                metadata={"subject": subject[:100] if subject else None},
+                            )
+                            source_entity.canonical_person_id = recipient_result.entity.id
+                            source_entity.link_confidence = recipient_result.confidence
+                            source_entity.linked_at = datetime.now(timezone.utc)
+                            source_entity_store.add_or_update(source_entity)
+                            stats['source_entities_created'] += 1
 
                     if created_for_this_email == 0:
                         stats['no_person'] += 1
@@ -260,11 +297,13 @@ def sync_calendar_interactions(
         'already_exists': 0,
         'no_person': 0,
         'errors': 0,
+        'source_entities_created': 0,
     }
 
     db_path = get_interaction_db_path()
     conn = sqlite3.connect(db_path)
     resolver = get_entity_resolver()
+    source_entity_store = get_source_entity_store()
     my_person_id = settings.my_person_id
 
     # Get existing interactions to avoid duplicates
@@ -363,6 +402,21 @@ def sync_calendar_interactions(
                     datetime.now(timezone.utc).isoformat(),
                 ))
                 stats['interactions_inserted'] += 1
+
+                # Create source entity for the attendee
+                if not dry_run and attendee_email:
+                    source_entity = create_calendar_source_entity(
+                        event_id=event.event_id,
+                        attendee_email=attendee_email,
+                        attendee_name=attendee_name,
+                        observed_at=event.start_time,
+                        metadata={"event_title": event.title[:100] if event.title else None},
+                    )
+                    source_entity.canonical_person_id = person_id
+                    source_entity.link_confidence = result.confidence if result else 1.0
+                    source_entity.linked_at = datetime.now(timezone.utc)
+                    source_entity_store.add_or_update(source_entity)
+                    stats['source_entities_created'] += 1
 
         # Insert batch
         if batch and not dry_run:
@@ -524,7 +578,7 @@ def main():
                 domain_filter=args.domain,
             )
             all_stats[f'gmail_{account.value}'] = stats
-            logger.info(f"Gmail {account.value}: fetched={stats['fetched']}, inserted={stats['inserted']}, exists={stats['already_exists']}, errors={stats['errors']}")
+            logger.info(f"Gmail {account.value}: fetched={stats['fetched']}, inserted={stats['inserted']}, source_entities={stats['source_entities_created']}, exists={stats['already_exists']}, errors={stats['errors']}")
 
         if not args.gmail_only:
             logger.info(f"\n=== Syncing Calendar ({account.value}) ===")
@@ -534,7 +588,7 @@ def main():
                 dry_run=dry_run,
             )
             all_stats[f'calendar_{account.value}'] = stats
-            logger.info(f"Calendar {account.value}: events={stats['events_fetched']}, inserted={stats['interactions_inserted']}, exists={stats['already_exists']}, errors={stats['errors']}")
+            logger.info(f"Calendar {account.value}: events={stats['events_fetched']}, inserted={stats['interactions_inserted']}, source_entities={stats['source_entities_created']}, exists={stats['already_exists']}, errors={stats['errors']}")
 
     if dry_run:
         logger.info("\nDRY RUN - no changes made. Use --execute to apply.")

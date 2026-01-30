@@ -51,11 +51,11 @@ class OllamaClient:
         Args:
             host: Ollama server URL (default from settings)
             model: Model name to use (default from settings)
-            timeout: Request timeout in seconds (default: 30s for fact extraction)
+            timeout: Request timeout in seconds (default from settings)
         """
         self.host = host or settings.ollama_host
         self.model = model or settings.ollama_model
-        self.timeout = timeout or self.DEFAULT_TIMEOUT
+        self.timeout = timeout or settings.ollama_timeout
 
     async def generate(
         self,

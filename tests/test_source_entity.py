@@ -159,6 +159,7 @@ class TestSourceEntityStore:
 
     def test_unlink(self, store):
         """Test unlinking a source entity."""
+        # Note: validate_person=False bypasses person existence check for unit testing
         entity = SourceEntity(
             source_type="gmail",
             source_id="msg123",
@@ -166,7 +167,7 @@ class TestSourceEntityStore:
             link_confidence=1.0,
             link_status=LINK_STATUS_CONFIRMED,
         )
-        store.add(entity)
+        store.add(entity, validate_person=False)
 
         success = store.unlink(entity.id)
         assert success
@@ -178,20 +179,21 @@ class TestSourceEntityStore:
     def test_get_for_person(self, store):
         """Test getting all entities for a canonical person."""
         # Add entities for different people
+        # Note: validate_person=False bypasses person existence check for unit testing
         for i in range(3):
             entity = SourceEntity(
                 source_type="gmail",
                 source_id=f"msg{i}",
                 canonical_person_id="person1",
             )
-            store.add(entity)
+            store.add(entity, validate_person=False)
 
         entity = SourceEntity(
             source_type="gmail",
             source_id="msg99",
             canonical_person_id="person2",
         )
-        store.add(entity)
+        store.add(entity, validate_person=False)
 
         # Get for person1
         entities = store.get_for_person("person1")
@@ -204,12 +206,13 @@ class TestSourceEntityStore:
     def test_get_unlinked(self, store):
         """Test getting unlinked entities."""
         # Add linked and unlinked entities
+        # Note: validate_person=False bypasses person existence check for unit testing
         linked = SourceEntity(
             source_type="gmail",
             source_id="msg1",
             canonical_person_id="person1",
         )
-        store.add(linked)
+        store.add(linked, validate_person=False)
 
         unlinked = SourceEntity(
             source_type="gmail",
@@ -237,18 +240,19 @@ class TestSourceEntityStore:
     def test_statistics(self, store):
         """Test getting statistics."""
         # Add some entities
+        # Note: validate_person=False bypasses person existence check for unit testing
         for i in range(3):
             store.add(SourceEntity(
                 source_type="gmail",
                 source_id=f"gmail{i}",
                 canonical_person_id="person1" if i < 2 else None,
-            ))
+            ), validate_person=False)
 
         store.add(SourceEntity(
             source_type="calendar",
             source_id="cal1",
             canonical_person_id="person1",
-        ))
+        ), validate_person=False)
 
         stats = store.get_statistics()
         assert stats["total_entities"] == 4

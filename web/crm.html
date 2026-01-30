@@ -2584,22 +2584,19 @@
             opacity: 0.85;
         }
 
-        .fact-item.unconfirmed::before {
-            content: '';
-            position: absolute;
-            left: -8px;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 4px;
-            height: 4px;
-            background: var(--warning);
-            border-radius: 50%;
-        }
-
         .fact-bullet {
-            color: goldenrod;
             flex-shrink: 0;
             margin-top: 0.1rem;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        .fact-bullet.unconfirmed {
+            color: goldenrod;
+        }
+
+        .fact-bullet.confirmed {
+            color: var(--success);
         }
 
         .fact-content {
@@ -2738,37 +2735,21 @@
 
         /* Confidence indicator */
         .fact-confidence {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.25rem;
             font-size: 0.625rem;
             color: var(--text-muted);
+            margin-left: 0.25rem;
         }
 
-        .fact-confidence-bar {
-            width: 30px;
-            height: 3px;
-            background: var(--bg-primary);
-            border-radius: 2px;
-            overflow: hidden;
+        .fact-confidence.high {
+            color: var(--success);
         }
 
-        .fact-confidence-fill {
-            height: 100%;
-            border-radius: 2px;
-            transition: width 0.3s;
+        .fact-confidence.medium {
+            color: var(--warning);
         }
 
-        .fact-confidence-fill.high {
-            background: var(--success);
-        }
-
-        .fact-confidence-fill.medium {
-            background: var(--warning);
-        }
-
-        .fact-confidence-fill.low {
-            background: var(--error);
+        .fact-confidence.low {
+            color: var(--error);
         }
 
         /* Summary facts have distinct styling */
@@ -4961,9 +4942,10 @@
             const quoteHtml = fact.source_quote ?
                 `<div class="fact-quote">${escapeHtml(fact.source_quote)}</div>` : '';
 
+            const bulletClass = fact.confirmed_by_user ? 'confirmed' : 'unconfirmed';
             return `
                 <li class="fact-item ${unconfirmedClass}">
-                    <span class="fact-bullet">•</span>
+                    <span class="fact-bullet ${bulletClass}">•</span>
                     <span class="fact-content">
                         <span class="fact-text">${escapeHtml(factSentence)}</span>
                         ${sourceLinkHtml}

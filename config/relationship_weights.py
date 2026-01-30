@@ -19,8 +19,8 @@ FREQUENCY_WEIGHT = 0.55   # How much total interaction volume matters
 DIVERSITY_WEIGHT = 0.05   # How much multi-channel communication matters (low to avoid capping single-channel relationships)
 
 # Parameters for component scores
-RECENCY_WINDOW_DAYS = 365     # Days after which recency score drops to 0 (1 year gentle decay)
-FREQUENCY_TARGET = 150        # Weighted interactions for max frequency score (higher = better spread)
+RECENCY_WINDOW_DAYS = 200     # Days after which recency score drops to 0
+FREQUENCY_TARGET = 250        # Weighted interactions for max frequency score (higher = better spread)
 FREQUENCY_WINDOW_DAYS = 365   # Window for counting recent interactions
 
 # Logarithmic frequency scaling - spreads out scores between casual and close contacts
@@ -32,7 +32,7 @@ USE_LOG_FREQUENCY_SCALING = True
 LIFETIME_FREQUENCY_ENABLED = True
 LIFETIME_FREQUENCY_WEIGHT = 0.3   # 30% of frequency score from lifetime interactions
 RECENT_FREQUENCY_WEIGHT = 0.7    # 70% of frequency score from recent (365-day) interactions
-LIFETIME_FREQUENCY_TARGET = 500  # Higher target for all-time (harder to max out)
+LIFETIME_FREQUENCY_TARGET = 750  # Higher target for all-time (harder to max out)
 
 # Recency discount for zero-interaction contacts
 # People with no tracked interactions get NO recency credit
