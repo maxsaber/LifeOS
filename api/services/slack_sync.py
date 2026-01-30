@@ -111,12 +111,42 @@ class SlackSync:
         logger.info(f"Slack user sync complete: {stats}")
         return stats
 
+    def _get_linked_slack_user_ids(self) -> set[str]:
+        """
+        Get set of Slack user IDs that have canonical_person_id linked.
+
+        Returns:
+            Set of Slack user IDs (without workspace prefix)
+        """
+        linked_ids = set()
+        # Query source entities with canonical_person_id set
+        conn = self.entity_store._get_connection()
+        try:
+            cursor = conn.execute(
+                """
+                SELECT source_id FROM source_entities
+                WHERE source_type = 'slack'
+                AND canonical_person_id IS NOT NULL
+                AND link_status != 'rejected'
+                """
+            )
+            for row in cursor.fetchall():
+                source_id = row[0]
+                # source_id format is "workspace_id:user_id"
+                if ":" in source_id:
+                    user_id = source_id.split(":", 1)[1]
+                    linked_ids.add(user_id)
+        finally:
+            conn.close()
+        return linked_ids
+
     def sync_messages(
         self,
         full: bool = False,
         dm_only: bool = True,
         channel_history_days: int = DEFAULT_CHANNEL_HISTORY_DAYS,
         create_interactions: bool = True,
+        linked_only: bool = False,
     ) -> dict:
         """
         Sync Slack messages to ChromaDB and optionally create interactions.
@@ -126,19 +156,27 @@ class SlackSync:
             dm_only: If True, only sync DMs; if False, also sync channels
             channel_history_days: Days of channel history to sync (for non-DM channels)
             create_interactions: If True, create CRM Interaction records
+            linked_only: If True, only sync DMs for users linked to CRM people
 
         Returns:
             Dict with sync statistics
         """
-        logger.info(f"Starting Slack message sync (full={full}, dm_only={dm_only})")
+        logger.info(f"Starting Slack message sync (full={full}, dm_only={dm_only}, linked_only={linked_only})")
         start_time = time.time()
 
         stats = {
             "channels_processed": 0,
+            "channels_skipped": 0,
             "messages_indexed": 0,
             "interactions_created": 0,
             "errors": [],
         }
+
+        # Get linked user IDs if filtering
+        linked_user_ids = None
+        if linked_only:
+            linked_user_ids = self._get_linked_slack_user_ids()
+            logger.info(f"Found {len(linked_user_ids)} linked Slack users")
 
         try:
             # Get list of accessible channels
@@ -149,6 +187,12 @@ class SlackSync:
                 # Skip non-DM channels if dm_only is True
                 if dm_only and not (channel.is_im or channel.is_mpim):
                     continue
+
+                # Skip unlinked DM users if linked_only is True
+                if linked_only and channel.is_im:
+                    if channel.name not in linked_user_ids:
+                        stats["channels_skipped"] += 1
+                        continue
 
                 try:
                     channel_stats = self._sync_channel(
@@ -398,12 +442,13 @@ class SlackSync:
             logger.error(error_msg)
             results["errors"].append(error_msg)
 
-        # Step 2: Sync messages
+        # Step 2: Sync messages (only for linked users to speed up full sync)
         try:
             results["messages"] = self.sync_messages(
                 full=True,
-                dm_only=True,  # Start with DMs only per PRD
+                dm_only=True,  # DMs only
                 create_interactions=create_interactions,
+                linked_only=True,  # Only sync DMs for users linked to CRM people
             )
             if results["messages"].get("errors"):
                 results["errors"].extend(results["messages"]["errors"])
