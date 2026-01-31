@@ -2943,9 +2943,16 @@ async def get_me_interactions(
         person_id = interaction.person_id
         circle = circle_map.get(person_id, 7)
 
-        # Daily aggregates (exclude email from totals for heatmap)
-        if source != 'gmail':
-            daily_data[date_str]["total"] += 1
+        # For /me dashboard: only count SENT emails (title starts with →)
+        # Received emails (←) are excluded to focus on outbound activity
+        if source == 'gmail':
+            title = interaction.title or ""
+            is_sent = title.startswith("→")
+            if not is_sent:
+                continue  # Skip received emails entirely
+
+        # Daily aggregates
+        daily_data[date_str]["total"] += 1
         daily_data[date_str]["sources"][source] += 1
 
         # Breakdown totals

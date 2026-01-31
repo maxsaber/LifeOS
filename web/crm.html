@@ -5064,6 +5064,7 @@
         function selectPerson(personId, stayOnCurrentTab = false, skipUrlUpdate = false) {
             selectedPersonId = personId;
             hiddenNodeIds.clear(); // Clear hidden nodes when switching people
+            closeEdgePanel(); // Close edge panel when switching people
             renderPeopleList();
 
             // Update URL immediately (unless called from popstate or initial load)
@@ -7576,6 +7577,9 @@
 
         // Load graph visualization using 2-degree network
         async function loadGraph(personId) {
+            // Close edge panel when loading a new graph (belt-and-suspenders with node click handler)
+            closeEdgePanel();
+
             const container = document.getElementById('graphContainer');
             container.innerHTML = '<div class="loading">Loading graph...</div>';
 
