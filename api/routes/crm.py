@@ -48,6 +48,9 @@ router = APIRouter(prefix="/api/crm", tags=["crm"])
 # Work email domain for category detection
 WORK_EMAIL_DOMAIN = "movementlabs.com"
 
+# Owner's person ID for "Me" page
+MY_PERSON_ID = "3f41e143-719f-4dc9-a9f1-389b2db5b166"
+
 # Family last names (case-insensitive matching)
 FAMILY_LAST_NAMES = {"ramia"}
 
@@ -478,6 +481,14 @@ class LinkConfirmRequest(BaseModel):
     new_person_name: Optional[str] = Field(
         default=None,
         description="Name for the new person (required if create_new_person=True)"
+    )
+
+
+class HidePersonRequest(BaseModel):
+    """Request for hiding a person (soft delete)."""
+    reason: str = Field(
+        default="",
+        description="Reason for hiding (e.g., 'fake marketing persona')"
     )
 
 
@@ -2050,6 +2061,47 @@ async def confirm_person_fact(person_id: str, fact_id: str):
     return {"status": "confirmed", "fact_id": fact_id}
 
 
+@router.post("/people/{person_id}/hide")
+async def hide_person(person_id: str, request: HidePersonRequest):
+    """
+    Hide a person (soft delete) and blocklist their identifiers.
+
+    This marks the person as hidden and adds all their emails/phones to
+    a blocklist to prevent sync from recreating them. Use this for:
+    - Fake marketing personas from store emails
+    - Spam/bot accounts
+    - Duplicate people that shouldn't exist
+
+    The person is not deleted, just hidden. Hidden people won't appear
+    in search results or the people list.
+    """
+    person_store = get_person_entity_store()
+    person = person_store.get_by_id(person_id)
+
+    if not person:
+        raise HTTPException(status_code=404, detail=f"Person '{person_id}' not found")
+
+    # Check if already hidden
+    if person.hidden:
+        return {
+            "status": "already_hidden",
+            "person_id": person_id,
+            "hidden_at": person.hidden_at.isoformat() if person.hidden_at else None,
+        }
+
+    # Hide the person
+    hidden = person_store.hide_person(person_id, request.reason)
+
+    return {
+        "status": "hidden",
+        "person_id": person_id,
+        "name": hidden.canonical_name,
+        "emails_blocked": len(hidden.emails),
+        "phones_blocked": len(hidden.phone_numbers),
+        "reason": request.reason,
+    }
+
+
 @router.get("/discover", response_model=DiscoverResponse)
 async def discover_connections(
     person_id: Optional[str] = Query(default=None, description="Person to find suggestions for"),
@@ -2348,7 +2400,7 @@ async def get_network_graph(
     valid_node_ids = {n.id for n in nodes}
 
     # Get all edges in one query instead of per-node queries
-    all_relationships = rel_store.get_all_relationships(limit=10000)
+    all_relationships = rel_store.get_all_relationships()
     seen_edges: set[tuple[str, str]] = set()
 
     for rel in all_relationships:
@@ -2644,6 +2696,526 @@ async def sync_contacts_endpoint():
         "status": "completed",
         "stats": stats,
     }
+
+
+# =============================
+# "Me" Page Routes
+# =============================
+
+
+class MeStatsResponse(BaseModel):
+    """Aggregate statistics for the owner's dashboard."""
+    total_people: int
+    total_emails: int
+    total_meetings: int
+    total_messages: int
+
+
+class DailyAggregate(BaseModel):
+    """Aggregated interactions for a single day."""
+    date: str
+    total: int
+    sources: dict[str, int]
+
+
+class TopContact(BaseModel):
+    """A top contact with interaction count."""
+    person_id: str
+    person_name: str
+    count: int
+
+
+class TrendPerson(BaseModel):
+    """Person with trend data (recent vs previous period)."""
+    person_id: str
+    person_name: str
+    recent_count: int
+    previous_count: int
+
+
+class NeglectedContact(BaseModel):
+    """A contact that hasn't been reached out to recently."""
+    person_id: str
+    person_name: str
+    days_since_contact: int
+    typical_gap_days: int  # How often you normally contact them
+    dunbar_circle: int
+
+
+class MonthlyNetworkGrowth(BaseModel):
+    """Network growth for a single month."""
+    month: str  # "YYYY-MM"
+    new_people: int
+    cumulative_total: int
+
+
+class MonthlyMessagingVolume(BaseModel):
+    """Messaging volume by Dunbar circle for a single month."""
+    month: str  # "YYYY-MM"
+    total: int
+    by_circle: dict[str, int]  # circle "0"-"4" -> count
+    circle_percentages: dict[str, float]  # circle -> % of total
+
+
+class HealthScorePoint(BaseModel):
+    """Health score at a point in time."""
+    date: str  # "YYYY-MM-DD"
+    score: int  # 0-100
+
+
+class MeInteractionsResponse(BaseModel):
+    """Aggregated interaction data for the owner's dashboard."""
+    # Daily aggregates for heatmap (date -> {total, sources})
+    daily: list[DailyAggregate]
+    # Breakdown totals
+    by_source: dict[str, int]
+    by_month: dict[str, int]  # "YYYY-MM" -> count
+    by_circle: dict[str, int]  # circle number as string -> count
+    # Top contacts (last 30 days)
+    top_contacts: list[TopContact]
+    # Relationship trends (2-week comparison)
+    warming: list[TrendPerson]
+    cooling: list[TrendPerson]
+    total_count: int
+    # New widgets
+    relationship_health_score: int = 0  # 0-100
+    health_score_history: list[HealthScorePoint] = []  # Longitudinal health scores
+    neglected_contacts: list[NeglectedContact] = []
+    network_growth: list[MonthlyNetworkGrowth] = []
+    messaging_by_circle: list[MonthlyMessagingVolume] = []
+
+
+@router.get("/me/stats", response_model=MeStatsResponse)
+async def get_me_stats():
+    """
+    Get aggregate statistics for the owner's personal dashboard.
+
+    Returns total counts across all people in the CRM.
+    """
+    person_store = get_person_entity_store()
+    interaction_store = get_interaction_store()
+
+    # Get all people
+    all_people = person_store.get_all()
+    total_people = len(all_people)
+
+    # Aggregate stats from all people
+    total_emails = sum(p.email_count for p in all_people)
+    total_meetings = sum(p.meeting_count for p in all_people)
+    total_messages = sum(p.message_count for p in all_people)
+
+    return MeStatsResponse(
+        total_people=total_people,
+        total_emails=total_emails,
+        total_meetings=total_meetings,
+        total_messages=total_messages,
+    )
+
+
+@router.get("/me/interactions", response_model=MeInteractionsResponse)
+async def get_me_interactions(
+    days_back: int = Query(default=365, ge=1, le=1095, description="Days of history (up to 3 years)"),
+    trend_period: str = Query(default="quarter", description="Trend comparison period: week, month, quarter, year"),
+    health_period: str = Query(default="quarter", description="Health score history period: month, quarter, year"),
+):
+    """
+    Get aggregated interaction data for the "Me" dashboard.
+
+    Returns pre-aggregated data for heatmaps, charts, and trends.
+    """
+    from datetime import timedelta
+    from collections import defaultdict
+
+    interaction_store = get_interaction_store()
+    person_store = get_person_entity_store()
+
+    # Calculate date range
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=days_back)
+
+    # Build person lookup for names (excludes hidden people by default)
+    person_lookup = {p.id: p for p in person_store.get_all()}
+
+    # Get hidden person IDs to exclude from metrics
+    hidden_person_ids = {
+        p.id for p in person_store.get_all(include_hidden=True) if p.hidden
+    }
+
+    # Get all interactions in date range, excluding self and hidden people
+    all_interactions_raw = interaction_store.get_all_in_range(
+        start_date=start_date,
+        end_date=end_date,
+        exclude_person_ids=[MY_PERSON_ID] + list(hidden_person_ids),
+    )
+
+    # Filter to only include interactions with known (non-orphaned) person IDs
+    all_interactions = [
+        i for i in all_interactions_raw
+        if i.person_id in person_lookup
+    ]
+
+    # Pre-compute Dunbar circles (simplified - by relationship strength ranking)
+    sorted_people = sorted(
+        person_store.get_all(),
+        key=lambda p: p.relationship_strength or 0,
+        reverse=True
+    )
+    circle_map = {}
+    circle_sizes = [3, 5, 15, 50, 150, 500, 1500]  # Cumulative thresholds
+    cumulative = 0
+    current_circle = 0
+    for i, person in enumerate(sorted_people):
+        if person.id == MY_PERSON_ID:
+            circle_map[person.id] = -1  # Self
+            continue
+        if current_circle < len(circle_sizes) and i >= circle_sizes[current_circle] + cumulative:
+            cumulative = circle_sizes[current_circle]
+            current_circle += 1
+        circle_map[person.id] = current_circle
+
+    # Aggregation structures
+    daily_data = defaultdict(lambda: {"total": 0, "sources": defaultdict(int)})
+    by_source = defaultdict(int)
+    by_month = defaultdict(int)
+    by_circle = defaultdict(int)
+    person_counts_30d = defaultdict(int)
+    person_counts_recent = defaultdict(int)
+    person_counts_previous = defaultdict(int)
+
+    # Date boundaries for trends based on period
+    now = datetime.now(timezone.utc)
+    period_days = {
+        "week": 7,
+        "month": 30,
+        "quarter": 90,
+        "year": 365,
+    }
+    trend_days = period_days.get(trend_period, 90)
+    trend_recent_start = now - timedelta(days=trend_days)
+    trend_previous_start = now - timedelta(days=trend_days * 2)
+    thirty_days_ago = now - timedelta(days=30)
+
+    total_count = 0
+
+    for interaction in all_interactions:
+        # Get date string
+        if interaction.timestamp:
+            if hasattr(interaction.timestamp, 'strftime'):
+                ts = interaction.timestamp
+                # Ensure timezone-aware for comparisons
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                date_str = ts.strftime('%Y-%m-%d')
+                month_str = ts.strftime('%Y-%m')
+            else:
+                date_str = str(interaction.timestamp)[:10]
+                month_str = date_str[:7]
+                ts = datetime.fromisoformat(date_str).replace(tzinfo=timezone.utc)
+        else:
+            continue
+
+        source = (interaction.source_type or "unknown").lower()
+        person_id = interaction.person_id
+        circle = circle_map.get(person_id, 7)
+
+        # Daily aggregates (exclude email from totals for heatmap)
+        if source != 'gmail':
+            daily_data[date_str]["total"] += 1
+        daily_data[date_str]["sources"][source] += 1
+
+        # Breakdown totals
+        by_source[source] += 1
+        by_month[month_str] += 1
+        by_circle[str(circle)] += 1
+
+        # Top contacts (last 30 days)
+        if ts >= thirty_days_ago:
+            person_counts_30d[person_id] += 1
+
+        # Trend data (period-based comparison)
+        if ts >= trend_recent_start:
+            person_counts_recent[person_id] += 1
+        elif ts >= trend_previous_start:
+            person_counts_previous[person_id] += 1
+
+        total_count += 1
+
+    # Build daily aggregates list
+    daily_list = [
+        DailyAggregate(date=date, total=data["total"], sources=dict(data["sources"]))
+        for date, data in sorted(daily_data.items())
+    ]
+
+    # Build top contacts (top 10 by count in last 30 days)
+    top_contacts = []
+    for person_id, count in sorted(person_counts_30d.items(), key=lambda x: -x[1])[:10]:
+        person = person_lookup.get(person_id)
+        top_contacts.append(TopContact(
+            person_id=person_id,
+            person_name=person.canonical_name if person else "Unknown",
+            count=count,
+        ))
+
+    # Build trend data (warming and cooling)
+    warming = []
+    cooling = []
+    all_person_ids = set(person_counts_recent.keys()) | set(person_counts_previous.keys())
+    for person_id in all_person_ids:
+        recent = person_counts_recent.get(person_id, 0)
+        prev = person_counts_previous.get(person_id, 0)
+        if recent == prev:
+            continue
+        person = person_lookup.get(person_id)
+        trend_person = TrendPerson(
+            person_id=person_id,
+            person_name=person.canonical_name if person else "Unknown",
+            recent_count=recent,
+            previous_count=prev,
+        )
+        if recent > prev:
+            warming.append(trend_person)
+        else:
+            cooling.append(trend_person)
+
+    # Sort by magnitude of change
+    warming.sort(key=lambda x: x.recent_count - x.previous_count, reverse=True)
+    cooling.sort(key=lambda x: x.previous_count - x.recent_count, reverse=True)
+
+    # ===== NEW WIDGETS =====
+
+    # 1. Relationship Health Score (0-100)
+    # Based on: recency of contacts, frequency, weighted by circle
+    health_score = 0
+    if person_lookup:
+        score_components = []
+        for person in person_lookup.values():
+            if person.id == MY_PERSON_ID:
+                continue
+            circle = circle_map.get(person.id, 7)
+            if circle > 4:  # Only count circles 0-4 for health
+                continue
+            # Weight by circle (closer = more important)
+            circle_weight = {0: 5, 1: 4, 2: 3, 3: 2, 4: 1}.get(circle, 0)
+            if circle_weight == 0:
+                continue
+            # Recency score (100 if contacted today, decays over 90 days)
+            last_seen = person.last_seen
+            if last_seen:
+                if last_seen.tzinfo is None:
+                    last_seen = last_seen.replace(tzinfo=timezone.utc)
+                days_ago = (now - last_seen).days
+                recency_score = max(0, 100 - (days_ago * 100 / 90))
+            else:
+                recency_score = 0
+            score_components.append(recency_score * circle_weight)
+        if score_components:
+            # Weighted average
+            total_weight = sum({0: 5, 1: 4, 2: 3, 3: 2, 4: 1}.get(circle_map.get(p.id, 7), 0)
+                              for p in person_lookup.values()
+                              if p.id != MY_PERSON_ID and circle_map.get(p.id, 7) <= 4)
+            if total_weight > 0:
+                health_score = int(sum(score_components) / total_weight)
+
+    # 2. Neglected Contacts
+    # People in circles 0-3 who haven't been contacted in longer than their typical gap
+    neglected = []
+    person_interaction_dates = defaultdict(list)
+    for interaction in all_interactions:
+        if interaction.timestamp:
+            ts = interaction.timestamp
+            if hasattr(ts, 'tzinfo') and ts.tzinfo is None:
+                ts = ts.replace(tzinfo=timezone.utc)
+            elif not hasattr(ts, 'tzinfo'):
+                ts = datetime.fromisoformat(str(ts)[:10]).replace(tzinfo=timezone.utc)
+            person_interaction_dates[interaction.person_id].append(ts)
+
+    for person_id, dates in person_interaction_dates.items():
+        person = person_lookup.get(person_id)
+        if not person:
+            continue
+        circle = circle_map.get(person_id, 7)
+        if circle > 3:  # Only alert for circles 0-3
+            continue
+        if len(dates) < 5:  # Need meaningful history to establish pattern
+            continue
+        dates_sorted = sorted(dates)
+        # Calculate typical gap (median of gaps, excluding outliers)
+        gaps = [(dates_sorted[i+1] - dates_sorted[i]).days for i in range(len(dates_sorted)-1)]
+        if not gaps:
+            continue
+        # Use median of gaps
+        gaps_sorted = sorted(gaps)
+        typical_gap = gaps_sorted[len(gaps_sorted)//2]
+        # Minimum based on circle - closer relationships have lower thresholds
+        min_gap = {0: 3, 1: 5, 2: 7, 3: 14}.get(circle, 14)
+        if typical_gap < min_gap:
+            typical_gap = min_gap
+        # Days since last contact
+        last_contact = dates_sorted[-1]
+        days_since = (now - last_contact).days
+        # Alert if 1.5x typical gap has passed (was 2x, now more sensitive)
+        if days_since > typical_gap * 1.5:
+            neglected.append(NeglectedContact(
+                person_id=person_id,
+                person_name=person.canonical_name,
+                days_since_contact=days_since,
+                typical_gap_days=typical_gap,
+                dunbar_circle=circle,
+            ))
+    # Sort by circle (closer first), then by how overdue they are
+    neglected.sort(key=lambda x: (x.dunbar_circle, -(x.days_since_contact / x.typical_gap_days)))
+
+    # 2b. Health Score History (longitudinal)
+    # Calculate health score at different points in time
+    health_score_history = []
+
+    # Determine time points based on health_period
+    # Each period shows exactly 2x that period (2 months, 2 quarters, 2 years)
+    if health_period == "month":
+        # 2 months back, weekly intervals (9 points: 0, 1, 2, ..., 8 weeks)
+        total_days = 61  # ~2 months
+        num_points = 9
+        time_points = [now - timedelta(days=int(i * total_days / (num_points - 1))) for i in range(num_points)]
+    elif health_period == "year":
+        # 2 years back, bi-monthly intervals (13 points)
+        total_days = 730  # 2 years
+        num_points = 13
+        time_points = [now - timedelta(days=int(i * total_days / (num_points - 1))) for i in range(num_points)]
+    else:  # quarter (default)
+        # 6 months back (2 quarters), bi-weekly intervals (13 points)
+        total_days = 183  # ~6 months
+        num_points = 13
+        time_points = [now - timedelta(days=int(i * total_days / (num_points - 1))) for i in range(num_points)]
+
+    time_points = sorted(time_points)  # oldest first
+
+    # Pre-calculate total weight (doesn't change over time)
+    total_weight = sum(
+        {0: 5, 1: 4, 2: 3, 3: 2, 4: 1}.get(circle_map.get(p.id, 7), 0)
+        for p in person_lookup.values()
+        if p.id != MY_PERSON_ID and circle_map.get(p.id, 7) <= 4
+    )
+
+    for point_date in time_points:
+        score_components = []
+        for person in person_lookup.values():
+            if person.id == MY_PERSON_ID:
+                continue
+            circle = circle_map.get(person.id, 7)
+            if circle > 4:
+                continue
+            circle_weight = {0: 5, 1: 4, 2: 3, 3: 2, 4: 1}.get(circle, 0)
+            if circle_weight == 0:
+                continue
+
+            # Find most recent interaction before point_date
+            person_dates = person_interaction_dates.get(person.id, [])
+            dates_before = [d for d in person_dates if d <= point_date]
+            if dates_before:
+                last_contact = max(dates_before)
+                days_ago = (point_date - last_contact).days
+                recency_score = max(0, 100 - (days_ago * 100 / 90))
+            else:
+                recency_score = 0
+            score_components.append(recency_score * circle_weight)
+
+        if total_weight > 0 and score_components:
+            point_score = int(sum(score_components) / total_weight)
+        else:
+            point_score = 0
+
+        health_score_history.append(HealthScorePoint(
+            date=point_date.strftime('%Y-%m-%d'),
+            score=point_score,
+        ))
+
+    # 3. Network Growth Timeline
+    # Use FIRST INTERACTION date across ALL time (not limited by days_back query)
+    # Require at least 3 interactions to filter out one-off contacts (spam, single emails)
+    first_interaction_dates = interaction_store.get_first_interaction_dates(min_interactions=3)
+    monthly_new_people = defaultdict(int)
+    for person_id, first_dt in first_interaction_dates.items():
+        if person_id == MY_PERSON_ID:
+            continue
+        if person_id in hidden_person_ids:
+            continue
+        if person_id not in person_lookup:
+            continue  # Skip orphaned person IDs
+        month_key = first_dt.strftime('%Y-%m')
+        monthly_new_people[month_key] += 1
+
+    # Build growth list (based on days_back)
+    network_growth = []
+    cumulative = 0
+    # Get all months and sort
+    all_months = sorted(monthly_new_people.keys())
+    # For cumulative, need to count all people before the chart window too
+    # Use days_back to determine the cutoff for charts (network growth, messaging)
+    chart_months_cutoff = (now - timedelta(days=days_back)).strftime('%Y-%m')
+    for month in all_months:
+        cumulative += monthly_new_people[month]
+        if month >= chart_months_cutoff:
+            network_growth.append(MonthlyNetworkGrowth(
+                month=month,
+                new_people=monthly_new_people[month],
+                cumulative_total=cumulative,
+            ))
+
+    # 4. Messaging Volume by Circle (iMessage + WhatsApp only)
+    # Group by month, then by circle
+    monthly_messaging = defaultdict(lambda: {"total": 0, "by_circle": defaultdict(int)})
+    for interaction in all_interactions:
+        source = (interaction.source_type or "").lower()
+        if source not in ('imessage', 'whatsapp'):
+            continue
+        if interaction.timestamp:
+            ts = interaction.timestamp
+            if hasattr(ts, 'strftime'):
+                month_key = ts.strftime('%Y-%m')
+            else:
+                month_key = str(ts)[:7]
+        else:
+            continue
+        person_id = interaction.person_id
+        circle = circle_map.get(person_id, 7)
+        if circle > 4:  # Only track circles 0-4
+            circle = 5  # Group 5+ as "outer"
+        monthly_messaging[month_key]["total"] += 1
+        monthly_messaging[month_key]["by_circle"][str(circle)] += 1
+
+    # Build messaging list (based on days_back)
+    messaging_by_circle = []
+    for month in sorted(monthly_messaging.keys()):
+        if month >= chart_months_cutoff:
+            data = monthly_messaging[month]
+            total = data["total"]
+            by_circle = dict(data["by_circle"])
+            # Calculate percentages
+            percentages = {}
+            for c, count in by_circle.items():
+                percentages[c] = round(count / total * 100, 1) if total > 0 else 0
+            messaging_by_circle.append(MonthlyMessagingVolume(
+                month=month,
+                total=total,
+                by_circle=by_circle,
+                circle_percentages=percentages,
+            ))
+
+    return MeInteractionsResponse(
+        daily=daily_list,
+        by_source=dict(by_source),
+        by_month=dict(by_month),
+        by_circle=dict(by_circle),
+        top_contacts=top_contacts[:10],
+        warming=warming[:10],
+        cooling=cooling[:10],
+        total_count=total_count,
+        relationship_health_score=health_score,
+        health_score_history=health_score_history,
+        neglected_contacts=neglected[:10],
+        network_growth=network_growth,
+        messaging_by_circle=messaging_by_circle,
+    )
 
 
 # Sync Health Monitoring Routes

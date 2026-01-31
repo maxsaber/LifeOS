@@ -679,23 +679,29 @@ class RelationshipStore:
         finally:
             conn.close()
 
-    def get_all_relationships(self, limit: int = 10000) -> list["Relationship"]:
+    def get_all_relationships(self, limit: Optional[int] = None) -> list["Relationship"]:
         """
         Get all relationships.
 
         Args:
-            limit: Maximum relationships to return
+            limit: Maximum relationships to return (None = no limit)
 
         Returns:
             List of all relationships
         """
         conn = self._get_connection()
         try:
-            cursor = conn.execute("""
-                SELECT * FROM relationships
-                ORDER BY last_seen_together DESC
-                LIMIT ?
-            """, (limit,))
+            if limit is not None:
+                cursor = conn.execute("""
+                    SELECT * FROM relationships
+                    ORDER BY last_seen_together DESC
+                    LIMIT ?
+                """, (limit,))
+            else:
+                cursor = conn.execute("""
+                    SELECT * FROM relationships
+                    ORDER BY last_seen_together DESC
+                """)
             return [Relationship.from_row(row) for row in cursor.fetchall()]
         finally:
             conn.close()

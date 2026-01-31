@@ -18,6 +18,7 @@ from api.services.gmail import GmailService
 from api.services.calendar import CalendarService
 from api.services.google_auth import GoogleAccount
 from api.services.entity_resolver import get_entity_resolver
+from api.services.person_entity import get_person_entity_store
 from api.services.interaction_store import get_interaction_db_path
 from api.services.source_entity import (
     get_source_entity_store,
@@ -28,6 +29,123 @@ from config.settings import settings
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
+
+# Marketing/promotional email patterns to skip
+# These are email address prefixes that typically indicate automated/marketing emails
+MARKETING_EMAIL_PREFIXES = {
+    'noreply', 'no-reply', 'no_reply', 'donotreply', 'do-not-reply', 'do_not_reply',
+    'newsletter', 'newsletters', 'news',
+    'marketing', 'promo', 'promotions', 'offers', 'deals',
+    'notifications', 'notification', 'notify', 'alert', 'alerts',
+    'updates', 'update', 'info', 'information',
+    'support', 'help', 'helpdesk', 'customerservice', 'customer-service',
+    'mailer', 'mailer-daemon', 'postmaster', 'webmaster',
+    'bounce', 'bounces', 'unsubscribe',
+    'billing', 'invoices', 'invoice', 'receipts', 'receipt',
+    'orders', 'order', 'shipping', 'delivery',
+    'feedback', 'survey', 'surveys',
+    'hello', 'hi', 'team', 'contact',
+    'admin', 'administrator', 'system', 'automated',
+    'reply', 'replies',  # Generic auto-reply addresses
+    # Newsletter-specific prefixes
+    'digest', 'daily', 'weekly', 'monthly', 'morning', 'evening',
+    'playbook', 'briefing', 'roundup', 'recap', 'summary',
+    'forecast', 'report', 'insider', 'dispatch', 'bulletin',
+    'edition', 'highlights', 'headlines', 'breaking',
+}
+
+# Sender NAME patterns that indicate marketing/newsletter (checked against sender display name)
+MARKETING_NAME_PATTERNS = {
+    'newsletter', 'digest', 'playbook', 'briefing', 'roundup',
+    'weekly', 'daily', 'morning', 'evening', 'update',
+    'forecast', 'report', 'insider', 'dispatch', 'bulletin',
+    'alerts', 'notifications', 'noreply', 'no-reply',
+}
+
+# Known marketing/transactional email domains to skip (dedicated marketing domains only)
+# NOTE: Do NOT include domains where real people work (google.com, amazon.com, etc.)
+# Only include domains that are EXCLUSIVELY used for automated/marketing emails
+MARKETING_DOMAINS = {
+    # Email service providers (dedicated sending domains)
+    'mailchimp.com', 'mail.mailchimp.com', 'mailchimpapp.net', 'mailchi.mp',
+    'sendgrid.net',  # Note: sendgrid.com is different
+    'ccsend.com',  # Constant Contact sending domain
+    'mailgun.org',
+    'amazonses.com',  # AWS SES (not amazon.com where employees work)
+    'postmarkapp.com',
+    'sparkpostmail.com',
+    'mandrillapp.com',
+    'sendinblue.com', 'brevo.com',
+    'klaviyomail.com',  # Not klaviyo.com
+    'hubspotmail.com', 'hs-mail.com',  # Not hubspot.com
+    'intercom-mail.com',  # Not intercom.io
+    'cmail19.com', 'cmail20.com',  # Campaign Monitor sending domains
+    'responsys.net',
+    # Social media notification domains (dedicated sending domains)
+    'facebookmail.com',  # Not fb.com where employees work
+    'linkedin-email.com',  # Not linkedin.com
+    'redditmail.com',  # Not reddit.com
+    # Service notification domains (dedicated sending domains)
+    'shopifyemail.com',  # Not shopify.com
+    'dropboxmail.com',  # Not dropbox.com
+    'slack-msgs.com',  # Not slack.com
+    # Newsletter platforms (dedicated sending subdomains)
+    'substack.com',  # Newsletter platform
+    'email.politico.com',  # POLITICO newsletters
+    'email.axios.com',  # Axios newsletters
+    'email.theatlantic.com',
+    'email.nytimes.com', 'e.newyorktimes.com',
+    'email.washingtonpost.com',
+    'email.wsj.com',
+    'e.forbes.com',
+    'email.bloomberg.com',
+    'mail.beehiiv.com',  # Newsletter platform
+    'news.ycombinator.com',  # Hacker News
+    'ghost.io',  # Newsletter platform
+}
+
+
+def is_marketing_email(email: str, sender_name: str = None) -> bool:
+    """
+    Check if an email address or sender name indicates marketing/automated sender.
+
+    Args:
+        email: Email address to check
+        sender_name: Optional sender display name to check
+
+    Returns:
+        True if likely marketing/automated, False if likely a real person
+    """
+    # Check sender name for marketing patterns
+    if sender_name:
+        name_lower = sender_name.lower()
+        for pattern in MARKETING_NAME_PATTERNS:
+            if pattern in name_lower:
+                return True
+
+    if not email or '@' not in email:
+        return False
+
+    email_lower = email.lower()
+    prefix = email_lower.split('@')[0]
+    domain = email_lower.split('@')[1]
+
+    # Check if prefix matches marketing patterns
+    # Handle variations like "noreply+abc@" or "newsletter123@"
+    prefix_base = prefix.split('+')[0]  # Strip plus addressing
+    for pattern in MARKETING_EMAIL_PREFIXES:
+        if prefix_base == pattern or prefix_base.startswith(pattern + '-') or prefix_base.startswith(pattern + '_'):
+            return True
+
+    # Check if domain is a known marketing domain
+    # Also check parent domain (e.g., mail.company.com -> company.com)
+    domain_parts = domain.split('.')
+    for i in range(len(domain_parts) - 1):
+        check_domain = '.'.join(domain_parts[i:])
+        if check_domain in MARKETING_DOMAINS:
+            return True
+
+    return False
 
 
 def sync_gmail_interactions(
@@ -56,6 +174,7 @@ def sync_gmail_interactions(
         'no_person': 0,
         'errors': 0,
         'source_entities_created': 0,
+        'marketing_skipped': 0,
     }
 
     db_path = get_interaction_db_path()
@@ -133,6 +252,11 @@ def sync_gmail_interactions(
                     stats['errors'] += 1
                     continue
 
+                # Skip marketing/promotional emails (check both email and sender name)
+                if is_marketing_email(email.sender, email.sender_name):
+                    stats['marketing_skipped'] += 1
+                    continue
+
                 # Resolve the sender
                 sender_result = resolver.resolve(
                     name=email.sender_name if email.sender_name != email.sender else None,
@@ -149,12 +273,13 @@ def sync_gmail_interactions(
                 # Determine if this is a received email (sender != me) or sent email (sender == me)
                 if sender_person_id and sender_person_id != my_person_id:
                     # RECEIVED EMAIL: Create one interaction with the sender
+                    # Use ← arrow to indicate received (like iMessage)
                     batch.append((
                         str(uuid.uuid4()),
                         sender_person_id,
                         timestamp,
                         'gmail',
-                        subject,
+                        f"← {subject}",
                         snippet,
                         source_link,
                         message_id,
@@ -193,6 +318,11 @@ def sync_gmail_interactions(
 
                     created_for_this_email = 0
                     for recipient_name, recipient_email in recipients:
+                        # Skip marketing/promotional recipients
+                        if is_marketing_email(recipient_email, recipient_name):
+                            stats['marketing_skipped'] += 1
+                            continue
+
                         # Skip duplicates within same email
                         source_id = f"{message_id}:{recipient_email}"
                         if source_id in existing:
@@ -209,12 +339,13 @@ def sync_gmail_interactions(
                         if recipient_result.entity.id == my_person_id:
                             continue  # Skip myself
 
+                        # Use → arrow to indicate sent (like iMessage)
                         batch.append((
                             str(uuid.uuid4()),
                             recipient_result.entity.id,
                             timestamp,
                             'gmail',
-                            subject,
+                            f"→ {subject}",
                             snippet,
                             source_link,
                             source_id,  # Use email-specific source_id for deduplication
@@ -578,7 +709,7 @@ def main():
                 domain_filter=args.domain,
             )
             all_stats[f'gmail_{account.value}'] = stats
-            logger.info(f"Gmail {account.value}: fetched={stats['fetched']}, inserted={stats['inserted']}, source_entities={stats['source_entities_created']}, exists={stats['already_exists']}, errors={stats['errors']}")
+            logger.info(f"Gmail {account.value}: fetched={stats['fetched']}, inserted={stats['inserted']}, marketing_skipped={stats['marketing_skipped']}, source_entities={stats['source_entities_created']}, exists={stats['already_exists']}, errors={stats['errors']}")
 
         if not args.gmail_only:
             logger.info(f"\n=== Syncing Calendar ({account.value}) ===")
@@ -592,6 +723,11 @@ def main():
 
     if dry_run:
         logger.info("\nDRY RUN - no changes made. Use --execute to apply.")
+    else:
+        # Persist newly created person entities to disk
+        person_store = get_person_entity_store()
+        person_store.save()
+        logger.info("Saved person entities to disk")
 
     return all_stats
 

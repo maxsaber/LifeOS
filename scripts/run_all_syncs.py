@@ -38,6 +38,88 @@ from api.services.sync_health import (
     check_sync_health,
 )
 
+# Markdown error log in Notes directory (for visibility)
+NOTES_ERROR_LOG = Path.home() / "Notes 2025" / "LifeOS" / "sync_errors.md"
+
+
+def log_error_to_markdown(source: str, error_msg: str, error_type: str = "error"):
+    """
+    Log an error to the markdown file in Notes for visibility.
+
+    Errors are prepended so the most recent appear at the top.
+    """
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    entry = f"""
+## {timestamp} - {source.upper()} - {error_type}
+
+```
+{error_msg[:2000]}
+```
+
+---
+"""
+
+    _write_to_markdown_log(entry)
+
+
+def log_sync_summary_to_markdown(result: dict):
+    """
+    Log a sync run summary to the markdown file.
+
+    Only logs if there were failures, to avoid noise from successful runs.
+    """
+    if result["failed"] == 0:
+        return  # Don't log successful runs
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    failed_list = ", ".join(result["failed_sources"]) if result["failed_sources"] else "none"
+
+    entry = f"""
+## {timestamp} - SYNC RUN SUMMARY
+
+- **Total sources:** {result["sources_run"]}
+- **Succeeded:** {result["succeeded"]}
+- **Failed:** {result["failed"]}
+- **Failed sources:** {failed_list}
+
+---
+"""
+
+    _write_to_markdown_log(entry)
+
+
+def _write_to_markdown_log(entry: str):
+    """Write an entry to the markdown log file, prepending after the header."""
+    try:
+        # Ensure directory exists
+        NOTES_ERROR_LOG.parent.mkdir(parents=True, exist_ok=True)
+
+        if NOTES_ERROR_LOG.exists():
+            existing = NOTES_ERROR_LOG.read_text()
+        else:
+            existing = """# LifeOS Sync Errors
+
+This file tracks errors from the nightly sync process. Most recent errors appear first.
+
+---
+"""
+
+        # Prepend new entry after the header
+        header_end = existing.find("---\n")
+        if header_end != -1:
+            header = existing[:header_end + 4]
+            body = existing[header_end + 4:]
+            new_content = header + entry + body
+        else:
+            new_content = existing + entry
+
+        NOTES_ERROR_LOG.write_text(new_content)
+        logger.info(f"Entry logged to {NOTES_ERROR_LOG}")
+
+    except Exception as e:
+        logger.warning(f"Failed to write to markdown error log: {e}")
+
 # Configure logging
 LOG_DIR = Path(__file__).parent.parent / "logs"
 LOG_DIR.mkdir(exist_ok=True)
@@ -202,6 +284,9 @@ def run_sync(source: str, dry_run: bool = False) -> tuple[bool, dict]:
                 context=f"Command: {' '.join(cmd)}"
             )
 
+            # Log to markdown for visibility
+            log_error_to_markdown(source, error_msg, "subprocess_error")
+
             return False, {"error": error_msg, **stats}
 
         logger.info(f"Sync completed for {source}: {stats}")
@@ -229,6 +314,7 @@ def run_sync(source: str, dry_run: bool = False) -> tuple[bool, dict]:
         )
 
         record_sync_error(source, error_msg, error_type="timeout")
+        log_error_to_markdown(source, error_msg, "timeout")
         return False, {"error": error_msg}
 
     except Exception as e:
@@ -249,6 +335,10 @@ def run_sync(source: str, dry_run: bool = False) -> tuple[bool, dict]:
             error_type=type(e).__name__,
             stack_trace=traceback.format_exc(),
         )
+
+        # Log to markdown with full stack trace
+        full_error = f"{error_msg}\n\n{traceback.format_exc()}"
+        log_error_to_markdown(source, full_error, type(e).__name__)
 
         return False, {"error": error_msg}
 
@@ -335,7 +425,7 @@ def run_all_syncs(
     is_healthy, health_msg = check_sync_health()
     logger.info(f"Overall health: {health_msg}")
 
-    return {
+    result = {
         "sources_run": len(sources),
         "succeeded": len(sources) - len(failed),
         "failed": len(failed),
@@ -345,11 +435,17 @@ def run_all_syncs(
         "health_message": health_msg,
     }
 
+    # Log summary to markdown file if there were failures
+    log_sync_summary_to_markdown(result)
+
+    return result
+
 
 def main():
     parser = argparse.ArgumentParser(description="Run CRM data source syncs")
     parser.add_argument("--source", help="Run only this specific source")
     parser.add_argument("--dry-run", action="store_true", help="Don't actually sync")
+    parser.add_argument("--execute", action="store_true", help="Actually run syncs (required for non-dry-run)")
     parser.add_argument("--force", action="store_true", help="Run even if recently synced")
     parser.add_argument("--status", action="store_true", help="Just show sync status")
     args = parser.parse_args()
@@ -366,7 +462,13 @@ def main():
         return 0 if summary['all_healthy'] else 1
 
     sources = [args.source] if args.source else None
-    result = run_all_syncs(sources=sources, dry_run=args.dry_run, force=args.force)
+
+    # Require --execute for actual syncs (safety measure)
+    dry_run = args.dry_run or not args.execute
+    if not args.execute and not args.dry_run:
+        logger.info("Note: Running in dry-run mode. Use --execute to actually run syncs.")
+
+    result = run_all_syncs(sources=sources, dry_run=dry_run, force=args.force)
 
     # Exit with error if any sync failed
     if result["failed"] > 0:

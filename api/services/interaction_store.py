@@ -473,6 +473,39 @@ class InteractionStore:
         finally:
             conn.close()
 
+    def get_first_interaction_dates(self, min_interactions: int = 1) -> dict[str, datetime]:
+        """
+        Get the earliest interaction timestamp for each person.
+
+        Args:
+            min_interactions: Minimum number of interactions required to include
+                             a person. Use >1 to filter out one-off contacts.
+
+        Returns a dict mapping person_id -> first interaction datetime.
+        Used for calculating true network growth over time.
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(
+                """
+                SELECT person_id, MIN(timestamp) as first_timestamp, COUNT(*) as cnt
+                FROM interactions
+                GROUP BY person_id
+                HAVING cnt >= ?
+            """,
+                (min_interactions,),
+            )
+            result = {}
+            for row in cursor.fetchall():
+                person_id = row[0]
+                ts_str = row[1]
+                if ts_str:
+                    dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                    result[person_id] = _make_aware(dt)
+            return result
+        finally:
+            conn.close()
+
     def get_conversation_context(
         self,
         interaction_id: str,
@@ -706,6 +739,67 @@ class InteractionStore:
                 "earliest_interaction": date_range[0],
                 "latest_interaction": date_range[1],
             }
+        finally:
+            conn.close()
+
+    def get_all_in_range(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+        exclude_person_ids: list[str] = None,
+    ) -> list[Interaction]:
+        """
+        Get all interactions within a date range.
+
+        Used for aggregate views like the "Me" dashboard.
+
+        Args:
+            start_date: Start of date range (inclusive)
+            end_date: End of date range (inclusive)
+            exclude_person_ids: Person IDs to exclude (e.g., self)
+
+        Returns:
+            List of interactions in the date range
+        """
+        conn = self._get_connection()
+        try:
+            # Format dates for SQLite
+            start_str = start_date.strftime('%Y-%m-%d')
+            end_str = end_date.strftime('%Y-%m-%d 23:59:59')
+
+            # Build query
+            query = """
+                SELECT id, person_id, timestamp, source_type, title, snippet, source_link, source_id
+                FROM interactions
+                WHERE timestamp >= ? AND timestamp <= ?
+            """
+            params = [start_str, end_str]
+
+            # Exclude specific person IDs if provided
+            if exclude_person_ids:
+                placeholders = ','.join('?' * len(exclude_person_ids))
+                query += f" AND person_id NOT IN ({placeholders})"
+                params.extend(exclude_person_ids)
+
+            query += " ORDER BY timestamp DESC"
+
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(query, params)
+
+            interactions = []
+            for row in cursor.fetchall():
+                interactions.append(Interaction(
+                    id=row['id'],
+                    person_id=row['person_id'],
+                    timestamp=datetime.fromisoformat(row['timestamp']),
+                    source_type=row['source_type'],
+                    title=row['title'],
+                    snippet=row['snippet'],
+                    source_link=row['source_link'],
+                    source_id=row['source_id'],
+                ))
+
+            return interactions
         finally:
             conn.close()
 

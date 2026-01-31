@@ -10,6 +10,7 @@ Key changes from PersonRecord:
 """
 import json
 import logging
+import sqlite3
 import uuid
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
@@ -85,6 +86,13 @@ class PersonEntity:
     tags: list[str] = field(default_factory=list)  # User-defined tags
     notes: str = ""  # User notes about the person
     source_entity_count: int = 0  # Count of linked SourceEntity records
+
+    # Hidden person (soft delete)
+    # When hidden=True, person is excluded from search/list results and their
+    # emails/phones are added to a blocklist to prevent sync recreation.
+    hidden: bool = False
+    hidden_at: Optional[datetime] = None
+    hidden_reason: str = ""
 
     # Relationship strength (computed, not stored - see relationship_metrics.py)
     # Formula: (recency × 0.3) + (frequency × 0.4) + (diversity × 0.3)
@@ -290,6 +298,8 @@ class PersonEntity:
             data["first_seen"] = self.first_seen.isoformat()
         if self.last_seen:
             data["last_seen"] = self.last_seen.isoformat()
+        if self.hidden_at:
+            data["hidden_at"] = self.hidden_at.isoformat()
         # Remove private fields (they start with _)
         data.pop("_relationship_strength", None)
         # Add computed relationship_strength if available
@@ -307,6 +317,9 @@ class PersonEntity:
         if data.get("last_seen") and isinstance(data["last_seen"], str):
             dt = datetime.fromisoformat(data["last_seen"])
             data["last_seen"] = _make_aware(dt)
+        if data.get("hidden_at") and isinstance(data["hidden_at"], str):
+            dt = datetime.fromisoformat(data["hidden_at"])
+            data["hidden_at"] = _make_aware(dt)
         # Handle relationship_strength -> _relationship_strength
         if "relationship_strength" in data:
             data["_relationship_strength"] = data.pop("relationship_strength")
@@ -315,6 +328,10 @@ class PersonEntity:
         data.setdefault("notes", "")
         data.setdefault("source_entity_count", 0)
         data.setdefault("message_count", 0)
+        # Handle hidden fields (default to not hidden)
+        data.setdefault("hidden", False)
+        data.setdefault("hidden_at", None)
+        data.setdefault("hidden_reason", "")
         return cls(**data)
 
     @classmethod
@@ -403,6 +420,8 @@ class PersonEntityStore:
 
     # Path to merged IDs file (secondary_id -> primary_id mapping)
     MERGED_IDS_PATH = Path(__file__).parent.parent.parent / "data" / "merged_person_ids.json"
+    # Path to CRM database (shared with link_override)
+    CRM_DB_PATH = Path(__file__).parent.parent.parent / "data" / "crm.db"
 
     def __init__(self, storage_path: str = "./data/people_entities.json"):
         """
@@ -417,6 +436,9 @@ class PersonEntityStore:
         self._name_index: dict[str, str] = {}  # canonical_name.lower() → entity ID
         self._phone_index: dict[str, str] = {}  # E.164 phone → entity ID
         self._merged_ids: dict[str, str] = {}  # secondary_id -> primary_id
+        self._blocklist: set[str] = set()  # Blocked emails/phones (lowercase)
+        self._ensure_blocklist_table()
+        self._load_blocklist()
         self._load()
         self._load_merged_ids()
 
@@ -430,6 +452,98 @@ class PersonEntityStore:
                     logger.info(f"Loaded {len(self._merged_ids)} merged ID mappings")
             except Exception as e:
                 logger.warning(f"Failed to load merged IDs: {e}")
+
+    def _ensure_blocklist_table(self) -> None:
+        """Create the person_blocklist table if it doesn't exist."""
+        self.CRM_DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(self.CRM_DB_PATH)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS person_blocklist (
+                identifier TEXT PRIMARY KEY,  -- Email or phone (lowercase)
+                identifier_type TEXT NOT NULL,  -- 'email' or 'phone'
+                person_name TEXT,  -- Original person name (for reference)
+                reason TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        conn.commit()
+        conn.close()
+
+    def _load_blocklist(self) -> None:
+        """Load blocked identifiers from database."""
+        try:
+            conn = sqlite3.connect(self.CRM_DB_PATH)
+            cursor = conn.execute("SELECT identifier FROM person_blocklist")
+            self._blocklist = {row[0] for row in cursor}
+            conn.close()
+            if self._blocklist:
+                logger.info(f"Loaded {len(self._blocklist)} blocked identifiers")
+        except Exception as e:
+            logger.warning(f"Failed to load blocklist: {e}")
+
+    def is_blocked(self, identifier: str) -> bool:
+        """
+        Check if an email or phone is blocked.
+
+        Args:
+            identifier: Email or phone number to check
+
+        Returns:
+            True if blocked, False otherwise
+        """
+        return identifier.lower() in self._blocklist
+
+    def _add_to_blocklist(self, identifier: str, identifier_type: str,
+                          person_name: str, reason: str) -> None:
+        """Add an identifier to the blocklist."""
+        identifier = identifier.lower()
+        conn = sqlite3.connect(self.CRM_DB_PATH)
+        conn.execute("""
+            INSERT OR REPLACE INTO person_blocklist
+            (identifier, identifier_type, person_name, reason, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (identifier, identifier_type, person_name, reason,
+              datetime.now(timezone.utc).isoformat()))
+        conn.commit()
+        conn.close()
+        self._blocklist.add(identifier)
+
+    def hide_person(self, entity_id: str, reason: str = "") -> Optional[PersonEntity]:
+        """
+        Hide a person (soft delete) and blocklist their identifiers.
+
+        This marks the person as hidden and adds all their emails/phones to
+        a blocklist to prevent sync from recreating them.
+
+        Args:
+            entity_id: ID of the person to hide
+            reason: Optional reason for hiding (e.g., "fake marketing persona")
+
+        Returns:
+            The hidden PersonEntity, or None if not found
+        """
+        entity = self._entities.get(entity_id)
+        if not entity:
+            return None
+
+        # Mark as hidden
+        entity.hidden = True
+        entity.hidden_at = datetime.now(timezone.utc)
+        entity.hidden_reason = reason
+
+        # Add all emails and phones to blocklist
+        for email in entity.emails:
+            self._add_to_blocklist(email, "email", entity.canonical_name, reason)
+        for phone in entity.phone_numbers:
+            self._add_to_blocklist(phone, "phone", entity.canonical_name, reason)
+
+        # Update and save
+        self.update(entity)
+        self.save()
+
+        logger.info(f"Hidden person '{entity.canonical_name}' (ID: {entity_id[:8]}), "
+                    f"blocklisted {len(entity.emails)} emails, {len(entity.phone_numbers)} phones")
+        return entity
 
     def get_canonical_id(self, person_id: str) -> str:
         """
@@ -510,16 +624,31 @@ class PersonEntityStore:
 
         logger.info(f"Saved {len(data)} entities to {self.storage_path}")
 
-    def add(self, entity: PersonEntity) -> PersonEntity:
+    def add(self, entity: PersonEntity) -> Optional[PersonEntity]:
         """
         Add a new entity to the store.
+
+        Checks blocklist before adding - if any email or phone is blocked,
+        the entity is not added (prevents sync from recreating hidden people).
 
         Args:
             entity: PersonEntity to add
 
         Returns:
-            The added entity (a copy is stored internally)
+            The added entity, or None if blocked
         """
+        # Check blocklist - reject if any identifier is blocked
+        for email in entity.emails:
+            if self.is_blocked(email):
+                logger.info(f"Blocked adding entity '{entity.canonical_name}': "
+                            f"email {email} is blocklisted")
+                return None
+        for phone in entity.phone_numbers:
+            if self.is_blocked(phone):
+                logger.info(f"Blocked adding entity '{entity.canonical_name}': "
+                            f"phone {phone} is blocklisted")
+                return None
+
         # Store a copy to avoid reference issues
         stored = PersonEntity.from_dict(entity.to_dict())
         self._entities[stored.id] = stored
@@ -599,13 +728,14 @@ class PersonEntityStore:
         """Reload merged IDs mapping from disk (call after a merge operation)."""
         self._load_merged_ids()
 
-    def search(self, query: str, limit: int = 20) -> list[PersonEntity]:
+    def search(self, query: str, limit: int = 20, include_hidden: bool = False) -> list[PersonEntity]:
         """
         Search entities by name, email, or alias.
 
         Args:
             query: Search string
             limit: Maximum results to return
+            include_hidden: If True, include hidden entities (default: False)
 
         Returns:
             List of matching entities
@@ -614,6 +744,10 @@ class PersonEntityStore:
         results = []
 
         for entity in self._entities.values():
+            # Skip hidden entities unless explicitly requested
+            if entity.hidden and not include_hidden:
+                continue
+
             # Check canonical name
             if query_lower in entity.canonical_name.lower():
                 results.append(entity)
@@ -645,9 +779,19 @@ class PersonEntityStore:
 
         return results[:limit]
 
-    def get_all(self) -> list[PersonEntity]:
-        """Get all entities."""
-        return list(self._entities.values())
+    def get_all(self, include_hidden: bool = False) -> list[PersonEntity]:
+        """
+        Get all entities.
+
+        Args:
+            include_hidden: If True, include hidden entities (default: False)
+
+        Returns:
+            List of PersonEntity objects
+        """
+        if include_hidden:
+            return list(self._entities.values())
+        return [e for e in self._entities.values() if not e.hidden]
 
     def count(self) -> int:
         """Get total number of entities."""

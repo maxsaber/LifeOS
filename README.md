@@ -103,6 +103,10 @@ Web UI available at `http://localhost:8000`
 
 # Deployment
 ./scripts/deploy.sh "message"  # Test, restart, commit, push
+
+# Nightly sync (runs via launchd at 3 AM)
+./scripts/run_all_syncs.py --execute --force  # Manual run
+# Errors logged to ~/Notes 2025/LifeOS/sync_errors.md
 ```
 
 ### Project Structure

@@ -121,6 +121,17 @@
             color: white;
         }
 
+        .nav-link.me-link {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+        }
+
+        .nav-link.me-link:hover {
+            background: var(--people);
+            color: white;
+            border-color: var(--people);
+        }
+
         .header-right {
             display: flex;
             align-items: center;
@@ -1023,6 +1034,22 @@
         .detail-tag-add:hover {
             border-color: var(--people);
             color: var(--people);
+        }
+
+        .detail-hide-btn {
+            padding: 0.25rem 0.5rem;
+            background: transparent;
+            border: none;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            cursor: pointer;
+            opacity: 0.5;
+            transition: all 0.2s;
+        }
+
+        .detail-hide-btn:hover {
+            opacity: 1;
+            color: var(--error);
         }
 
         .detail-actions {
@@ -2748,6 +2775,884 @@
             color: var(--warning);
         }
 
+        /* Me Dashboard Widgets */
+        .me-dashboard {
+            display: none;
+        }
+
+        .me-dashboard.visible {
+            display: block;
+        }
+
+        .me-widget {
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .me-widget-title {
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.75rem;
+        }
+
+        /* 100% Bar Chart */
+        .bar-chart-container {
+            margin-bottom: 0.75rem;
+        }
+
+        .bar-chart-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-bottom: 0.25rem;
+        }
+
+        .bar-chart {
+            display: flex;
+            height: 24px;
+            border-radius: 4px;
+            overflow: hidden;
+            background: var(--bg-primary);
+        }
+
+        .bar-segment {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            color: white;
+            min-width: 0;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .bar-segment:hover {
+            filter: brightness(1.2);
+        }
+
+        .bar-segment-label {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0 0.25rem;
+        }
+
+        /* Bar chart colors */
+        .bar-imessage { background: #34c759; }
+        .bar-email, .bar-gmail { background: #ff9500; }
+        .bar-calendar { background: #5856d6; }
+        .bar-slack { background: #e01e5a; }
+        .bar-vault { background: #00bcd4; }
+        .bar-phone { background: #30b0c7; }
+        .bar-whatsapp { background: #25d366; }
+        .bar-linkedin { background: #0077b5; }
+        .bar-granola { background: #8b5cf6; }
+        .bar-contacts { background: #64748b; }
+        .bar-other { background: #64748b; }
+
+        /* Circle colors */
+        .bar-circle-0 { background: #ef4444; }
+        .bar-circle-1 { background: #f97316; }
+        .bar-circle-2 { background: #eab308; }
+        .bar-circle-3 { background: #22c55e; }
+        .bar-circle-4 { background: #06b6d4; }
+        .bar-circle-5 { background: #3b82f6; }
+        .bar-circle-6 { background: #8b5cf6; }
+        .bar-circle-7 { background: #64748b; }
+
+        /* Relationship trends */
+        .trends-period-selector {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .trends-period-pill {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.7rem;
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            color: var(--text-muted);
+            border-radius: 1rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .trends-period-pill:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .trends-period-pill.active {
+            background: var(--people);
+            color: white;
+            border-color: var(--people);
+        }
+
+        .trends-section {
+            margin-bottom: 1rem;
+        }
+
+        .trends-title {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .trend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.375rem 0;
+            border-bottom: 1px solid var(--border);
+            cursor: pointer;
+        }
+
+        .trend-item:last-child {
+            border-bottom: none;
+        }
+
+        .trend-item:hover {
+            background: var(--bg-primary);
+        }
+
+        .trend-indicator {
+            font-size: 0.875rem;
+        }
+
+        .trend-warming .trend-indicator { color: #22c55e; }
+        .trend-cooling .trend-indicator { color: #ef4444; }
+
+        .trend-pct {
+            font-size: 0.7rem;
+            font-weight: 600;
+            min-width: 2.5rem;
+        }
+
+        .trend-pct-warming { color: #22c55e; }
+        .trend-pct-cooling { color: #ef4444; }
+
+        .trend-name {
+            flex: 1;
+            font-size: 0.8rem;
+            color: var(--text-primary);
+        }
+
+        .trend-change {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        /* Me Dashboard Widgets */
+        .me-widgets-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        @media (max-width: 900px) {
+            .me-widgets-row {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Health Score Widget */
+        .me-health-panel {
+            min-height: 200px;
+        }
+
+        .health-current-score {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--people);
+        }
+
+        .health-period-selector {
+            display: flex;
+            gap: 0.375rem;
+            margin-bottom: 0.5rem;
+            padding: 0 0.5rem;
+        }
+
+        .health-period-pill {
+            padding: 0.2rem 0.6rem;
+            font-size: 0.65rem;
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-muted);
+        }
+
+        .health-period-pill:hover {
+            border-color: var(--people);
+            color: var(--people);
+        }
+
+        .health-period-pill.active {
+            background: var(--people);
+            color: white;
+            border-color: var(--people);
+        }
+
+        .health-chart-container {
+            height: 140px;
+            padding: 0.25rem 0;
+            width: 100%;
+            position: relative;
+        }
+
+        .health-line-chart {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        .health-chart-svg {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .health-chart-tooltip {
+            position: absolute;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 0.35rem 0.5rem;
+            font-size: 0.7rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.1s;
+            z-index: 100;
+            white-space: nowrap;
+        }
+
+        .health-chart-tooltip.visible {
+            opacity: 1;
+        }
+
+        .health-chart-tooltip-date {
+            color: var(--text-muted);
+            font-size: 0.6rem;
+        }
+
+        .health-chart-tooltip-score {
+            font-weight: 600;
+            color: var(--people);
+        }
+
+        .health-info-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: transparent;
+            border: 1.5px solid var(--text-muted);
+            font-size: 0.6rem;
+            font-weight: 600;
+            font-style: italic;
+            color: var(--text-muted);
+            cursor: help;
+            margin-left: 0.35rem;
+            position: relative;
+        }
+
+        .health-info-icon:hover {
+            background: var(--bg-primary);
+            border-color: var(--people);
+            color: var(--people);
+        }
+
+        .health-info-tooltip {
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 6px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.75rem;
+            width: 260px;
+            font-size: 0.7rem;
+            line-height: 1.4;
+            color: var(--text-secondary);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.15s, visibility 0.15s;
+            z-index: 200;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .health-info-icon:hover .health-info-tooltip {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .health-info-tooltip strong {
+            color: var(--text-primary);
+            display: block;
+            margin-bottom: 0.25rem;
+        }
+
+        .health-chart-line {
+            fill: none;
+            stroke: var(--people);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .health-chart-area {
+            fill: var(--people);
+            opacity: 0.1;
+        }
+
+        .health-chart-dot {
+            fill: var(--people);
+            cursor: pointer;
+            transition: r 0.1s ease-out;
+        }
+
+        .health-chart-dot:hover {
+            r: 6;
+            filter: brightness(1.2);
+        }
+
+        .health-chart-labels {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.25rem 0;
+        }
+
+        .health-chart-label {
+            font-size: 0.55rem;
+            color: var(--text-muted);
+        }
+
+        .health-chart-grid-line {
+            stroke: var(--border-color);
+            stroke-width: 1;
+            stroke-dasharray: 2, 2;
+        }
+
+        /* Neglected Contacts Widget */
+        .me-neglected-panel {
+            min-height: 180px;
+        }
+
+        .neglected-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+
+        .neglected-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.375rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .neglected-item:hover {
+            background: var(--bg-primary);
+        }
+
+        .neglected-circle {
+            width: 1.25rem;
+            height: 1.25rem;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .neglected-circle-0 { background: #ef4444; }
+        .neglected-circle-1 { background: #f97316; }
+        .neglected-circle-2 { background: #eab308; }
+        .neglected-circle-3 { background: #22c55e; }
+
+        .neglected-name {
+            flex: 1;
+            font-size: 0.8rem;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .neglected-days {
+            font-size: 0.7rem;
+            color: #ef4444;
+            white-space: nowrap;
+        }
+
+        .neglected-typical {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        /* Chart Panels */
+        .me-chart-panel {
+            min-height: 220px;
+        }
+
+        .me-compact-panel {
+            min-height: 220px;
+            display: flex;
+            flex-direction: column;
+            padding-bottom: 0.5rem;
+        }
+
+        .me-compact-panel #meTopContacts {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 170px;
+        }
+
+        .me-messaging-panel {
+            min-height: 380px;
+        }
+
+        .me-tall-row {
+            align-items: stretch;
+        }
+
+        .chart-container {
+            height: 180px;
+            padding: 0.5rem;
+        }
+
+        .chart-container-tall {
+            height: 320px;
+            flex: 1;
+        }
+
+        .chart-subtitle {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        /* Network Growth Chart */
+        .growth-chart {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .growth-chart-inner {
+            display: flex;
+            position: relative;
+            height: 120px;
+        }
+
+        .growth-y-axis {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            width: 24px;
+            padding-right: 4px;
+            text-align: right;
+            height: 120px;
+            padding-bottom: 4px;
+        }
+
+        .growth-y-label {
+            font-size: 0.65rem;
+            color: var(--text-primary);
+            line-height: 1;
+        }
+
+        /* Network Growth tooltip */
+        .growth-tooltip {
+            position: absolute;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 0.35rem 0.5rem;
+            font-size: 0.7rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.1s;
+            z-index: 100;
+            white-space: nowrap;
+        }
+
+        .growth-tooltip.visible {
+            opacity: 1;
+        }
+
+        .growth-bar {
+            cursor: pointer;
+        }
+
+        .growth-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 2px;
+            flex: 1;
+            height: 120px;
+            padding-bottom: 4px;
+        }
+
+        .growth-bar-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            height: 100%;
+            justify-content: flex-end;
+        }
+
+        .growth-bar {
+            width: 100%;
+            background: linear-gradient(to top, var(--people), #a78bfa);
+            border-radius: 2px 2px 0 0;
+            min-height: 2px;
+            transition: height 0.3s ease-out;
+        }
+
+        .growth-bar:hover {
+            filter: brightness(1.1);
+        }
+
+        .growth-labels {
+            display: flex;
+            gap: 2px;
+            margin-top: 0;
+        }
+
+        .growth-label {
+            flex: 1;
+            font-size: 0.6rem;
+            color: var(--text-primary);
+            text-align: center;
+        }
+
+        .growth-label.clickable-month {
+            cursor: pointer;
+            transition: color 0.15s ease, transform 0.15s ease;
+            user-select: none;
+        }
+
+        .growth-label.clickable-month:hover {
+            color: var(--people);
+            transform: scale(1.1);
+        }
+
+        .growth-chart-header {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 0.25rem;
+        }
+
+        .growth-reset-btn {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            color: var(--text-muted);
+            font-size: 0.6rem;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .growth-reset-btn:hover {
+            background: var(--people);
+            border-color: var(--people);
+            color: white;
+        }
+
+        .growth-cumulative {
+            margin-top: 0.5rem;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        /* Messaging by Circle Chart */
+        .messaging-chart {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        .messaging-stacked-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+            flex: 1;
+            height: 200px;
+        }
+
+        .messaging-bar-container {
+            flex: 1;
+            height: 100%;
+            display: flex;
+            align-items: flex-end;
+        }
+
+        .messaging-stacked-bar {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            border-radius: 2px 2px 0 0;
+            overflow: hidden;
+            min-height: 2px;
+        }
+
+        .messaging-segment {
+            width: 100%;
+            transition: height 0.3s ease-out;
+        }
+
+        .messaging-segment-0 { background: #ef4444; }
+        .messaging-segment-1 { background: #f97316; }
+        .messaging-segment-2 { background: #eab308; }
+        .messaging-segment-3 { background: #22c55e; }
+        .messaging-segment-4 { background: #3b82f6; }
+        .messaging-segment-5 { background: #6b7280; }
+
+        .messaging-bar-container {
+            cursor: pointer;
+        }
+
+        .messaging-bar-container:hover .messaging-stacked-bar {
+            filter: brightness(1.1);
+        }
+
+        /* Messaging tooltip */
+        .messaging-tooltip {
+            position: absolute;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 0.35rem 0.5rem;
+            font-size: 0.7rem;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.1s;
+            z-index: 100;
+            white-space: nowrap;
+        }
+
+        .messaging-tooltip.visible {
+            opacity: 1;
+        }
+
+        .messaging-chart-header {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .messaging-mode-toggle {
+            display: flex;
+            gap: 2px;
+            background: var(--bg-secondary);
+            border-radius: 4px;
+            padding: 2px;
+        }
+
+        .mode-toggle-btn {
+            padding: 0.2rem 0.5rem;
+            font-size: 0.6rem;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            border-radius: 3px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .mode-toggle-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .mode-toggle-btn.active {
+            background: var(--people);
+            color: white;
+        }
+
+        .messaging-chart-inner {
+            display: flex;
+            flex: 1;
+        }
+
+        .messaging-y-axis {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            width: 28px;
+            padding-right: 4px;
+            text-align: right;
+            height: 200px;
+        }
+
+        .messaging-y-label {
+            font-size: 0.65rem;
+            color: var(--text-primary);
+            line-height: 1;
+        }
+
+        .messaging-labels {
+            display: flex;
+            gap: 3px;
+            margin-top: 0.25rem;
+        }
+
+        .messaging-label {
+            flex: 1;
+            font-size: 0.6rem;
+            color: var(--text-primary);
+            text-align: center;
+        }
+
+        .messaging-label.clickable-month {
+            cursor: pointer;
+            transition: color 0.15s ease, transform 0.15s ease;
+            user-select: none;
+        }
+
+        .messaging-label.clickable-month:hover {
+            color: var(--people);
+            transform: scale(1.1);
+        }
+
+        .messaging-reset-btn {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-primary);
+            color: var(--text-muted);
+            font-size: 0.65rem;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .messaging-reset-btn:hover {
+            background: var(--people);
+            border-color: var(--people);
+            color: white;
+        }
+
+        .messaging-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+            justify-content: center;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            font-size: 0.6rem;
+            color: var(--text-muted);
+        }
+
+        .legend-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+        }
+
+        .legend-toggle {
+            cursor: pointer;
+            padding: 0.15rem 0.35rem;
+            border-radius: 4px;
+            transition: all 0.15s;
+            opacity: 0.4;
+        }
+
+        .legend-toggle.selected {
+            opacity: 1;
+            background: var(--bg-tertiary);
+        }
+
+        .legend-toggle:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .messaging-insight {
+            margin-top: 0.25rem;
+            padding: 0.35rem 0.5rem;
+            background: var(--bg-primary);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            color: var(--text-primary);
+            line-height: 1.4;
+        }
+
+        .messaging-insight:first-of-type {
+            margin-top: 0.75rem;
+        }
+
+        /* Top contacts */
+        .top-contact {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .top-contact:hover {
+            background: var(--bg-primary);
+        }
+
+        .top-contact-rank {
+            width: 1.5rem;
+            height: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--people);
+            color: white;
+            border-radius: 50%;
+            font-size: 0.7rem;
+            font-weight: 600;
+        }
+
+        .top-contact-info {
+            flex: 1;
+        }
+
+        .top-contact-name {
+            font-size: 0.8rem;
+            color: var(--text-primary);
+        }
+
+        .top-contact-count {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
         .fact-confidence.low {
             color: var(--error);
         }
@@ -2787,6 +3692,7 @@
             <nav class="header-nav">
                 <a href="/chat" class="nav-link">💬 Chat</a>
                 <a href="/crm" class="nav-link active">👥 CRM</a>
+                <a href="/me" class="nav-link me-link">👤 Me</a>
             </nav>
         </div>
         <div class="header-right">
@@ -2812,11 +3718,12 @@
             </div>
             <div class="merge-toolbar" id="mergeToolbar">
                 <div class="merge-toolbar-info">
-                    <strong id="selectedCount">0</strong> people selected
+                    <strong id="selectedCount">0</strong> <span id="selectedLabel">people selected</span>
                 </div>
                 <div class="merge-toolbar-actions">
                     <button class="clear-selection-btn" onclick="clearSelection()">Clear</button>
-                    <button class="merge-btn" onclick="openMergeModal()">Merge Selected</button>
+                    <button class="merge-btn" id="mergeBtn" onclick="openMergeModal()">Merge Selected</button>
+                    <button class="merge-btn hide-btn" id="hideBtn" onclick="hidePerson()" style="display: none; background: #6b4423;">Hide Person</button>
                 </div>
             </div>
             <div class="people-list" id="peopleList">
@@ -2950,8 +3857,98 @@
                         </div>
                         <div class="heatmap-tooltip" id="heatmapTooltip"></div>
 
-                        <!-- Two-column content grid -->
-                        <div class="overview-content-grid">
+                        <!-- Me Dashboard (shown only for owner's profile) -->
+                        <div class="me-dashboard" id="meDashboard">
+                            <!-- Health Score + Neglected Row -->
+                            <div class="me-widgets-row">
+                                <!-- Relationship Health Score -->
+                                <div class="overview-panel me-health-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">
+                                            Relationship Health
+                                            <span class="health-info-icon">i
+                                                <div class="health-info-tooltip">
+                                                    <strong>How Relationship Health is calculated</strong>
+                                                    Measures how actively you're maintaining your relationships. Based on contact frequency with your inner circles (0-2), weighted by Dunbar number. Higher scores mean you're keeping up with close contacts. A score of 80+ is excellent.
+                                                </div>
+                                            </span>
+                                        </span>
+                                        <span class="health-current-score" id="healthCurrentScore">--</span>
+                                    </div>
+                                    <div class="health-period-selector">
+                                        <button class="health-period-pill" data-period="month" onclick="changeHealthPeriod('month')">Month</button>
+                                        <button class="health-period-pill active" data-period="quarter" onclick="changeHealthPeriod('quarter')">Quarter</button>
+                                        <button class="health-period-pill" data-period="year" onclick="changeHealthPeriod('year')">Year</button>
+                                    </div>
+                                    <div class="health-chart-container" id="healthChartContainer"></div>
+                                </div>
+
+                                <!-- Neglected Contacts -->
+                                <div class="overview-panel me-neglected-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">Need Attention</span>
+                                    </div>
+                                    <div class="neglected-list" id="neglectedContactsList"></div>
+                                </div>
+                            </div>
+
+                            <!-- Charts Row: Network Growth + Top Contacts (smaller) -->
+                            <div class="me-widgets-row">
+                                <!-- Network Growth -->
+                                <div class="overview-panel me-chart-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">Network Growth</span>
+                                    </div>
+                                    <div class="chart-container" id="networkGrowthChart"></div>
+                                </div>
+
+                                <!-- Top Contacts (smaller) -->
+                                <div class="overview-panel me-compact-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">Top Contacts (30 Days)</span>
+                                    </div>
+                                    <div id="meTopContacts"></div>
+                                </div>
+                            </div>
+
+                            <!-- Messaging by Circle (double height) + Relationship Trends -->
+                            <div class="me-widgets-row me-tall-row">
+                                <!-- Messaging Volume by Circle (larger) -->
+                                <div class="overview-panel me-messaging-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">Messaging by Circle</span>
+                                        <span class="chart-subtitle">iMessage + WhatsApp</span>
+                                    </div>
+                                    <div class="chart-container chart-container-tall" id="messagingByCircleChart"></div>
+                                </div>
+
+                                <!-- Relationship Trends -->
+                                <div class="overview-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">Relationship Trends</span>
+                                    </div>
+                                    <div class="trends-period-selector" id="trendsPeriodSelector">
+                                        <button class="trends-period-pill" data-period="week" onclick="changeTrendPeriod('week')">Week</button>
+                                        <button class="trends-period-pill" data-period="month" onclick="changeTrendPeriod('month')">Month</button>
+                                        <button class="trends-period-pill active" data-period="quarter" onclick="changeTrendPeriod('quarter')">Quarter</button>
+                                        <button class="trends-period-pill" data-period="year" onclick="changeTrendPeriod('year')">Year</button>
+                                    </div>
+                                    <div id="meRelationshipTrends">
+                                        <div class="trends-section" id="trendsWarming">
+                                            <div class="trends-title">🔥 Warming</div>
+                                            <div id="trendsWarmingList"></div>
+                                        </div>
+                                        <div class="trends-section" id="trendsCooling">
+                                            <div class="trends-title">❄️ Cooling</div>
+                                            <div id="trendsCoolingList"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Two-column content grid (hidden for Me page) -->
+                        <div class="overview-content-grid" id="personContentGrid">
                             <!-- Quick Facts - Left Column -->
                             <div class="quick-facts-section overview-panel">
                                 <div class="overview-panel-header">
@@ -3242,6 +4239,7 @@
         let mergePrimaryId = null;  // Primary person for merge
         let dunbarCircleMap = new Map();  // Map person ID to Dunbar circle
         let dunbarCirclesInitialized = false;  // Track if global circles have been calculated
+        let meInteractionsCache = null;  // Cache for "Me" page interactions
 
         // Dunbar Circle Configuration
         // Circle sizes: 0=3 (manual), 1=5, 2=15, 3=50, 4=150, 5=500, 6=1500, 7+=rest
@@ -3359,23 +4357,53 @@
         // ===============================
 
         // Parse URL to get person ID and tab
+        // Supports: /crm, /crm/{personId}, /crm/{personId}/{tab}, /me, /me/{tab}
         function parseUrl() {
             const path = window.location.pathname;
+
+            // Handle /me route (alias for owner's profile)
+            const meMatch = path.match(/^\/me(?:\/([^\/]+))?/);
+            if (meMatch) {
+                return {
+                    personId: DUNBAR_CONFIG.myPersonId,
+                    tab: meMatch[1] || null,
+                    isMe: true
+                };
+            }
+
+            // Handle /crm routes
             const match = path.match(/^\/crm(?:\/([^\/]+))?(?:\/([^\/]+))?/);
-            if (!match) return { personId: null, tab: null };
+            if (!match) return { personId: null, tab: null, isMe: false };
+
+            const personId = match[1] || null;
             return {
-                personId: match[1] || null,
-                tab: match[2] || null
+                personId: personId,
+                tab: match[2] || null,
+                isMe: personId === DUNBAR_CONFIG.myPersonId
             };
+        }
+
+        // Check if current view is the "Me" page (owner's profile)
+        function isMyPage(personId = selectedPersonId) {
+            return personId === DUNBAR_CONFIG.myPersonId;
         }
 
         // Update URL without reloading page
         function updateUrl(personId, tab, replace = false) {
-            let path = '/crm';
-            if (personId) {
-                path += '/' + personId;
+            let path;
+            // Use /me route for owner's profile
+            if (personId === DUNBAR_CONFIG.myPersonId) {
+                path = '/me';
                 if (tab && tab !== 'overview') {
                     path += '/' + tab;
+                }
+            } else {
+                path = '/crm';
+                if (personId) {
+                    path += '/' + personId;
+                    if (tab && tab !== 'overview') {
+                        path += '/' + tab;
+                    }
                 }
             }
             const method = replace ? 'replaceState' : 'pushState';
@@ -3403,6 +4431,12 @@
 
         // Initialize
         async function init() {
+            // Redirect /crm to /me (Me page is the default landing)
+            if (window.location.pathname === '/crm' || window.location.pathname === '/crm/') {
+                window.location.replace('/me');
+                return;
+            }
+
             await loadPeople();
             await loadStatistics();
 
@@ -3502,12 +4536,25 @@
         function updateMergeToolbar() {
             const toolbar = document.getElementById('mergeToolbar');
             const countEl = document.getElementById('selectedCount');
+            const labelEl = document.getElementById('selectedLabel');
+            const mergeBtn = document.getElementById('mergeBtn');
+            const hideBtn = document.getElementById('hideBtn');
             const count = selectedForMerge.size;
 
             countEl.textContent = count;
 
             if (count >= 2) {
+                // Multiple people selected - show merge button
                 toolbar.classList.add('visible');
+                labelEl.textContent = 'people selected';
+                mergeBtn.style.display = '';
+                hideBtn.style.display = 'none';
+            } else if (count === 1) {
+                // Single person selected - show hide button
+                toolbar.classList.add('visible');
+                labelEl.textContent = 'person selected';
+                mergeBtn.style.display = 'none';
+                hideBtn.style.display = '';
             } else {
                 toolbar.classList.remove('visible');
             }
@@ -3518,6 +4565,52 @@
             selectedForMerge.clear();
             mergePrimaryId = null;
             renderPeopleList();
+        }
+
+        // Hide a single person (soft delete)
+        async function hidePerson() {
+            if (selectedForMerge.size !== 1) return;
+
+            const personId = [...selectedForMerge][0];
+            const person = people.find(p => p.id === personId);
+            if (!person) return;
+
+            // Confirm with user
+            const confirmed = confirm(
+                `Hide "${person.canonical_name}"?\n\n` +
+                `This will:\n` +
+                `• Remove them from the people list\n` +
+                `• Block their email/phone from future syncs\n\n` +
+                `Use this for fake personas or spam contacts.`
+            );
+            if (!confirmed) return;
+
+            try {
+                const reason = prompt('Reason for hiding (optional):', 'fake marketing persona');
+
+                const response = await api(`/people/${personId}/hide`, {
+                    method: 'POST',
+                    body: JSON.stringify({ reason: reason || '' }),
+                });
+
+                // Clear selection first
+                clearSelection();
+
+                // If this was the selected person, clear it
+                if (selectedPersonId === personId) {
+                    selectedPersonId = null;
+                }
+
+                // Reload people list and force UI refresh
+                await loadPeople();
+                renderPeopleList();
+                updateMergeToolbar();
+
+                showNotification(`Hidden "${person.canonical_name}" (${response.emails_blocked} emails blocked)`, 'success');
+            } catch (error) {
+                console.error('Failed to hide person:', error);
+                showNotification(`Failed to hide person: ${error.message}`, 'error');
+            }
         }
 
         // Open merge modal
@@ -3983,29 +5076,86 @@
 
         // Render person detail
         function renderPersonDetail(person) {
-            document.getElementById('detailAvatar').textContent = getInitials(person.canonical_name);
-            document.getElementById('detailName').textContent = person.canonical_name;
-            document.getElementById('detailCompany').textContent = [person.company, person.position].filter(Boolean).join(' · ');
+            const isMePage = isMyPage(person.id);
 
-            // Quick contact links in header
+            // Toggle Me Dashboard vs Person Content Grid visibility
+            const meDashboard = document.getElementById('meDashboard');
+            const personContentGrid = document.getElementById('personContentGrid');
+            const sourceEntitiesFooter = document.getElementById('sourceEntities');
+
+            // Header indicators (strength ring, dunbar circle) - hide for Me page
+            const headerIndicators = document.querySelector('.header-indicators');
+            if (headerIndicators) {
+                headerIndicators.style.display = isMePage ? 'none' : 'flex';
+            }
+
+            // Last seen stat - hide for Me page
+            const lastSeenStat = document.getElementById('heroStatLastSeen')?.closest('.hero-stat');
+            if (lastSeenStat) {
+                lastSeenStat.style.display = isMePage ? 'none' : 'flex';
+            }
+
+            if (isMePage) {
+                meDashboard.style.display = 'grid';
+                personContentGrid.style.display = 'none';
+                if (sourceEntitiesFooter) sourceEntitiesFooter.style.display = 'none';
+            } else {
+                meDashboard.style.display = 'none';
+                personContentGrid.style.display = 'grid';
+                if (sourceEntitiesFooter) sourceEntitiesFooter.style.display = 'block';
+            }
+
+            // For "Me" page, customize the display
+            if (isMePage) {
+                document.getElementById('detailAvatar').textContent = '👤';
+                document.getElementById('detailName').textContent = 'My Dashboard';
+                document.getElementById('detailCompany').textContent = 'Personal CRM Overview';
+            } else {
+                document.getElementById('detailAvatar').textContent = getInitials(person.canonical_name);
+                document.getElementById('detailName').textContent = person.canonical_name;
+                document.getElementById('detailCompany').textContent = [person.company, person.position].filter(Boolean).join(' · ');
+            }
+
+            // Quick contact links in header (skip for Me page)
             const quickContactEl = document.getElementById('detailContactQuick');
-            let quickContactHtml = '';
-            if (person.emails && person.emails.length > 0) {
-                quickContactHtml += `<a href="mailto:${person.emails[0]}" class="detail-contact-link">📧 ${escapeHtml(person.emails[0])}</a>`;
+            if (isMePage) {
+                quickContactEl.innerHTML = '';
+            } else {
+                let quickContactHtml = '';
+                if (person.emails && person.emails.length > 0) {
+                    quickContactHtml += `<a href="mailto:${person.emails[0]}" class="detail-contact-link">📧 ${escapeHtml(person.emails[0])}</a>`;
+                }
+                if (person.phone_numbers && person.phone_numbers.length > 0) {
+                    quickContactHtml += `<a href="tel:${person.phone_numbers[0]}" class="detail-contact-link">📞 ${escapeHtml(person.phone_numbers[0])}</a>`;
+                }
+                quickContactEl.innerHTML = quickContactHtml;
             }
-            if (person.phone_numbers && person.phone_numbers.length > 0) {
-                quickContactHtml += `<a href="tel:${person.phone_numbers[0]}" class="detail-contact-link">📞 ${escapeHtml(person.phone_numbers[0])}</a>`;
+
+            // Editable tags in header (skip for Me page)
+            if (!isMePage) {
+                renderEditableTags(person.tags || []);
+            } else {
+                document.getElementById('detailTagsChips').innerHTML = '';
             }
-            quickContactEl.innerHTML = quickContactHtml;
 
-            // Editable tags in header
-            renderEditableTags(person.tags || []);
-
-            // Load Quick Facts (will auto-extract if none exist)
-            loadFacts(person.id);
+            // Load Quick Facts (skip for Me page - has its own dashboard)
+            if (!isMePage) {
+                loadFacts(person.id);
+            } else {
+                // Render Me dashboard widgets
+                renderMeDashboard();
+            }
 
             // Hero stats row
             renderHeroStats(person);
+
+            // Heat map calendar - load from timeline or generate empty
+            loadAndRenderHeatMap(person.id);
+
+            // Skip individual-specific rendering for Me page
+            if (isMePage) {
+                return;
+            }
 
             // Relationship strength ring
             renderStrengthRing(person.relationship_strength || 0);
@@ -4015,9 +5165,6 @@
 
             // Backwards compatibility for old strength breakdown (hidden)
             renderStrengthBreakdown(person);
-
-            // Heat map calendar - load from timeline or generate empty
-            loadAndRenderHeatMap(person.id);
 
             // Compact contact info for new layout
             renderCompactContactInfo(person);
@@ -4077,7 +5224,48 @@
                 </span>
             `).join('');
             html += `<span class="detail-tag-add" onclick="addTag()">+ Add tag</span>`;
+            html += `<span class="detail-hide-btn" onclick="hideCurrentPerson()" title="Hide this person">Hide</span>`;
             container.innerHTML = html;
+        }
+
+        // Hide the currently selected person
+        async function hideCurrentPerson() {
+            console.log('hideCurrentPerson called, selectedPersonId:', selectedPersonId);
+            if (!selectedPersonId) {
+                alert('No person selected');
+                return;
+            }
+
+            const person = allPeople.find(p => p.id === selectedPersonId);
+            const name = person?.canonical_name || 'this person';
+
+            if (!confirm(`Hide "${name}"?\n\nThis will remove them from all lists and metrics. Their identifiers will be blocklisted to prevent recreation during syncs.`)) {
+                return;
+            }
+
+            try {
+                console.log('Calling hide API for:', selectedPersonId);
+                const result = await api(`/people/${selectedPersonId}/hide`, {
+                    method: 'POST',
+                    body: JSON.stringify({ reason: 'Hidden from profile page' }),
+                });
+                console.log('Hide API result:', result);
+
+                // Remove from local list and refresh
+                allPeople = allPeople.filter(p => p.id !== selectedPersonId);
+                renderPeopleList();
+
+                // Clear detail view
+                selectedPersonId = null;
+                document.getElementById('detailContent').classList.remove('person-selected');
+                updateUrl(null, null);
+
+                // Show confirmation
+                alert(`"${name}" has been hidden.`);
+            } catch (error) {
+                console.error('Failed to hide person:', error);
+                alert('Failed to hide person. Please try again.');
+            }
         }
 
         // Format large numbers compactly (e.g., 46049 -> "46K")
@@ -4088,7 +5276,13 @@
         }
 
         // Render hero stats row
-        function renderHeroStats(person) {
+        async function renderHeroStats(person) {
+            // For "Me" page, show aggregate stats across all people
+            if (isMyPage(person.id)) {
+                await renderMeHeroStats();
+                return;
+            }
+
             const emailCount = person.email_count || 0;
             const eventCount = person.meeting_count || 0; // "events" instead of "meetings"
             const messageCount = person.message_count || 0; // iMessage + WhatsApp combined
@@ -4115,6 +5309,44 @@
             document.getElementById('statMeetings').textContent = eventCount;
             document.getElementById('statMessages').textContent = messageCount;
             document.getElementById('statNotes').textContent = person.notes ? 1 : 0;
+        }
+
+        // Render hero stats for "Me" page with aggregate totals
+        async function renderMeHeroStats() {
+            try {
+                const stats = await api('/me/stats');
+
+                // Show aggregate totals
+                document.getElementById('heroStatEmails').textContent = formatCompactNumber(stats.total_emails);
+                document.getElementById('heroStatEvents').textContent = formatCompactNumber(stats.total_meetings);
+                document.getElementById('heroStatMessages').textContent = formatCompactNumber(stats.total_messages);
+
+                // For "Me", show total people instead of last seen
+                document.getElementById('heroStatLastSeen').textContent = `${formatCompactNumber(stats.total_people)} people`;
+
+                // Update backwards compat stats
+                document.getElementById('statEmails').textContent = stats.total_emails;
+                document.getElementById('statMeetings').textContent = stats.total_meetings;
+                document.getElementById('statMessages').textContent = stats.total_messages;
+            } catch (error) {
+                console.error('Failed to load Me stats:', error);
+            }
+        }
+
+        // Load all interactions for "Me" page (for client-side processing)
+        async function loadMeInteractions() {
+            if (meInteractionsCache) {
+                return meInteractionsCache;
+            }
+            try {
+                // Use quarter as default trend period, fetch 2 years for chart navigation
+                const data = await api(`/me/interactions?days_back=1095&trend_period=${currentTrendPeriod}`);
+                meInteractionsCache = data; // Store the whole aggregated response
+                return meInteractionsCache;
+            } catch (error) {
+                console.error('Failed to load Me interactions:', error);
+                return null;
+            }
         }
 
         // Update hero stats from aggregated source totals (called after heatmap loads)
@@ -4394,6 +5626,12 @@
             const monthsContainer = document.getElementById('heatmapMonths');
 
             try {
+                // For "Me" page, aggregate interactions across all people
+                if (isMyPage(personId)) {
+                    await loadMeHeatMap();
+                    return;
+                }
+
                 // Use aggregated timeline endpoint for efficient data loading
                 const data = await api(`/people/${personId}/timeline/aggregated?days_back=372`);
                 const days = data.days || [];
@@ -4420,6 +5658,938 @@
                 sourceTotals = {};
                 renderHeatMap();
             }
+        }
+
+        // Load and render heatmap for "Me" page (aggregate across all people)
+        async function loadMeHeatMap() {
+            try {
+                const data = await loadMeInteractions();
+                if (!data) {
+                    heatmapData = {};
+                    sourceTotals = {};
+                    renderHeatMap();
+                    return;
+                }
+
+                // Use pre-aggregated daily data from server
+                heatmapData = {};
+                sourceTotals = data.by_source || {};
+
+                (data.daily || []).forEach(day => {
+                    heatmapData[day.date] = { total: day.total, sources: day.sources };
+                });
+
+                renderHeatMap();
+                // Don't call updateHeroStatsFromSources for Me page - we already set aggregate stats
+            } catch (error) {
+                console.error('Failed to load Me heat map:', error);
+                heatmapData = {};
+                sourceTotals = {};
+                renderHeatMap();
+            }
+        }
+
+        // Render Me dashboard widgets
+        async function renderMeDashboard() {
+            const data = await loadMeInteractions();
+            if (!data) return;
+
+            // Update hero stats with phone/slack counts from interactions data
+            updateMeHeroStatsFromInteractions(data);
+
+            // New widgets
+            renderHealthScore(data);
+            renderNeglectedContacts(data);
+            renderNetworkGrowth(data);
+            renderMessagingByCircle(data);
+
+            // Existing widgets
+            renderTopContacts(data);
+            renderRelationshipTrends(data);
+        }
+
+        // Update hero stats for Me page with phone/slack counts
+        function updateMeHeroStatsFromInteractions(data) {
+            const bySource = data.by_source || {};
+
+            const phoneCount = bySource.phone || 0;
+            const slackCount = bySource.slack || 0;
+
+            // Show phone stat if there's data
+            const phoneContainer = document.getElementById('heroStatPhoneContainer');
+            if (phoneContainer) {
+                if (phoneCount > 0) {
+                    phoneContainer.style.display = '';
+                    document.getElementById('heroStatPhone').textContent = formatCompactNumber(phoneCount);
+                } else {
+                    phoneContainer.style.display = 'none';
+                }
+            }
+
+            // Show slack stat if there's data
+            const slackContainer = document.getElementById('heroStatSlackContainer');
+            if (slackContainer) {
+                if (slackCount > 0) {
+                    slackContainer.style.display = '';
+                    document.getElementById('heroStatSlack').textContent = formatCompactNumber(slackCount);
+                } else {
+                    slackContainer.style.display = 'none';
+                }
+            }
+        }
+
+        // Render 100% bar charts from aggregated data
+        function renderBreakdownCharts(data) {
+            // By Source - use pre-aggregated data
+            renderBarChart('chartBySource', data.by_source || {}, 'source');
+
+            // By Month (last 12 months) - sort and take last 12
+            const byMonth = data.by_month || {};
+            const sortedMonths = Object.keys(byMonth).sort().slice(-12);
+            const monthData = {};
+            sortedMonths.forEach(m => { monthData[m] = byMonth[m]; });
+            renderBarChart('chartByMonth', monthData, 'month');
+
+            // By Dunbar Circle - use pre-aggregated data
+            const byCircle = {};
+            Object.entries(data.by_circle || {}).forEach(([circle, count]) => {
+                byCircle[`Circle ${circle}`] = count;
+            });
+            renderBarChart('chartByCircle', byCircle, 'circle');
+        }
+
+        function renderBarChart(elementId, data, type) {
+            const container = document.getElementById(elementId);
+            if (!container) return;
+
+            const total = Object.values(data).reduce((a, b) => a + b, 0);
+            if (total === 0) {
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem; padding: 0.5rem;">No data</div>';
+                return;
+            }
+
+            let html = '';
+            const entries = Object.entries(data).sort((a, b) => b[1] - a[1]);
+
+            entries.forEach(([key, count]) => {
+                const pct = (count / total * 100);
+                if (pct < 1) return; // Skip tiny segments
+
+                let colorClass = 'bar-other';
+                let label = key;
+
+                if (type === 'source') {
+                    colorClass = `bar-${key.toLowerCase()}`;
+                    label = key.charAt(0).toUpperCase() + key.slice(1);
+                } else if (type === 'circle') {
+                    const circleNum = parseInt(key.replace('Circle ', ''));
+                    colorClass = `bar-circle-${circleNum}`;
+                } else if (type === 'month') {
+                    const [y, m] = key.split('-');
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    label = months[parseInt(m) - 1];
+                    // Use a gradient based on position
+                    const idx = entries.findIndex(e => e[0] === key);
+                    colorClass = `bar-circle-${idx % 8}`;
+                }
+
+                html += `<div class="bar-segment ${colorClass}" style="width: ${pct}%;" title="${label}: ${count} (${pct.toFixed(1)}%)">
+                    <span class="bar-segment-label">${pct > 8 ? label : ''}</span>
+                </div>`;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Render top contacts from aggregated data
+        function renderTopContacts(data) {
+            const container = document.getElementById('meTopContacts');
+            if (!container) return;
+
+            const topContacts = data.top_contacts || [];
+
+            if (topContacts.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No recent interactions</div>';
+                return;
+            }
+
+            let html = '';
+            // Show top 10 contacts (scrollable panel)
+            topContacts.slice(0, 10).forEach((contact, idx) => {
+                html += `<div class="top-contact" onclick="selectPerson('${contact.person_id}')">
+                    <div class="top-contact-rank">${idx + 1}</div>
+                    <div class="top-contact-info">
+                        <div class="top-contact-name">${escapeHtml(contact.person_name)}</div>
+                        <div class="top-contact-count">${contact.count} interactions</div>
+                    </div>
+                </div>`;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Current trend period (default: quarter)
+        let currentTrendPeriod = 'quarter';
+
+        // Change trend period and reload trends
+        async function changeTrendPeriod(period) {
+            currentTrendPeriod = period;
+
+            // Update pill button states
+            document.querySelectorAll('.trends-period-pill').forEach(pill => {
+                pill.classList.toggle('active', pill.dataset.period === period);
+            });
+
+            // Show loading state
+            const warmingList = document.getElementById('trendsWarmingList');
+            const coolingList = document.getElementById('trendsCoolingList');
+            if (warmingList) warmingList.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">Loading...</div>';
+            if (coolingList) coolingList.innerHTML = '';
+
+            // Fetch trends for new period
+            try {
+                const data = await api(`/me/interactions?days_back=1095&trend_period=${period}`);
+                renderRelationshipTrends(data);
+            } catch (error) {
+                console.error('Failed to load trends:', error);
+                if (warmingList) warmingList.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">Failed to load</div>';
+            }
+        }
+
+        // Render relationship trends (warming/cooling) from aggregated data
+        function renderRelationshipTrends(data) {
+            const warmingList = document.getElementById('trendsWarmingList');
+            const coolingList = document.getElementById('trendsCoolingList');
+            if (!warmingList || !coolingList) return;
+
+            const warming = data.warming || [];
+            const cooling = data.cooling || [];
+
+            // Render
+            const renderTrend = (item, isWarming) => {
+                const pctChange = item.previous_count > 0
+                    ? Math.round(((item.recent_count - item.previous_count) / item.previous_count) * 100)
+                    : (item.recent_count > 0 ? 100 : 0);
+                const pctDisplay = pctChange >= 0 ? `+${pctChange}%` : `${pctChange}%`;
+                const pctClass = isWarming ? 'trend-pct-warming' : 'trend-pct-cooling';
+                return `
+                    <div class="trend-item ${isWarming ? 'trend-warming' : 'trend-cooling'}" onclick="selectPerson('${item.person_id}')">
+                        <span class="trend-indicator">${isWarming ? '↑' : '↓'}</span>
+                        <span class="trend-pct ${pctClass}">${pctDisplay}</span>
+                        <span class="trend-name">${escapeHtml(item.person_name)}</span>
+                        <span class="trend-change">${item.previous_count}→${item.recent_count}</span>
+                    </div>
+                `;
+            };
+
+            warmingList.innerHTML = warming.length > 0
+                ? warming.slice(0, 5).map(w => renderTrend(w, true)).join('')
+                : '<div style="color: var(--text-muted); font-size: 0.75rem; padding: 0.25rem;">No warming trends</div>';
+
+            coolingList.innerHTML = cooling.length > 0
+                ? cooling.slice(0, 5).map(c => renderTrend(c, false)).join('')
+                : '<div style="color: var(--text-muted); font-size: 0.75rem; padding: 0.25rem;">No cooling trends</div>';
+        }
+
+        // Render Relationship Health Score
+        let currentHealthPeriod = 'quarter';
+        let healthChartData = []; // Store for tooltip lookups
+
+        // Render Health Score Line Chart
+        function renderHealthScore(data) {
+            const container = document.getElementById('healthChartContainer');
+            const scoreEl = document.getElementById('healthCurrentScore');
+            if (!container) return;
+
+            const history = data.health_score_history || [];
+            healthChartData = history; // Store for tooltip
+
+            // Use most recent chart value as current score (more accurate)
+            const currentScore = history.length > 0 ? history[history.length - 1].score : (data.relationship_health_score || 0);
+
+            // Update current score display
+            if (scoreEl) {
+                scoreEl.textContent = currentScore;
+                // Color based on score
+                let color = '#ef4444';
+                if (currentScore >= 80) color = '#22c55e';
+                else if (currentScore >= 60) color = '#eab308';
+                else if (currentScore >= 50) color = '#f97316';
+                scoreEl.style.color = color;
+            }
+
+            if (history.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 1rem; text-align: center;">No health history data</div>';
+                return;
+            }
+
+            // SVG dimensions - match typical container aspect ratio (roughly 4:1)
+            const width = 600;
+            const height = 120;
+            const padding = { top: 10, right: 15, bottom: 20, left: 30 };
+            const chartWidth = width - padding.left - padding.right;
+            const chartHeight = height - padding.top - padding.bottom;
+
+            // Scale functions
+            const xScale = (i) => padding.left + (i / Math.max(history.length - 1, 1)) * chartWidth;
+            const yScale = (score) => padding.top + chartHeight - (score / 100) * chartHeight;
+
+            // Build line path
+            const linePath = history.map((point, i) => {
+                const x = xScale(i);
+                const y = yScale(point.score);
+                return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+            }).join(' ');
+
+            // Build area path (closed shape for fill)
+            const areaPath = linePath +
+                ` L ${xScale(history.length - 1)} ${padding.top + chartHeight}` +
+                ` L ${padding.left} ${padding.top + chartHeight} Z`;
+
+            // Build dots with data attributes for tooltips
+            const dots = history.map((point, i) => {
+                const x = xScale(i);
+                const y = yScale(point.score);
+                return `<circle class="health-chart-dot" cx="${x}" cy="${y}" r="4" data-index="${i}" data-score="${point.score}" data-date="${point.date}"/>`;
+            }).join('');
+
+            // Y-axis grid lines (at 25, 50, 75)
+            const gridLines = [25, 50, 75].map(val => {
+                const y = yScale(val);
+                return `<line class="health-chart-grid-line" x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}"/>`;
+            }).join('');
+
+            // Y-axis labels
+            const yLabels = [0, 50, 100].map(val => {
+                const y = yScale(val);
+                return `<text x="${padding.left - 5}" y="${y + 3}" font-size="11" fill="var(--text-primary)" text-anchor="end">${val}</text>`;
+            }).join('');
+
+            // X-axis labels (first, middle, last)
+            const xLabels = [];
+            if (history.length > 0) {
+                const formatLabel = (dateStr) => {
+                    const d = new Date(dateStr);
+                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                };
+                xLabels.push(`<text x="${xScale(0)}" y="${height - 2}" font-size="11" fill="var(--text-primary)" text-anchor="start">${formatLabel(history[0].date)}</text>`);
+                if (history.length > 2) {
+                    const midIdx = Math.floor(history.length / 2);
+                    xLabels.push(`<text x="${xScale(midIdx)}" y="${height - 2}" font-size="11" fill="var(--text-primary)" text-anchor="middle">${formatLabel(history[midIdx].date)}</text>`);
+                }
+                xLabels.push(`<text x="${xScale(history.length - 1)}" y="${height - 2}" font-size="11" fill="var(--text-primary)" text-anchor="end">${formatLabel(history[history.length - 1].date)}</text>`);
+            }
+
+            container.innerHTML = `
+                <div class="health-line-chart" style="position: relative;">
+                    <svg class="health-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+                        ${gridLines}
+                        ${yLabels}
+                        <path class="health-chart-area" d="${areaPath}"/>
+                        <path class="health-chart-line" d="${linePath}"/>
+                        ${dots}
+                        ${xLabels.join('')}
+                    </svg>
+                    <div class="health-chart-tooltip" id="healthChartTooltip"></div>
+                </div>
+            `;
+
+            // Setup instant hover tooltips
+            setupHealthChartTooltips();
+        }
+
+        // Setup instant tooltips for health chart
+        function setupHealthChartTooltips() {
+            const container = document.querySelector('.health-line-chart');
+            const tooltip = document.getElementById('healthChartTooltip');
+            const dots = document.querySelectorAll('.health-chart-dot');
+
+            if (!container || !tooltip) return;
+
+            dots.forEach(dot => {
+                dot.addEventListener('mouseenter', (e) => {
+                    const score = dot.dataset.score;
+                    const dateStr = dot.dataset.date;
+                    const d = new Date(dateStr);
+                    const formattedDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+                    tooltip.innerHTML = `
+                        <div class="health-chart-tooltip-date">${formattedDate}</div>
+                        <div class="health-chart-tooltip-score">Score: ${score}</div>
+                    `;
+
+                    // Position tooltip near the dot
+                    const rect = dot.getBoundingClientRect();
+                    const containerRect = container.getBoundingClientRect();
+                    tooltip.style.left = `${rect.left - containerRect.left + rect.width / 2}px`;
+                    tooltip.style.top = `${rect.top - containerRect.top - 8}px`;
+                    tooltip.style.transform = 'translate(-50%, -100%)';
+                    tooltip.classList.add('visible');
+                });
+
+                dot.addEventListener('mouseleave', () => {
+                    tooltip.classList.remove('visible');
+                });
+            });
+        }
+
+        // Change health score period
+        async function changeHealthPeriod(period) {
+            currentHealthPeriod = period;
+
+            // Update pill states
+            document.querySelectorAll('.health-period-pill').forEach(pill => {
+                pill.classList.toggle('active', pill.dataset.period === period);
+            });
+
+            // Show loading
+            const container = document.getElementById('healthChartContainer');
+            if (container) {
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 1rem;">Loading...</div>';
+            }
+
+            // Fetch new data
+            try {
+                const data = await api(`/me/interactions?days_back=1095&health_period=${period}`);
+                renderHealthScore(data);
+            } catch (error) {
+                console.error('Failed to load health history:', error);
+                if (container) {
+                    container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 1rem;">Failed to load</div>';
+                }
+            }
+        }
+
+        // Render Neglected Contacts
+        function renderNeglectedContacts(data) {
+            const container = document.getElementById('neglectedContactsList');
+            if (!container) return;
+
+            const neglected = data.neglected_contacts || [];
+
+            if (neglected.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 1rem; text-align: center;">All caught up! No neglected contacts.</div>';
+                return;
+            }
+
+            // Show top 20 (scrollable list)
+            container.innerHTML = neglected.slice(0, 20).map(item => `
+                <div class="neglected-item" onclick="selectPerson('${item.person_id}')">
+                    <div class="neglected-circle neglected-circle-${item.dunbar_circle}">${item.dunbar_circle}</div>
+                    <span class="neglected-name">${escapeHtml(item.person_name)}</span>
+                    <span class="neglected-days">${item.days_since_contact}d ago</span>
+                    <span class="neglected-typical">(usually ${item.typical_gap_days}d)</span>
+                </div>
+            `).join('');
+        }
+
+        // Render Network Growth Chart
+        let networkGrowthData = []; // Store all data
+        let networkGrowthCenterMonth = null; // null = default (most recent 12 months)
+
+        function setGrowthCenterMonth(month) {
+            const today = new Date();
+            const currentMonth = today.toISOString().slice(0, 7);
+            const clickedDate = new Date(month + '-01');
+            const currentDate = new Date(currentMonth + '-01');
+            const monthsBack = (currentDate.getFullYear() - clickedDate.getFullYear()) * 12 + (currentDate.getMonth() - clickedDate.getMonth());
+
+            if (monthsBack < 6) {
+                networkGrowthCenterMonth = null;
+            } else {
+                networkGrowthCenterMonth = month;
+            }
+            renderNetworkGrowthChart();
+        }
+
+        function resetGrowthCenter() {
+            networkGrowthCenterMonth = null;
+            renderNetworkGrowthChart();
+        }
+
+        function getGrowthWindowData() {
+            const allData = networkGrowthData;
+            if (allData.length === 0) return [];
+            const sortedData = [...allData].sort((a, b) => a.month.localeCompare(b.month));
+
+            if (!networkGrowthCenterMonth) {
+                return sortedData.slice(-12);
+            }
+
+            const centerIndex = sortedData.findIndex(m => m.month === networkGrowthCenterMonth);
+            if (centerIndex === -1) {
+                return sortedData.slice(-12);
+            }
+
+            const startIndex = Math.max(0, centerIndex - 6);
+            const endIndex = Math.min(sortedData.length, startIndex + 12);
+            const adjustedStart = Math.max(0, endIndex - 12);
+            return sortedData.slice(adjustedStart, endIndex);
+        }
+
+        function renderNetworkGrowth(data) {
+            const container = document.getElementById('networkGrowthChart');
+            if (!container) return;
+
+            networkGrowthData = data.network_growth || [];
+            if (networkGrowthData.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 1rem; text-align: center;">No network growth data</div>';
+                return;
+            }
+
+            renderNetworkGrowthChart();
+        }
+
+        function renderNetworkGrowthChart() {
+            const container = document.getElementById('networkGrowthChart');
+            if (!container || networkGrowthData.length === 0) return;
+
+            const growth = getGrowthWindowData();
+            const maxNew = Math.max(...growth.map(g => g.new_people), 1);
+
+            // Reset button if not at default view
+            const resetBtnHtml = networkGrowthCenterMonth ? `<button class="growth-reset-btn" onclick="resetGrowthCenter()">↻ Now</button>` : '';
+
+            // Generate y-axis labels (0, mid, max)
+            const yAxisMid = Math.round(maxNew / 2);
+            const yAxisLabels = `
+                <div class="growth-y-axis">
+                    <div class="growth-y-label">${maxNew}</div>
+                    <div class="growth-y-label">${yAxisMid}</div>
+                    <div class="growth-y-label">0</div>
+                </div>
+            `;
+
+            const barsHtml = growth.map((g, idx) => {
+                const height = (g.new_people / maxNew) * 100;
+                return `
+                    <div class="growth-bar-container" data-index="${idx}">
+                        <div class="growth-bar" style="height: ${Math.max(height, 2)}%;"></div>
+                    </div>
+                `;
+            }).join('');
+
+            const labelsHtml = growth.map(g => {
+                const [year, month] = g.month.split('-');
+                const label = `${month}/${year.slice(-2)}`;
+                return `<div class="growth-label clickable-month" onclick="setGrowthCenterMonth('${g.month}')">${label}</div>`;
+            }).join('');
+
+            container.innerHTML = `
+                <div class="growth-chart" style="position: relative;">
+                    ${resetBtnHtml ? `<div class="growth-chart-header">${resetBtnHtml}</div>` : ''}
+                    <div class="growth-chart-inner">
+                        ${yAxisLabels}
+                        <div class="growth-bars">${barsHtml}</div>
+                    </div>
+                    <div class="growth-labels" style="margin-left: 24px;">${labelsHtml}</div>
+                    <div class="growth-tooltip" id="growthTooltip"></div>
+                </div>
+            `;
+
+            // Setup instant hover tooltips
+            setupNetworkGrowthTooltips(growth);
+        }
+
+        // Setup instant tooltips for network growth chart
+        function setupNetworkGrowthTooltips(windowedData) {
+            const chartContainer = document.querySelector('.growth-chart');
+            const tooltip = document.getElementById('growthTooltip');
+            const bars = document.querySelectorAll('.growth-bar-container');
+
+            if (!chartContainer || !tooltip) return;
+
+            bars.forEach(bar => {
+                bar.addEventListener('mouseenter', (e) => {
+                    const idx = parseInt(bar.dataset.index);
+                    const g = windowedData[idx];
+                    if (!g) return;
+
+                    const d = new Date(g.month + '-01');
+                    const monthName = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+                    tooltip.innerHTML = `
+                        <div style="color: var(--text-muted); font-size: 0.6rem;">${monthName}</div>
+                        <div style="font-weight: 600; color: var(--people);">${g.new_people} new people</div>
+                    `;
+
+                    // Position tooltip near the bar
+                    const rect = bar.getBoundingClientRect();
+                    const containerRect = chartContainer.getBoundingClientRect();
+                    tooltip.style.left = `${rect.left - containerRect.left + rect.width / 2}px`;
+                    tooltip.style.top = `${rect.top - containerRect.top - 8}px`;
+                    tooltip.style.transform = 'translate(-50%, -100%)';
+                    tooltip.classList.add('visible');
+                });
+
+                bar.addEventListener('mouseleave', () => {
+                    tooltip.classList.remove('visible');
+                });
+            });
+        }
+
+        // Render Messaging Volume by Circle Chart
+        // Store raw messaging data for filtering
+        let messagingByCircleData = [];
+        let messagingCircleFilters = new Set(['1', '2', '3', '4']);  // Inner circle excluded by default
+        let messagingDisplayMode = 'raw';  // 'raw' or 'percent'
+        let messagingCenterMonth = null;  // null = default (most recent 12 months), or 'YYYY-MM' to center on
+
+        function toggleMessagingDisplayMode(mode) {
+            messagingDisplayMode = mode;
+            renderMessagingChart();
+        }
+
+        function setMessagingCenterMonth(month) {
+            // Get today's month
+            const today = new Date();
+            const currentMonth = today.toISOString().slice(0, 7);
+
+            // Calculate how many months back the clicked month is
+            const clickedDate = new Date(month + '-01');
+            const currentDate = new Date(currentMonth + '-01');
+            const monthsBack = (currentDate.getFullYear() - clickedDate.getFullYear()) * 12 + (currentDate.getMonth() - clickedDate.getMonth());
+
+            // If clicking on a recent month (within last 6 months), cap at current view
+            if (monthsBack < 6) {
+                messagingCenterMonth = null;  // Reset to default
+            } else {
+                messagingCenterMonth = month;
+            }
+            renderMessagingChart();
+        }
+
+        function resetMessagingCenter() {
+            messagingCenterMonth = null;
+            renderMessagingChart();
+        }
+
+        // Get the 12-month window based on center month
+        function getMessagingWindowData() {
+            const allData = messagingByCircleData;
+            if (allData.length === 0) return [];
+
+            // Sort data by month
+            const sortedData = [...allData].sort((a, b) => a.month.localeCompare(b.month));
+
+            if (!messagingCenterMonth) {
+                // Default: show most recent 12 months
+                return sortedData.slice(-12);
+            }
+
+            // Find index of center month
+            const centerIndex = sortedData.findIndex(m => m.month === messagingCenterMonth);
+            if (centerIndex === -1) {
+                // Center month not in data, return default
+                return sortedData.slice(-12);
+            }
+
+            // Get 6 months before and 6 months after (including center = 13 months, but we show 12)
+            // Actually, for 12 months centered: 5 before, center, 6 after = 12 total
+            // Or: 6 before, center, 5 after = 12 total
+            const startIndex = Math.max(0, centerIndex - 6);
+            const endIndex = Math.min(sortedData.length, startIndex + 12);
+
+            // Adjust start if we hit the end
+            const adjustedStart = Math.max(0, endIndex - 12);
+
+            return sortedData.slice(adjustedStart, endIndex);
+        }
+
+        function renderMessagingByCircle(data) {
+            const container = document.getElementById('messagingByCircleChart');
+            if (!container) return;
+
+            messagingByCircleData = data.messaging_by_circle || [];
+            if (messagingByCircleData.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 1rem; text-align: center;">No messaging data</div>';
+                return;
+            }
+
+            renderMessagingChart();
+        }
+
+        function toggleCircleFilter(circle) {
+            if (messagingCircleFilters.has(circle)) {
+                // Don't allow removing the last filter
+                if (messagingCircleFilters.size > 1) {
+                    messagingCircleFilters.delete(circle);
+                }
+            } else {
+                messagingCircleFilters.add(circle);
+            }
+            renderMessagingChart();
+        }
+
+        function renderMessagingChart() {
+            const container = document.getElementById('messagingByCircleChart');
+            if (!container || messagingByCircleData.length === 0) return;
+
+            // Use windowed data based on center month selection
+            const messaging = getMessagingWindowData();
+            const selectedCircles = Array.from(messagingCircleFilters);
+            const circleLabels = ['Inner', 'Close', 'Friend', 'Acquaint', 'Familiar', 'Outer'];
+            const isPercentMode = messagingDisplayMode === 'percent';
+
+            // Recalculate totals based on selected circles only
+            const filteredData = messaging.map(m => {
+                const filteredTotal = selectedCircles.reduce((sum, c) => sum + (m.by_circle[c] || 0), 0);
+                const filteredPercentages = {};
+                selectedCircles.forEach(c => {
+                    filteredPercentages[c] = filteredTotal > 0 ? ((m.by_circle[c] || 0) / filteredTotal * 100) : 0;
+                });
+                return { ...m, filteredTotal, filteredPercentages };
+            });
+
+            const maxTotal = Math.max(...filteredData.map(m => m.filteredTotal), 1);
+
+            // Calculate average distribution for comparison
+            const avgByCircle = {};
+            selectedCircles.forEach(c => {
+                avgByCircle[c] = filteredData.reduce((sum, m) => sum + (m.by_circle[c] || 0), 0);
+            });
+            const avgTotal = Object.values(avgByCircle).reduce((a, b) => a + b, 0);
+            const avgPercentages = {};
+            selectedCircles.forEach(c => {
+                avgPercentages[c] = avgTotal > 0 ? (avgByCircle[c] / avgTotal * 100).toFixed(1) : 0;
+            });
+
+            // Build stacked bars with data attributes for tooltips
+            // Reverse order so inner circles (0) are at bottom, outer circles (4) at top
+            const reversedCircles = [...selectedCircles].reverse();
+
+            const barsHtml = filteredData.map((m, idx) => {
+                // In percent mode, all bars are 100% height; in raw mode, scale by maxTotal
+                const barHeight = isPercentMode ? 100 : (m.filteredTotal / maxTotal) * 100;
+
+                // Segments always fill 100% of their bar - their heights are percentages within the bar
+                const segments = reversedCircles.map(circle => {
+                    const pct = m.filteredPercentages[circle] || 0;
+                    return pct > 0 ? `<div class="messaging-segment messaging-segment-${circle}" style="height: ${pct}%;"></div>` : '';
+                }).join('');
+
+                return `
+                    <div class="messaging-bar-container" data-index="${idx}">
+                        <div class="messaging-stacked-bar" style="height: ${Math.max(barHeight, 2)}%;">${segments}</div>
+                    </div>
+                `;
+            }).join('');
+
+            // Generate y-axis labels based on mode
+            let yAxisLabels;
+            if (isPercentMode) {
+                yAxisLabels = `
+                    <div class="messaging-y-axis">
+                        <div class="messaging-y-label">100%</div>
+                        <div class="messaging-y-label">50%</div>
+                        <div class="messaging-y-label">0%</div>
+                    </div>
+                `;
+            } else {
+                const yAxisMax = Math.max(...filteredData.map(m => m.filteredTotal), 1);
+                const yAxisMid = Math.round(yAxisMax / 2);
+                const formatYLabel = (n) => n >= 1000 ? `${(n/1000).toFixed(0)}k` : n;
+                yAxisLabels = `
+                    <div class="messaging-y-axis">
+                        <div class="messaging-y-label">${formatYLabel(yAxisMax)}</div>
+                        <div class="messaging-y-label">${formatYLabel(yAxisMid)}</div>
+                        <div class="messaging-y-label">0</div>
+                    </div>
+                `;
+            }
+
+            const labelsHtml = filteredData.map(m => {
+                const [year, month] = m.month.split('-');
+                const label = `${month}/${year.slice(-2)}`;
+                return `<div class="messaging-label clickable-month" onclick="setMessagingCenterMonth('${m.month}')">${label}</div>`;
+            }).join('');
+
+            // Display mode toggle (Raw / Percent) and Reset button
+            const resetBtnHtml = messagingCenterMonth ? `<button class="messaging-reset-btn" onclick="resetMessagingCenter()">↻ Now</button>` : '';
+            const modeToggleHtml = `
+                <div class="messaging-mode-toggle">
+                    <button class="mode-toggle-btn ${!isPercentMode ? 'active' : ''}" onclick="toggleMessagingDisplayMode('raw')">Raw</button>
+                    <button class="mode-toggle-btn ${isPercentMode ? 'active' : ''}" onclick="toggleMessagingDisplayMode('percent')">%</button>
+                </div>
+                ${resetBtnHtml}
+            `;
+
+            // Legend with toggles
+            const legendHtml = ['0', '1', '2', '3', '4'].map(c => {
+                const isSelected = messagingCircleFilters.has(c);
+                return `
+                    <div class="legend-item legend-toggle ${isSelected ? 'selected' : ''}" onclick="toggleCircleFilter('${c}')">
+                        <div class="legend-dot messaging-segment-${c}"></div>
+                        <span>${circleLabels[parseInt(c)]}</span>
+                    </div>
+                `;
+            }).join('');
+
+            // Generate insights based on the filtered data (show up to 4)
+            const allInsights = generateMessagingInsights(filteredData, selectedCircles, avgPercentages, avgTotal, circleLabels);
+            const insightsHtml = allInsights.slice(0, 4).map(i => `<div class="messaging-insight">${i}</div>`).join('');
+
+            container.innerHTML = `
+                <div class="messaging-chart" style="position: relative;">
+                    <div class="messaging-chart-header">
+                        ${modeToggleHtml}
+                    </div>
+                    <div class="messaging-chart-inner">
+                        ${yAxisLabels}
+                        <div class="messaging-stacked-bars">${barsHtml}</div>
+                    </div>
+                    <div class="messaging-labels" style="margin-left: 28px;">${labelsHtml}</div>
+                    <div class="messaging-legend">${legendHtml}</div>
+                    ${insightsHtml}
+                    <div class="messaging-tooltip" id="messagingTooltip"></div>
+                </div>
+            `;
+
+            // Setup instant hover tooltips
+            setupMessagingTooltips(filteredData, selectedCircles, circleLabels);
+        }
+
+        // Setup instant tooltips for messaging chart
+        function setupMessagingTooltips(filteredData, selectedCircles, circleLabels) {
+            const chartContainer = document.querySelector('.messaging-chart');
+            const tooltip = document.getElementById('messagingTooltip');
+            const bars = document.querySelectorAll('.messaging-bar-container');
+
+            if (!chartContainer || !tooltip) return;
+
+            bars.forEach(bar => {
+                bar.addEventListener('mouseenter', (e) => {
+                    const idx = parseInt(bar.dataset.index);
+                    const m = filteredData[idx];
+                    if (!m) return;
+
+                    const d = new Date(m.month + '-01');
+                    const monthName = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+                    // Build breakdown by circle
+                    const breakdown = selectedCircles.map(c => {
+                        const count = m.by_circle[c] || 0;
+                        const pct = m.filteredPercentages[c]?.toFixed(0) || 0;
+                        return count > 0 ? `<div style="display: flex; justify-content: space-between; gap: 1rem;"><span style="color: var(--text-muted);">${circleLabels[parseInt(c)]}</span><span>${count} (${pct}%)</span></div>` : '';
+                    }).filter(Boolean).join('');
+
+                    tooltip.innerHTML = `
+                        <div style="color: var(--text-muted); font-size: 0.6rem; margin-bottom: 0.25rem;">${monthName}</div>
+                        <div style="font-weight: 600; color: var(--people); margin-bottom: 0.25rem;">${m.filteredTotal.toLocaleString()} messages</div>
+                        ${breakdown}
+                    `;
+
+                    // Position tooltip near the bar
+                    const rect = bar.getBoundingClientRect();
+                    const containerRect = chartContainer.getBoundingClientRect();
+                    tooltip.style.left = `${rect.left - containerRect.left + rect.width / 2}px`;
+                    tooltip.style.top = `${rect.top - containerRect.top - 8}px`;
+                    tooltip.style.transform = 'translate(-50%, -100%)';
+                    tooltip.classList.add('visible');
+                });
+
+                bar.addEventListener('mouseleave', () => {
+                    tooltip.classList.remove('visible');
+                });
+            });
+        }
+
+        // Generate messaging insights based on filtered data
+        function generateMessagingInsights(filteredData, selectedCircles, avgPercentages, avgTotal, circleLabels) {
+            const insights = [];
+            if (filteredData.length < 2 || avgTotal === 0) return insights;
+
+            const recent = filteredData[filteredData.length - 1];
+            const previous = filteredData[filteredData.length - 2];
+            const avgMonthlyTotal = avgTotal / filteredData.length;
+            const recentTotal = recent.filteredTotal;
+
+            // Helper to get month name
+            const getMonthName = (monthStr) => new Date(monthStr + '-01').toLocaleDateString('en-US', { month: 'short' });
+            const recentMonthName = getMonthName(recent.month);
+
+            // 1. Volume comparison vs average
+            const volumeDiff = avgMonthlyTotal > 0 ? ((recentTotal - avgMonthlyTotal) / avgMonthlyTotal * 100) : 0;
+            if (Math.abs(volumeDiff) >= 15) {
+                const volumeDesc = volumeDiff > 0 ? `${Math.abs(volumeDiff).toFixed(0)}% more` : `${Math.abs(volumeDiff).toFixed(0)}% fewer`;
+                insights.push(`In ${recentMonthName}, you sent ${volumeDesc} messages than your monthly average.`);
+            }
+
+            // 2. Inner circle concentration (circles 0-1 vs others)
+            const innerCircles = selectedCircles.filter(c => c === '0' || c === '1');
+            if (innerCircles.length > 0) {
+                const innerPct = innerCircles.reduce((sum, c) => sum + (recent.filteredPercentages[c] || 0), 0);
+                const avgInnerPct = innerCircles.reduce((sum, c) => sum + parseFloat(avgPercentages[c] || 0), 0);
+                const concentrationDiff = innerPct - avgInnerPct;
+
+                if (Math.abs(concentrationDiff) >= 8) {
+                    if (concentrationDiff > 0) {
+                        insights.push(`${recentMonthName} was more focused on your closest relationships (${innerPct.toFixed(0)}% to inner circles vs ${avgInnerPct.toFixed(0)}% average).`);
+                    } else {
+                        insights.push(`${recentMonthName} saw more outreach to your broader network (${(100 - innerPct).toFixed(0)}% outside inner circles).`);
+                    }
+                }
+            }
+
+            // 3. Month-over-month trend
+            if (previous) {
+                const momChange = previous.filteredTotal > 0 ? ((recentTotal - previous.filteredTotal) / previous.filteredTotal * 100) : 0;
+                const prevMonthName = getMonthName(previous.month);
+                if (Math.abs(momChange) >= 25) {
+                    const direction = momChange > 0 ? 'increased' : 'decreased';
+                    insights.push(`Messaging ${direction} ${Math.abs(momChange).toFixed(0)}% from ${prevMonthName} to ${recentMonthName}.`);
+                }
+            }
+
+            // 4. Dominant circle insight
+            let maxCircle = null;
+            let maxPct = 0;
+            selectedCircles.forEach(c => {
+                const pct = recent.filteredPercentages[c] || 0;
+                if (pct > maxPct) {
+                    maxPct = pct;
+                    maxCircle = c;
+                }
+            });
+            if (maxCircle !== null && maxPct >= 40) {
+                const circleName = circleLabels[parseInt(maxCircle)];
+                insights.push(`Your "${circleName}" circle dominated ${recentMonthName} messaging at ${maxPct.toFixed(0)}% of volume.`);
+            }
+
+            // 5. Trend over time (first half vs second half of data)
+            if (filteredData.length >= 6) {
+                const midpoint = Math.floor(filteredData.length / 2);
+                const firstHalfTotal = filteredData.slice(0, midpoint).reduce((sum, m) => sum + m.filteredTotal, 0);
+                const secondHalfTotal = filteredData.slice(midpoint).reduce((sum, m) => sum + m.filteredTotal, 0);
+                const firstHalfAvg = firstHalfTotal / midpoint;
+                const secondHalfAvg = secondHalfTotal / (filteredData.length - midpoint);
+                const trendChange = firstHalfAvg > 0 ? ((secondHalfAvg - firstHalfAvg) / firstHalfAvg * 100) : 0;
+
+                if (Math.abs(trendChange) >= 20) {
+                    const trend = trendChange > 0 ? 'upward' : 'downward';
+                    insights.push(`Your messaging shows an ${trend} trend over the past year (${Math.abs(trendChange).toFixed(0)}% change).`);
+                }
+            }
+
+            // 6. Circle shift insight (compare recent circle distribution to average)
+            const circleShifts = [];
+            selectedCircles.forEach(c => {
+                const recentPct = recent.filteredPercentages[c] || 0;
+                const avgPct = parseFloat(avgPercentages[c] || 0);
+                const shift = recentPct - avgPct;
+                if (Math.abs(shift) >= 10) {
+                    circleShifts.push({ circle: c, shift, recentPct, avgPct });
+                }
+            });
+            if (circleShifts.length > 0) {
+                const biggest = circleShifts.sort((a, b) => Math.abs(b.shift) - Math.abs(a.shift))[0];
+                const circleName = circleLabels[parseInt(biggest.circle)];
+                const direction = biggest.shift > 0 ? 'up' : 'down';
+                insights.push(`"${circleName}" circle is ${direction} ${Math.abs(biggest.shift).toFixed(0)} percentage points from your average in ${recentMonthName}.`);
+            }
+
+            // Return top insight (prioritize variety)
+            return insights;
         }
 
         // Render heat map in GitHub contribution graph style
@@ -4458,13 +6628,23 @@
                     const dayData = heatmapData[dateKey] || { total: 0, sources: {} };
                     const count = dayData.total;
 
-                    // Calculate level (0-5)
+                    // Calculate level (0-5) - use different thresholds for Me page (aggregate view)
                     let level = 0;
-                    if (count > 0) level = 1;
-                    if (count >= 3) level = 2;
-                    if (count >= 6) level = 3;
-                    if (count >= 10) level = 4;
-                    if (count >= 20) level = 5;
+                    if (isMyPage()) {
+                        // Me page: higher thresholds for aggregate data
+                        if (count > 0) level = 1;
+                        if (count >= 50) level = 2;
+                        if (count >= 150) level = 3;
+                        if (count >= 300) level = 4;
+                        if (count >= 500) level = 5;
+                    } else {
+                        // Individual person: standard thresholds
+                        if (count > 0) level = 1;
+                        if (count >= 3) level = 2;
+                        if (count >= 6) level = 3;
+                        if (count >= 10) level = 4;
+                        if (count >= 20) level = 5;
+                    }
 
                     // Track month changes at the START of each week (Sunday)
                     // This way the label aligns with the week column
