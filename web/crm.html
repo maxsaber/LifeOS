@@ -197,6 +197,39 @@
             color: var(--text-muted);
         }
 
+        .search-input-wrapper {
+            position: relative;
+            width: 100%;
+        }
+
+        .search-input-wrapper .search-input {
+            padding-right: 2.5rem;
+        }
+
+        .search-clear-btn {
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.25rem;
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            line-height: 1;
+            opacity: 0;
+            transition: opacity 0.15s;
+        }
+
+        .search-clear-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .search-input-wrapper:has(.search-input:not(:placeholder-shown)) .search-clear-btn {
+            opacity: 1;
+        }
+
         .filters {
             display: flex;
             gap: 0.5rem;
@@ -3946,7 +3979,10 @@
     <div class="main-container">
         <div class="people-list-panel">
             <div class="search-bar">
-                <input type="text" class="search-input" id="searchInput" placeholder="Search people..." oninput="handleSearch()">
+                <div class="search-input-wrapper">
+                    <input type="text" class="search-input" id="searchInput" placeholder="Search people..." oninput="handleSearch()" onkeydown="handleSearchKeydown(event)">
+                    <button type="button" class="search-clear-btn" id="searchClearBtn" onclick="clearSearch()" title="Clear search (Esc)">&times;</button>
+                </div>
             </div>
             <div class="filters">
                 <div class="filter-chip active" data-filter="all" onclick="setFilter('all')">All</div>
@@ -8996,6 +9032,9 @@
 
         // Show edge details panel
         async function showEdgeDetails(sourceId, targetId) {
+            // Close node panel if open (edge panel replaces it)
+            closeNodePanel();
+
             const panel = document.getElementById('edgePanel');
 
             // Clear previous selection and highlight new one
@@ -9858,6 +9897,23 @@
                 searchQuery = document.getElementById('searchInput').value;
                 loadPeople();
             }, 300);
+        }
+
+        // Clear search field
+        function clearSearch() {
+            const input = document.getElementById('searchInput');
+            input.value = '';
+            searchQuery = '';
+            loadPeople();
+            input.focus();
+        }
+
+        // Handle keydown in search field (Esc clears)
+        function handleSearchKeydown(event) {
+            if (event.key === 'Escape') {
+                clearSearch();
+                event.preventDefault();
+            }
         }
 
         // Utility functions

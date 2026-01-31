@@ -174,7 +174,8 @@ def _tokenize(text: str) -> list[str]:
     """Split text into lowercase tokens, removing punctuation."""
     import re
     # Split on whitespace and punctuation, keep only alphanumeric
-    return [t.lower() for t in re.split(r'[\s.,;:\-\'\"()]+', text) if t]
+    # Include various apostrophe/quote variants: ' ' ' ` ʼ ʻ
+    return [t.lower() for t in re.split(r'[\s.,;:\-\'\"()\u2018\u2019\u0027\u0060\u02BC\u02BB]+', text) if t]
 
 
 def _fuzzy_name_match(query: str, name: str) -> bool:
