@@ -14,9 +14,9 @@ Edit this file to tune relationship scoring behavior.
 # =============================================================================
 # Formula: strength = (recency × RECENCY_WEIGHT) + (frequency × FREQUENCY_WEIGHT) + (diversity × DIVERSITY_WEIGHT)
 
-RECENCY_WEIGHT = 0.4      # How much recent contact matters
-FREQUENCY_WEIGHT = 0.55   # How much total interaction volume matters
-DIVERSITY_WEIGHT = 0.05   # How much multi-channel communication matters (low to avoid capping single-channel relationships)
+RECENCY_WEIGHT = 0.30     # How much recent contact matters
+FREQUENCY_WEIGHT = 0.60   # How much total interaction volume matters
+DIVERSITY_WEIGHT = 0.10   # How much multi-channel communication matters
 
 # Parameters for component scores
 RECENCY_WINDOW_DAYS = 200     # Days after which recency score drops to 0

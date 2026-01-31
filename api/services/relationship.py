@@ -187,6 +187,111 @@ class Relationship:
         normalized = math.log1p(raw) / math.log1p(10000) * 100
         return min(100, round(normalized))
 
+    @property
+    def pair_strength(self) -> int:
+        """
+        Calculate pair relationship strength (0-100 scale).
+
+        Uses the same formula as person relationship strength:
+            strength = (recency × 0.30) + (frequency × 0.60) + (diversity × 0.10)
+
+        This unifies edge_weight and relationship_strength into a single metric.
+        Uses adjusted frequency scaling to work for both high-interaction (owner)
+        and low-interaction (non-owner) edges.
+
+        Components:
+        - Recency: How recently the pair interacted (decays over 200 days)
+        - Frequency: Weighted interaction count with log scaling
+        - Diversity: Number of different interaction types used
+        """
+        import math
+        from datetime import timezone
+
+        # Constants - match relationship_weights.py but adjusted for pair relationships
+        RECENCY_WEIGHT = 0.30
+        FREQUENCY_WEIGHT = 0.60
+        DIVERSITY_WEIGHT = 0.10
+        RECENCY_WINDOW_DAYS = 200
+
+        # Frequency target tuned for pair relationships
+        # Owner edges avg ~36, non-owner avg ~1.6, max 387
+        # Use lower target so non-owner edges with 10-50 interactions get reasonable scores
+        FREQUENCY_TARGET = 100  # Lower than person strength (250) for better non-owner spread
+
+        # Interaction type weights (same rationale as relationship_weights.py)
+        TYPE_WEIGHTS = {
+            'events': 1.0,      # Calendar meetings
+            'threads': 0.8,     # Email threads
+            'messages': 1.5,    # iMessage (personal)
+            'whatsapp': 1.5,    # WhatsApp (personal)
+            'slack': 1.2,       # Slack DMs
+            'phone_calls': 2.0, # Phone calls (highest - synchronous)
+        }
+
+        # --- RECENCY SCORE ---
+        recency_score = 0.0
+        if self.last_seen_together:
+            now = datetime.now(timezone.utc)
+            last_seen = self.last_seen_together
+            if last_seen.tzinfo is None:
+                last_seen = last_seen.replace(tzinfo=timezone.utc)
+            # Cap future dates at today
+            if last_seen > now:
+                last_seen = now
+            days_since = (now - last_seen).days
+            recency_score = max(0.0, 1.0 - (days_since / RECENCY_WINDOW_DAYS))
+
+        # --- FREQUENCY SCORE ---
+        # Calculate weighted interaction count
+        weighted_count = (
+            self.shared_events_count * TYPE_WEIGHTS['events'] +
+            self.shared_threads_count * TYPE_WEIGHTS['threads'] +
+            self.shared_messages_count * TYPE_WEIGHTS['messages'] +
+            self.shared_whatsapp_count * TYPE_WEIGHTS['whatsapp'] +
+            self.shared_slack_count * TYPE_WEIGHTS['slack'] +
+            self.shared_phone_calls_count * TYPE_WEIGHTS['phone_calls']
+        )
+
+        # Log scaling for better spread across low and high counts
+        # log(1 + count) / log(1 + target) gives 0-1 range with good distribution
+        if weighted_count <= 0:
+            frequency_score = 0.0
+        else:
+            frequency_score = min(1.0, math.log1p(weighted_count) / math.log1p(FREQUENCY_TARGET))
+
+        # --- DIVERSITY SCORE ---
+        # Count how many source types have interactions
+        source_count = 0
+        total_sources = 6  # events, threads, messages, whatsapp, slack, phone_calls
+        if self.shared_events_count > 0:
+            source_count += 1
+        if self.shared_threads_count > 0:
+            source_count += 1
+        if self.shared_messages_count > 0:
+            source_count += 1
+        if self.shared_whatsapp_count > 0:
+            source_count += 1
+        if self.shared_slack_count > 0:
+            source_count += 1
+        if self.shared_phone_calls_count > 0:
+            source_count += 1
+
+        # LinkedIn connection gives a small diversity bonus
+        if self.is_linkedin_connection:
+            source_count += 0.5  # Partial credit for passive connection
+
+        diversity_score = min(1.0, source_count / total_sources)
+
+        # --- COMBINE SCORES ---
+        strength = (
+            recency_score * RECENCY_WEIGHT +
+            frequency_score * FREQUENCY_WEIGHT +
+            diversity_score * DIVERSITY_WEIGHT
+        )
+
+        # Scale to 0-100
+        return min(100, round(strength * 100))
+
     def involves(self, person_id: str) -> bool:
         """Check if this relationship involves a specific person."""
         return person_id == self.person_a_id or person_id == self.person_b_id

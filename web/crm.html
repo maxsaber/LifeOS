@@ -4342,7 +4342,7 @@
 
             try {
                 // Fetch ALL people sorted by strength to calculate global circles
-                const data = await api('/people?sort=strength&limit=5000');
+                const data = await api('/people?sort=strength&limit=10000');
                 const allPeople = data.people || [];
 
                 console.log(`[Dunbar] Initializing with ${allPeople.length} people`);

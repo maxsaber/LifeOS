@@ -154,31 +154,13 @@ D3.js force-directed graph visualization:
 - Degree filter (1st only vs 1st & 2nd)
 - Source filter (Calendar, Email, iMessage, WhatsApp, Slack, LinkedIn)
 
-**Edge Weight Calculation:**
-```javascript
-function calculateEdgeWeight(edge, selectedSources) {
-  let weight = 0;
-  if (selectedSources.includes('calendar')) {
-    weight += edge.shared_events_count * 3;
-  }
-  if (selectedSources.includes('email')) {
-    weight += edge.shared_threads_count * 2;
-  }
-  if (selectedSources.includes('imessage')) {
-    weight += edge.shared_messages_count * 2;
-  }
-  if (selectedSources.includes('whatsapp')) {
-    weight += edge.shared_whatsapp_count * 2;
-  }
-  if (selectedSources.includes('slack')) {
-    weight += edge.shared_slack_count * 1;
-  }
-  if (selectedSources.includes('linkedin') && edge.is_linkedin_connection) {
-    weight += 10;
-  }
-  return weight;
-}
-```
+**Edge Weight Source:**
+
+Graph edge weights are unified with relationship strength:
+- **Owner edges** (you ↔ someone): Uses the person's `relationship_strength` (factors in recency, frequency, diversity)
+- **Non-owner edges** (others ↔ others): Uses `pair_strength` computed from shared interactions
+
+This ensures dormant relationships (e.g., ex-partners you haven't talked to in years) show appropriately low edge weights despite high historical interaction counts.
 
 **Dynamic Edge Threshold:**
 

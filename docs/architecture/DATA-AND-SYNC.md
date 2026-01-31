@@ -297,28 +297,32 @@ Each relationship between two people tracks signals from multiple sources:
 | shared_slack_count | Slack DM messages |
 | is_linkedin_connection | Both have LinkedIn source |
 
-### Edge Weight Formula
+### Graph Edge Weight
 
-```python
-edge_weight = (
-    shared_events_count  × 3  +     # Calendar (high signal)
-    shared_threads_count × 2  +     # Email threads
-    shared_messages_count × 2 +     # iMessage/SMS
-    shared_whatsapp_count × 2 +     # WhatsApp
-    shared_slack_count   × 1  +     # Slack DMs
-    (10 if is_linkedin_connection)  # LinkedIn bonus
-)
-```
+Graph edges use unified strength scoring:
+- **Owner edges** (you ↔ someone): Uses the person's `relationship_strength`
+- **Non-owner edges** (others ↔ others): Uses `pair_strength` computed from shared interactions
 
 ### Relationship Strength Formula
 
 ```
-strength = (recency × 0.3) + (frequency × 0.4) + (diversity × 0.3)
+strength = (recency × 0.30) + (frequency × 0.60) + (diversity × 0.10)
 
 Where:
-- recency = max(0, 1 - days_since_last / 90)
-- frequency = min(1, interactions_90d / 20)
+- recency = max(0, 1 - days_since_last / 200)
+- frequency = hybrid of recent (70%) and lifetime (30%) weighted interactions
 - diversity = unique_sources / total_sources
+```
+
+### Pair Strength Formula (for non-owner edges)
+
+```
+pair_strength = (recency × 0.30) + (frequency × 0.60) + (diversity × 0.10)
+
+Where:
+- recency = max(0, 1 - days_since_last_seen_together / 200)
+- frequency = log(1 + weighted_count) / log(1 + 100)
+- diversity = source_types_with_interactions / 6
 ```
 
 ---

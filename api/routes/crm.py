@@ -2403,6 +2403,9 @@ async def get_network_graph(
     all_relationships = rel_store.get_all_relationships()
     seen_edges: set[tuple[str, str]] = set()
 
+    # Get owner ID for determining edge weight source
+    my_person_id = settings.my_person_id
+
     for rel in all_relationships:
         # Both people must be in valid nodes
         if rel.person_a_id not in valid_node_ids or rel.person_b_id not in valid_node_ids:
@@ -2414,10 +2417,22 @@ async def get_network_graph(
             continue
         seen_edges.add(edge_key)
 
+        # Determine edge weight:
+        # - For edges involving the owner: use the other person's relationship_strength
+        # - For edges between two other people: use pair_strength
+        if rel.person_a_id == my_person_id or rel.person_b_id == my_person_id:
+            # Owner edge - use the other person's relationship_strength
+            other_id = rel.person_b_id if rel.person_a_id == my_person_id else rel.person_a_id
+            other_person = all_people_dict.get(other_id)
+            weight = int(other_person.relationship_strength) if other_person else rel.pair_strength
+        else:
+            # Non-owner edge - use pair_strength
+            weight = rel.pair_strength
+
         edges.append(NetworkEdge(
             source=rel.person_a_id,
             target=rel.person_b_id,
-            weight=rel.edge_weight,
+            weight=weight,
             type=rel.relationship_type,
             shared_events_count=rel.shared_events_count or 0,
             shared_threads_count=rel.shared_threads_count or 0,
@@ -2503,6 +2518,16 @@ async def get_relationship_details(person_a_id: str, person_b_id: str):
         # Map names correctly based on normalized IDs
         name_map = {person_a_id: person_a.canonical_name, person_b_id: person_b.canonical_name}
 
+        # Determine weight: relationship_strength for owner edges, pair_strength for others
+        my_person_id = settings.my_person_id
+        if rel.person_a_id == my_person_id or rel.person_b_id == my_person_id:
+            # Owner edge - use the other person's relationship_strength
+            other_person = person_b if rel.person_a_id == my_person_id else person_a
+            weight = int(other_person.relationship_strength) if other_person else rel.pair_strength
+        else:
+            # Non-owner edge - use pair_strength
+            weight = rel.pair_strength
+
         return RelationshipDetailResponse(
             person_a_id=rel.person_a_id,
             person_a_name=name_map.get(rel.person_a_id, "Unknown"),
@@ -2520,7 +2545,7 @@ async def get_relationship_details(person_a_id: str, person_b_id: str):
             total_interactions=rel.total_shared_interactions or 0,
             first_seen_together=rel.first_seen_together.isoformat() if rel.first_seen_together else None,
             last_seen_together=rel.last_seen_together.isoformat() if rel.last_seen_together else None,
-            weight=rel.edge_weight,
+            weight=weight,
         )
     except HTTPException:
         raise
