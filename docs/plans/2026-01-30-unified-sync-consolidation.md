@@ -34,8 +34,8 @@ Collect fresh data from all external sources into local stores.
 
 | Step | Script | Writes To | Dependencies |
 |------|--------|-----------|--------------|
-| 1.1 | sync_gmail_calendar_interactions.py --source gmail | interactions.db | None |
-| 1.2 | sync_gmail_calendar_interactions.py --source calendar | interactions.db | None |
+| 1.1 | sync_gmail_calendar_interactions.py --gmail-only | interactions.db | None |
+| 1.2 | sync_gmail_calendar_interactions.py --calendar-only | interactions.db | None |
 | 1.3 | sync_contacts_csv.py | crm.db (source_entities) | None |
 | 1.4 | sync_phone_calls.py | interactions.db | None |
 | 1.5 | sync_whatsapp.py | interactions.db, crm.db | None |
