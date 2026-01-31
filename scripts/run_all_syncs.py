@@ -168,8 +168,9 @@ SYNC_ORDER = [
 
     # === Phase 3: Relationship Building ===
     # Build relationships using all collected interaction data
+    # Note: person_stats is no longer in sync order - each sync script refreshes
+    # its own affected PersonEntity stats via refresh_person_stats()
     "relationship_discovery",   # Discover relationships, populate edge weights
-    "person_stats",             # Update interaction counts on PersonEntity
     "strengths",                # Calculate relationship strength scores
 
     # === Phase 4: Vector Store Indexing ===
@@ -185,8 +186,8 @@ SYNC_ORDER = [
 # Scripts that can be run directly
 SYNC_SCRIPTS = {
     # Phase 1: Data Collection
-    "gmail": ("scripts/sync_gmail_calendar_interactions.py", ["--execute", "--gmail-only"]),
-    "calendar": ("scripts/sync_gmail_calendar_interactions.py", ["--execute", "--calendar-only"]),
+    "gmail": ("scripts/sync_gmail_calendar_interactions.py", ["--execute", "--gmail-only", "--days", "30"]),
+    "calendar": ("scripts/sync_gmail_calendar_interactions.py", ["--execute", "--calendar-only", "--days", "30"]),
     "linkedin": ("scripts/sync_linkedin.py", ["--execute"]),
     "contacts": ("scripts/sync_contacts_csv.py", ["--execute"]),
     "phone": ("scripts/sync_phone_calls.py", ["--execute"]),
@@ -199,8 +200,8 @@ SYNC_SCRIPTS = {
     "link_imessage": ("scripts/link_imessage_entities.py", ["--execute"]),
 
     # Phase 3: Relationship Building
+    # Note: person_stats removed - each sync script now refreshes its own stats
     "relationship_discovery": ("scripts/sync_relationship_discovery.py", ["--execute"]),
-    "person_stats": ("scripts/sync_person_stats.py", ["--execute"]),
     "strengths": ("scripts/sync_strengths.py", ["--execute"]),
 
     # Phase 4: Vector Store Indexing
@@ -209,6 +210,13 @@ SYNC_SCRIPTS = {
     # Phase 5: Content Sync
     "google_docs": ("scripts/sync_google_docs.py", ["--execute"]),
     "google_sheets": ("scripts/sync_google_sheets.py", ["--execute"]),
+}
+
+# Per-source timeout overrides (seconds)
+# Default is 30 minutes (1800). These sources need more time.
+SYNC_TIMEOUTS = {
+    "gmail": 3600,        # 60 min - fetches 365 days of emails via individual API calls
+    "vault_reindex": 3600,  # 60 min - indexes ~5000 files with vector embeddings
 }
 
 
@@ -247,12 +255,15 @@ def run_sync(source: str, dry_run: bool = False) -> tuple[bool, dict]:
 
         cmd = [str(venv_python), str(full_path)] + args
 
+        # Get per-source timeout (default 30 minutes)
+        timeout_seconds = SYNC_TIMEOUTS.get(source, 1800)
+
         # Run subprocess
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=1800,  # 30 minute timeout
+            timeout=timeout_seconds,
             cwd=str(Path(__file__).parent.parent),
             env={
                 **dict(__import__('os').environ),
@@ -303,7 +314,8 @@ def run_sync(source: str, dry_run: bool = False) -> tuple[bool, dict]:
         return True, stats
 
     except subprocess.TimeoutExpired:
-        error_msg = f"Sync timed out after 30 minutes"
+        timeout_minutes = SYNC_TIMEOUTS.get(source, 1800) // 60
+        error_msg = f"Sync timed out after {timeout_minutes} minutes"
         logger.error(f"Sync timeout for {source}")
 
         record_sync_complete(

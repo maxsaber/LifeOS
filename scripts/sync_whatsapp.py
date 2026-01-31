@@ -328,6 +328,9 @@ def sync_whatsapp_messages(dry_run: bool = True) -> dict:
         'errors': 0,
     }
 
+    # Track affected person_ids for stats refresh
+    affected_person_ids: set[str] = set()
+
     wacli_db_path = Path.home() / ".wacli" / "wacli.db"
     if not wacli_db_path.exists():
         logger.error(f"wacli database not found at {wacli_db_path}")
@@ -412,6 +415,9 @@ def sync_whatsapp_messages(dry_run: bool = True) -> dict:
 
             person_id = result.entity.id
 
+            # Track for stats refresh
+            affected_person_ids.add(person_id)
+
             # Parse timestamp
             try:
                 if isinstance(timestamp, str):
@@ -476,6 +482,12 @@ def sync_whatsapp_messages(dry_run: bool = True) -> dict:
 
     if dry_run:
         logger.info("\nDRY RUN - no changes made")
+    else:
+        # Refresh PersonEntity stats for all affected people
+        if affected_person_ids:
+            from api.services.person_stats import refresh_person_stats
+            logger.info(f"Refreshing stats for {len(affected_person_ids)} affected people...")
+            refresh_person_stats(list(affected_person_ids))
 
     return stats
 

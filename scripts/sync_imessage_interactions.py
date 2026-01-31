@@ -57,6 +57,9 @@ def sync_imessage_interactions(dry_run: bool = True, limit: int = None) -> dict:
         'errors': 0,
     }
 
+    # Track affected person_ids for stats refresh
+    affected_person_ids: set[str] = set()
+
     # Connect to both databases
     imessage_conn = sqlite3.connect(imessage_db)
     interactions_conn = sqlite3.connect(interactions_db)
@@ -139,6 +142,9 @@ def sync_imessage_interactions(dry_run: bool = True, limit: int = None) -> dict:
             datetime.now(timezone.utc).isoformat(),
         ))
 
+        # Track this person for stats refresh
+        affected_person_ids.add(person_id)
+
         # Create source entity for this handle (deduped by add_or_update)
         if not dry_run and handle:
             source_entity = create_imessage_source_entity(
@@ -183,6 +189,12 @@ def sync_imessage_interactions(dry_run: bool = True, limit: int = None) -> dict:
 
     if dry_run:
         logger.info("\nDRY RUN - no changes made")
+    else:
+        # Refresh PersonEntity stats for all affected people
+        if affected_person_ids:
+            from api.services.person_stats import refresh_person_stats
+            logger.info(f"Refreshing stats for {len(affected_person_ids)} affected people...")
+            refresh_person_stats(list(affected_person_ids))
 
     return stats
 

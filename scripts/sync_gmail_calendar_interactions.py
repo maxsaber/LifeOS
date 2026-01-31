@@ -62,6 +62,13 @@ MARKETING_NAME_PATTERNS = {
     'alerts', 'notifications', 'noreply', 'no-reply',
 }
 
+# Commercial/transactional senders to always skip (substring match in email or name)
+# These are companies that only send automated/transactional emails
+COMMERCIAL_SENDER_SUBSTRINGS = {
+    'amazon', 'ebay', 'etsy', 'gusto', 'gustin',
+    'capitalone', 'capital one', 'monarch', 'usaa',
+}
+
 # Known marketing/transactional email domains to skip (dedicated marketing domains only)
 # NOTE: Do NOT include domains where real people work (google.com, amazon.com, etc.)
 # Only include domains that are EXCLUSIVELY used for automated/marketing emails
@@ -122,11 +129,20 @@ def is_marketing_email(email: str, sender_name: str = None) -> bool:
         for pattern in MARKETING_NAME_PATTERNS:
             if pattern in name_lower:
                 return True
+        # Check for commercial sender substrings in name
+        for substring in COMMERCIAL_SENDER_SUBSTRINGS:
+            if substring in name_lower:
+                return True
 
     if not email or '@' not in email:
         return False
 
     email_lower = email.lower()
+
+    # Check for commercial sender substrings anywhere in email
+    for substring in COMMERCIAL_SENDER_SUBSTRINGS:
+        if substring in email_lower:
+            return True
     prefix = email_lower.split('@')[0]
     domain = email_lower.split('@')[1]
 
@@ -154,6 +170,7 @@ def sync_gmail_interactions(
     dry_run: bool = True,
     batch_size: int = 100,
     domain_filter: str | None = None,
+    before_days: int | None = None,
 ) -> dict:
     """
     Sync Gmail interactions for an account.
@@ -177,6 +194,9 @@ def sync_gmail_interactions(
         'marketing_skipped': 0,
     }
 
+    # Track affected person_ids for stats refresh
+    affected_person_ids: set[str] = set()
+
     db_path = get_interaction_db_path()
     conn = sqlite3.connect(db_path)
     resolver = get_entity_resolver()
@@ -184,26 +204,40 @@ def sync_gmail_interactions(
     my_person_id = settings.my_person_id
 
     # Get existing interactions to avoid duplicates
-    existing = set()
+    # We track both full source_ids AND base message_ids for efficient skipping
+    existing = set()  # Full source_ids (for sent emails with :recipient suffix)
+    existing_base_ids = set()  # Base message_ids (for fast initial skip check)
     cursor = conn.execute(
         "SELECT source_id FROM interactions WHERE source_type = 'gmail'"
     )
     for row in cursor.fetchall():
         if row[0]:
-            existing.add(row[0])
-    logger.info(f"Found {len(existing)} existing gmail interactions")
+            source_id = row[0]
+            existing.add(source_id)
+            # Extract base message_id (strip :email suffix if present)
+            base_id = source_id.split(':')[0] if ':' in source_id else source_id
+            existing_base_ids.add(base_id)
+    logger.info(f"Found {len(existing)} existing gmail interactions ({len(existing_base_ids)} unique message IDs)")
 
     gmail = GmailService(account_type=account_type)
     after_date = datetime.now(timezone.utc) - timedelta(days=days_back)
+    before_date = datetime.now(timezone.utc) - timedelta(days=before_days) if before_days else None
 
     # Fetch emails in batches using search
     # Gmail API limits to 500 results per query, so we paginate
     try:
         # Build search query
         query = f"after:{after_date.strftime('%Y/%m/%d')}"
+        if before_date:
+            query += f" before:{before_date.strftime('%Y/%m/%d')}"
         if domain_filter:
             # Filter to emails from/to the specified domain
             query += f" (from:*@{domain_filter} OR to:*@{domain_filter})"
+
+        # Log what we're syncing
+        if before_date:
+            logger.info(f"Fetching emails from {account_type.value} account ({after_date.strftime('%Y-%m-%d')} to {before_date.strftime('%Y-%m-%d')})...")
+        elif domain_filter:
             logger.info(f"Fetching emails from {account_type.value} account (last {days_back} days, domain: {domain_filter})...")
         else:
             logger.info(f"Fetching emails from {account_type.value} account (last {days_back} days)...")
@@ -237,13 +271,30 @@ def sync_gmail_interactions(
         batch = []
         processed = 0
 
+        logger.info(f"Starting to process messages (existing base IDs: {len(existing_base_ids)})...")
+        checked = 0
         for msg_data in messages:
             message_id = msg_data["id"]
+            checked += 1
 
-            # Skip if already exists
-            if message_id in existing:
+            # Log first message to confirm loop started
+            if checked == 1:
+                logger.info(f"  Processing first message: {message_id[:8]}...")
+                in_existing = message_id in existing_base_ids
+                logger.info(f"    Message in existing_base_ids: {in_existing}")
+
+            # Progress logging for checking phase
+            if checked % 5000 == 0:
+                logger.info(f"  Checked {checked}/{len(messages)} messages (skipped {stats['already_exists']} existing)...")
+
+            # Skip if this message was already processed (check base ID for sent emails too)
+            if message_id in existing_base_ids:
                 stats['already_exists'] += 1
                 continue
+
+            # Log when fetching new message
+            if checked <= 5:
+                logger.info(f"    Fetching new message {message_id[:8]}...")
 
             try:
                 # Fetch message details (metadata only for speed)
@@ -272,34 +323,99 @@ def sync_gmail_interactions(
 
                 # Determine if this is a received email (sender != me) or sent email (sender == me)
                 if sender_person_id and sender_person_id != my_person_id:
-                    # RECEIVED EMAIL: Create one interaction with the sender
-                    # Use ← arrow to indicate received (like iMessage)
-                    batch.append((
-                        str(uuid.uuid4()),
-                        sender_person_id,
-                        timestamp,
-                        'gmail',
-                        f"← {subject}",
-                        snippet,
-                        source_link,
-                        message_id,
-                        datetime.now(timezone.utc).isoformat(),
-                    ))
+                    # RECEIVED EMAIL: Create interactions with sender AND all To/CC recipients
+                    # This captures everyone involved in the email thread
 
-                    # Create source entity for the sender
-                    if not dry_run:
-                        source_entity = create_gmail_source_entity(
-                            message_id=message_id,
-                            sender_email=email.sender,
-                            sender_name=email.sender_name if email.sender_name != email.sender else None,
-                            observed_at=email.date,
-                            metadata={"subject": subject[:100] if subject else None},
+                    # 1. Create interaction with the sender (use base message_id)
+                    if message_id not in existing:
+                        batch.append((
+                            str(uuid.uuid4()),
+                            sender_person_id,
+                            timestamp,
+                            'gmail',
+                            f"← {subject}",
+                            snippet,
+                            source_link,
+                            message_id,
+                            datetime.now(timezone.utc).isoformat(),
+                        ))
+                        affected_person_ids.add(sender_person_id)
+                        existing.add(message_id)
+
+                        # Create source entity for the sender
+                        if not dry_run:
+                            source_entity = create_gmail_source_entity(
+                                message_id=message_id,
+                                sender_email=email.sender,
+                                sender_name=email.sender_name if email.sender_name != email.sender else None,
+                                observed_at=email.date,
+                                metadata={"subject": subject[:100] if subject else None},
+                            )
+                            source_entity.canonical_person_id = sender_person_id
+                            source_entity.link_confidence = sender_result.confidence if sender_result else 1.0
+                            source_entity.linked_at = datetime.now(timezone.utc)
+                            source_entity_store.add_or_update(source_entity)
+                            stats['source_entities_created'] += 1
+
+                    # 2. Create interactions with To/CC recipients (excluding myself)
+                    # These are people I was on an email thread with
+                    other_participants = []
+                    if email.to:
+                        other_participants.extend(_parse_email_addresses(email.to))
+                    if email.cc:
+                        other_participants.extend(_parse_email_addresses(email.cc))
+
+                    for participant_name, participant_email in other_participants:
+                        # Skip marketing/automated addresses
+                        if is_marketing_email(participant_email, participant_name):
+                            continue
+
+                        # Use source_id format: message_id:cc:email for CC participants
+                        participant_source_id = f"{message_id}:cc:{participant_email}"
+                        if participant_source_id in existing:
+                            continue
+
+                        participant_result = resolver.resolve(
+                            name=participant_name,
+                            email=participant_email,
+                            create_if_missing=True,
                         )
-                        source_entity.canonical_person_id = sender_person_id
-                        source_entity.link_confidence = sender_result.confidence if sender_result else 1.0
-                        source_entity.linked_at = datetime.now(timezone.utc)
-                        source_entity_store.add_or_update(source_entity)
-                        stats['source_entities_created'] += 1
+                        if not participant_result or not participant_result.entity:
+                            continue
+                        if participant_result.entity.id == my_person_id:
+                            continue  # Skip myself
+                        if participant_result.entity.id == sender_person_id:
+                            continue  # Already created interaction with sender
+
+                        # Use ↔ arrow to indicate shared thread (not direct send/receive)
+                        batch.append((
+                            str(uuid.uuid4()),
+                            participant_result.entity.id,
+                            timestamp,
+                            'gmail',
+                            f"↔ {subject}",
+                            snippet,
+                            source_link,
+                            participant_source_id,
+                            datetime.now(timezone.utc).isoformat(),
+                        ))
+                        affected_person_ids.add(participant_result.entity.id)
+                        existing.add(participant_source_id)
+
+                        # Create source entity for the participant
+                        if not dry_run:
+                            source_entity = create_gmail_source_entity(
+                                message_id=participant_source_id,
+                                sender_email=participant_email,
+                                sender_name=participant_name,
+                                observed_at=email.date,
+                                metadata={"subject": subject[:100] if subject else None, "role": "cc"},
+                            )
+                            source_entity.canonical_person_id = participant_result.entity.id
+                            source_entity.link_confidence = participant_result.confidence if participant_result else 1.0
+                            source_entity.linked_at = datetime.now(timezone.utc)
+                            source_entity_store.add_or_update(source_entity)
+                            stats['source_entities_created'] += 1
                 else:
                     # SENT EMAIL: Create interactions for ALL recipients (To + CC)
                     recipients = []
@@ -352,6 +468,8 @@ def sync_gmail_interactions(
                             datetime.now(timezone.utc).isoformat(),
                         ))
                         created_for_this_email += 1
+                        # Track for stats refresh
+                        affected_person_ids.add(recipient_result.entity.id)
 
                         # Create source entity for the recipient
                         if not dry_run:
@@ -381,7 +499,7 @@ def sync_gmail_interactions(
 
                 processed += 1
                 if processed % 500 == 0:
-                    logger.info(f"  Processed {processed} emails...")
+                    logger.info(f"  Processed {processed} new emails (skipped {stats['already_exists']} existing, {stats['marketing_skipped']} marketing)...")
 
             except Exception as e:
                 logger.warning(f"Error processing email {message_id}: {e}")
@@ -401,6 +519,10 @@ def sync_gmail_interactions(
         stats['errors'] += 1
 
     conn.close()
+
+    # Add affected person_ids to stats for refresh
+    stats['affected_person_ids'] = affected_person_ids
+
     return stats
 
 
@@ -430,6 +552,9 @@ def sync_calendar_interactions(
         'errors': 0,
         'source_entities_created': 0,
     }
+
+    # Track affected person_ids for stats refresh
+    affected_person_ids: set[str] = set()
 
     db_path = get_interaction_db_path()
     conn = sqlite3.connect(db_path)
@@ -516,6 +641,9 @@ def sync_calendar_interactions(
                 if person_id == my_person_id:
                     continue
 
+                # Track for stats refresh
+                affected_person_ids.add(person_id)
+
                 # Create interaction
                 interaction_id = str(uuid.uuid4())
                 timestamp = event.start_time.isoformat()
@@ -561,6 +689,10 @@ def sync_calendar_interactions(
         stats['errors'] += 1
 
     conn.close()
+
+    # Add affected person_ids to stats for refresh
+    stats['affected_person_ids'] = affected_person_ids
+
     return stats
 
 
@@ -685,6 +817,7 @@ def main():
     parser.add_argument('--personal-only', action='store_true', help='Only sync personal account')
     parser.add_argument('--work-only', action='store_true', help='Only sync work account')
     parser.add_argument('--domain', type=str, help='Filter emails by domain (e.g., gmail.com)')
+    parser.add_argument('--before-days', type=int, help='Skip emails newer than this many days ago (for historical backfill)')
     args = parser.parse_args()
 
     dry_run = not args.execute
@@ -707,6 +840,7 @@ def main():
                 days_back=args.days,
                 dry_run=dry_run,
                 domain_filter=args.domain,
+                before_days=args.before_days,
             )
             all_stats[f'gmail_{account.value}'] = stats
             logger.info(f"Gmail {account.value}: fetched={stats['fetched']}, inserted={stats['inserted']}, marketing_skipped={stats['marketing_skipped']}, source_entities={stats['source_entities_created']}, exists={stats['already_exists']}, errors={stats['errors']}")
@@ -728,6 +862,17 @@ def main():
         person_store = get_person_entity_store()
         person_store.save()
         logger.info("Saved person entities to disk")
+
+        # Collect all affected person_ids and refresh their stats
+        all_affected = set()
+        for stats in all_stats.values():
+            affected = stats.get('affected_person_ids', set())
+            all_affected.update(affected)
+
+        if all_affected:
+            from api.services.person_stats import refresh_person_stats
+            logger.info(f"Refreshing stats for {len(all_affected)} affected people...")
+            refresh_person_stats(list(all_affected))
 
     return all_stats
 

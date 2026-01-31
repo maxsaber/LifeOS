@@ -112,6 +112,9 @@ def sync_phone_calls(
         'errors': 0,
     }
 
+    # Track affected person_ids for stats refresh
+    affected_person_ids: set[str] = set()
+
     callhistory_path = get_callhistory_db_path()
     if not Path(callhistory_path).exists():
         logger.error(f"CallHistoryDB not found at {callhistory_path}")
@@ -235,6 +238,9 @@ def sync_phone_calls(
 
             person = result.entity
 
+            # Track for stats refresh
+            affected_person_ids.add(person.id)
+
             # Link source entity to person
             source_entity = seen_phones[phone]
             if source_entity.canonical_person_id != person.id:
@@ -327,6 +333,12 @@ def sync_phone_calls(
 
     if dry_run:
         logger.info("\nDRY RUN - no changes made")
+    else:
+        # Refresh PersonEntity stats for all affected people
+        if affected_person_ids:
+            from api.services.person_stats import refresh_person_stats
+            logger.info(f"Refreshing stats for {len(affected_person_ids)} affected people...")
+            refresh_person_stats(list(affected_person_ids))
 
     return stats
 
