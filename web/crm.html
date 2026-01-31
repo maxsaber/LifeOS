@@ -2024,9 +2024,26 @@
             align-items: center;
             gap: 1rem;
             padding: 0.5rem 0.75rem;
-            background: var(--bg-tertiary);
+            background: var(--bg-secondary);
             border-top: 1px solid var(--border);
             flex-wrap: wrap;
+        }
+
+        .graph-refresh-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            font-size: 2.2rem;
+            display: flex;
+            align-items: center;
+            margin-left: auto;
+            line-height: 1;
+        }
+
+        .graph-refresh-btn:hover {
+            color: var(--text-primary);
         }
 
         .graph-controls-expansion.visible {
@@ -2043,7 +2060,6 @@
             display: flex;
             align-items: center;
             gap: 0.25rem;
-            margin-left: auto;
         }
 
         .graph-expand-btn:hover {
@@ -4365,6 +4381,9 @@
                                         <option value="first" selected>1st Degree Only</option>
                                     </select>
                                 </div>
+                                <button class="graph-refresh-btn" onclick="refreshGraphLayout()" title="Refresh layout">
+                                    ↻
+                                </button>
                                 <button class="graph-expand-btn" onclick="toggleGraphFiltersExpansion(event)">
                                     More <span class="expand-arrow">▼</span>
                                 </button>
@@ -4933,18 +4952,42 @@
                 // Initialize global Dunbar circles on first load
                 await initializeDunbarCircles();
 
-                const params = new URLSearchParams();
-                if (searchQuery) params.set('q', searchQuery);
-                if (currentFilter !== 'all') {
-                    params.set('category', currentFilter);
-                }
-                params.set('sort', 'strength');
-                params.set('limit', '100');
+                let allPeople = [];
 
-                const data = await api(`/people?${params}`);
-                people = applyDunbarCircles(data.people);
-                // Sort by Dunbar circle first, then by relationship strength within each circle
+                // Check if search query contains OR operator (|)
+                const searchTerms = searchQuery ? searchQuery.split('|').map(t => t.trim()).filter(t => t) : [''];
+
+                // Fetch results for each search term in parallel
+                const fetchPromises = searchTerms.map(term => {
+                    const params = new URLSearchParams();
+                    if (term) params.set('q', term);
+                    if (currentFilter !== 'all') {
+                        params.set('category', currentFilter);
+                    }
+                    params.set('sort', 'strength');
+                    params.set('limit', '100');
+                    return api(`/people?${params}`);
+                });
+
+                const results = await Promise.all(fetchPromises);
+
+                // Merge and deduplicate results by person ID
+                const seenIds = new Set();
+                for (const data of results) {
+                    for (const person of data.people) {
+                        if (!seenIds.has(person.id)) {
+                            seenIds.add(person.id);
+                            allPeople.push(person);
+                        }
+                    }
+                }
+
+                people = applyDunbarCircles(allPeople);
+                // Sort: self first, then by Dunbar circle, then by relationship strength
                 people.sort((a, b) => {
+                    const selfA = a.category === 'self' ? 0 : 1;
+                    const selfB = b.category === 'self' ? 0 : 1;
+                    if (selfA !== selfB) return selfA - selfB;
                     const circleA = a.dunbar_circle ?? 7;
                     const circleB = b.dunbar_circle ?? 7;
                     if (circleA !== circleB) return circleA - circleB;
@@ -8076,6 +8119,13 @@
             }
             if (btn) {
                 btn.classList.toggle('expanded');
+            }
+        }
+
+        // Refresh graph layout - fully reload graph for current center person
+        function refreshGraphLayout() {
+            if (graphCenterId) {
+                loadGraph(graphCenterId);
             }
         }
 
