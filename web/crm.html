@@ -7739,6 +7739,29 @@
         let filterDebounceTimer = null; // Debounce timer for filter changes
         let hiddenNodeIds = new Set(); // Nodes hidden via right-click
 
+        /**
+         * /ME PAGE "2ND DEGREE" NODE TRACKING
+         *
+         * On the /me page, almost everyone is technically a 1st-degree connection (directly
+         * connected to me). Traditional "2nd degree" (friends-of-friends who AREN'T directly
+         * connected) barely exists.
+         *
+         * So on the /me page, we redefine what "1st degree" and "2nd degree" mean:
+         *
+         *   - "1st degree node": A person whose edge weight TO ME exceeds the 1st degree threshold
+         *   - "2nd degree node": A person whose edge weight to ANY VISIBLE 1st degree node
+         *                        exceeds the 2nd degree threshold (regardless of whether they're
+         *                        technically directly connected to me)
+         *
+         * This set tracks which nodes qualify as "2nd degree" under this /me-specific definition.
+         * Used for:
+         *   1. Determining visibility when "show 2nd degree" is enabled
+         *   2. Styling edges from me to these nodes with faint gray (de-emphasized)
+         *
+         * ONLY populated when viewing the /me page. Empty otherwise.
+         */
+        let graphSecondDegreeNodeIds = new Set();
+
         // Preserved filter state (for node-to-node navigation)
         let preservedEdgeStrength = null;
         let preservedDegreeFilter = null;
@@ -8227,6 +8250,26 @@
                 return sourceId === centerId || targetId === centerId;
             }
 
+            /**
+             * /ME PAGE: Check if edge connects center to a "2nd degree" node
+             *
+             * On the /me page, graphSecondDegreeNodeIds contains nodes that qualified
+             * for visibility through their connection to 1st degree nodes (not through
+             * their direct edge to me). See detailed explanation at variable definition.
+             *
+             * Edges from me to these nodes should be visually de-emphasized (faint gray)
+             * to reflect that the relationship is indirect/weak.
+             */
+            function isEdgeToSecondDegreeNode(d) {
+                if (graphSecondDegreeNodeIds.size === 0) return false;
+                const sourceId = typeof d.source === 'object' ? d.source.id : d.source;
+                const targetId = typeof d.target === 'object' ? d.target.id : d.target;
+                // Only applies to edges connecting to center
+                if (sourceId !== centerId && targetId !== centerId) return false;
+                const otherNodeId = sourceId === centerId ? targetId : sourceId;
+                return graphSecondDegreeNodeIds.has(otherNodeId);
+            }
+
             // Sort links so first-degree edges are rendered last (on top) for easier clicking
             const sortedLinks = [...links].sort((a, b) => {
                 const aFirst = isFirstDegreeEdge(a) ? 1 : 0;
@@ -8240,18 +8283,25 @@
                 .selectAll('line')
                 .data(sortedLinks)
                 .join('line')
-                .attr('class', d => 'graph-link' + (isFirstDegreeEdge(d) ? ' first-degree' : ''))
+                .attr('class', d => {
+                    // On /me page, edges to "2nd degree" nodes don't get first-degree class
+                    const useFirstDegreeStyle = isFirstDegreeEdge(d) && !isEdgeToSecondDegreeNode(d);
+                    return 'graph-link' + (useFirstDegreeStyle ? ' first-degree' : '');
+                })
                 .attr('stroke', d => {
-                    if (isFirstDegreeEdge(d)) {
+                    // On /me page, edges to "2nd degree" nodes use faint styling
+                    // (see isEdgeToSecondDegreeNode() for explanation)
+                    const useFirstDegreeStyle = isFirstDegreeEdge(d) && !isEdgeToSecondDegreeNode(d);
+                    const normalizedWeight = (d.weight - minWeight) / weightRange;
+
+                    if (useFirstDegreeStyle) {
                         // First-degree edges: bright cyan/teal gradient based on weight
-                        const normalizedWeight = (d.weight - minWeight) / weightRange;
                         const r = Math.round(0 + normalizedWeight * 50);
                         const g = Math.round(180 + normalizedWeight * 75);
                         const b = Math.round(200 + normalizedWeight * 55);
                         return `rgb(${r}, ${g}, ${b})`;
                     } else {
-                        // Second-degree edges: muted blue/gray
-                        const normalizedWeight = (d.weight - minWeight) / weightRange;
+                        // Second-degree edges (or edges to /me-page "2nd degree" nodes): muted blue/gray
                         const r = Math.round(60 + normalizedWeight * 20);
                         const g = Math.round(70 + normalizedWeight * 40);
                         const b = Math.round(100 + normalizedWeight * 50);
@@ -8259,8 +8309,10 @@
                     }
                 })
                 .attr('stroke-width', d => {
+                    const useFirstDegreeStyle = isFirstDegreeEdge(d) && !isEdgeToSecondDegreeNode(d);
                     const normalizedWeight = (d.weight - minWeight) / weightRange;
-                    if (isFirstDegreeEdge(d)) {
+
+                    if (useFirstDegreeStyle) {
                         // First-degree: thicker (1 to 10px)
                         return 1 + normalizedWeight * 9;
                     } else {
@@ -8269,8 +8321,10 @@
                     }
                 })
                 .attr('stroke-opacity', d => {
+                    const useFirstDegreeStyle = isFirstDegreeEdge(d) && !isEdgeToSecondDegreeNode(d);
                     const normalizedWeight = (d.weight - minWeight) / weightRange;
-                    if (isFirstDegreeEdge(d)) {
+
+                    if (useFirstDegreeStyle) {
                         // First-degree: very visible (0.6 to 0.95)
                         return 0.6 + normalizedWeight * 0.35;
                     } else {
@@ -9015,41 +9069,113 @@
                 // Track which second-degree edges pass the threshold (for filtering later)
                 const visibleSecondDegreeEdges = new Set();
 
+                // Clear the /me page 2nd-degree tracking set (see definition at top of file)
+                graphSecondDegreeNodeIds = new Set();
+
                 if (!showOnlyFirstDegree) {
-                    // Exclude owner from first-degree set for second-degree calculation
-                    // because owner is connected to everyone, which would make all nodes visible
-                    // EXCEPT when viewing the Me graph - then we need owner to find 2nd degree connections
                     const firstDegreeIds = new Set(visibleNodeIds);
                     const isViewingMeGraph = graphCenterId === DUNBAR_CONFIG.myPersonId;
-                    if (!isViewingMeGraph) {
+
+                    if (isViewingMeGraph) {
+                        /**
+                         * /ME PAGE SPECIAL LOGIC
+                         *
+                         * On the /me page, almost everyone is technically a 1st-degree connection
+                         * (directly connected to me in the graph). Traditional "2nd degree" nodes
+                         * (friends-of-friends who AREN'T directly connected to me) barely exist.
+                         *
+                         * So we REDEFINE what "1st degree" and "2nd degree" mean on this page:
+                         *
+                         *   "1st degree node": A person whose edge weight TO ME exceeds the
+                         *                      1st degree threshold slider value.
+                         *                      (i.e., people I have STRONG direct relationships with)
+                         *
+                         *   "2nd degree node": A person whose edge weight to ANY VISIBLE 1st degree
+                         *                      node exceeds the 2nd degree threshold slider value.
+                         *                      (i.e., people my strong contacts have strong relationships with)
+                         *
+                         * This means someone who IS technically directly connected to me can appear
+                         * as a "2nd degree node" if:
+                         *   - Their direct edge to me is weak (below 1st threshold)
+                         *   - BUT they have a strong edge to one of my visible 1st degree contacts
+                         *
+                         * We track these nodes in graphSecondDegreeNodeIds so we can visually
+                         * de-emphasize the edges from me to them (faint gray instead of bright cyan).
+                         */
+
+                        // Remove center from firstDegreeIds - we don't want ME as a bridge
+                        // (I'm connected to everyone, so that would make everyone visible)
+                        firstDegreeIds.delete(graphCenterId);
+
+                        graphLinksAll.forEach(linkData => {
+                            if (!linkData) return;
+
+                            const sourceId = linkData.source;
+                            const targetId = linkData.target;
+
+                            // Skip edges involving the center (me) - those are 1st degree edges
+                            // We're looking for edges BETWEEN other people
+                            if (sourceId === graphCenterId || targetId === graphCenterId) return;
+
+                            // Edge must pass source filter
+                            const hasSelectedSource = edgeHasSelectedSource(linkData, selectedSources);
+                            if (!hasSelectedSource) return;
+
+                            // Edge must pass second-degree weight threshold
+                            if (linkData.weight < secondThreshold) return;
+
+                            // If one end is a visible 1st-degree node and the other is not yet visible,
+                            // add the other as a "2nd degree" node
+                            if (firstDegreeIds.has(sourceId) && !visibleNodeIds.has(targetId)) {
+                                visibleNodeIds.add(targetId);
+                                graphSecondDegreeNodeIds.add(targetId);
+                                visibleSecondDegreeEdges.add(`${sourceId}|${targetId}`);
+                            }
+                            if (firstDegreeIds.has(targetId) && !visibleNodeIds.has(sourceId)) {
+                                visibleNodeIds.add(sourceId);
+                                graphSecondDegreeNodeIds.add(sourceId);
+                                visibleSecondDegreeEdges.add(`${sourceId}|${targetId}`);
+                            }
+                        });
+                    } else {
+                        /**
+                         * NON-/ME PAGE LOGIC (original behavior)
+                         *
+                         * On pages for other people, we use traditional graph degree:
+                         *   - 1st degree: Graph distance of 1 from center (node.degree === 1)
+                         *   - 2nd degree: Graph distance of 2 from center (node.degree === 2)
+                         *
+                         * We exclude "me" (the CRM owner) from being a bridge for 2nd degree,
+                         * since I'm connected to everyone and would cause all nodes to appear.
+                         */
                         firstDegreeIds.delete(DUNBAR_CONFIG.myPersonId);
+
+                        graphLinksAll.forEach(linkData => {
+                            if (!linkData) return;
+
+                            const sourceId = linkData.source;
+                            const targetId = linkData.target;
+                            const sourceNode = nodeById[sourceId];
+                            const targetNode = nodeById[targetId];
+
+                            // Edge must pass source filter
+                            const hasSelectedSource = edgeHasSelectedSource(linkData, selectedSources);
+                            if (!hasSelectedSource) return;
+
+                            // Second-degree edge must also pass the second-degree weight threshold
+                            if (linkData.weight < secondThreshold) return;
+
+                            // If one end is a visible first-degree node and other has graph degree=2, add it
+                            if (firstDegreeIds.has(sourceId) && targetNode && targetNode.degree === 2) {
+                                visibleNodeIds.add(targetId);
+                                visibleSecondDegreeEdges.add(`${sourceId}|${targetId}`);
+                            }
+                            if (firstDegreeIds.has(targetId) && sourceNode && sourceNode.degree === 2) {
+                                visibleNodeIds.add(sourceId);
+                                visibleSecondDegreeEdges.add(`${sourceId}|${targetId}`);
+                            }
+                        });
                     }
-
-                    graphLinksAll.forEach(linkData => {
-                        if (!linkData) return;
-
-                        const sourceId = linkData.source;
-                        const targetId = linkData.target;
-                        const sourceNode = nodeById[sourceId];
-                        const targetNode = nodeById[targetId];
-
-                        // Edge must pass source filter
-                        const hasSelectedSource = edgeHasSelectedSource(linkData, selectedSources);
-                        if (!hasSelectedSource) return;
-
-                        // Second-degree edge must also pass the second-degree weight threshold
-                        if (linkData.weight < secondThreshold) return;
-
-                        // If one end is a visible first-degree node (excluding owner) and other is second-degree, add it
-                        if (firstDegreeIds.has(sourceId) && targetNode && targetNode.degree === 2) {
-                            visibleNodeIds.add(targetId);
-                            visibleSecondDegreeEdges.add(`${sourceId}|${targetId}`);
-                        }
-                        if (firstDegreeIds.has(targetId) && sourceNode && sourceNode.degree === 2) {
-                            visibleNodeIds.add(sourceId);
-                            visibleSecondDegreeEdges.add(`${sourceId}|${targetId}`);
-                        }
-                    });
                 }
 
                 // Step 3: Create filtered link array with appropriate thresholds
@@ -9066,6 +9192,21 @@
                     const isFirstDegree = sourceId === graphCenterId || targetId === graphCenterId;
 
                     if (isFirstDegree) {
+                        /**
+                         * /ME PAGE EDGE EXCEPTION
+                         *
+                         * On the /me page, edges from me to "2nd degree nodes" should be shown
+                         * even though their weight is below the 1st degree threshold.
+                         * (That's WHY they're "2nd degree" - their direct edge to me is weak,
+                         * but they qualify through a strong edge to one of my 1st degree contacts.)
+                         *
+                         * Without this exception, these edges would be filtered out here,
+                         * making the "2nd degree" nodes appear disconnected from me.
+                         */
+                        const otherNodeId = sourceId === graphCenterId ? targetId : sourceId;
+                        if (graphSecondDegreeNodeIds.has(otherNodeId)) {
+                            return true;  // Allow edge to 2nd-degree node regardless of weight
+                        }
                         // First-degree edges use first threshold
                         return l.weight >= threshold;
                     } else {
