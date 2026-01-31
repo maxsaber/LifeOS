@@ -389,3 +389,172 @@ class TestEdgeCases:
             create_if_missing=True,
         )
         assert result.entity.canonical_name == "Jdoe"
+
+
+class TestParseName:
+    """Tests for the parse_name helper function."""
+
+    def test_simple_two_part_name(self):
+        """Test parsing a simple first/last name."""
+        from api.services.entity_resolver import parse_name
+
+        result = parse_name("John Smith")
+        assert result.first == "John"
+        assert result.last == "Smith"
+        assert result.middles == []
+
+    def test_three_part_name(self):
+        """Test parsing a name with middle name."""
+        from api.services.entity_resolver import parse_name
+
+        result = parse_name("Anne Taylor Walker")
+        assert result.first == "Anne"
+        assert result.middles == ["Taylor"]
+        assert result.last == "Walker"
+
+    def test_first_name_only(self):
+        """Test parsing a single name."""
+        from api.services.entity_resolver import parse_name
+
+        result = parse_name("Taylor")
+        assert result.first == "Taylor"
+        assert result.last is None
+        assert result.middles == []
+
+    def test_strips_prefix(self):
+        """Test that prefixes like Dr., Mr., etc. are stripped."""
+        from api.services.entity_resolver import parse_name
+
+        result = parse_name("Dr. John Smith")
+        assert result.first == "John"
+        assert result.last == "Smith"
+
+        result = parse_name("Mrs. Jane Doe")
+        assert result.first == "Jane"
+        assert result.last == "Doe"
+
+    def test_strips_suffix(self):
+        """Test that suffixes like MD, PhD, Jr are stripped."""
+        from api.services.entity_resolver import parse_name
+
+        result = parse_name("Taylor Walker MD")
+        assert result.first == "Taylor"
+        assert result.last == "Walker"
+
+        result = parse_name("John Smith Jr")
+        assert result.first == "John"
+        assert result.last == "Smith"
+
+    def test_strips_multiple_suffixes(self):
+        """Test stripping multiple suffixes."""
+        from api.services.entity_resolver import parse_name
+
+        result = parse_name("Dr. Mary Katherine Palmer MD PhD")
+        assert result.first == "Mary"
+        assert result.middles == ["Katherine"]
+        assert result.last == "Palmer"
+
+    def test_preserves_original(self):
+        """Test that original string is preserved."""
+        from api.services.entity_resolver import parse_name
+
+        result = parse_name("Dr. John Smith MD")
+        assert result.original == "Dr. John Smith MD"
+
+    def test_empty_string(self):
+        """Test handling empty string."""
+        from api.services.entity_resolver import parse_name
+
+        result = parse_name("")
+        assert result.first == ""
+        assert result.last is None
+
+
+class TestStructuredNameMatching:
+    """Tests for the new structured name matching in _score_candidates."""
+
+    def test_different_last_names_no_match(self, temp_store):
+        """Test that different last names don't match."""
+        # This was the original bug: "Mary Katherine Palmer" matched "Taylor Walker"
+        entity = PersonEntity(
+            canonical_name="Taylor Walker",
+            last_seen=datetime.now() - timedelta(days=5),
+        )
+        temp_store.add(entity)
+
+        resolver = EntityResolver(temp_store)
+        result = resolver.resolve_by_name("Mary Katherine Palmer")
+
+        assert result is None  # Should NOT match
+
+    def test_same_last_name_different_first_no_match(self, temp_store):
+        """Test that same last name but different first doesn't match."""
+        entity = PersonEntity(
+            canonical_name="Taylor Walker",
+            last_seen=datetime.now() - timedelta(days=5),
+        )
+        temp_store.add(entity)
+
+        resolver = EntityResolver(temp_store)
+        result = resolver.resolve_by_name("John Walker")
+
+        assert result is None  # Different first name
+
+    def test_with_middle_name_matches(self, temp_store):
+        """Test that adding a middle name still matches."""
+        entity = PersonEntity(
+            canonical_name="Taylor Walker",
+            last_seen=datetime.now() - timedelta(days=5),
+        )
+        temp_store.add(entity)
+
+        resolver = EntityResolver(temp_store)
+        # Anne Taylor Walker should match if Taylor is treated as middle name
+        # Actually, this tests first=Anne, middle=Taylor, last=Walker
+        # vs first=Taylor, last=Walker - different first names, no match expected
+        result = resolver.resolve_by_name("Anne Taylor Walker")
+
+        # This SHOULD match because the last names match and Taylor=Taylor cross-match
+        assert result is not None
+
+    def test_suffix_stripped_matches(self, temp_store):
+        """Test that suffixes are stripped before matching."""
+        entity = PersonEntity(
+            canonical_name="Taylor Walker",
+            last_seen=datetime.now() - timedelta(days=5),
+        )
+        temp_store.add(entity)
+
+        resolver = EntityResolver(temp_store)
+        result = resolver.resolve_by_name("Taylor Walker MD")
+
+        assert result is not None
+        assert result.entity.canonical_name == "Taylor Walker"
+
+    def test_initial_matches_full_name(self, temp_store):
+        """Test that initial matches full last name."""
+        entity = PersonEntity(
+            canonical_name="Yoni Landau",
+            last_seen=datetime.now() - timedelta(days=5),
+        )
+        temp_store.add(entity)
+
+        resolver = EntityResolver(temp_store)
+        result = resolver.resolve_by_name("Yoni L")
+
+        assert result is not None
+        assert result.entity.canonical_name == "Yoni Landau"
+
+    def test_first_name_only_matches(self, temp_store):
+        """Test that first name only can match."""
+        entity = PersonEntity(
+            canonical_name="Ben Calvin",
+            last_seen=datetime.now() - timedelta(days=5),
+        )
+        temp_store.add(entity)
+
+        resolver = EntityResolver(temp_store)
+        result = resolver.resolve_by_name("Ben")
+
+        assert result is not None
+        assert result.entity.canonical_name == "Ben Calvin"

@@ -16,6 +16,76 @@ from typing import Optional
 from rapidfuzz import fuzz
 
 from api.services.person_entity import PersonEntity, PersonEntityStore, get_person_entity_store
+
+# Name prefixes to strip before parsing (case-insensitive)
+NAME_PREFIXES = {'dr', 'dr.', 'mr', 'mr.', 'mrs', 'mrs.', 'ms', 'ms.', 'prof', 'prof.', 'rev', 'rev.'}
+
+# Name suffixes to strip before parsing (case-insensitive, may have trailing punctuation)
+NAME_SUFFIXES = {
+    'md', 'phd', 'jr', 'sr', 'ii', 'iii', 'iv', 'v',
+    'esq', 'mph', 'dds', 'dmd', 'do', 'rn', 'cpa',
+    'mba', 'jd', 'llm', 'msw', 'lcsw', 'psyd', 'edd',
+}
+
+
+@dataclass
+class ParsedName:
+    """Structured representation of a parsed name."""
+    first: str  # First name (required)
+    middles: list[str]  # Middle names (may be empty)
+    last: Optional[str]  # Last name (None for single-word names)
+    original: str  # Original input string
+
+
+def parse_name(name: str) -> ParsedName:
+    """
+    Parse a name into structured components.
+
+    Strips common prefixes (Dr., Mr., Mrs.) and suffixes (MD, PhD, Jr).
+    Returns {first, middles[], last} structure.
+
+    Examples:
+        "John Smith" -> {first="John", middles=[], last="Smith"}
+        "Dr. Mary Katherine Palmer MD" -> {first="Mary", middles=["Katherine"], last="Palmer"}
+        "Taylor" -> {first="Taylor", middles=[], last=None}
+        "Anne Taylor Walker" -> {first="Anne", middles=["Taylor"], last="Walker"}
+
+    Args:
+        name: Name string to parse
+
+    Returns:
+        ParsedName with structured components
+    """
+    if not name or not name.strip():
+        return ParsedName(first="", middles=[], last=None, original=name or "")
+
+    original = name
+    parts = name.strip().split()
+
+    # Strip prefixes from the beginning
+    while parts and parts[0].lower().rstrip('.,') in NAME_PREFIXES:
+        parts.pop(0)
+
+    # Strip suffixes from the end
+    while parts and parts[-1].lower().rstrip('.,') in NAME_SUFFIXES:
+        parts.pop()
+
+    if not parts:
+        # All parts were prefixes/suffixes, return original as first name
+        return ParsedName(first=name.strip(), middles=[], last=None, original=original)
+
+    if len(parts) == 1:
+        return ParsedName(first=parts[0], middles=[], last=None, original=original)
+    elif len(parts) == 2:
+        return ParsedName(first=parts[0], middles=[], last=parts[1], original=original)
+    else:
+        # 3+ parts: first, middle(s), last
+        return ParsedName(
+            first=parts[0],
+            middles=parts[1:-1],
+            last=parts[-1],
+            original=original,
+        )
 from api.services.people import resolve_person_name, PEOPLE_DICTIONARY
 from api.services.link_override import get_link_override_store
 from config.people_config import (
@@ -220,7 +290,21 @@ class EntityResolver:
         self, name: str, context_path: Optional[str]
     ) -> list[ResolutionCandidate]:
         """
-        Score all entities against a name.
+        Score all entities against a name using structured matching.
+
+        Uses a three-phase approach:
+        1. Hard disqualifiers - Different last names → skip candidate
+        2. Name component matching - Exact/fuzzy matches on first, middle, last
+        3. Bonus scoring - Context, recency, relationship strength
+
+        Scoring system (approximate points):
+        - Exact last name match: 30 points
+        - Exact first name match: 25 points
+        - First name = middle name cross-match: 15 points
+        - Initial matches full name: 10 points
+        - Context boost: 30 points
+        - Recency boost: 10 points
+        - Relationship strength: 0-25 points (scaled)
 
         Args:
             name: Name to match against
@@ -230,32 +314,169 @@ class EntityResolver:
             List of candidates with scores
         """
         candidates = []
-        name_lower = name.lower()
 
-        # Check if this is a first-name-only match (single word, no spaces)
+        # Parse the query name into components
+        query = parse_name(name)
+        query_first_lower = query.first.lower() if query.first else ""
+        query_middles_lower = [m.lower() for m in query.middles]
+        query_last_lower = query.last.lower() if query.last else None
+
+        # Check if this is a first-name-only match (single word, no last name)
         # First-name mentions in notes usually refer to close contacts
-        is_first_name_only = ' ' not in name.strip()
+        is_first_name_only = query.last is None
+
+        # Check if query last name is an initial (single character)
+        is_last_initial = query_last_lower and len(query_last_lower) == 1
+        # Check if query first name is an initial (single character)
+        is_first_initial = len(query_first_lower) == 1
 
         for entity in self._store.get_all():
+            # Parse entity's canonical name
+            entity_parsed = parse_name(entity.canonical_name)
+            entity_first_lower = entity_parsed.first.lower() if entity_parsed.first else ""
+            entity_middles_lower = [m.lower() for m in entity_parsed.middles]
+            entity_last_lower = entity_parsed.last.lower() if entity_parsed.last else None
+
+            # Also parse all aliases
+            alias_parses = [parse_name(alias) for alias in entity.aliases]
+
+            # ===== PHASE 1: HARD DISQUALIFIERS =====
+            # If both names have last names, they must match (or be initials)
+            if query_last_lower and not is_first_name_only:
+                last_name_matches = False
+
+                # Check canonical name
+                if entity_last_lower:
+                    if is_last_initial:
+                        # Query last is initial: check prefix match
+                        if entity_last_lower.startswith(query_last_lower):
+                            last_name_matches = True
+                    elif fuzz.ratio(query_last_lower, entity_last_lower) >= 85:
+                        # Fuzzy match for typos/variations
+                        last_name_matches = True
+
+                # Check aliases for last name match
+                if not last_name_matches:
+                    for ap in alias_parses:
+                        if ap.last:
+                            ap_last = ap.last.lower()
+                            if is_last_initial:
+                                if ap_last.startswith(query_last_lower):
+                                    last_name_matches = True
+                                    break
+                            elif fuzz.ratio(query_last_lower, ap_last) >= 85:
+                                last_name_matches = True
+                                break
+
+                # Skip this candidate if last names don't match
+                if not last_name_matches:
+                    continue
+
+            # ===== PHASE 2: NAME COMPONENT MATCHING =====
             score = 0.0
-            match_type = "fuzzy"
+            match_type = "structured"
 
-            # Name similarity (using token_set_ratio for best partial matching)
-            name_sim = fuzz.token_set_ratio(name_lower, entity.canonical_name.lower())
-            score += name_sim * EntityResolutionConfig.NAME_SIMILARITY_WEIGHT
+            # --- Last name matching (30 points max) ---
+            if query_last_lower and entity_last_lower:
+                if query_last_lower == entity_last_lower:
+                    score += 30  # Exact match
+                elif is_last_initial and entity_last_lower.startswith(query_last_lower):
+                    score += 20  # Initial prefix match
+                elif fuzz.ratio(query_last_lower, entity_last_lower) >= 85:
+                    score += 25  # Fuzzy match (close enough)
 
-            # Also check aliases
-            for alias in entity.aliases:
-                alias_sim = fuzz.token_set_ratio(name_lower, alias.lower())
-                if alias_sim > name_sim:
-                    name_sim = alias_sim
-                    score = alias_sim * EntityResolutionConfig.NAME_SIMILARITY_WEIGHT
+            # --- First name matching (25 points max, + 15 bonus for first-name-only) ---
+            first_matched = False
+            if query_first_lower and entity_first_lower:
+                if query_first_lower == entity_first_lower:
+                    score += 25  # Exact match
+                    first_matched = True
+                    # Bonus for first-name-only queries that match exactly
+                    # People often refer to close contacts by first name only
+                    if is_first_name_only:
+                        score += 15
+                elif is_first_initial and entity_first_lower.startswith(query_first_lower):
+                    score += 10  # Initial prefix match
+                    first_matched = True
+                elif len(entity_first_lower) == 1 and query_first_lower.startswith(entity_first_lower):
+                    score += 10  # Entity has initial, query has full name
+                    first_matched = True
+                elif fuzz.ratio(query_first_lower, entity_first_lower) >= 85:
+                    score += 20  # Fuzzy match (nicknames, typos)
+                    first_matched = True
+                    # Smaller bonus for fuzzy first-name-only matches
+                    if is_first_name_only:
+                        score += 10
+
+            # --- First name = middle name cross-matching (15 points max) ---
+            # Check if query first matches any entity middle
+            if not first_matched and query_first_lower:
+                for em in entity_middles_lower:
+                    if query_first_lower == em:
+                        score += 15
+                        first_matched = True
+                        break
+                    elif fuzz.ratio(query_first_lower, em) >= 85:
+                        score += 12
+                        first_matched = True
+                        break
+
+            # Check if any query middle matches entity first
+            if entity_first_lower:
+                for qm in query_middles_lower:
+                    if qm == entity_first_lower:
+                        score += 15
+                        break
+                    elif fuzz.ratio(qm, entity_first_lower) >= 85:
+                        score += 12
+                        break
+
+            # --- Middle name matching (10 points max) ---
+            if query_middles_lower and entity_middles_lower:
+                for qm in query_middles_lower:
+                    for em in entity_middles_lower:
+                        if qm == em:
+                            score += 10
+                            break
+                        elif fuzz.ratio(qm, em) >= 85:
+                            score += 7
+                            break
+
+            # --- Check aliases for additional matches ---
+            best_alias_score = 0
+            for ap in alias_parses:
+                alias_score = 0
+                ap_first = ap.first.lower() if ap.first else ""
+                ap_last = ap.last.lower() if ap.last else None
+                ap_middles = [m.lower() for m in ap.middles]
+
+                # First name match in alias
+                if query_first_lower and ap_first:
+                    if query_first_lower == ap_first:
+                        alias_score += 25
+                    elif is_first_initial and ap_first.startswith(query_first_lower):
+                        alias_score += 10
+
+                # Cross-match: query first = alias middle
+                if query_first_lower:
+                    for am in ap_middles:
+                        if query_first_lower == am:
+                            alias_score += 15
+                            break
+
+                best_alias_score = max(best_alias_score, alias_score)
+
+            # Add best alias bonus (but don't double-count with canonical)
+            if best_alias_score > 0 and not first_matched:
+                score += best_alias_score
+
+            # ===== PHASE 3: BONUS SCORING =====
 
             # Context boost
             if context_path and entity.vault_contexts:
                 if self._path_matches_context(context_path, entity.vault_contexts):
                     score += EntityResolutionConfig.CONTEXT_BOOST_POINTS
-                    match_type = "fuzzy_context"
+                    match_type = "structured_context"
 
             # Recency boost
             if entity.last_seen:
@@ -278,10 +499,18 @@ class EntityResolver:
                     rel_boost *= FIRST_NAME_ONLY_BOOST_MULTIPLIER
                 score += rel_boost
                 if rel_boost > 5:  # Significant boost
-                    match_type = "fuzzy_relationship" if match_type == "fuzzy" else f"{match_type}_relationship"
+                    match_type = f"{match_type}_relationship"
 
-            # Only add if there's meaningful similarity
-            if name_sim > 50:  # At least 50% name match
+            # For full names (both have first and last), require first name similarity
+            # This prevents "John Walker" from matching "Taylor Walker"
+            if not is_first_name_only and query_last_lower and entity_last_lower:
+                if not first_matched:
+                    # Both have last names, but no first name match - skip
+                    continue
+
+            # Only add candidates with meaningful scores
+            # Minimum: at least first OR last name should match (20+ points)
+            if score >= 20:
                 confidence = min(score / 100.0, 1.0)
                 candidates.append(
                     ResolutionCandidate(
@@ -632,15 +861,30 @@ class EntityResolver:
             vault_contexts = get_vault_contexts_for_company(company)
 
             # Try to find existing entity by domain match
+            query_parsed = parse_name(full_name)
+            query_first = query_parsed.first.lower() if query_parsed.first else ""
+            query_last = query_parsed.last.lower() if query_parsed.last else None
+
             for domain in domains:
                 for entity in self._store.get_all():
                     for ent_email in entity.emails:
                         if ent_email.endswith(f"@{domain}"):
-                            # Check if name matches
-                            name_sim = fuzz.token_set_ratio(
-                                full_name.lower(), entity.canonical_name.lower()
-                            )
-                            if name_sim > 80:
+                            # Check if name matches using structured comparison
+                            entity_parsed = parse_name(entity.canonical_name)
+                            entity_first = entity_parsed.first.lower() if entity_parsed.first else ""
+                            entity_last = entity_parsed.last.lower() if entity_parsed.last else None
+
+                            # Require last name match (if both have last names)
+                            last_match = True
+                            if query_last and entity_last:
+                                last_match = fuzz.ratio(query_last, entity_last) >= 85
+
+                            # Require first name match
+                            first_match = False
+                            if query_first and entity_first:
+                                first_match = fuzz.ratio(query_first, entity_first) >= 85
+
+                            if last_match and first_match:
                                 # Update with LinkedIn data
                                 entity.linkedin_url = linkedin_url or entity.linkedin_url
                                 entity.company = company or entity.company
