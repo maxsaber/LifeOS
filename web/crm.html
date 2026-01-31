@@ -7875,6 +7875,7 @@
         let currentZoomScale = 1;
         let isRenderingGraph = false; // Guard against infinite render loops
         let filterDebounceTimer = null; // Debounce timer for filter changes
+        let graphLoadingPersonId = null; // Guard against duplicate loadGraph calls for same person
         let hiddenNodeIds = new Set(); // Nodes hidden via right-click
         let graphHighlightedNodeId = null; // Node whose edges are currently highlighted (null = center node)
 
@@ -8179,6 +8180,12 @@
 
         // Load graph visualization using 2-degree network
         async function loadGraph(personId) {
+            // Prevent duplicate loads for the same person (race between loadPersonDetail and switchTab)
+            if (graphLoadingPersonId === personId) {
+                return;
+            }
+            graphLoadingPersonId = personId;
+
             // Close edge panel when loading a new graph (belt-and-suspenders with node click handler)
             closeEdgePanel();
 
@@ -8247,6 +8254,11 @@
             } catch (error) {
                 console.error('Failed to load graph:', error);
                 container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><p>Failed to load graph</p></div>';
+            } finally {
+                // Clear loading guard so future loads for this person work
+                if (graphLoadingPersonId === personId) {
+                    graphLoadingPersonId = null;
+                }
             }
         }
 
