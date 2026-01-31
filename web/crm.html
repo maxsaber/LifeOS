@@ -7876,6 +7876,7 @@
         let isRenderingGraph = false; // Guard against infinite render loops
         let filterDebounceTimer = null; // Debounce timer for filter changes
         let hiddenNodeIds = new Set(); // Nodes hidden via right-click
+        let graphHighlightedNodeId = null; // Node whose edges are currently highlighted (null = center node)
 
         /**
          * /ME PAGE "2ND DEGREE" NODE TRACKING
@@ -9088,7 +9089,7 @@
             // Close edge panel if open
             closeEdgePanel();
 
-            // Highlight the selected node
+            // Highlight the selected node visually (teal border via CSS)
             if (graphSvg) {
                 graphSvg.selectAll('.graph-node').classed('panel-selected', false);
                 graphSvg.selectAll('.graph-node').each(function(d) {
@@ -9099,6 +9100,10 @@
             }
             selectedNodeId = nodeData.id;
             nodePanelPersonId = nodeData.id;
+
+            // Update edge highlighting to show this node's first-degree connections in cyan
+            // (The center node keeps its red border - only edges change)
+            updateEdgeHighlighting(nodeData.id);
 
             // Populate panel with node data (already available from graph)
             document.getElementById('nodePanelName').textContent = nodeData.name || 'Unknown';
@@ -9226,6 +9231,78 @@
             }
             selectedNodeId = null;
             nodePanelPersonId = null;
+
+            // Revert edge highlighting to show center node's first-degree edges
+            updateEdgeHighlighting(null);
+        }
+
+        /**
+         * Update edge highlighting to show a specific node's first-degree connections in cyan.
+         * When a node is clicked (showing the details panel), that node's edges become highlighted.
+         * When the panel is closed, edges revert to highlighting the center node's connections.
+         *
+         * @param {string|null} nodeId - The node whose edges should be highlighted, or null for center node
+         */
+        function updateEdgeHighlighting(nodeId) {
+            // Use center node if no specific node provided
+            const highlightNodeId = nodeId || graphCenterId;
+            graphHighlightedNodeId = nodeId; // Track which node is highlighted (null means center)
+
+            if (!graphSvg || !graphWeightRange) return;
+
+            const { min: minWeight, range: weightRange } = graphWeightRange;
+
+            // Helper to check if an edge connects to the highlighted node
+            function isHighlightedEdge(d) {
+                const sourceId = typeof d.source === 'object' ? d.source.id : d.source;
+                const targetId = typeof d.target === 'object' ? d.target.id : d.target;
+                return sourceId === highlightNodeId || targetId === highlightNodeId;
+            }
+
+            // Update all edge colors based on the highlighted node
+            graphSvg.selectAll('.graph-link')
+                .attr('stroke', function(d) {
+                    const normalizedWeight = (d.weight - minWeight) / weightRange;
+
+                    if (isHighlightedEdge(d)) {
+                        // Edges to highlighted node: bright cyan/teal gradient based on weight
+                        const r = Math.round(0 + normalizedWeight * 50);
+                        const g = Math.round(180 + normalizedWeight * 75);
+                        const b = Math.round(200 + normalizedWeight * 55);
+                        return `rgb(${r}, ${g}, ${b})`;
+                    } else {
+                        // Other edges: muted blue/gray
+                        const r = Math.round(60 + normalizedWeight * 20);
+                        const g = Math.round(70 + normalizedWeight * 40);
+                        const b = Math.round(100 + normalizedWeight * 50);
+                        return `rgb(${r}, ${g}, ${b})`;
+                    }
+                })
+                .attr('stroke-width', function(d) {
+                    const normalizedWeight = (d.weight - minWeight) / weightRange;
+
+                    if (isHighlightedEdge(d)) {
+                        // Highlighted edges: thicker (1 to 10px)
+                        return 1 + normalizedWeight * 9;
+                    } else {
+                        // Other edges: thinner (0.5 to 4px)
+                        return 0.5 + normalizedWeight * 3.5;
+                    }
+                })
+                .attr('stroke-opacity', function(d) {
+                    const normalizedWeight = (d.weight - minWeight) / weightRange;
+
+                    if (isHighlightedEdge(d)) {
+                        // Highlighted edges: very visible (0.6 to 0.95)
+                        return 0.6 + normalizedWeight * 0.35;
+                    } else {
+                        // Other edges: clearly visible (0.35 to 0.7)
+                        return 0.35 + normalizedWeight * 0.35;
+                    }
+                })
+                .classed('first-degree', function(d) {
+                    return isHighlightedEdge(d);
+                });
         }
 
         /**
