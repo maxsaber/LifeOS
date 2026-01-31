@@ -2009,6 +2009,62 @@
             color: var(--text-primary);
         }
 
+        .graph-layout-tuning {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            margin-left: 1rem;
+        }
+
+        .tuning-toggle {
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+        }
+
+        .tuning-toggle:hover {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+        }
+
+        .tuning-sliders {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            padding: 0.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+        }
+
+        .tuning-slider {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
+        .tuning-slider label {
+            min-width: 70px;
+        }
+
+        .tuning-slider input[type="range"] {
+            width: 80px;
+            cursor: pointer;
+            accent-color: var(--people);
+        }
+
+        .tuning-slider span {
+            min-width: 35px;
+            color: var(--text-primary);
+            font-size: 0.65rem;
+        }
+
         .graph-degree-toggle {
             display: flex;
             align-items: center;
@@ -4041,9 +4097,14 @@
                                 Show Labels
                             </label>
                             <div class="graph-slider-container">
-                                <label for="edgeStrengthSlider">Edge Weight:</label>
+                                <label for="edgeStrengthSlider">1st° Weight:</label>
                                 <input type="range" id="edgeStrengthSlider" min="0" max="100" value="50" oninput="updateEdgeVisibility(this.value)">
                                 <span id="edgeStrengthValue">50%</span>
+                            </div>
+                            <div class="graph-slider-container" id="secondDegreeSliderContainer" style="display:none">
+                                <label for="secondDegreeSlider">2nd° Weight:</label>
+                                <input type="range" id="secondDegreeSlider" min="0" max="100" value="30" oninput="updateSecondDegreeWeight(this.value)">
+                                <span id="secondDegreeValue">30%</span>
                             </div>
                             <div class="graph-degree-toggle">
                                 <label>Show:</label>
@@ -4088,6 +4149,31 @@
                                             <input type="checkbox" value="linkedin" checked onchange="updateSourceFilter()">
                                             <span class="source-icon">🔗</span> LinkedIn
                                         </label>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="graph-layout-tuning">
+                                <button class="tuning-toggle" onclick="toggleLayoutTuning()">⚙ Layout</button>
+                                <div class="tuning-sliders" id="tuningSliders" style="display:none">
+                                    <div class="tuning-slider">
+                                        <label>Center repel:</label>
+                                        <input type="range" id="centerRepelSlider" min="500" max="6000" value="1000" oninput="updateLayoutTuning()">
+                                        <span id="centerRepelValue">1000</span>
+                                    </div>
+                                    <div class="tuning-slider">
+                                        <label>1st° repel:</label>
+                                        <input type="range" id="firstRepelSlider" min="250" max="3000" value="1300" oninput="updateLayoutTuning()">
+                                        <span id="firstRepelValue">1300</span>
+                                    </div>
+                                    <div class="tuning-slider">
+                                        <label>2nd° repel:</label>
+                                        <input type="range" id="secondRepelSlider" min="100" max="1500" value="900" oninput="updateLayoutTuning()">
+                                        <span id="secondRepelValue">900</span>
+                                    </div>
+                                    <div class="tuning-slider">
+                                        <label>Range:</label>
+                                        <input type="range" id="repelRangeSlider" min="400" max="2500" value="900" oninput="updateLayoutTuning()">
+                                        <span id="repelRangeValue">900</span>
                                     </div>
                                 </div>
                             </div>
@@ -4966,6 +5052,8 @@
             if (newNameInput) {
                 newNameInput.addEventListener('input', updateSplitButton);
             }
+            // Initialize layout tuning sliders from localStorage
+            initLayoutTuningSliders();
         });
 
         // ===============================
@@ -7622,24 +7710,50 @@
             function updateLabelsForZoom(scale) {
                 currentZoomScale = scale;
 
+                // Compensation factor: larger when zoomed out, smaller when zoomed in
+                // At scale 0.2, factor ~2.0; at scale 1.0, factor ~1.0; at scale 2.0, factor ~0.8
+                const zoomCompensation = Math.min(2.5, Math.max(0.7, 1 / Math.pow(scale, 0.5)));
+
+                // Update node circle sizes to compensate for zoom
+                g.selectAll('.graph-node circle')
+                    .attr('r', d => getNodeRadius(d) * zoomCompensation);
+
+                // Update label positions to match new node sizes
+                g.selectAll('.graph-node text')
+                    .attr('dy', d => (getNodeRadius(d) * zoomCompensation) + 12);
+
+                // Update hide button positions and sizes
+                g.selectAll('.node-hide-btn')
+                    .attr('transform', d => {
+                        const r = getNodeRadius(d) * zoomCompensation;
+                        return `translate(${r * 0.7}, ${-r * 0.7})`;
+                    })
+                    .each(function() {
+                        const btn = d3.select(this);
+                        const btnRadius = 8 * zoomCompensation;
+                        btn.select('circle')
+                            .attr('r', btnRadius);
+                        btn.select('text')
+                            .attr('font-size', (12 * zoomCompensation) + 'px')
+                            .attr('dy', '0.3em');  // Keep text vertically centered
+                    });
+
                 // Update label visibility and font size
                 if (showLabelsEnabled) {
                     g.selectAll('.graph-node text')
                         .style('display', d => {
                             // Always show center node label
                             if (d.degree === 0) return 'block';
-                            // Show 1st degree at scale >= 0.3 (earlier than before)
+                            // Show 1st degree at scale >= 0.3
                             if (d.degree === 1 && scale >= 0.3) return 'block';
-                            // Show 2nd degree at scale >= 0.7 (earlier than before)
+                            // Show 2nd degree at scale >= 0.7
                             if (d.degree === 2 && scale >= 0.7) return 'block';
                             return 'none';
                         })
                         .style('font-size', d => {
-                            // Scale font size with zoom for readability
+                            // Base font size, scaled to compensate for zoom
                             const baseSize = d.degree === 0 ? 15 : (d.degree === 1 ? 13 : 12);
-                            // Increase font size when zoomed in (1.0 to 1.6x at high zoom)
-                            const scaleFactor = Math.min(1.6, Math.max(1.0, scale * 0.9 + 0.4));
-                            return (baseSize * scaleFactor) + 'px';
+                            return (baseSize * zoomCompensation) + 'px';
                         });
                 }
 
@@ -7720,12 +7834,12 @@
                     }))
                 .force('charge', d3.forceManyBody()
                     .strength(d => {
-                        // Strong repulsion (2x original) to surface clusters
-                        if (d.degree === 0) return -3600 * spreadFactor;  // Center pushes hard
-                        if (d.degree === 1) return -1800 * spreadFactor;  // 1st degree spread
-                        return -900 * spreadFactor;                        // 2nd degree
+                        // Repulsion strength from tuning sliders
+                        if (d.degree === 0) return -layoutTuning.centerRepel * spreadFactor;
+                        if (d.degree === 1) return -layoutTuning.firstRepel * spreadFactor;
+                        return -layoutTuning.secondRepel * spreadFactor;
                     })
-                    .distanceMax(1200 * spreadFactor))  // 1.5x original range
+                    .distanceMax(layoutTuning.range * spreadFactor))
                 .force('center', d3.forceCenter(centerX, centerY).strength(0.02))  // Very weak centering
                 .force('collision', d3.forceCollide()
                     .radius(d => getNodeRadius(d) + 15)  // Just prevent overlap
@@ -7838,6 +7952,8 @@
                     .on('end', dragended))
                 .on('click', (event, d) => {
                     event.stopPropagation();
+                    // Close edge panel if open
+                    closeEdgePanel();
                     // Save current filter values before navigating (except edge strength - recalculated per person)
                     const degreeSelect = document.getElementById('degreeFilter');
                     preservedDegreeFilter = degreeSelect ? degreeSelect.value : 'all';
@@ -7881,7 +7997,7 @@
             // Node labels - add to ALL nodes, visibility controlled by zoom
             node.append('text')
                 .attr('dy', d => getNodeRadius(d) + 12)
-                .text(d => truncateName(d.name, d.degree === 0 ? 20 : 12));
+                .text(d => truncateName(d.name, d.degree === 0 ? 28 : 20));
 
             // Hide button - appears when zoomed in, allows removing node from view
             // Only add to non-center nodes
@@ -8235,17 +8351,20 @@
             try {
                 // Get current filter values
                 const slider = document.getElementById('edgeStrengthSlider');
+                const secondSlider = document.getElementById('secondDegreeSlider');
                 const degreeSelect = document.getElementById('degreeFilter');
                 const thresholdPercent = slider ? parseInt(slider.value) : 15;
+                const secondThresholdPercent = secondSlider ? parseInt(secondSlider.value) : 30;
                 const showOnlyFirstDegree = degreeSelect ? (degreeSelect.value === 'first') : false;
                 const selectedSources = getSelectedSources();
 
-                // Calculate weight threshold from the FULL dataset
+                // Calculate weight thresholds from the FULL dataset
                 const allWeights = graphLinksAll.map(l => l.weight);
                 const maxWeight = Math.max(1, ...allWeights);
                 const minWeight = allWeights.length > 0 ? Math.min(...allWeights) : 0;
                 const weightRange = Math.max(1, maxWeight - minWeight);
                 const threshold = minWeight + (weightRange * (thresholdPercent / 100));
+                const secondThreshold = minWeight + (weightRange * (secondThresholdPercent / 100));
 
                 // Build node lookup by ID from ORIGINAL data
                 const nodeById = {};
@@ -8274,6 +8393,9 @@
                 });
 
                 // Step 2: If showing 2nd degree too, add second-degree nodes connected to visible first-degree
+                // Track which second-degree edges pass the threshold (for filtering later)
+                const visibleSecondDegreeEdges = new Set();
+
                 if (!showOnlyFirstDegree) {
                     // Exclude owner (Nathan) from first-degree set for second-degree calculation
                     // because owner is connected to everyone, which would make all nodes visible
@@ -8292,29 +8414,60 @@
                         const hasSelectedSource = edgeHasSelectedSource(linkData, selectedSources);
                         if (!hasSelectedSource) return;
 
+                        // Second-degree edge must also pass the second-degree weight threshold
+                        if (linkData.weight < secondThreshold) return;
+
                         // If one end is a visible first-degree node (excluding owner) and other is second-degree, add it
                         if (firstDegreeIds.has(sourceId) && targetNode && targetNode.degree === 2) {
                             visibleNodeIds.add(targetId);
+                            visibleSecondDegreeEdges.add(`${sourceId}|${targetId}`);
                         }
                         if (firstDegreeIds.has(targetId) && sourceNode && sourceNode.degree === 2) {
                             visibleNodeIds.add(sourceId);
+                            visibleSecondDegreeEdges.add(`${sourceId}|${targetId}`);
                         }
                     });
                 }
 
-                // Step 3: Create filtered node and link arrays (excluding manually hidden nodes)
-                const filteredNodes = graphNodesAll
-                    .filter(n => visibleNodeIds.has(n.id) && !hiddenNodeIds.has(n.id))
-                    .map(n => ({...n, x: undefined, y: undefined, fx: undefined, fy: undefined})); // Reset positions
-
+                // Step 3: Create filtered link array with appropriate thresholds
                 const filteredLinks = graphLinksAll.filter(l => {
                     const sourceId = l.source;
                     const targetId = l.target;
                     const bothVisible = visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId);
                     const neitherHidden = !hiddenNodeIds.has(sourceId) && !hiddenNodeIds.has(targetId);
                     const hasSelectedSource = edgeHasSelectedSource(l, selectedSources);
-                    return bothVisible && neitherHidden && hasSelectedSource;
+
+                    if (!bothVisible || !neitherHidden || !hasSelectedSource) return false;
+
+                    // Check if this is a first-degree edge (connects to center)
+                    const isFirstDegree = sourceId === graphCenterId || targetId === graphCenterId;
+
+                    if (isFirstDegree) {
+                        // First-degree edges use first threshold
+                        return l.weight >= threshold;
+                    } else {
+                        // Second-degree edges use second threshold
+                        return l.weight >= secondThreshold;
+                    }
                 }).map(l => ({...l})); // Clone to avoid mutating original
+
+                // Step 4: Remove second-degree nodes that have no visible edges after filtering
+                const nodesWithEdges = new Set();
+                nodesWithEdges.add(graphCenterId); // Center always visible
+                filteredLinks.forEach(l => {
+                    nodesWithEdges.add(l.source);
+                    nodesWithEdges.add(l.target);
+                });
+
+                const filteredNodes = graphNodesAll
+                    .filter(n => {
+                        if (!visibleNodeIds.has(n.id) || hiddenNodeIds.has(n.id)) return false;
+                        // First-degree nodes stay even without edges (connected to center)
+                        if (n.degree <= 1) return true;
+                        // Second-degree nodes need at least one visible edge
+                        return nodesWithEdges.has(n.id);
+                    })
+                    .map(n => ({...n, x: undefined, y: undefined, fx: undefined, fy: undefined})); // Reset positions
 
                 // Store filtered data as current view
                 graphNodes = filteredNodes;
@@ -8362,7 +8515,93 @@
 
         // Update degree filter - wrapper that calls unified filter
         function updateDegreeFilter(value) {
+            // Show/hide second degree slider based on selection
+            const secondSlider = document.getElementById('secondDegreeSliderContainer');
+            if (secondSlider) {
+                secondSlider.style.display = (value === 'all') ? 'flex' : 'none';
+            }
+
             // Debounce to avoid rapid rebuilds
+            if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
+            filterDebounceTimer = setTimeout(() => {
+                applyGraphFilters();
+            }, 300);
+        }
+
+        // Update second degree weight filter
+        function updateSecondDegreeWeight(value) {
+            document.getElementById('secondDegreeValue').textContent = value + '%';
+            // Debounce filter application
+            if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
+            filterDebounceTimer = setTimeout(() => {
+                applyGraphFilters();
+            }, 500);
+        }
+
+        // Toggle layout tuning panel
+        function toggleLayoutTuning() {
+            const sliders = document.getElementById('tuningSliders');
+            sliders.style.display = sliders.style.display === 'none' ? 'flex' : 'none';
+        }
+
+        // Layout tuning values - load from localStorage or use defaults
+        let layoutTuning = (() => {
+            const saved = localStorage.getItem('graphLayoutTuning');
+            if (saved) {
+                try {
+                    return JSON.parse(saved);
+                } catch (e) {}
+            }
+            return {
+                centerRepel: 1000,
+                firstRepel: 1300,
+                secondRepel: 900,
+                range: 900
+            };
+        })();
+
+        // Initialize layout tuning sliders from saved values
+        function initLayoutTuningSliders() {
+            const centerSlider = document.getElementById('centerRepelSlider');
+            const firstSlider = document.getElementById('firstRepelSlider');
+            const secondSlider = document.getElementById('secondRepelSlider');
+            const rangeSlider = document.getElementById('repelRangeSlider');
+
+            if (centerSlider) {
+                centerSlider.value = layoutTuning.centerRepel;
+                document.getElementById('centerRepelValue').textContent = layoutTuning.centerRepel;
+            }
+            if (firstSlider) {
+                firstSlider.value = layoutTuning.firstRepel;
+                document.getElementById('firstRepelValue').textContent = layoutTuning.firstRepel;
+            }
+            if (secondSlider) {
+                secondSlider.value = layoutTuning.secondRepel;
+                document.getElementById('secondRepelValue').textContent = layoutTuning.secondRepel;
+            }
+            if (rangeSlider) {
+                rangeSlider.value = layoutTuning.range;
+                document.getElementById('repelRangeValue').textContent = layoutTuning.range;
+            }
+        }
+
+        // Update layout tuning from sliders
+        function updateLayoutTuning() {
+            layoutTuning.centerRepel = parseInt(document.getElementById('centerRepelSlider').value);
+            layoutTuning.firstRepel = parseInt(document.getElementById('firstRepelSlider').value);
+            layoutTuning.secondRepel = parseInt(document.getElementById('secondRepelSlider').value);
+            layoutTuning.range = parseInt(document.getElementById('repelRangeSlider').value);
+
+            // Update displayed values
+            document.getElementById('centerRepelValue').textContent = layoutTuning.centerRepel;
+            document.getElementById('firstRepelValue').textContent = layoutTuning.firstRepel;
+            document.getElementById('secondRepelValue').textContent = layoutTuning.secondRepel;
+            document.getElementById('repelRangeValue').textContent = layoutTuning.range;
+
+            // Save to localStorage
+            localStorage.setItem('graphLayoutTuning', JSON.stringify(layoutTuning));
+
+            // Rebuild graph with new layout parameters
             if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
             filterDebounceTimer = setTimeout(() => {
                 applyGraphFilters();
