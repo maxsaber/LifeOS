@@ -1969,12 +1969,60 @@
         /* Graph visualization */
         .graph-controls {
             display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding: 0.75rem;
+            flex-direction: column;
+            gap: 0;
+            padding: 0;
             background: var(--bg-secondary);
             border-radius: 8px;
             margin-bottom: 1rem;
+            overflow: visible;
+        }
+
+        .graph-controls-primary {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem;
+            flex-wrap: nowrap;
+        }
+
+        .graph-controls-expansion {
+            display: none;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-tertiary);
+            border-top: 1px solid var(--border);
+            flex-wrap: wrap;
+        }
+
+        .graph-controls-expansion.visible {
+            display: flex;
+        }
+
+        .graph-expand-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            margin-left: auto;
+        }
+
+        .graph-expand-btn:hover {
+            color: var(--text-primary);
+        }
+
+        .graph-expand-btn .expand-arrow {
+            transition: transform 0.2s;
+        }
+
+        .graph-expand-btn.expanded .expand-arrow {
+            transform: rotate(180deg);
         }
 
         .graph-btn {
@@ -1990,19 +2038,6 @@
 
         .graph-btn:hover {
             background: var(--people);
-        }
-
-        .graph-toggle {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.875rem;
-            color: var(--text-secondary);
-            cursor: pointer;
-        }
-
-        .graph-toggle input {
-            cursor: pointer;
         }
 
         .graph-slider-container {
@@ -2026,10 +2061,11 @@
         }
 
         .graph-layout-tuning {
+            position: relative;
             display: flex;
             align-items: flex-start;
             gap: 0.5rem;
-            margin-left: 1rem;
+            margin-left: auto;
         }
 
         .tuning-toggle {
@@ -2048,13 +2084,23 @@
         }
 
         .tuning-sliders {
-            display: flex;
+            display: none;
+            position: absolute;
+            top: 100%;
+            right: 0;
             flex-direction: column;
             gap: 0.35rem;
             padding: 0.5rem;
             background: var(--bg-tertiary);
             border: 1px solid var(--border-color);
             border-radius: 4px;
+            margin-top: 0.25rem;
+            z-index: 200;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+
+        .tuning-sliders.visible {
+            display: flex;
         }
 
         .tuning-slider {
@@ -2180,6 +2226,28 @@
 
         .source-icon {
             font-size: 0.9rem;
+        }
+
+        .category-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .graph-category-filter,
+        .graph-dunbar-filter {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .category-filter-dropdown,
+        .dunbar-filter-dropdown {
+            position: relative;
         }
 
         .edge-panel-section-title {
@@ -4206,89 +4274,160 @@
 
                     <div id="tabGraph" class="tab-content" style="display:none">
                         <div class="graph-controls">
-                            <button class="graph-btn" onclick="resetGraphZoom()">Reset Zoom</button>
-                            <label class="graph-toggle">
-                                <input type="checkbox" id="showLabels" checked onchange="toggleGraphLabels()">
-                                Show Labels
-                            </label>
-                            <div class="graph-slider-container">
-                                <label for="edgeStrengthSlider">1st° Weight:</label>
-                                <input type="range" id="edgeStrengthSlider" min="0" max="100" value="50" oninput="updateEdgeVisibility(this.value)">
-                                <span id="edgeStrengthValue">50%</span>
+                            <!-- Primary row: always visible -->
+                            <div class="graph-controls-primary">
+                                <button class="graph-btn" onclick="resetGraphZoom()">Reset Zoom</button>
+                                <div class="graph-slider-container">
+                                    <label for="edgeStrengthSlider">1st° Weight:</label>
+                                    <input type="range" id="edgeStrengthSlider" min="0" max="100" value="50" oninput="updateEdgeVisibility(this.value)">
+                                    <span id="edgeStrengthValue">50%</span>
+                                </div>
+                                <div class="graph-slider-container" id="secondDegreeSliderContainer" style="display:none">
+                                    <label for="secondDegreeSlider">2nd° Weight:</label>
+                                    <input type="range" id="secondDegreeSlider" min="0" max="100" value="30" oninput="updateSecondDegreeWeight(this.value)">
+                                    <span id="secondDegreeValue">30%</span>
+                                </div>
+                                <div class="graph-degree-toggle">
+                                    <label>Show:</label>
+                                    <select id="degreeFilter" onchange="updateDegreeFilter(this.value)">
+                                        <option value="all">1st & 2nd Degree</option>
+                                        <option value="first" selected>1st Degree Only</option>
+                                    </select>
+                                </div>
+                                <button class="graph-expand-btn" onclick="toggleGraphFiltersExpansion(event)">
+                                    More <span class="expand-arrow">▼</span>
+                                </button>
                             </div>
-                            <div class="graph-slider-container" id="secondDegreeSliderContainer" style="display:none">
-                                <label for="secondDegreeSlider">2nd° Weight:</label>
-                                <input type="range" id="secondDegreeSlider" min="0" max="100" value="30" oninput="updateSecondDegreeWeight(this.value)">
-                                <span id="secondDegreeValue">30%</span>
-                            </div>
-                            <div class="graph-degree-toggle">
-                                <label>Show:</label>
-                                <select id="degreeFilter" onchange="updateDegreeFilter(this.value)">
-                                    <option value="all">1st & 2nd Degree</option>
-                                    <option value="first" selected>1st Degree Only</option>
-                                </select>
-                            </div>
-                            <div class="graph-source-filter">
-                                <label>Sources:</label>
-                                <div class="source-filter-dropdown" id="sourceFilterDropdown">
-                                    <button class="source-filter-btn" onclick="toggleSourceFilter()">
-                                        <span id="sourceFilterLabel">All Sources</span>
-                                        <span class="dropdown-arrow">▼</span>
-                                    </button>
-                                    <div class="source-filter-options" id="sourceFilterOptions">
-                                        <label class="source-option">
-                                            <input type="checkbox" value="calendar" checked onchange="updateSourceFilter()">
-                                            <span class="source-icon">📅</span> Calendar
-                                        </label>
-                                        <label class="source-option">
-                                            <input type="checkbox" value="email" checked onchange="updateSourceFilter()">
-                                            <span class="source-icon">📧</span> Email
-                                        </label>
-                                        <label class="source-option">
-                                            <input type="checkbox" value="imessage" checked onchange="updateSourceFilter()">
-                                            <span class="source-icon">💬</span> iMessage
-                                        </label>
-                                        <label class="source-option">
-                                            <input type="checkbox" value="whatsapp" checked onchange="updateSourceFilter()">
-                                            <span class="source-icon">📱</span> WhatsApp
-                                        </label>
-                                        <label class="source-option">
-                                            <input type="checkbox" value="slack" checked onchange="updateSourceFilter()">
-                                            <span class="source-icon">💼</span> Slack
-                                        </label>
-                                        <label class="source-option">
-                                            <input type="checkbox" value="phone" checked onchange="updateSourceFilter()">
-                                            <span class="source-icon">📞</span> Phone
-                                        </label>
-                                        <label class="source-option">
-                                            <input type="checkbox" value="linkedin" checked onchange="updateSourceFilter()">
-                                            <span class="source-icon">🔗</span> LinkedIn
-                                        </label>
+                            <!-- Expansion row: hidden by default -->
+                            <div class="graph-controls-expansion" id="graphControlsExpansion">
+                                <div class="graph-source-filter">
+                                    <label>Sources:</label>
+                                    <div class="source-filter-dropdown" id="sourceFilterDropdown">
+                                        <button class="source-filter-btn" onclick="toggleSourceFilter()">
+                                            <span id="sourceFilterLabel">All Sources</span>
+                                            <span class="dropdown-arrow">▼</span>
+                                        </button>
+                                        <div class="source-filter-options" id="sourceFilterOptions">
+                                            <label class="source-option">
+                                                <input type="checkbox" value="calendar" checked onchange="updateSourceFilter()">
+                                                <span class="source-icon">📅</span> Calendar
+                                            </label>
+                                            <label class="source-option">
+                                                <input type="checkbox" value="email" checked onchange="updateSourceFilter()">
+                                                <span class="source-icon">📧</span> Email
+                                            </label>
+                                            <label class="source-option">
+                                                <input type="checkbox" value="imessage" checked onchange="updateSourceFilter()">
+                                                <span class="source-icon">💬</span> iMessage
+                                            </label>
+                                            <label class="source-option">
+                                                <input type="checkbox" value="whatsapp" checked onchange="updateSourceFilter()">
+                                                <span class="source-icon">📱</span> WhatsApp
+                                            </label>
+                                            <label class="source-option">
+                                                <input type="checkbox" value="slack" checked onchange="updateSourceFilter()">
+                                                <span class="source-icon">💼</span> Slack
+                                            </label>
+                                            <label class="source-option">
+                                                <input type="checkbox" value="phone" checked onchange="updateSourceFilter()">
+                                                <span class="source-icon">📞</span> Phone
+                                            </label>
+                                            <label class="source-option">
+                                                <input type="checkbox" value="linkedin" checked onchange="updateSourceFilter()">
+                                                <span class="source-icon">🔗</span> LinkedIn
+                                            </label>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            <div class="graph-layout-tuning">
-                                <button class="tuning-toggle" onclick="toggleLayoutTuning()">⚙ Layout</button>
-                                <div class="tuning-sliders" id="tuningSliders" style="display:none">
-                                    <div class="tuning-slider">
-                                        <label>Center repel:</label>
-                                        <input type="range" id="centerRepelSlider" min="500" max="6000" value="1000" oninput="updateLayoutTuning()">
-                                        <span id="centerRepelValue">1000</span>
+                                <div class="graph-category-filter">
+                                    <label>Category:</label>
+                                    <div class="category-filter-dropdown" id="categoryFilterDropdown">
+                                        <button class="source-filter-btn" onclick="toggleCategoryFilter()">
+                                            <span id="categoryFilterLabel">All</span>
+                                            <span class="dropdown-arrow">▼</span>
+                                        </button>
+                                        <div class="source-filter-options" id="categoryFilterOptions">
+                                            <label class="source-option">
+                                                <input type="checkbox" value="self" checked onchange="updateCategoryFilter()">
+                                                <span class="category-dot" style="background: #ffffff; border: 1px solid #666;"></span> Me
+                                            </label>
+                                            <label class="source-option">
+                                                <input type="checkbox" value="family" checked onchange="updateCategoryFilter()">
+                                                <span class="category-dot" style="background: #daa520;"></span> Family
+                                            </label>
+                                            <label class="source-option">
+                                                <input type="checkbox" value="work" checked onchange="updateCategoryFilter()">
+                                                <span class="category-dot" style="background: #4f46e5;"></span> Work
+                                            </label>
+                                            <label class="source-option">
+                                                <input type="checkbox" value="personal" checked onchange="updateCategoryFilter()">
+                                                <span class="category-dot" style="background: #00bcd4;"></span> Personal
+                                            </label>
+                                        </div>
                                     </div>
-                                    <div class="tuning-slider">
-                                        <label>1st° repel:</label>
-                                        <input type="range" id="firstRepelSlider" min="250" max="3000" value="1300" oninput="updateLayoutTuning()">
-                                        <span id="firstRepelValue">1300</span>
+                                </div>
+                                <div class="graph-dunbar-filter">
+                                    <label>Dunbar:</label>
+                                    <div class="dunbar-filter-dropdown" id="dunbarFilterDropdown">
+                                        <button class="source-filter-btn" onclick="toggleDunbarFilter()">
+                                            <span id="dunbarFilterLabel">All</span>
+                                            <span class="dropdown-arrow">▼</span>
+                                        </button>
+                                        <div class="source-filter-options" id="dunbarFilterOptions">
+                                            <label class="source-option">
+                                                <input type="checkbox" value="0" checked onchange="updateDunbarFilter()">
+                                                <span class="category-dot" style="background: #e94560;"></span> 0: Intimate
+                                            </label>
+                                            <label class="source-option">
+                                                <input type="checkbox" value="1" checked onchange="updateDunbarFilter()">
+                                                <span class="category-dot" style="background: #ff6b6b;"></span> 1: Close
+                                            </label>
+                                            <label class="source-option">
+                                                <input type="checkbox" value="2" checked onchange="updateDunbarFilter()">
+                                                <span class="category-dot" style="background: #ffa502;"></span> 2: Good Friends
+                                            </label>
+                                            <label class="source-option">
+                                                <input type="checkbox" value="3" checked onchange="updateDunbarFilter()">
+                                                <span class="category-dot" style="background: #2ed573;"></span> 3: Friends
+                                            </label>
+                                            <label class="source-option">
+                                                <input type="checkbox" value="4" checked onchange="updateDunbarFilter()">
+                                                <span class="category-dot" style="background: #1e90ff;"></span> 4: Acquaintances
+                                            </label>
+                                            <label class="source-option">
+                                                <input type="checkbox" value="5" checked onchange="updateDunbarFilter()">
+                                                <span class="category-dot" style="background: #5352ed;"></span> 5: Known
+                                            </label>
+                                            <label class="source-option">
+                                                <input type="checkbox" value="6+" checked onchange="updateDunbarFilter()">
+                                                <span class="category-dot" style="background: #747d8c;"></span> 6+: Familiar/Contacts
+                                            </label>
+                                        </div>
                                     </div>
-                                    <div class="tuning-slider">
-                                        <label>2nd° repel:</label>
-                                        <input type="range" id="secondRepelSlider" min="100" max="1500" value="900" oninput="updateLayoutTuning()">
-                                        <span id="secondRepelValue">900</span>
-                                    </div>
-                                    <div class="tuning-slider">
-                                        <label>Range:</label>
-                                        <input type="range" id="repelRangeSlider" min="400" max="2500" value="900" oninput="updateLayoutTuning()">
-                                        <span id="repelRangeValue">900</span>
+                                </div>
+                                <div class="graph-layout-tuning">
+                                    <button class="tuning-toggle" onclick="toggleLayoutTuning()">⚙ Layout</button>
+                                    <div class="tuning-sliders" id="tuningSliders">
+                                        <div class="tuning-slider">
+                                            <label>Center repel:</label>
+                                            <input type="range" id="centerRepelSlider" min="500" max="6000" value="1000" oninput="updateLayoutTuning()">
+                                            <span id="centerRepelValue">1000</span>
+                                        </div>
+                                        <div class="tuning-slider">
+                                            <label>1st° repel:</label>
+                                            <input type="range" id="firstRepelSlider" min="250" max="3000" value="1300" oninput="updateLayoutTuning()">
+                                            <span id="firstRepelValue">1300</span>
+                                        </div>
+                                        <div class="tuning-slider">
+                                            <label>2nd° repel:</label>
+                                            <input type="range" id="secondRepelSlider" min="100" max="1500" value="900" oninput="updateLayoutTuning()">
+                                            <span id="secondRepelValue">900</span>
+                                        </div>
+                                        <div class="tuning-slider">
+                                            <label>Range:</label>
+                                            <input type="range" id="repelRangeSlider" min="400" max="2500" value="900" oninput="updateLayoutTuning()">
+                                            <span id="repelRangeValue">900</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -7733,7 +7872,6 @@
         let graphNodesAll = null;     // Stores ORIGINAL unfiltered node data
         let graphLinksAll = null;     // Stores ORIGINAL unfiltered link data
         let graphContainer = null;    // Stores container element for rebuilding
-        let showLabelsEnabled = true;
         let currentZoomScale = 1;
         let isRenderingGraph = false; // Guard against infinite render loops
         let filterDebounceTimer = null; // Debounce timer for filter changes
@@ -7824,6 +7962,124 @@
                 cb.checked = sources.includes(cb.value);
             });
             updateSourceFilter();
+        }
+
+        // Graph filter bar expansion toggle
+        function toggleGraphFiltersExpansion(event) {
+            if (event) event.stopPropagation();
+            const expansion = document.getElementById('graphControlsExpansion');
+            const btn = document.querySelector('.graph-expand-btn');
+            if (expansion) {
+                expansion.classList.toggle('visible');
+            }
+            if (btn) {
+                btn.classList.toggle('expanded');
+            }
+        }
+
+        // Category filter functions
+        function toggleCategoryFilter() {
+            const options = document.getElementById('categoryFilterOptions');
+            options.classList.toggle('visible');
+
+            if (options.classList.contains('visible')) {
+                setTimeout(() => {
+                    document.addEventListener('click', closeCategoryFilterOnOutsideClick);
+                }, 0);
+            }
+        }
+
+        function closeCategoryFilterOnOutsideClick(e) {
+            const dropdown = document.getElementById('categoryFilterDropdown');
+            if (dropdown && !dropdown.contains(e.target)) {
+                document.getElementById('categoryFilterOptions').classList.remove('visible');
+                document.removeEventListener('click', closeCategoryFilterOnOutsideClick);
+            }
+        }
+
+        function getSelectedCategories() {
+            const checkboxes = document.querySelectorAll('#categoryFilterOptions input[type="checkbox"]');
+            const selected = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked) selected.push(cb.value);
+            });
+            return selected;
+        }
+
+        function updateCategoryFilter() {
+            const selected = getSelectedCategories();
+            const label = document.getElementById('categoryFilterLabel');
+
+            if (selected.length === 4) {
+                label.textContent = 'All';
+            } else if (selected.length === 0) {
+                label.textContent = 'None';
+            } else {
+                label.textContent = `${selected.length} selected`;
+            }
+
+            // Debounce filter application
+            if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
+            filterDebounceTimer = setTimeout(() => {
+                applyGraphFilters();
+            }, 300);
+        }
+
+        // Dunbar filter functions
+        function toggleDunbarFilter() {
+            const options = document.getElementById('dunbarFilterOptions');
+            options.classList.toggle('visible');
+
+            if (options.classList.contains('visible')) {
+                setTimeout(() => {
+                    document.addEventListener('click', closeDunbarFilterOnOutsideClick);
+                }, 0);
+            }
+        }
+
+        function closeDunbarFilterOnOutsideClick(e) {
+            const dropdown = document.getElementById('dunbarFilterDropdown');
+            if (dropdown && !dropdown.contains(e.target)) {
+                document.getElementById('dunbarFilterOptions').classList.remove('visible');
+                document.removeEventListener('click', closeDunbarFilterOnOutsideClick);
+            }
+        }
+
+        function getSelectedDunbarCircles() {
+            const checkboxes = document.querySelectorAll('#dunbarFilterOptions input[type="checkbox"]');
+            const selected = [];
+            checkboxes.forEach(cb => {
+                if (cb.checked) {
+                    if (cb.value === '6+') {
+                        // "6+" includes both circle 6 and 7
+                        selected.push(6, 7);
+                    } else {
+                        selected.push(parseInt(cb.value));
+                    }
+                }
+            });
+            return selected;
+        }
+
+        function updateDunbarFilter() {
+            const checkboxes = document.querySelectorAll('#dunbarFilterOptions input[type="checkbox"]');
+            const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+            const label = document.getElementById('dunbarFilterLabel');
+
+            // 7 checkboxes total (0-5 plus "6+")
+            if (checkedCount === 7) {
+                label.textContent = 'All';
+            } else if (checkedCount === 0) {
+                label.textContent = 'None';
+            } else {
+                label.textContent = `${checkedCount} circles`;
+            }
+
+            // Debounce filter application
+            if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
+            filterDebounceTimer = setTimeout(() => {
+                applyGraphFilters();
+            }, 300);
         }
 
         // Calculate filtered edge weight based on selected sources
@@ -8072,6 +8328,13 @@
 
             graphSvg = svg;
 
+            // Close panels when clicking on empty space in the graph
+            // (clicks on nodes/edges call stopPropagation, so they won't trigger this)
+            svg.on('click', () => {
+                closeEdgePanel();
+                closeNodePanel();
+            });
+
             // Create group for zoomable content
             const g = svg.append('g');
 
@@ -8121,23 +8384,21 @@
                     });
 
                 // Update label visibility and font size
-                if (showLabelsEnabled) {
-                    g.selectAll('.graph-node text')
-                        .style('display', d => {
-                            // Always show center node label
-                            if (d.degree === 0) return 'block';
-                            // Show 1st degree at scale >= 0.3
-                            if (d.degree === 1 && scale >= 0.3) return 'block';
-                            // Show 2nd degree at scale >= 0.7
-                            if (d.degree === 2 && scale >= 0.7) return 'block';
-                            return 'none';
-                        })
-                        .style('font-size', d => {
-                            // Base font size, scaled to compensate for zoom
-                            const baseSize = d.degree === 0 ? 15 : (d.degree === 1 ? 13 : 12);
-                            return (baseSize * zoomCompensation) + 'px';
-                        });
-                }
+                g.selectAll('.graph-node text')
+                    .style('display', d => {
+                        // Always show center node label
+                        if (d.degree === 0) return 'block';
+                        // Show 1st degree at scale >= 0.3
+                        if (d.degree === 1 && scale >= 0.3) return 'block';
+                        // Show 2nd degree at scale >= 0.7
+                        if (d.degree === 2 && scale >= 0.7) return 'block';
+                        return 'none';
+                    })
+                    .style('font-size', d => {
+                        // Base font size, scaled to compensate for zoom
+                        const baseSize = d.degree === 0 ? 15 : (d.degree === 1 ? 13 : 12);
+                        return (baseSize * zoomCompensation) + 'px';
+                    });
 
                 // Show hide buttons when zoomed in enough (scale >= 1.3)
                 g.selectAll('.node-hide-btn')
@@ -8601,22 +8862,27 @@
             `;
 
             // Build Dunbar circle legend items using colors from dunbarCircleColors
-            const dunbarLabels = ['Intimate', 'Close', 'Good Friends', 'Friends', 'Acquaint.', 'Recognized', 'Known'];
+            // Labels match getDunbarCircleSize() values used throughout the app
+            const dunbarLabels = ['Intimate', 'Close', 'Good Friends', 'Friends', 'Acquaintances', 'Known', 'Familiar/Contacts'];
             const dunbarLegendItems = `
                 <div class="graph-legend-item">
                     <div class="graph-legend-color" style="background: var(--bg-tertiary); border: 4px solid #ef4444; box-shadow: 0 0 6px #ef4444;"></div>
                     <span>Selected</span>
                 </div>
                 <div class="graph-legend-item">
-                    <div class="graph-legend-color" style="background: ${categoryColors.self};"></div>
+                    <div class="graph-legend-color" style="background: ${categoryColors.self}; border: 1px solid #666;"></div>
                     <span>Me</span>
                 </div>
-                ${[0, 1, 2, 3, 4, 5, 6].map(i => `
+                ${[0, 1, 2, 3, 4, 5].map(i => `
                     <div class="graph-legend-item">
                         <div class="graph-legend-color" style="background: ${dunbarCircleColors[i]};"></div>
                         <span>${i}: ${dunbarLabels[i]}</span>
                     </div>
                 `).join('')}
+                <div class="graph-legend-item">
+                    <div class="graph-legend-color" style="background: ${dunbarCircleColors[6]};"></div>
+                    <span>6+: ${dunbarLabels[6]}</span>
+                </div>
             `;
 
             legend.innerHTML = `
@@ -8963,6 +9229,27 @@
         }
 
         /**
+         * Close panels when clicking anywhere outside them.
+         * This handles clicks on the page outside the graph area.
+         */
+        document.addEventListener('click', (event) => {
+            const edgePanel = document.getElementById('edgePanel');
+            const nodePanel = document.getElementById('nodePanel');
+
+            // Check if click is inside either panel
+            const clickedInsideEdgePanel = edgePanel && edgePanel.contains(event.target);
+            const clickedInsideNodePanel = nodePanel && nodePanel.contains(event.target);
+
+            // If click is outside both panels, close them
+            if (!clickedInsideEdgePanel && edgePanel?.classList.contains('visible')) {
+                closeEdgePanel();
+            }
+            if (!clickedInsideNodePanel && nodePanel?.classList.contains('visible')) {
+                closeNodePanel();
+            }
+        });
+
+        /**
          * Navigate to the person shown in the node panel.
          * Called when clicking "Go to Profile" button.
          */
@@ -8992,27 +9279,6 @@
             await switchTab('overview', true); // true = don't update URL again
         }
 
-        // Toggle graph labels
-        function toggleGraphLabels() {
-            showLabelsEnabled = document.getElementById('showLabels').checked;
-            if (graphSvg) {
-                if (!showLabelsEnabled) {
-                    // Hide all labels
-                    graphSvg.selectAll('.graph-node text')
-                        .style('display', 'none');
-                } else {
-                    // Re-apply zoom-based visibility
-                    graphSvg.selectAll('.graph-node text')
-                        .style('display', d => {
-                            if (d.degree === 0) return 'block';
-                            if (d.degree === 1 && currentZoomScale >= 0.5) return 'block';
-                            if (d.degree === 2 && currentZoomScale >= 1.2) return 'block';
-                            return 'none';
-                        });
-                }
-            }
-        }
-
         // Apply filters and REBUILD graph with only visible nodes for compact layouts
         function applyGraphFilters() {
             if (!graphNodesAll || !graphLinksAll || !graphContainer) return;
@@ -9030,6 +9296,8 @@
                 const secondThresholdPercent = secondSlider ? parseInt(secondSlider.value) : 30;
                 const showOnlyFirstDegree = degreeSelect ? (degreeSelect.value === 'first') : false;
                 const selectedSources = getSelectedSources();
+                const selectedCategories = getSelectedCategories();
+                const selectedDunbarCircles = getSelectedDunbarCircles();
 
                 // Calculate weight thresholds from the FULL dataset
                 const allWeights = graphLinksAll.map(l => l.weight);
@@ -9226,6 +9494,24 @@
                 const filteredNodes = graphNodesAll
                     .filter(n => {
                         if (!visibleNodeIds.has(n.id) || hiddenNodeIds.has(n.id)) return false;
+
+                        // Apply category filter (center node always passes)
+                        // Nodes with undefined/unknown category default to 'work' for filtering
+                        if (n.id !== graphCenterId) {
+                            const nodeCategory = n.category || 'work';
+                            if (!selectedCategories.includes(nodeCategory)) {
+                                return false;
+                            }
+                        }
+
+                        // Apply Dunbar circle filter (center node always passes)
+                        if (n.id !== graphCenterId) {
+                            const dunbarCircle = dunbarCircleMap.get(n.id) ?? 7;
+                            if (!selectedDunbarCircles.includes(dunbarCircle)) {
+                                return false;
+                            }
+                        }
+
                         // First-degree nodes stay even without edges (connected to center)
                         if (n.degree <= 1) return true;
                         // Second-degree nodes need at least one visible edge
@@ -9233,9 +9519,16 @@
                     })
                     .map(n => ({...n, x: undefined, y: undefined, fx: undefined, fy: undefined})); // Reset positions
 
+                // Step 5: Filter links to only include edges between remaining nodes
+                // This handles cases where category/Dunbar filters removed nodes
+                const filteredNodeIds = new Set(filteredNodes.map(n => n.id));
+                const finalLinks = filteredLinks.filter(l => {
+                    return filteredNodeIds.has(l.source) && filteredNodeIds.has(l.target);
+                });
+
                 // Store filtered data as current view
                 graphNodes = filteredNodes;
-                graphLinks = filteredLinks;
+                graphLinks = finalLinks;
                 graphWeightRange = { min: minWeight, max: maxWeight, range: weightRange };
 
                 // Check if we have anything to show
@@ -9250,7 +9543,7 @@
                 }
 
                 // Rebuild the graph with only filtered data
-                renderGraph(graphContainer, filteredNodes, filteredLinks, graphCenterId);
+                renderGraph(graphContainer, filteredNodes, finalLinks, graphCenterId);
 
                 // Fit zoom to show all first-degree nodes
                 fitToFirstDegreeNodes();
@@ -9305,7 +9598,21 @@
         // Toggle layout tuning panel
         function toggleLayoutTuning() {
             const sliders = document.getElementById('tuningSliders');
-            sliders.style.display = sliders.style.display === 'none' ? 'flex' : 'none';
+            sliders.classList.toggle('visible');
+
+            if (sliders.classList.contains('visible')) {
+                setTimeout(() => {
+                    document.addEventListener('click', closeLayoutTuningOnOutsideClick);
+                }, 0);
+            }
+        }
+
+        function closeLayoutTuningOnOutsideClick(e) {
+            const container = document.querySelector('.graph-layout-tuning');
+            if (container && !container.contains(e.target)) {
+                document.getElementById('tuningSliders').classList.remove('visible');
+                document.removeEventListener('click', closeLayoutTuningOnOutsideClick);
+            }
         }
 
         // Layout tuning values - load from localStorage or use defaults
