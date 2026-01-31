@@ -5018,17 +5018,19 @@
             countEl.textContent = count;
 
             if (count >= 2) {
-                // Multiple people selected - show merge button
+                // Multiple people selected - show both merge and hide buttons
                 toolbar.classList.add('visible');
                 labelEl.textContent = 'people selected';
                 mergeBtn.style.display = '';
-                hideBtn.style.display = 'none';
+                hideBtn.style.display = '';
+                hideBtn.textContent = 'Hide Selected';
             } else if (count === 1) {
-                // Single person selected - show hide button
+                // Single person selected - show hide button only
                 toolbar.classList.add('visible');
                 labelEl.textContent = 'person selected';
                 mergeBtn.style.display = 'none';
                 hideBtn.style.display = '';
+                hideBtn.textContent = 'Hide Person';
             } else {
                 toolbar.classList.remove('visible');
             }
@@ -5041,17 +5043,20 @@
             renderPeopleList();
         }
 
-        // Hide a single person (soft delete)
+        // Hide selected people (soft delete)
         async function hidePerson() {
-            if (selectedForMerge.size !== 1) return;
+            if (selectedForMerge.size === 0) return;
 
-            const personId = [...selectedForMerge][0];
-            const person = people.find(p => p.id === personId);
-            if (!person) return;
+            const selectedIds = [...selectedForMerge];
+            const selectedPeople = selectedIds.map(id => people.find(p => p.id === id)).filter(Boolean);
+            if (selectedPeople.length === 0) return;
 
-            // Confirm with user
+            // Build confirmation message
+            const isSingle = selectedPeople.length === 1;
+            const nameList = selectedPeople.map(p => `• ${p.canonical_name}`).join('\n');
             const confirmed = confirm(
-                `Hide "${person.canonical_name}"?\n\n` +
+                `Hide ${isSingle ? `"${selectedPeople[0].canonical_name}"` : `${selectedPeople.length} people`}?\n\n` +
+                (isSingle ? '' : `${nameList}\n\n`) +
                 `This will:\n` +
                 `• Remove them from the people list\n` +
                 `• Block their email/phone from future syncs\n\n` +
@@ -5061,29 +5066,44 @@
 
             try {
                 const reason = prompt('Reason for hiding (optional):', 'fake marketing persona');
+                let totalEmailsBlocked = 0;
+                let hiddenCount = 0;
 
-                const response = await api(`/people/${personId}/hide`, {
-                    method: 'POST',
-                    body: JSON.stringify({ reason: reason || '' }),
-                });
+                // Hide each person
+                for (const personId of selectedIds) {
+                    try {
+                        const response = await api(`/people/${personId}/hide`, {
+                            method: 'POST',
+                            body: JSON.stringify({ reason: reason || '' }),
+                        });
+                        totalEmailsBlocked += response.emails_blocked || 0;
+                        hiddenCount++;
+
+                        // If this was the selected person, clear it
+                        if (selectedPersonId === personId) {
+                            selectedPersonId = null;
+                        }
+                    } catch (err) {
+                        console.error(`Failed to hide person ${personId}:`, err);
+                    }
+                }
 
                 // Clear selection first
                 clearSelection();
-
-                // If this was the selected person, clear it
-                if (selectedPersonId === personId) {
-                    selectedPersonId = null;
-                }
 
                 // Reload people list and force UI refresh
                 await loadPeople();
                 renderPeopleList();
                 updateMergeToolbar();
 
-                showNotification(`Hidden "${person.canonical_name}" (${response.emails_blocked} emails blocked)`, 'success');
+                if (isSingle) {
+                    showNotification(`Hidden "${selectedPeople[0].canonical_name}" (${totalEmailsBlocked} emails blocked)`, 'success');
+                } else {
+                    showNotification(`Hidden ${hiddenCount} people (${totalEmailsBlocked} emails blocked)`, 'success');
+                }
             } catch (error) {
-                console.error('Failed to hide person:', error);
-                showNotification(`Failed to hide person: ${error.message}`, 'error');
+                console.error('Failed to hide people:', error);
+                showNotification(`Failed to hide people: ${error.message}`, 'error');
             }
         }
 
