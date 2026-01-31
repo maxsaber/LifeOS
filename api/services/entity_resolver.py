@@ -16,6 +16,7 @@ from typing import Optional
 from rapidfuzz import fuzz
 
 from api.services.person_entity import PersonEntity, PersonEntityStore, get_person_entity_store
+from config.nickname_lookup import are_name_variants
 
 # Name prefixes to strip before parsing (case-insensitive)
 NAME_PREFIXES = {'dr', 'dr.', 'mr', 'mr.', 'mrs', 'mrs.', 'ms', 'ms.', 'prof', 'prof.', 'rev', 'rev.'}
@@ -42,6 +43,7 @@ def parse_name(name: str) -> ParsedName:
     Parse a name into structured components.
 
     Strips common prefixes (Dr., Mr., Mrs.) and suffixes (MD, PhD, Jr).
+    Also strips anything after a comma (credentials like ", CLC, CSC" or ", PhD").
     Returns {first, middles[], last} structure.
 
     Examples:
@@ -49,6 +51,7 @@ def parse_name(name: str) -> ParsedName:
         "Dr. Mary Katherine Palmer MD" -> {first="Mary", middles=["Katherine"], last="Palmer"}
         "Taylor" -> {first="Taylor", middles=[], last=None}
         "Anne Taylor Walker" -> {first="Anne", middles=["Taylor"], last="Walker"}
+        "Sarah Long, CLC, CSC" -> {first="Sarah", middles=[], last="Long"}
 
     Args:
         name: Name string to parse
@@ -60,6 +63,11 @@ def parse_name(name: str) -> ParsedName:
         return ParsedName(first="", middles=[], last=None, original=name or "")
 
     original = name
+
+    # First, strip anything after a comma (credentials like ", PhD" or ", CLC, CSC")
+    if ',' in name:
+        name = name.split(',')[0].strip()
+
     parts = name.strip().split()
 
     # Strip prefixes from the beginning
@@ -72,7 +80,7 @@ def parse_name(name: str) -> ParsedName:
 
     if not parts:
         # All parts were prefixes/suffixes, return original as first name
-        return ParsedName(first=name.strip(), middles=[], last=None, original=original)
+        return ParsedName(first=original.strip(), middles=[], last=None, original=original)
 
     if len(parts) == 1:
         return ParsedName(first=parts[0], middles=[], last=None, original=original)
@@ -400,8 +408,11 @@ class EntityResolver:
                 elif len(entity_first_lower) == 1 and query_first_lower.startswith(entity_first_lower):
                     score += 10  # Entity has initial, query has full name
                     first_matched = True
+                elif are_name_variants(query_first_lower, entity_first_lower):
+                    score += 20  # Nickname match (Ben/Benjamin, Mike/Michael)
+                    first_matched = True
                 elif fuzz.ratio(query_first_lower, entity_first_lower) >= 85:
-                    score += 20  # Fuzzy match (nicknames, typos)
+                    score += 20  # Fuzzy match (typos)
                     first_matched = True
 
             # --- First name = middle name cross-matching (15 points max) ---

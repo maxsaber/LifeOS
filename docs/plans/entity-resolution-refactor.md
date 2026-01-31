@@ -76,3 +76,70 @@ For each entity in the store:
 
 - `api/services/entity_resolver.py` - Complete rewrite of `_score_candidates()`
 - `tests/test_entity_resolver.py` - Added 14 new tests for parse_name and structured matching
+
+## Algorithm Improvements
+
+### Comma-Separated Suffix Handling
+Added support for stripping credentials after commas (e.g., "Sarah Long, CLC, CSC" → first="Sarah", last="Long").
+
+## Data Cleanup (Post-Refactor)
+
+After implementing the new algorithm, audited existing data for bad matches caused by the old permissive algorithm.
+
+### LinkedIn Matches Fixed (38 total)
+
+User reviewed all 75 suspicious LinkedIn matches and classified them. Fixed 38 incorrect matches by clearing linkedin_url, company, and position:
+
+**Initial fixes (5):**
+- Taylor Walker (mary-katherine-palmer)
+- Madeline Eden (denismikush)
+- Samuel Miller (amitpatel2008)
+- Sarah Long (val-sanin)
+
+**CSV-based fixes (34):**
+- Emilia Pierce, Santiago Martinez, Brandon Larson, "." entity, Sarah (first-name only)
+- Anne Barkett, T H, Mark Mullen, Eric Larson, Jen Nicole, Ami Patel
+- Matt Wilhelm, David Hudson, M P, Larry Stein, Kate Edwards, Charles Stewart
+- M L, Christina Lah, Jack Wallace, Caitlin Chicu, Gregory Gause, Adam Young
+- Christina Brugger, Cort Mukina, Sheryn Lee, Jennifer, Jewell, Kay Klunder
+- Michael Pak, PFC Rodriguez, Richard, Sean, Bo
+
+**Restored (1):**
+- Tamara Miller (liliomere) - confirmed correct by user
+
+### Vault Matches Fixed
+
+User reviewed 60 ambiguous vault matches (first-name-only entities with shared names).
+
+**Reassignments (422):**
+- Ben → Ben Calvin (45)
+- Malea → Malea Ramia (41)
+- Dan → context-based (Dan Porter if BlueLabs, Dan McSwain if Murm) (34)
+- Kat → Kat Atwater (26)
+- Valerie → Valerie Bradley (22)
+- Sarah → context-based (Sarah Long if ML, Sarah Esty if Personal) (19)
+- Ed → Ed Niles (21)
+- Hayley → Hayley Currier (20)
+- Evan → Evan Burfield (16)
+- Erek → Erek Dyskant (16)
+- Kate → Kate Dahl (BlueLabs only) (14)
+- Harrison → Harrison Kreisberg (14)
+- Isaac → Isaac Flores-Huerta (12)
+- Elly → Elly Teitsworth (12)
+- Joel → Joel Shuman (11)
+- Amir → Amir Stepak (10)
+- Max → context-based (8)
+- And 20+ more simple reassignments
+
+**Deleted (132):**
+Removed incorrectly linked vault interactions where no valid match exists:
+- Rep (16), Speaker 0 (16), Colin (9), Chris (8), Andrew (8), Tait (8)
+- Emily (7), Josh (7), Alex (5), Amanda (5), Tanya (5), Grace (5), Wendy (5)
+- Mark (4), Aaron (4), Matt (4), Scott (4), Jackie (4), Beth (4), Tom (4)
+
+### Scripts Created
+
+- `scripts/fix_taylor_walker.py` - Single fix for Taylor Walker
+- `scripts/fix_linkedin_mismatches.py` - Batch fix for confirmed bad matches
+- `scripts/fix_linkedin_from_csv.py` - CSV-driven LinkedIn cleanup
+- `scripts/fix_vault_matches.py` - CSV-driven vault match corrections

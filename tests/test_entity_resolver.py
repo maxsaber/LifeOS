@@ -469,6 +469,26 @@ class TestParseName:
         assert result.first == ""
         assert result.last is None
 
+    def test_strips_comma_separated_credentials(self):
+        """Test that comma-separated credentials are stripped."""
+        from api.services.entity_resolver import parse_name
+
+        # Simple credentials after comma
+        result = parse_name("Sarah Long, CLC, CSC")
+        assert result.first == "Sarah"
+        assert result.last == "Long"
+        assert result.middles == []
+
+        # PhD after comma
+        result = parse_name("Shengnan Zhao, PhD")
+        assert result.first == "Shengnan"
+        assert result.last == "Zhao"
+
+        # Multiple credentials
+        result = parse_name("Matt Wilhelm, M.P.A.")
+        assert result.first == "Matt"
+        assert result.last == "Wilhelm"
+
 
 class TestStructuredNameMatching:
     """Tests for the new structured name matching in _score_candidates."""
@@ -558,3 +578,31 @@ class TestStructuredNameMatching:
 
         assert result is not None
         assert result.entity.canonical_name == "Ben Calvin"
+
+    def test_nickname_matches_formal_name(self, temp_store):
+        """Test that nicknames match formal names (Ben -> Benjamin)."""
+        entity = PersonEntity(
+            canonical_name="Benjamin Smith",
+            last_seen=datetime.now() - timedelta(days=5),
+        )
+        temp_store.add(entity)
+
+        resolver = EntityResolver(temp_store)
+        result = resolver.resolve_by_name("Ben Smith")
+
+        assert result is not None
+        assert result.entity.canonical_name == "Benjamin Smith"
+
+    def test_formal_name_matches_nickname(self, temp_store):
+        """Test that formal names match nicknames (Michael -> Mike)."""
+        entity = PersonEntity(
+            canonical_name="Mike Johnson",
+            last_seen=datetime.now() - timedelta(days=5),
+        )
+        temp_store.add(entity)
+
+        resolver = EntityResolver(temp_store)
+        result = resolver.resolve_by_name("Michael Johnson")
+
+        assert result is not None
+        assert result.entity.canonical_name == "Mike Johnson"
