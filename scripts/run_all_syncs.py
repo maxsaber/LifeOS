@@ -185,8 +185,8 @@ SYNC_ORDER = [
 # Scripts that can be run directly
 SYNC_SCRIPTS = {
     # Phase 1: Data Collection
-    "gmail": ("scripts/sync_gmail_calendar_interactions.py", ["--execute", "--source", "gmail"]),
-    "calendar": ("scripts/sync_gmail_calendar_interactions.py", ["--execute", "--source", "calendar"]),
+    "gmail": ("scripts/sync_gmail_calendar_interactions.py", ["--execute", "--gmail-only"]),
+    "calendar": ("scripts/sync_gmail_calendar_interactions.py", ["--execute", "--calendar-only"]),
     "linkedin": ("scripts/sync_linkedin.py", ["--execute"]),
     "contacts": ("scripts/sync_contacts_csv.py", ["--execute"]),
     "phone": ("scripts/sync_phone_calls.py", ["--execute"]),
