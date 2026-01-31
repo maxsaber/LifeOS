@@ -80,9 +80,9 @@ All data syncing is consolidated into a single daily sync with proper phase orde
 
                === PHASE 3: Relationship Building ===
                Build relationships using all collected interaction data
+               (Note: person stats are now refreshed inline by each sync script)
 03:09          └─ Relationship discovery (populate edge weights)
-03:10          └─ Person stats (update interaction counts)
-03:11          └─ Strengths (calculate relationship scores)
+03:10          └─ Strengths (calculate relationship scores)
 
                === PHASE 4: Vector Store Indexing ===
                Index content with fresh people data available
@@ -242,8 +242,8 @@ Phase 1 - Data Collection (Gmail, Calendar, Contacts, Phone, WhatsApp, iMessage,
 Phase 2 - Entity Processing (Link Slack entities by email)
 Phase 3 - Relationship Building:
   └─ relationship_discovery ← discovers/updates relationships
-  └─ person_stats ← update interaction counts
   └─ strengths ← recalculate relationship strengths
+  (person_stats refreshed inline by each sync script)
 Phase 4 - Vector Store Indexing
 Phase 5 - Content Sync
 ```
@@ -357,7 +357,7 @@ All sync scripts in `scripts/` follow the pattern:
 | Script | Purpose | Data Source |
 |--------|---------|-------------|
 | `sync_relationship_discovery.py` | Discover relationships and populate edge weights | All interactions |
-| `sync_person_stats.py` | Update interaction counts | `data/interactions.db` |
+| `sync_person_stats.py` | Verify/repair interaction counts (not in nightly sync) | `data/interactions.db` |
 | `sync_strengths.py` | Recalculate relationship strengths | `data/crm.db` |
 
 ### Phase 4: Vector Store Indexing
@@ -477,8 +477,8 @@ The unified sync runner (`run_all_syncs.py`) executes in this order:
 
 **Phase 3: Relationship Building**
 11. `relationship_discovery` - Discover relationships, populate edge weights
-12. `person_stats` - Update interaction counts
-13. `strengths` - Recalculate relationship strengths
+12. `strengths` - Recalculate relationship strengths
+(Note: person_stats refreshed inline by each data collection sync)
 
 **Phase 4: Vector Store Indexing**
 14. `vault_reindex` - Reindex vault to ChromaDB + BM25
