@@ -376,25 +376,24 @@ class EntityResolver:
             score = 0.0
             match_type = "structured"
 
-            # --- Last name matching (30 points max) ---
+            # --- Last name matching (50 points max) - most important signal ---
             if query_last_lower and entity_last_lower:
                 if query_last_lower == entity_last_lower:
-                    score += 30  # Exact match
+                    score += 50  # Exact match
                 elif is_last_initial and entity_last_lower.startswith(query_last_lower):
-                    score += 20  # Initial prefix match
+                    score += 35  # Initial prefix match
                 elif fuzz.ratio(query_last_lower, entity_last_lower) >= 85:
-                    score += 25  # Fuzzy match (close enough)
+                    score += 25  # Fuzzy match (typos/variations)
 
-            # --- First name matching (25 points max, + 15 bonus for first-name-only) ---
+            # --- First name matching (25 points max) ---
+            # Note: first-name-only bonus is applied later after checking for ambiguity
             first_matched = False
+            first_name_exact_match = False
             if query_first_lower and entity_first_lower:
                 if query_first_lower == entity_first_lower:
                     score += 25  # Exact match
                     first_matched = True
-                    # Bonus for first-name-only queries that match exactly
-                    # People often refer to close contacts by first name only
-                    if is_first_name_only:
-                        score += 15
+                    first_name_exact_match = True
                 elif is_first_initial and entity_first_lower.startswith(query_first_lower):
                     score += 10  # Initial prefix match
                     first_matched = True
@@ -404,9 +403,6 @@ class EntityResolver:
                 elif fuzz.ratio(query_first_lower, entity_first_lower) >= 85:
                     score += 20  # Fuzzy match (nicknames, typos)
                     first_matched = True
-                    # Smaller bonus for fuzzy first-name-only matches
-                    if is_first_name_only:
-                        score += 10
 
             # --- First name = middle name cross-matching (15 points max) ---
             # Check if query first matches any entity middle
@@ -508,6 +504,11 @@ class EntityResolver:
                     # Both have last names, but no first name match - skip
                     continue
 
+            # For first-name-only queries, require first name to match
+            # (prevents context-only matches like "Sarah" matching "Taylor" via context boost)
+            if is_first_name_only and not first_matched:
+                continue
+
             # Only add candidates with meaningful scores
             # Minimum: at least first OR last name should match (20+ points)
             if score >= 20:
@@ -520,6 +521,70 @@ class EntityResolver:
                         confidence=confidence,
                     )
                 )
+
+        # === FIRST-NAME-ONLY AMBIGUITY CHECK ===
+        # For first-name-only queries, check if there's only one clear match.
+        # We consider:
+        # 1. Only one candidate → unambiguous
+        # 2. Multiple candidates, but only one passes MIN_MATCH_SCORE → unambiguous
+        # 3. Multiple close relationship matches without clear winner → ambiguous
+        # 4. One candidate has significantly higher score → unambiguous
+        if is_first_name_only and candidates:
+            MIN_SCORE = EntityResolutionConfig.MIN_MATCH_SCORE
+
+            # Check how many candidates would pass the minimum threshold
+            passing_candidates = [c for c in candidates if c.score >= MIN_SCORE]
+
+            if len(candidates) == 1:
+                # Only one person with this first name - unambiguous
+                candidates[0].score += 15
+                candidates[0].match_type = "first_name_unique"
+                candidates[0].confidence = min(candidates[0].score / 100.0, 1.0)
+            elif len(passing_candidates) == 1:
+                # Only one candidate passes threshold (e.g., has context boost)
+                passing_candidates[0].score += 10
+                passing_candidates[0].match_type = "first_name_context_clear"
+                passing_candidates[0].confidence = min(passing_candidates[0].score / 100.0, 1.0)
+            elif len(passing_candidates) > 1:
+                # Multiple candidates pass threshold - check for clear winner
+                passing_candidates.sort(key=lambda c: c.score, reverse=True)
+                score_diff = passing_candidates[0].score - passing_candidates[1].score
+
+                if score_diff >= 20:
+                    # Clear winner by score (significant lead)
+                    passing_candidates[0].score += 10
+                    passing_candidates[0].match_type = "first_name_score_dominant"
+                    passing_candidates[0].confidence = min(passing_candidates[0].score / 100.0, 1.0)
+                else:
+                    # Check relationship strength as tiebreaker
+                    CLOSE_THRESHOLD = 30
+                    close_matches = [c for c in passing_candidates
+                                     if c.entity.relationship_strength >= CLOSE_THRESHOLD]
+
+                    if len(close_matches) == 1:
+                        # Only one is "close" - use that one
+                        close_matches[0].score += 15
+                        close_matches[0].match_type = "first_name_close_unique"
+                        close_matches[0].confidence = min(close_matches[0].score / 100.0, 1.0)
+                    elif len(close_matches) > 1:
+                        # Multiple close people - check relationship strength difference
+                        close_matches.sort(key=lambda c: c.entity.relationship_strength, reverse=True)
+                        strength_diff = close_matches[0].entity.relationship_strength - close_matches[1].entity.relationship_strength
+
+                        if strength_diff >= 25:
+                            # One person is clearly closer
+                            close_matches[0].score += 10
+                            close_matches[0].match_type = "first_name_relationship_dominant"
+                            close_matches[0].confidence = min(close_matches[0].score / 100.0, 1.0)
+                        else:
+                            # Truly ambiguous - multiple close people with similar strength
+                            logger.debug(f"First-name-only '{name}' ambiguous: {len(close_matches)} close matches")
+                            return []
+                    else:
+                        # Multiple passing but none close - ambiguous
+                        logger.debug(f"First-name-only '{name}' ambiguous: {len(passing_candidates)} passing, none close")
+                        return []
+            # else: no candidates pass threshold - will naturally return no match
 
         return candidates
 
