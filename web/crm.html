@@ -4975,6 +4975,7 @@
         // Select a person - IMMEDIATELY updates UI, loads data in background
         function selectPerson(personId, stayOnCurrentTab = false, skipUrlUpdate = false) {
             selectedPersonId = personId;
+            hiddenNodeIds.clear(); // Clear hidden nodes when switching people
             renderPeopleList();
 
             // Update URL immediately (unless called from popstate or initial load)
@@ -7325,6 +7326,7 @@
         let currentZoomScale = 1;
         let isRenderingGraph = false; // Guard against infinite render loops
         let filterDebounceTimer = null; // Debounce timer for filter changes
+        let hiddenNodeIds = new Set(); // Nodes hidden via right-click
 
         // Preserved filter state (for node-to-node navigation)
         let preservedEdgeStrength = null;
@@ -7620,19 +7622,30 @@
             function updateLabelsForZoom(scale) {
                 currentZoomScale = scale;
 
-                // Update label visibility
+                // Update label visibility and font size
                 if (showLabelsEnabled) {
                     g.selectAll('.graph-node text')
                         .style('display', d => {
                             // Always show center node label
                             if (d.degree === 0) return 'block';
-                            // Show 1st degree at scale >= 0.5
-                            if (d.degree === 1 && scale >= 0.5) return 'block';
-                            // Show 2nd degree only when zoomed in (scale >= 1.2)
-                            if (d.degree === 2 && scale >= 1.2) return 'block';
+                            // Show 1st degree at scale >= 0.3 (earlier than before)
+                            if (d.degree === 1 && scale >= 0.3) return 'block';
+                            // Show 2nd degree at scale >= 0.7 (earlier than before)
+                            if (d.degree === 2 && scale >= 0.7) return 'block';
                             return 'none';
+                        })
+                        .style('font-size', d => {
+                            // Scale font size with zoom for readability
+                            const baseSize = d.degree === 0 ? 15 : (d.degree === 1 ? 13 : 12);
+                            // Increase font size when zoomed in (1.0 to 1.6x at high zoom)
+                            const scaleFactor = Math.min(1.6, Math.max(1.0, scale * 0.9 + 0.4));
+                            return (baseSize * scaleFactor) + 'px';
                         });
                 }
+
+                // Show hide buttons when zoomed in enough (scale >= 1.3)
+                g.selectAll('.node-hide-btn')
+                    .style('display', scale >= 1.3 ? 'block' : 'none');
             }
 
             // Create zoom behavior with label visibility updates
@@ -7678,35 +7691,48 @@
             graphNodes = nodes;
             graphCenterId = centerId;
 
+            // Build adjacency set for cluster-aware repulsion
+            const adjacencySet = new Set();
+            links.forEach(l => {
+                const sid = typeof l.source === 'object' ? l.source.id : l.source;
+                const tid = typeof l.target === 'object' ? l.target.id : l.target;
+                adjacencySet.add(`${sid}|${tid}`);
+                adjacencySet.add(`${tid}|${sid}`);
+            });
+
             graphSimulation = d3.forceSimulation(nodes)
                 .force('link', d3.forceLink(links)
                     .id(d => d.id)
                     .distance(d => {
-                        // Much longer distances for clear separation
+                        // Moderate distances - let repulsion create the real spacing
                         const sourceNode = typeof d.source === 'object' ? d.source : nodes.find(n => n.id === d.source);
                         const targetNode = typeof d.target === 'object' ? d.target : nodes.find(n => n.id === d.target);
                         const minDegree = Math.min(sourceNode?.degree ?? 1, targetNode?.degree ?? 1);
 
-                        // Large base distances scaled by network size
-                        if (minDegree === 0) return 180 * spreadFactor;  // Center to 1st degree
-                        return 120 * spreadFactor;                        // 1st to 2nd degree
+                        // Shorter base distances - clusters form from repulsion, not link length
+                        if (minDegree === 0) return 100 * spreadFactor;  // Center to 1st degree
+                        return 80 * spreadFactor;                         // Between other nodes
                     })
-                    .strength(0.05))  // Very weak links - let repulsion dominate
+                    .strength(d => {
+                        // Weak links let repulsion dominate, but keep connected nodes somewhat together
+                        const w = d.weight || 50;
+                        return 0.02 + (w / 100) * 0.03;  // 0.02 to 0.05 based on weight
+                    }))
                 .force('charge', d3.forceManyBody()
                     .strength(d => {
-                        // Strong repulsion for maximum separation - pulls graph apart to surface subnetworks
-                        if (d.degree === 0) return -1800 * spreadFactor;  // Center pushes hard
-                        if (d.degree === 1) return -900 * spreadFactor;   // 1st degree spread wide
-                        return -450 * spreadFactor;                        // 2nd degree spread
+                        // Strong repulsion (2x original) to surface clusters
+                        if (d.degree === 0) return -3600 * spreadFactor;  // Center pushes hard
+                        if (d.degree === 1) return -1800 * spreadFactor;  // 1st degree spread
+                        return -900 * spreadFactor;                        // 2nd degree
                     })
-                    .distanceMax(800 * spreadFactor))
-                .force('center', d3.forceCenter(centerX, centerY))
+                    .distanceMax(1200 * spreadFactor))  // 1.5x original range
+                .force('center', d3.forceCenter(centerX, centerY).strength(0.02))  // Very weak centering
                 .force('collision', d3.forceCollide()
-                    .radius(d => getNodeRadius(d) + 35 * spreadFactor)  // Large collision radius
-                    .strength(1.0))  // Maximum collision strength
-                .alphaDecay(0.03)   // Faster decay = settles quicker
-                .alphaMin(0.005)    // Higher minimum = stops sooner
-                .velocityDecay(0.7) // Higher friction = less jitter
+                    .radius(d => getNodeRadius(d) + 15)  // Just prevent overlap
+                    .strength(0.8))
+                .alphaDecay(0.02)   // Slower decay = more time to settle into clusters
+                .alphaMin(0.001)    // Lower minimum = simulation runs longer
+                .velocityDecay(0.4) // Less friction = nodes can move into position
                 .stop();  // Don't auto-start - wait until elements are created
 
             // Stop simulation after it settles (with timeout as backup)
@@ -7714,12 +7740,12 @@
                 console.log('Graph simulation settled');
             });
 
-            // Backup: force stop after 5 seconds
+            // Backup: force stop after 8 seconds (longer to allow clusters to form)
             setTimeout(() => {
                 if (graphSimulation) {
                     graphSimulation.alpha(0).stop();
                 }
-            }, 5000);
+            }, 8000);
 
             // Helper to check if edge connects to center node
             function isFirstDegreeEdge(d) {
@@ -7837,7 +7863,8 @@
                 })
                 .on('mouseleave', () => {
                     tooltip.classed('visible', false);
-                });
+                })
+;
 
             // Node circles with degree-based styling
             node.append('circle')
@@ -7855,6 +7882,45 @@
             node.append('text')
                 .attr('dy', d => getNodeRadius(d) + 12)
                 .text(d => truncateName(d.name, d.degree === 0 ? 20 : 12));
+
+            // Hide button - appears when zoomed in, allows removing node from view
+            // Only add to non-center nodes
+            node.filter(d => d.degree !== 0)
+                .append('g')
+                .attr('class', 'node-hide-btn')
+                .attr('transform', d => {
+                    const r = getNodeRadius(d);
+                    // Position at top-right of node
+                    return `translate(${r * 0.7}, ${-r * 0.7})`;
+                })
+                .style('display', 'none')  // Hidden by default, shown on zoom
+                .style('cursor', 'pointer')
+                .on('click', (event, d) => {
+                    event.stopPropagation();
+                    event.preventDefault();
+                    hideGraphNode(d.id, d.name);
+                })
+                .on('mouseenter', function() {
+                    d3.select(this).select('circle').attr('fill', '#ef4444');
+                })
+                .on('mouseleave', function() {
+                    d3.select(this).select('circle').attr('fill', 'rgba(0,0,0,0.6)');
+                })
+                .each(function() {
+                    const btn = d3.select(this);
+                    btn.append('circle')
+                        .attr('r', 8)
+                        .attr('fill', 'rgba(0,0,0,0.6)')
+                        .attr('stroke', 'rgba(255,255,255,0.8)')
+                        .attr('stroke-width', 1);
+                    btn.append('text')
+                        .attr('text-anchor', 'middle')
+                        .attr('dy', '0.35em')
+                        .attr('fill', 'white')
+                        .attr('font-size', '12px')
+                        .attr('font-weight', 'bold')
+                        .text('×');
+                });
 
             // Apply initial label visibility based on current zoom
             updateLabelsForZoom(currentZoomScale);
@@ -7877,7 +7943,7 @@
             });
 
             // Now start the simulation (elements are ready) with lower initial energy
-            graphSimulation.alpha(0.5).restart();  // Start calmer to reduce initial jitter
+            graphSimulation.alpha(1).restart();  // Full energy to let clusters form
 
             // Restore or reset the filters
             const slider = document.getElementById('edgeStrengthSlider');
@@ -8209,7 +8275,10 @@
 
                 // Step 2: If showing 2nd degree too, add second-degree nodes connected to visible first-degree
                 if (!showOnlyFirstDegree) {
+                    // Exclude owner (Nathan) from first-degree set for second-degree calculation
+                    // because owner is connected to everyone, which would make all nodes visible
                     const firstDegreeIds = new Set(visibleNodeIds);
+                    firstDegreeIds.delete(DUNBAR_CONFIG.myPersonId);
 
                     graphLinksAll.forEach(linkData => {
                         if (!linkData) return;
@@ -8223,7 +8292,7 @@
                         const hasSelectedSource = edgeHasSelectedSource(linkData, selectedSources);
                         if (!hasSelectedSource) return;
 
-                        // If one end is a visible first-degree node and other is second-degree, add it
+                        // If one end is a visible first-degree node (excluding owner) and other is second-degree, add it
                         if (firstDegreeIds.has(sourceId) && targetNode && targetNode.degree === 2) {
                             visibleNodeIds.add(targetId);
                         }
@@ -8233,17 +8302,18 @@
                     });
                 }
 
-                // Step 3: Create filtered node and link arrays
+                // Step 3: Create filtered node and link arrays (excluding manually hidden nodes)
                 const filteredNodes = graphNodesAll
-                    .filter(n => visibleNodeIds.has(n.id))
+                    .filter(n => visibleNodeIds.has(n.id) && !hiddenNodeIds.has(n.id))
                     .map(n => ({...n, x: undefined, y: undefined, fx: undefined, fy: undefined})); // Reset positions
 
                 const filteredLinks = graphLinksAll.filter(l => {
                     const sourceId = l.source;
                     const targetId = l.target;
                     const bothVisible = visibleNodeIds.has(sourceId) && visibleNodeIds.has(targetId);
+                    const neitherHidden = !hiddenNodeIds.has(sourceId) && !hiddenNodeIds.has(targetId);
                     const hasSelectedSource = edgeHasSelectedSource(l, selectedSources);
-                    return bothVisible && hasSelectedSource;
+                    return bothVisible && neitherHidden && hasSelectedSource;
                 }).map(l => ({...l})); // Clone to avoid mutating original
 
                 // Store filtered data as current view
@@ -8270,6 +8340,14 @@
             } finally {
                 isRenderingGraph = false;
             }
+        }
+
+        // Hide a node from the graph (right-click action)
+        function hideGraphNode(nodeId, nodeName) {
+            hiddenNodeIds.add(nodeId);
+            console.log(`Hidden node: ${nodeName} (${nodeId})`);
+            // Reapply filters to rebuild graph without this node
+            applyGraphFilters();
         }
 
         // Update edge visibility - wrapper that calls unified filter
