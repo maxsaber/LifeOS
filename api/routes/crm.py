@@ -1538,7 +1538,11 @@ async def split_person(request: PersonSplitRequest):
 @router.get("/people/{person_id}/timeline", response_model=TimelineResponse)
 async def get_person_timeline(
     person_id: str,
-    source_type: Optional[str] = Query(default=None, description="Filter by source type"),
+    source_type: Optional[str] = Query(
+        default=None,
+        description="Filter by source type. Supports comma-separated values for compound "
+                    "filters (e.g., 'imessage,whatsapp' for all messages, 'vault,granola' for notes)"
+    ),
     days_back: int = Query(
         default=InteractionConfig.DEFAULT_WINDOW_DAYS,
         ge=1,
@@ -1553,6 +1557,9 @@ async def get_person_timeline(
     Get chronological interaction history for a person.
 
     Returns emails, meetings, notes, and other interactions in timeline format.
+
+    Source types: gmail, calendar, imessage, whatsapp, phone, slack, vault, granola
+    Compound filters: Use comma-separated values like "imessage,whatsapp" for messages.
     """
     start_time = time.time()
 
@@ -1585,8 +1592,8 @@ async def get_person_timeline(
                 source_type=i.source_type,
                 title=i.title,
                 snippet=i.snippet,
-                source_link=i.source_link,
-                source_badge=i.source_badge,
+                source_link=i.source_link or "",  # Handle None values
+                source_badge=i.source_badge or "",  # Handle None values
             )
             for i in interactions
         ],
@@ -1611,7 +1618,11 @@ SOURCE_BADGES = {
 @router.get("/people/{person_id}/timeline/aggregated", response_model=AggregatedTimelineResponse)
 async def get_person_timeline_aggregated(
     person_id: str,
-    source_type: Optional[str] = Query(default=None, description="Filter by source type"),
+    source_type: Optional[str] = Query(
+        default=None,
+        description="Filter by source type. Supports comma-separated values for compound "
+                    "filters (e.g., 'imessage,whatsapp' for all messages)"
+    ),
     days_back: int = Query(
         default=90,  # Default to 90 days for faster initial load
         ge=1,
@@ -2834,6 +2845,89 @@ async def get_me_stats():
         total_emails=total_emails,
         total_meetings=total_meetings,
         total_messages=total_messages,
+    )
+
+
+@router.get("/me/timeline", response_model=TimelineResponse)
+async def get_me_timeline(
+    source_type: Optional[str] = Query(
+        default=None,
+        description="Filter by source type. Supports comma-separated values for compound "
+                    "filters (e.g., 'imessage,whatsapp' for all messages, 'vault,granola' for notes)"
+    ),
+    days_back: int = Query(
+        default=InteractionConfig.DEFAULT_WINDOW_DAYS,
+        ge=1,
+        le=InteractionConfig.MAX_WINDOW_DAYS,
+        description="Days to look back (default 365, max 3650)"
+    ),
+    date: Optional[str] = Query(default=None, description="Filter to specific date (YYYY-MM-DD)"),
+    offset: int = Query(default=0, ge=0, description="Offset for pagination"),
+    limit: int = Query(default=50, ge=1, le=2000, description="Max results"),
+):
+    """
+    Get chronological interaction history for the "Me" dashboard.
+
+    Returns ALL interactions across all people (since all interactions involve the owner).
+    This is different from /people/{id}/timeline which only shows interactions with one person.
+
+    Source types: gmail, calendar, imessage, whatsapp, phone, slack, vault, granola
+    Compound filters: Use comma-separated values like "imessage,whatsapp" for messages.
+    """
+    from datetime import timedelta
+    start_time = time.time()
+
+    interaction_store = get_interaction_store()
+    person_store = get_person_entity_store()
+
+    # Calculate date range
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=days_back)
+
+    # Get hidden person IDs to exclude from results
+    hidden_person_ids = {
+        p.id for p in person_store.get_all(include_hidden=True) if p.hidden
+    }
+
+    # Get all interactions, excluding self and hidden people
+    # Note: We fetch extra for pagination (offset + limit + 1 to check has_more)
+    interactions = interaction_store.get_all_in_range(
+        start_date=start_date,
+        end_date=end_date,
+        exclude_person_ids=[MY_PERSON_ID] + list(hidden_person_ids),
+        source_type=source_type,
+        limit=offset + limit + 1,
+        specific_date=date,
+    )
+
+    # Build person lookup for adding person names to timeline items
+    person_lookup = {p.id: p for p in person_store.get_all()}
+
+    # Filter to only include interactions with known (non-orphaned) person IDs
+    interactions = [i for i in interactions if i.person_id in person_lookup]
+
+    has_more = len(interactions) > offset + limit
+    interactions = interactions[offset:offset + limit]
+
+    elapsed = (time.time() - start_time) * 1000
+    logger.info(f"me/timeline took {elapsed:.1f}ms ({len(interactions)} interactions, {days_back} days)")
+
+    return TimelineResponse(
+        items=[
+            TimelineItem(
+                id=i.id,
+                timestamp=i.timestamp.isoformat(),
+                source_type=i.source_type,
+                # Include person name in title for context
+                title=f"{person_lookup[i.person_id].canonical_name}: {i.title}" if i.person_id in person_lookup else i.title,
+                snippet=i.snippet,
+                source_link=i.source_link or "",  # Handle None values
+                source_badge=i.source_badge or "",  # Handle None values
+            )
+            for i in interactions
+        ],
+        count=len(interactions),
+        has_more=has_more,
     )
 
 

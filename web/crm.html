@@ -1775,6 +1775,22 @@
             margin-bottom: 1rem;
         }
 
+        .timeline-count {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+            padding: 0.25rem 0.6rem;
+            border-radius: 12px;
+            min-width: 2rem;
+            text-align: center;
+        }
+
+        .timeline-count.has-more::after {
+            content: '+';
+            color: var(--text-muted);
+        }
+
         .timeline-date-range {
             display: flex;
             align-items: center;
@@ -2215,7 +2231,15 @@
 
         .graph-node.selected circle {
             stroke: var(--accent);
-            stroke-width: 3px;
+            stroke-width: 4px;
+            filter: drop-shadow(0 0 6px var(--accent));
+        }
+
+        /* Node selected via panel (single-click) - distinct from navigation selection */
+        .graph-node.panel-selected circle {
+            stroke: var(--people);
+            stroke-width: 4px;
+            filter: drop-shadow(0 0 6px var(--people));
         }
 
         .graph-node text {
@@ -2349,6 +2373,23 @@
             border-bottom: none;
         }
 
+        /* Clickable interaction stats in node panel */
+        .edge-panel-stat.clickable-stat {
+            cursor: pointer;
+            transition: background 0.15s;
+            margin: 0 -0.5rem;
+            padding: 0.4rem 0.5rem;
+            border-radius: 4px;
+        }
+
+        .edge-panel-stat.clickable-stat:hover {
+            background: var(--bg-secondary);
+        }
+
+        .edge-panel-stat.clickable-stat .edge-panel-stat-value {
+            color: var(--people);
+        }
+
         .edge-panel-stat-label {
             color: var(--text-secondary);
         }
@@ -2382,6 +2423,45 @@
             font-size: 0.7rem;
         }
 
+        /* Node Panel (person details on single-click) */
+        .node-panel {
+            /* Inherits from .edge-panel, additional styles below */
+        }
+
+        .node-panel-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .node-panel-category {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            text-transform: capitalize;
+            margin-bottom: 0.75rem;
+            padding-bottom: 0.75rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .node-panel-goto-btn {
+            width: 100%;
+            margin-top: 1rem;
+            padding: 0.6rem 1rem;
+            background: var(--accent-primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .node-panel-goto-btn:hover {
+            background: var(--accent-secondary);
+        }
+
         .graph-legend {
             position: absolute;
             bottom: 0.5rem;
@@ -2407,6 +2487,40 @@
             width: 12px;
             height: 12px;
             border-radius: 50%;
+        }
+
+        /* Graph legend mode toggle */
+        .graph-legend-toggle {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding-bottom: 0.5rem;
+            margin-bottom: 0.5rem;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.65rem;
+        }
+
+        .graph-legend-toggle-label {
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .graph-legend-toggle-label:hover {
+            background: var(--bg-secondary);
+        }
+
+        .graph-legend-toggle-label.active {
+            color: var(--text-primary);
+            background: var(--bg-tertiary);
+            font-weight: 500;
+        }
+
+        .graph-legend-items {
+            display: flex;
+            flex-direction: column;
         }
 
         /* Source entities section */
@@ -4069,6 +4183,7 @@
 
                     <div id="tabTimeline" class="tab-content" style="display:none">
                         <div class="timeline-filters" id="timelineFilters">
+                            <span class="timeline-count" id="timelineCount" title="Interactions matching current filters">0</span>
                             <div class="timeline-filter-chip active" data-source="all" onclick="filterTimeline('all')">All</div>
                             <div class="timeline-filter-chip" data-source="gmail" id="filterGmail" onclick="filterTimeline('gmail')">📧 Emails</div>
                             <div class="timeline-filter-chip" data-source="calendar" id="filterCalendar" onclick="filterTimeline('calendar')">📅 Events</div>
@@ -4238,6 +4353,58 @@
                                     <div class="edge-panel-contexts-title">Shared Contexts</div>
                                     <div class="edge-panel-context-tags" id="edgePanelContextTags"></div>
                                 </div>
+                            </div>
+                            <!-- Node Details Panel (shown on single-click of a node) -->
+                            <div id="nodePanel" class="edge-panel node-panel">
+                                <div class="edge-panel-header">
+                                    <div class="edge-panel-title" id="nodePanelTitle">Person Details</div>
+                                    <button class="edge-panel-close" onclick="closeNodePanel()">&times;</button>
+                                </div>
+                                <div class="node-panel-name" id="nodePanelName">Person Name</div>
+                                <div class="node-panel-category" id="nodePanelCategory">Category</div>
+                                <!-- Relationship stats - hidden for self -->
+                                <div id="nodePanelRelationshipSection">
+                                    <div class="edge-panel-stat">
+                                        <span class="edge-panel-stat-label">Relationship Strength</span>
+                                        <span class="edge-panel-stat-value" id="nodePanelStrength">0%</span>
+                                    </div>
+                                    <div class="edge-panel-stat">
+                                        <span class="edge-panel-stat-label">Dunbar Circle</span>
+                                        <span class="edge-panel-stat-value" id="nodePanelDunbar">—</span>
+                                    </div>
+                                </div>
+                                <div class="edge-panel-section-title">Interactions</div>
+                                <div class="edge-panel-stat clickable-stat" onclick="navigateToFilteredTimeline('gmail')">
+                                    <span class="edge-panel-stat-label">📧 Emails</span>
+                                    <span class="edge-panel-stat-value" id="nodePanelEmails">0</span>
+                                </div>
+                                <div class="edge-panel-stat clickable-stat" onclick="navigateToFilteredTimeline('calendar')">
+                                    <span class="edge-panel-stat-label">📅 Meetings</span>
+                                    <span class="edge-panel-stat-value" id="nodePanelMeetings">0</span>
+                                </div>
+                                <div class="edge-panel-stat clickable-stat" onclick="navigateToFilteredTimeline('messages')">
+                                    <span class="edge-panel-stat-label">💬 Messages</span>
+                                    <span class="edge-panel-stat-value" id="nodePanelMsgs">0</span>
+                                </div>
+                                <div class="edge-panel-stat clickable-stat" onclick="navigateToFilteredTimeline('notes')">
+                                    <span class="edge-panel-stat-label">📝 Note Mentions</span>
+                                    <span class="edge-panel-stat-value" id="nodePanelMentions">0</span>
+                                </div>
+                                <!-- Timing section - hidden for self -->
+                                <div id="nodePanelTimingSection">
+                                    <div class="edge-panel-section-title">Timing</div>
+                                    <div class="edge-panel-stat">
+                                        <span class="edge-panel-stat-label">First Seen</span>
+                                        <span class="edge-panel-stat-value" id="nodePanelFirstSeen">—</span>
+                                    </div>
+                                    <div class="edge-panel-stat">
+                                        <span class="edge-panel-stat-label">Last Seen</span>
+                                        <span class="edge-panel-stat-value" id="nodePanelLastSeen">—</span>
+                                    </div>
+                                </div>
+                                <button class="node-panel-goto-btn" onclick="navigateFromNodePanel()">
+                                    Go to Profile →
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -4498,6 +4665,10 @@
 
         // Handle browser back/forward navigation
         window.addEventListener('popstate', async (event) => {
+            // Close any open panels when navigating
+            closeEdgePanel();
+            closeNodePanel();
+
             const { personId, tab } = parseUrl();
             if (personId) {
                 selectedPersonId = personId;
@@ -5065,6 +5236,7 @@
             selectedPersonId = personId;
             hiddenNodeIds.clear(); // Clear hidden nodes when switching people
             closeEdgePanel(); // Close edge panel when switching people
+            closeNodePanel(); // Close node panel when switching people
             renderPeopleList();
 
             // Update URL immediately (unless called from popstate or initial load)
@@ -5079,8 +5251,15 @@
 
         // Load person detail - shows skeleton immediately, loads data progressively
         async function loadPersonDetail(personId, stayOnCurrentTab = false) {
-            // Clear any date filter when loading a new person
-            window.timelineDateFilter = null;
+            // Clear date range filter when loading a new person
+            const fromInput = document.getElementById('timelineDateFrom');
+            const toInput = document.getElementById('timelineDateTo');
+            const clearBtn = document.getElementById('clearDateRangeBtn');
+            if (fromInput) fromInput.value = '';
+            if (toInput) toInput.value = '';
+            if (clearBtn) clearBtn.style.display = 'none';
+            timelineDateRangeFrom = null;
+            timelineDateRangeTo = null;
 
             const emptyEl = document.getElementById('detailEmpty');
             const contentEl = document.getElementById('detailContent');
@@ -5486,14 +5665,45 @@
             updateTimelineFilterVisibility();
         }
 
-        // Update timeline filter chip visibility based on source data
+        /**
+         * Update timeline filter chip visibility based on available data.
+         *
+         * When no date filter is active, uses sourceTotals (full counts for the person).
+         * When a date filter is active, uses counts from the actual timeline data.
+         *
+         * This ensures filter chips only show for source types that have data
+         * in the current view, preventing users from clicking filters that
+         * would show empty results.
+         */
         function updateTimelineFilterVisibility() {
-            const emailCount = (sourceTotals['gmail'] || 0);
-            const eventCount = (sourceTotals['calendar'] || 0);
-            const messageCount = (sourceTotals['imessage'] || 0) + (sourceTotals['whatsapp'] || 0);
-            const phoneCount = (sourceTotals['phone'] || 0);
-            const slackCount = (sourceTotals['slack'] || 0);
-            const notesCount = (sourceTotals['vault'] || 0) + (sourceTotals['granola'] || 0);
+            // Check if a date filter is active
+            const hasDateFilter = timelineDateRangeFrom || timelineDateRangeTo;
+
+            let emailCount, eventCount, messageCount, phoneCount, slackCount, notesCount;
+
+            if (hasDateFilter && timelineData && timelineData.length >= 0) {
+                // When date filter is active, count from actual timeline data
+                // This ensures we only show filters for types present in the filtered data
+                const counts = {};
+                for (const item of timelineData) {
+                    const sourceType = (item.source_type || '').toLowerCase();
+                    counts[sourceType] = (counts[sourceType] || 0) + 1;
+                }
+                emailCount = counts['gmail'] || 0;
+                eventCount = counts['calendar'] || 0;
+                messageCount = (counts['imessage'] || 0) + (counts['whatsapp'] || 0);
+                phoneCount = counts['phone'] || 0;
+                slackCount = counts['slack'] || 0;
+                notesCount = (counts['vault'] || 0) + (counts['granola'] || 0);
+            } else {
+                // No date filter - use global sourceTotals
+                emailCount = (sourceTotals['gmail'] || 0);
+                eventCount = (sourceTotals['calendar'] || 0);
+                messageCount = (sourceTotals['imessage'] || 0) + (sourceTotals['whatsapp'] || 0);
+                phoneCount = (sourceTotals['phone'] || 0);
+                slackCount = (sourceTotals['slack'] || 0);
+                notesCount = (sourceTotals['vault'] || 0) + (sourceTotals['granola'] || 0);
+            }
 
             // Show/hide filter chips based on whether there's data
             const updateFilter = (id, count) => {
@@ -6682,6 +6892,51 @@
             return insights;
         }
 
+        /**
+         * Calculate dynamic heatmap thresholds based on actual interaction data.
+         * Uses percentile-based approach so each person's heatmap shows meaningful variation.
+         *
+         * @param {Object} data - heatmapData object with date keys and {total, sources} values
+         * @returns {number[]} - Array of 5 thresholds for levels 1-5
+         */
+        function calculateHeatmapThresholds(data) {
+            // Collect all non-zero daily counts
+            const counts = Object.values(data)
+                .map(d => d.total)
+                .filter(c => c > 0)
+                .sort((a, b) => a - b);
+
+            if (counts.length === 0) {
+                // No interactions - return minimal thresholds
+                return [1, 2, 3, 4, 5];
+            }
+
+            // Calculate percentiles for thresholds
+            // Level 1: any interaction (>0)
+            // Level 2: 25th percentile
+            // Level 3: 50th percentile (median)
+            // Level 4: 75th percentile
+            // Level 5: 90th percentile and above
+            const getPercentile = (arr, p) => {
+                const index = Math.ceil((p / 100) * arr.length) - 1;
+                return arr[Math.max(0, index)];
+            };
+
+            const p25 = getPercentile(counts, 25);
+            const p50 = getPercentile(counts, 50);
+            const p75 = getPercentile(counts, 75);
+            const p90 = getPercentile(counts, 90);
+
+            // Ensure thresholds are strictly increasing (at least +1 each level)
+            const t1 = 1;  // Level 1: any interaction
+            const t2 = Math.max(t1 + 1, p25);
+            const t3 = Math.max(t2 + 1, p50);
+            const t4 = Math.max(t3 + 1, p75);
+            const t5 = Math.max(t4 + 1, p90);
+
+            return [t1, t2, t3, t4, t5];
+        }
+
         // Render heat map in GitHub contribution graph style
         function renderHeatMap() {
             const grid = document.getElementById('heatmapGrid');
@@ -6697,6 +6952,10 @@
             // Adjust to start on a Sunday
             const startDayOfWeek = startDate.getDay();
             startDate.setDate(startDate.getDate() - startDayOfWeek);
+
+            // Calculate dynamic thresholds based on this person's interaction distribution
+            // This ensures meaningful color variation regardless of interaction volume
+            const thresholds = calculateHeatmapThresholds(heatmapData);
 
             // Constants for pixel calculations
             const daySize = 10; // px
@@ -6718,23 +6977,14 @@
                     const dayData = heatmapData[dateKey] || { total: 0, sources: {} };
                     const count = dayData.total;
 
-                    // Calculate level (0-5) - use different thresholds for Me page (aggregate view)
+                    // Calculate level (0-5) using dynamic thresholds based on this person's data
+                    // Level 0: no interaction, Level 5: above 90th percentile
                     let level = 0;
-                    if (isMyPage()) {
-                        // Me page: higher thresholds for aggregate data
-                        if (count > 0) level = 1;
-                        if (count >= 50) level = 2;
-                        if (count >= 150) level = 3;
-                        if (count >= 300) level = 4;
-                        if (count >= 500) level = 5;
-                    } else {
-                        // Individual person: standard thresholds
-                        if (count > 0) level = 1;
-                        if (count >= 3) level = 2;
-                        if (count >= 6) level = 3;
-                        if (count >= 10) level = 4;
-                        if (count >= 20) level = 5;
-                    }
+                    if (count > 0) level = 1;
+                    if (count >= thresholds[1]) level = 2;
+                    if (count >= thresholds[2]) level = 3;
+                    if (count >= thresholds[3]) level = 4;
+                    if (count >= thresholds[4]) level = 5;
 
                     // Track month changes at the START of each week (Sunday)
                     // This way the label aligns with the week column
@@ -6841,158 +7091,168 @@
             });
         }
 
-        // Navigate to timeline tab filtered to a specific date
+        /**
+         * Navigate to timeline tab filtered to a specific date (from heatmap click).
+         *
+         * This uses the standard date range filter UI by setting both From and To
+         * to the same date, providing a unified filtering experience. The user sees
+         * the date populated in the filter inputs and can modify or clear it.
+         *
+         * @param {string} dateKey - Date in YYYY-MM-DD format
+         */
         async function navigateToTimelineDate(dateKey) {
-            // IMPORTANT: Set the filter BEFORE switching tabs
-            // This ensures the filter is active when loadTimeline() runs
-            window.timelineDateFilter = dateKey;
+            // Set both date range inputs to the clicked date (same from/to = single day)
+            // This unifies the filtering experience - heatmap clicks and manual date
+            // selection use the same mechanism
+            const fromInput = document.getElementById('timelineDateFrom');
+            const toInput = document.getElementById('timelineDateTo');
+            const clearBtn = document.getElementById('clearDateRangeBtn');
 
-            // Switch to timeline tab - this will load and render timeline with the filter applied
+            fromInput.value = dateKey;
+            toInput.value = dateKey;
+            clearBtn.style.display = '';
+
+            // Update the date range state variables to match
+            timelineDateRangeFrom = new Date(dateKey + 'T00:00:00');
+            timelineDateRangeTo = new Date(dateKey + 'T23:59:59');
+
+            // Switch to timeline tab - loadTimeline will use the date range for filtering
             await switchTab('timeline');
         }
 
-        // Render timeline filtered to a specific date
-        function renderTimelineWithDateFilter() {
-            const container = document.getElementById('timelineContainer');
-            const dateKey = window.timelineDateFilter;
+        /**
+         * Map UI filter names to API source_type values.
+         *
+         * The UI uses friendly names like "messages" and "notes" which map to
+         * multiple underlying source types. The API accepts comma-separated values.
+         *
+         * @param {string} filter - UI filter name (e.g., 'gmail', 'messages', 'notes')
+         * @returns {string|null} - API source_type value(s) or null for 'all'
+         */
+        function mapFilterToSourceType(filter) {
+            if (filter === 'all') return null;
 
-            if (!dateKey) {
-                renderTimeline();
-                return;
-            }
+            // Compound filters that map to multiple source types
+            const compoundFilters = {
+                'messages': 'imessage,whatsapp',  // Both messaging platforms
+                'notes': 'vault,granola',          // Both note types
+            };
 
-            // API already filtered to the specific date, use timelineData directly
-            const targetDate = new Date(dateKey + 'T00:00:00');
-            let items = timelineData;
-
-            // Apply source filter if active
-            if (timelineFilter !== 'all') {
-                items = timelineData.filter(item => {
-                    const sourceType = (item.source_type || '').toLowerCase();
-                    // Handle combined filters
-                    if (timelineFilter === 'messages') {
-                        return sourceType === 'imessage' || sourceType === 'whatsapp';
-                    } else if (timelineFilter === 'notes') {
-                        return sourceType === 'vault' || sourceType === 'granola';
-                    }
-                    return sourceType === timelineFilter;
-                });
-            }
-
-            // Show date filter banner
-            const formattedDate = targetDate.toLocaleDateString('en-US', {
-                weekday: 'long',
-                month: 'long',
-                day: 'numeric',
-                year: 'numeric'
-            });
-
-            if (items.length === 0) {
-                container.innerHTML = `
-                    <div class="timeline-date-filter">
-                        <span>Showing ${formattedDate}</span>
-                        <button onclick="clearTimelineDateFilter()">Clear filter</button>
-                    </div>
-                    <div class="empty-state">
-                        <div class="empty-state-icon">${String.fromCodePoint(0x1F4C5)}</div>
-                        <p>No interactions on this day</p>
-                    </div>
-                `;
-                return;
-            }
-
-            container.innerHTML = `
-                <div class="timeline-date-filter">
-                    <span>Showing ${formattedDate} (${items.length} interaction${items.length !== 1 ? 's' : ''})</span>
-                    <button onclick="clearTimelineDateFilter()">Clear filter</button>
-                </div>
-            ` + items.map(item => {
-                // Check if snippet is duplicate of title
-                const title = item.title || '';
-                const snippet = item.snippet || '';
-                const isDuplicate = snippet && (
-                    snippet === title ||
-                    snippet.trim() === title.trim() ||
-                    title.includes(snippet) ||
-                    snippet.includes(title)
-                );
-
-                return `
-                <div class="timeline-item">
-                    <div class="timeline-badge">${item.source_badge || String.fromCodePoint(0x1F4C4)}</div>
-                    <div class="timeline-content">
-                        <div class="timeline-title">
-                            ${item.source_link ? `<a href="${item.source_link}" target="_blank">${escapeHtml(title)}</a>` : escapeHtml(title)}
-                        </div>
-                        ${snippet && !isDuplicate ? `<div class="timeline-snippet">${escapeHtml(snippet)}</div>` : ''}
-                        <div class="timeline-meta">
-                            ${formatDate(item.timestamp)}
-                            <span class="timeline-source-badge">${escapeHtml(item.source_type || 'Unknown')}</span>
-                        </div>
-                    </div>
-                </div>
-            `}).join('');
+            return compoundFilters[filter] || filter;
         }
 
-        // Clear timeline date filter
-        function clearTimelineDateFilter() {
-            window.timelineDateFilter = null;
-            renderTimeline();
-        }
+        /**
+         * Load timeline data from the API.
+         *
+         * IMPORTANT: Filtering is now done server-side via the source_type and date parameters.
+         * This ensures we get the correct filtered data regardless of how many total
+         * interactions exist. Previously, filtering was client-side on a limited 100-item
+         * fetch, which meant filters would show nothing if no matching items were in
+         * the initial fetch.
+         *
+         * Date filtering uses the same date range inputs whether the user clicks on
+         * a heatmap date or manually enters dates. This provides a unified experience.
+         *
+         * @param {string} personId - The person ID to load timeline for
+         */
+        // Maximum number of timeline items to load (prevents UI freezing for high-volume contacts)
+        const TIMELINE_LIMIT = 500;
 
-        // Load timeline
         async function loadTimeline(personId) {
             const container = document.getElementById('timelineContainer');
             container.innerHTML = '<div class="loading">Loading timeline...</div>';
 
             try {
-                // If date filter is active, fetch that specific date directly
-                // Otherwise, use default limit for performance
-                let url = `/people/${personId}/timeline`;
-                if (window.timelineDateFilter) {
-                    url += `?date=${window.timelineDateFilter}&limit=500`;
-                } else {
-                    url += '?limit=100';
+                // Build API URL with query parameters
+                const params = new URLSearchParams();
+
+                // Check if date range filter is set (from heatmap click or manual input)
+                // When from and to are the same date, use the API's 'date' param for efficiency
+                const fromInput = document.getElementById('timelineDateFrom');
+                const toInput = document.getElementById('timelineDateTo');
+                const fromDate = fromInput?.value;
+                const toDate = toInput?.value;
+
+                if (fromDate && toDate && fromDate === toDate) {
+                    // Single day filter - use API's date parameter for server-side filtering
+                    params.set('date', fromDate);
                 }
+
+                // Always use consistent limit to prevent loading failures for high-volume contacts
+                params.set('limit', TIMELINE_LIMIT.toString());
+
+                // Apply source type filter if not "all"
+                // This is the key fix: filter server-side instead of client-side
+                const sourceType = mapFilterToSourceType(timelineFilter);
+                if (sourceType) {
+                    params.set('source_type', sourceType);
+                }
+
+                // Use different endpoint for /me page vs regular person page
+                // The /me page shows ALL interactions (since the owner is involved in all of them)
+                // Regular person pages show only interactions with that specific person
+                const isMePage = isMyPage(personId);
+                const baseUrl = isMePage ? '/me/timeline' : `/people/${personId}/timeline`;
+                const url = `${baseUrl}?${params.toString()}`;
+
                 const data = await api(url);
                 timelineData = data.items || [];
+
+                // Update the count display
+                updateTimelineCount(data.count || timelineData.length, data.has_more || false);
+
+                // Update filter visibility when loading unfiltered data (timelineFilter === 'all')
+                // This ensures we know which source types have data for the current date range
+                // Don't update when a source filter is active - that would hide other filter options
+                if (timelineFilter === 'all') {
+                    updateTimelineFilterVisibility();
+                }
+
                 renderTimeline();
             } catch (error) {
                 console.error('Failed to load timeline:', error);
                 container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚠️</div><p>Failed to load timeline</p></div>';
+                updateTimelineCount(0, false);
             }
         }
 
-        // Render timeline with current filter
-        // Timeline date range state
+        /**
+         * Update the timeline count display.
+         * Shows the number of interactions matching current filters.
+         * @param {number} count - Number of interactions
+         * @param {boolean} hasMore - Whether there are more results beyond the limit
+         */
+        function updateTimelineCount(count, hasMore) {
+            const countEl = document.getElementById('timelineCount');
+            if (!countEl) return;
+
+            countEl.textContent = formatCompactNumber(count);
+            countEl.classList.toggle('has-more', hasMore);
+            countEl.title = hasMore
+                ? `Showing ${count} most recent interactions (more available)`
+                : `${count} interactions matching current filters`;
+        }
+
+        // Timeline date range state (synced with the From/To input fields)
         let timelineDateRangeFrom = null;
         let timelineDateRangeTo = null;
 
+        /**
+         * Render the timeline items to the DOM.
+         *
+         * NOTE: Source type filtering is handled by the API in loadTimeline().
+         * Date filtering for single days is also handled by the API.
+         * This function applies client-side date range filtering only when
+         * from != to (for filtering within the fetched data).
+         */
         function renderTimeline() {
-            // If date filter is active, use the date-filtered render
-            if (window.timelineDateFilter) {
-                renderTimelineWithDateFilter();
-                return;
-            }
-
             const container = document.getElementById('timelineContainer');
 
-            // Filter items by source type
+            // Start with all items from the API (already filtered by source_type server-side)
             let items = timelineData;
-            if (timelineFilter !== 'all') {
-                items = timelineData.filter(item => {
-                    const sourceType = (item.source_type || '').toLowerCase();
-                    // Handle combined filters
-                    if (timelineFilter === 'messages') {
-                        return sourceType === 'imessage' || sourceType === 'whatsapp';
-                    } else if (timelineFilter === 'notes') {
-                        return sourceType === 'vault' || sourceType === 'granola';
-                    }
-                    return sourceType === timelineFilter;
-                });
-            }
 
-            // Apply date range filter if set
+            // Apply date range filter if set (this is a client-side refinement)
+            // The date range picker allows narrowing down within the fetched data
             if (timelineDateRangeFrom || timelineDateRangeTo) {
                 items = items.filter(item => {
                     const itemDate = new Date(item.timestamp);
@@ -7004,7 +7264,12 @@
             }
 
             if (items.length === 0) {
-                container.innerHTML = '<div class="empty-state"><div class="empty-state-icon">📅</div><p>No interactions found</p></div>';
+                // Show appropriate message based on whether filters are active
+                const hasFilters = timelineFilter !== 'all' || timelineDateRangeFrom || timelineDateRangeTo;
+                const message = hasFilters
+                    ? 'No interactions match the current filters'
+                    : 'No interactions found';
+                container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">📅</div><p>${message}</p></div>`;
                 return;
             }
 
@@ -7036,12 +7301,17 @@
             `}).join('');
         }
 
-        // Navigate to timeline tab with a specific filter applied
+        /**
+         * Navigate to timeline tab with a specific filter pre-applied.
+         * Used when clicking on stat cards (e.g., "Emails: 500" links to filtered timeline).
+         *
+         * @param {string} source - Filter to apply (e.g., 'gmail', 'messages')
+         */
         async function navigateToTimelineFiltered(source) {
             // Set the filter before switching tabs
             timelineFilter = source;
 
-            // Switch to timeline tab
+            // Switch to timeline tab - this calls loadTimeline which uses timelineFilter
             await switchTab('timeline');
 
             // Update the filter chip UI to reflect the selection
@@ -7049,29 +7319,52 @@
             const chip = document.querySelector(`[data-source="${source}"]`);
             if (chip) chip.classList.add('active');
 
-            // Re-render with the filter applied
-            renderTimeline();
+            // Note: No need to call renderTimeline() here - switchTab already calls loadTimeline
         }
 
-        // Filter timeline by source type
-        function filterTimeline(source) {
+        /**
+         * Filter timeline by source type.
+         * Called when user clicks a filter chip (Emails, Events, Messages, etc.)
+         *
+         * IMPORTANT: This now re-fetches from the API with the filter applied server-side.
+         * Previously it only filtered the client-side data, which didn't work when the
+         * desired items weren't in the initial limited fetch.
+         *
+         * @param {string} source - Filter to apply (e.g., 'gmail', 'calendar', 'messages')
+         */
+        async function filterTimeline(source) {
             timelineFilter = source;
 
-            // Update UI
+            // Update UI to show active filter
             document.querySelectorAll('.timeline-filter-chip').forEach(c => c.classList.remove('active'));
             document.querySelector(`[data-source="${source}"]`).classList.add('active');
 
-            renderTimeline();
+            // Re-fetch from API with the new filter applied server-side
+            // This is the key change from the old client-side filtering approach
+            if (selectedPersonId) {
+                await loadTimeline(selectedPersonId);
+            }
         }
 
-        // Apply date range filter
-        function applyTimelineDateRange() {
+        /**
+         * Apply date range filter when user changes the From/To date inputs.
+         *
+         * Always reloads timeline data when a date filter is set, to ensure
+         * we have the correct data and can update filter chip visibility.
+         *
+         * Resets the source type filter to 'all' when date changes, so we can
+         * accurately determine which source types have data for the new date range.
+         */
+        async function applyTimelineDateRange() {
             const fromInput = document.getElementById('timelineDateFrom');
             const toInput = document.getElementById('timelineDateTo');
             const clearBtn = document.getElementById('clearDateRangeBtn');
 
-            timelineDateRangeFrom = fromInput.value ? new Date(fromInput.value + 'T00:00:00') : null;
-            timelineDateRangeTo = toInput.value ? new Date(toInput.value + 'T23:59:59') : null;
+            const fromValue = fromInput.value;
+            const toValue = toInput.value;
+
+            timelineDateRangeFrom = fromValue ? new Date(fromValue + 'T00:00:00') : null;
+            timelineDateRangeTo = toValue ? new Date(toValue + 'T23:59:59') : null;
 
             // Show/hide clear button
             if (timelineDateRangeFrom || timelineDateRangeTo) {
@@ -7080,17 +7373,46 @@
                 clearBtn.style.display = 'none';
             }
 
-            renderTimeline();
+            // Reset source type filter to 'all' when date changes
+            // This ensures we can see all available source types for the new date range
+            // and correctly update filter chip visibility
+            timelineFilter = 'all';
+            document.querySelectorAll('.timeline-filter-chip').forEach(c => c.classList.remove('active'));
+            document.querySelector('[data-source="all"]')?.classList.add('active');
+
+            // Reload from API with the new date filter
+            if (selectedPersonId) {
+                await loadTimeline(selectedPersonId);
+            }
         }
 
-        // Clear date range filter
-        function clearTimelineDateRange() {
+        /**
+         * Clear date range filter and reload timeline data.
+         *
+         * Since the current data may be filtered to a specific date, we need
+         * to reload from the API to get the full unfiltered dataset.
+         * Also resets source filter to 'all' and restores filter visibility
+         * based on global totals (not date-filtered counts).
+         */
+        async function clearTimelineDateRange() {
             document.getElementById('timelineDateFrom').value = '';
             document.getElementById('timelineDateTo').value = '';
             document.getElementById('clearDateRangeBtn').style.display = 'none';
             timelineDateRangeFrom = null;
             timelineDateRangeTo = null;
-            renderTimeline();
+
+            // Reset source type filter to 'all'
+            timelineFilter = 'all';
+            document.querySelectorAll('.timeline-filter-chip').forEach(c => c.classList.remove('active'));
+            document.querySelector('[data-source="all"]')?.classList.add('active');
+
+            // Reload from API to get unfiltered data
+            if (selectedPersonId) {
+                await loadTimeline(selectedPersonId);
+            }
+
+            // Restore filter visibility based on global totals (since no date filter is active)
+            updateTimelineFilterVisibility();
         }
 
         // Quick Facts state
@@ -7671,6 +7993,39 @@
             unknown: '#6b7280'    // Gray
         };
 
+        // Dunbar circle colors - matches CSS definitions for .header-dunbar-circle.circle-N
+        // These are the canonical color definitions used across the app
+        const dunbarCircleColors = {
+            0: '#e94560',  // Intimate (5 people)
+            1: '#ff6b6b',  // Close (15 people)
+            2: '#ffa502',  // Good friends (50 people)
+            3: '#2ed573',  // Friends (150 people)
+            4: '#1e90ff',  // Acquaintances (500 people)
+            5: '#5352ed',  // Recognized (1500 people)
+            6: '#747d8c',  // Known (5000 people)
+            7: '#747d8c'   // Outer (beyond 5000)
+        };
+
+        // Graph color mode: 'category' (default) or 'dunbar'
+        let graphColorMode = 'category';
+
+        /**
+         * Get node fill color based on current color mode
+         * @param {object} node - D3 node data
+         * @returns {string} - Hex color for the node
+         */
+        function getNodeFillColor(node) {
+            // Self node always stays white regardless of color mode
+            if (node.category === 'self') {
+                return categoryColors.self;
+            }
+            if (graphColorMode === 'dunbar') {
+                const circle = dunbarCircleMap.get(node.id);
+                return dunbarCircleColors[circle] || dunbarCircleColors[7];
+            }
+            return categoryColors[node.category] || categoryColors.unknown;
+        }
+
         // Render D3 force-directed graph with degree-based styling
         function renderGraph(container, nodes, links, centerId) {
             // Stop any existing simulation to prevent memory leaks
@@ -7955,9 +8310,16 @@
                     .on('drag', dragged)
                     .on('end', dragended))
                 .on('click', (event, d) => {
+                    // Single-click: Show person details panel (preview without navigating)
                     event.stopPropagation();
-                    // Close edge panel if open
+                    showNodeDetails(d);
+                })
+                .on('dblclick', (event, d) => {
+                    // Double-click: Navigate to this person's graph view
+                    event.stopPropagation();
+                    // Close any open panels
                     closeEdgePanel();
+                    closeNodePanel();
                     // Save current filter values before navigating (except edge strength - recalculated per person)
                     const degreeSelect = document.getElementById('degreeFilter');
                     preservedDegreeFilter = degreeSelect ? degreeSelect.value : 'all';
@@ -7989,14 +8351,15 @@
             // Node circles with degree-based styling
             node.append('circle')
                 .attr('r', d => getNodeRadius(d))
-                .attr('fill', d => categoryColors[d.category] || categoryColors.unknown)
+                .attr('fill', d => getNodeFillColor(d))
                 .attr('fill-opacity', d => d.degree === 2 ? 0.7 : 1)
                 .attr('stroke', d => {
                     if (d.degree === 0) return '#ef4444';  // Red border for selected
                     if (d.category === 'self') return '#4f46e5';  // Indigo stroke for white self node
                     return 'var(--bg-primary)';
                 })
-                .attr('stroke-width', d => d.degree === 0 ? 5 : (d.category === 'self' ? 3 : 2));
+                .attr('stroke-width', d => d.degree === 0 ? 6 : (d.category === 'self' ? 3 : 2))
+                .style('filter', d => d.degree === 0 ? 'drop-shadow(0 0 6px #ef4444)' : null);
 
             // Node labels - add to ALL nodes, visibility controlled by zoom
             node.append('text')
@@ -8142,14 +8505,27 @@
                 // d.fy = null;
             }
 
-            // Add legend with degree explanations
+            // Add legend with color mode toggle
             const legend = d3.select(container)
                 .append('div')
-                .attr('class', 'graph-legend');
+                .attr('class', 'graph-legend')
+                .attr('id', 'graphLegend');
 
-            legend.html(`
+            updateGraphLegend();
+        }
+
+        /**
+         * Update graph legend based on current color mode
+         * Called on initial render and when color mode changes
+         */
+        function updateGraphLegend() {
+            const legend = document.getElementById('graphLegend');
+            if (!legend) return;
+
+            // Build category legend items
+            const categoryLegendItems = `
                 <div class="graph-legend-item">
-                    <div class="graph-legend-color" style="background: var(--bg-tertiary); border: 4px solid #ef4444;"></div>
+                    <div class="graph-legend-color" style="background: var(--bg-tertiary); border: 4px solid #ef4444; box-shadow: 0 0 6px #ef4444;"></div>
                     <span>Selected</span>
                 </div>
                 <div class="graph-legend-item">
@@ -8168,7 +8544,58 @@
                     <div class="graph-legend-color" style="background: ${categoryColors.personal};"></div>
                     <span>Personal</span>
                 </div>
-            `);
+            `;
+
+            // Build Dunbar circle legend items using colors from dunbarCircleColors
+            const dunbarLabels = ['Intimate', 'Close', 'Good Friends', 'Friends', 'Acquaint.', 'Recognized', 'Known'];
+            const dunbarLegendItems = `
+                <div class="graph-legend-item">
+                    <div class="graph-legend-color" style="background: var(--bg-tertiary); border: 4px solid #ef4444; box-shadow: 0 0 6px #ef4444;"></div>
+                    <span>Selected</span>
+                </div>
+                <div class="graph-legend-item">
+                    <div class="graph-legend-color" style="background: ${categoryColors.self};"></div>
+                    <span>Me</span>
+                </div>
+                ${[0, 1, 2, 3, 4, 5, 6].map(i => `
+                    <div class="graph-legend-item">
+                        <div class="graph-legend-color" style="background: ${dunbarCircleColors[i]};"></div>
+                        <span>${i}: ${dunbarLabels[i]}</span>
+                    </div>
+                `).join('')}
+            `;
+
+            legend.innerHTML = `
+                <div class="graph-legend-toggle">
+                    <span class="graph-legend-toggle-label ${graphColorMode === 'category' ? 'active' : ''}"
+                          onclick="setGraphColorMode('category')">Category</span>
+                    <span class="graph-legend-toggle-label ${graphColorMode === 'dunbar' ? 'active' : ''}"
+                          onclick="setGraphColorMode('dunbar')">Dunbar</span>
+                </div>
+                <div class="graph-legend-items">
+                    ${graphColorMode === 'category' ? categoryLegendItems : dunbarLegendItems}
+                </div>
+            `;
+        }
+
+        /**
+         * Set graph color mode and update visualization
+         * @param {string} mode - 'category' or 'dunbar'
+         */
+        function setGraphColorMode(mode) {
+            if (mode === graphColorMode) return;
+            graphColorMode = mode;
+
+            // Update legend display
+            updateGraphLegend();
+
+            // Update all node colors in the existing graph
+            if (graphSvg) {
+                graphSvg.selectAll('.graph-node circle')
+                    .transition()
+                    .duration(300)
+                    .attr('fill', d => getNodeFillColor(d));
+            }
         }
 
         // Reset graph zoom
@@ -8323,6 +8750,194 @@
             }
         }
 
+        // Node panel state (for single-click person details)
+        let nodePanelPersonId = null;
+        let selectedNodeId = null;
+
+        /**
+         * Show person details panel when single-clicking a node.
+         * This provides a quick preview without navigating away from the current graph.
+         * Double-click is used to navigate to that person's graph view.
+         *
+         * @param {object} nodeData - D3 node data object with person info
+         */
+        async function showNodeDetails(nodeData) {
+            const panel = document.getElementById('nodePanel');
+            const isSelfNode = nodeData.category === 'self' || isMyPage(nodeData.id);
+
+            // Close edge panel if open
+            closeEdgePanel();
+
+            // Highlight the selected node
+            if (graphSvg) {
+                graphSvg.selectAll('.graph-node').classed('panel-selected', false);
+                graphSvg.selectAll('.graph-node').each(function(d) {
+                    if (d.id === nodeData.id) {
+                        d3.select(this).classed('panel-selected', true);
+                    }
+                });
+            }
+            selectedNodeId = nodeData.id;
+            nodePanelPersonId = nodeData.id;
+
+            // Populate panel with node data (already available from graph)
+            document.getElementById('nodePanelName').textContent = nodeData.name || 'Unknown';
+            document.getElementById('nodePanelCategory').textContent = nodeData.category || 'unknown';
+
+            // Hide relationship strength and timing for self node
+            const relationshipSection = document.getElementById('nodePanelRelationshipSection');
+            const timingSection = document.getElementById('nodePanelTimingSection');
+            if (isSelfNode) {
+                relationshipSection.style.display = 'none';
+                timingSection.style.display = 'none';
+            } else {
+                relationshipSection.style.display = 'block';
+                timingSection.style.display = 'block';
+                document.getElementById('nodePanelStrength').textContent = Math.round(nodeData.strength || 0) + '%';
+
+                // Dunbar circle from the map
+                const circle = dunbarCircleMap.get(nodeData.id);
+                if (circle !== undefined && circle >= 0) {
+                    document.getElementById('nodePanelDunbar').textContent = `Circle ${circle}`;
+                } else {
+                    document.getElementById('nodePanelDunbar').textContent = '—';
+                }
+            }
+
+            // Try to get detailed data - use /me/stats for self, /people/{id} for others
+            try {
+                if (isSelfNode) {
+                    // For self node, use aggregate stats from /me/stats
+                    // Note: API returns total_emails, total_meetings, total_messages (not email_count, etc.)
+                    const stats = await api('/me/stats');
+                    document.getElementById('nodePanelEmails').textContent = formatCompactNumber(stats.total_emails || 0);
+                    document.getElementById('nodePanelMeetings').textContent = formatCompactNumber(stats.total_meetings || 0);
+                    document.getElementById('nodePanelMsgs').textContent = formatCompactNumber(stats.total_messages || 0);
+                    document.getElementById('nodePanelMentions').textContent = '—'; // Notes not in /me/stats
+                } else {
+                    // For other nodes, use person-specific data
+                    const person = await api(`/people/${nodeData.id}`);
+                    document.getElementById('nodePanelEmails').textContent = person.email_count || 0;
+                    document.getElementById('nodePanelMeetings').textContent = person.meeting_count || 0;
+                    document.getElementById('nodePanelMsgs').textContent = person.message_count || 0;
+                    document.getElementById('nodePanelMentions').textContent = person.mention_count || 0;
+
+                    // Format dates
+                    const formatDate = (isoStr) => {
+                        if (!isoStr) return '—';
+                        const date = new Date(isoStr);
+                        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    };
+                    document.getElementById('nodePanelFirstSeen').textContent = formatDate(person.first_seen);
+                    document.getElementById('nodePanelLastSeen').textContent = formatDate(person.last_seen);
+                }
+            } catch (error) {
+                console.error('Failed to load person details:', error);
+                // Use fallback data
+                document.getElementById('nodePanelEmails').textContent = '—';
+                document.getElementById('nodePanelMeetings').textContent = '—';
+                document.getElementById('nodePanelMsgs').textContent = '—';
+                document.getElementById('nodePanelMentions').textContent = '—';
+                if (!isSelfNode) {
+                    document.getElementById('nodePanelFirstSeen').textContent = '—';
+                    document.getElementById('nodePanelLastSeen').textContent = '—';
+                }
+            }
+
+            panel.classList.add('visible');
+        }
+
+        /**
+         * Navigate to person's timeline with a specific source filter applied.
+         * Called when clicking interaction stats in the node panel.
+         * @param {string} filterType - Filter type: 'emails', 'events', 'messages', 'notes'
+         */
+        async function navigateToFilteredTimeline(filterType) {
+            if (!nodePanelPersonId) return;
+
+            const personId = nodePanelPersonId;
+
+            // Close the panel first
+            closeNodePanel();
+
+            // Set the filter BEFORE any navigation - this ensures loadTimeline uses the correct filter
+            timelineFilter = filterType;
+
+            // Check if we're already viewing this person
+            if (selectedPersonId === personId) {
+                // Update filter chip UI
+                document.querySelectorAll('.timeline-filter-chip').forEach(c => c.classList.remove('active'));
+                const chip = document.querySelector(`.timeline-filter-chip[data-source="${filterType}"]`);
+                if (chip) chip.classList.add('active');
+
+                // Just switch to timeline tab with the filter already set
+                await switchTab('timeline');
+            } else {
+                // Navigate to the new person
+                selectedPersonId = personId;
+                hiddenNodeIds.clear();
+                closeEdgePanel();
+                renderPeopleList();
+
+                // Update URL to the timeline tab
+                updateUrl(personId, 'timeline');
+
+                // Load the person detail first (await it fully)
+                await loadPersonDetail(personId, true);
+
+                // Update filter chip UI (now that the DOM is rendered)
+                document.querySelectorAll('.timeline-filter-chip').forEach(c => c.classList.remove('active'));
+                const chip = document.querySelector(`.timeline-filter-chip[data-source="${filterType}"]`);
+                if (chip) chip.classList.add('active');
+
+                // Switch to timeline tab - this will call loadTimeline with our filter
+                await switchTab('timeline');
+            }
+        }
+
+        /**
+         * Close the node details panel and deselect the node.
+         */
+        function closeNodePanel() {
+            document.getElementById('nodePanel').classList.remove('visible');
+            // Deselect node
+            if (graphSvg) {
+                graphSvg.selectAll('.graph-node').classed('panel-selected', false);
+            }
+            selectedNodeId = null;
+            nodePanelPersonId = null;
+        }
+
+        /**
+         * Navigate to the person shown in the node panel.
+         * Called when clicking "Go to Profile" button.
+         */
+        async function navigateFromNodePanel() {
+            if (!nodePanelPersonId) return;
+
+            const personId = nodePanelPersonId;
+
+            // Save current filter values for when they return to graph
+            const degreeSelect = document.getElementById('degreeFilter');
+            preservedDegreeFilter = degreeSelect ? degreeSelect.value : 'all';
+            preservedSourceFilter = getSelectedSources();
+
+            closeNodePanel();
+
+            // Navigate to the person's overview tab (not staying on current tab)
+            selectedPersonId = personId;
+            hiddenNodeIds.clear();
+            closeEdgePanel();
+            renderPeopleList();
+
+            // Update URL to overview tab
+            updateUrl(personId, 'overview');
+
+            // Load person detail and switch to overview tab
+            await loadPersonDetail(personId, false);
+            await switchTab('overview', true); // true = don't update URL again
+        }
+
         // Toggle graph labels
         function toggleGraphLabels() {
             showLabelsEnabled = document.getElementById('showLabels').checked;
@@ -8401,10 +9016,14 @@
                 const visibleSecondDegreeEdges = new Set();
 
                 if (!showOnlyFirstDegree) {
-                    // Exclude owner (Nathan) from first-degree set for second-degree calculation
+                    // Exclude owner from first-degree set for second-degree calculation
                     // because owner is connected to everyone, which would make all nodes visible
+                    // EXCEPT when viewing the Me graph - then we need owner to find 2nd degree connections
                     const firstDegreeIds = new Set(visibleNodeIds);
-                    firstDegreeIds.delete(DUNBAR_CONFIG.myPersonId);
+                    const isViewingMeGraph = graphCenterId === DUNBAR_CONFIG.myPersonId;
+                    if (!isViewingMeGraph) {
+                        firstDegreeIds.delete(DUNBAR_CONFIG.myPersonId);
+                    }
 
                     graphLinksAll.forEach(linkData => {
                         if (!linkData) return;
