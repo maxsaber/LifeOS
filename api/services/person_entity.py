@@ -739,7 +739,7 @@ class PersonEntityStore:
         """Reload merged IDs mapping from disk (call after a merge operation)."""
         self._load_merged_ids()
 
-    def search(self, query: str, limit: int = 20, include_hidden: bool = False) -> list[PersonEntity]:
+    def search(self, query: str, limit: int = 20, include_hidden: bool = False, include_merged: bool = False) -> list[PersonEntity]:
         """
         Search entities by name, email, or alias.
 
@@ -747,6 +747,7 @@ class PersonEntityStore:
             query: Search string
             limit: Maximum results to return
             include_hidden: If True, include hidden entities (default: False)
+            include_merged: If True, include entities that were merged into others (default: False)
 
         Returns:
             List of matching entities
@@ -757,6 +758,10 @@ class PersonEntityStore:
         for entity in self._entities.values():
             # Skip hidden entities unless explicitly requested
             if entity.hidden and not include_hidden:
+                continue
+
+            # Skip entities that were merged into another person
+            if entity.id in self._merged_ids and not include_merged:
                 continue
 
             # Check canonical name
@@ -790,19 +795,28 @@ class PersonEntityStore:
 
         return results[:limit]
 
-    def get_all(self, include_hidden: bool = False) -> list[PersonEntity]:
+    def get_all(self, include_hidden: bool = False, include_merged: bool = False) -> list[PersonEntity]:
         """
         Get all entities.
 
         Args:
             include_hidden: If True, include hidden entities (default: False)
+            include_merged: If True, include entities that were merged into others (default: False)
 
         Returns:
             List of PersonEntity objects
         """
-        if include_hidden:
-            return list(self._entities.values())
-        return [e for e in self._entities.values() if not e.hidden]
+        results = []
+        for entity in self._entities.values():
+            # Skip hidden entities unless explicitly requested
+            if entity.hidden and not include_hidden:
+                continue
+            # Skip entities that were merged into another person
+            # (their ID is in _merged_ids as a secondary ID)
+            if entity.id in self._merged_ids and not include_merged:
+                continue
+            results.append(entity)
+        return results
 
     def count(self) -> int:
         """Get total number of entities."""
