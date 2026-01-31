@@ -2283,6 +2283,41 @@
             position: relative;
         }
 
+        .graph-node-sizing {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+        }
+
+        .node-sizing-toggle {
+            display: flex;
+            background: var(--bg-tertiary);
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+        }
+
+        .node-sizing-toggle .sizing-option {
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .node-sizing-toggle .sizing-option:hover {
+            color: var(--text-primary);
+        }
+
+        .node-sizing-toggle .sizing-option.active {
+            background: var(--people);
+            color: white;
+        }
+
         .edge-panel-section-title {
             font-size: 0.75rem;
             color: var(--text-secondary);
@@ -4439,6 +4474,13 @@
                                                 <span class="category-dot" style="background: #747d8c;"></span> 6+: Familiar/Contacts
                                             </label>
                                         </div>
+                                    </div>
+                                </div>
+                                <div class="graph-node-sizing">
+                                    <label>Node Size:</label>
+                                    <div class="node-sizing-toggle">
+                                        <button class="sizing-option active" data-mode="strength" onclick="setNodeSizingMode('strength')">Strength</button>
+                                        <button class="sizing-option" data-mode="centrality" onclick="setNodeSizingMode('centrality')">Centrality</button>
                                     </div>
                                 </div>
                                 <div class="graph-layout-tuning">
@@ -7914,6 +7956,8 @@
         let graphLoadingPersonId = null; // Guard against duplicate loadGraph calls for same person
         let hiddenNodeIds = new Set(); // Nodes hidden via right-click
         let graphHighlightedNodeId = null; // Node whose edges are currently highlighted (null = center node)
+        let nodeSizingMode = 'strength'; // 'strength' or 'centrality'
+        let nodeCentralityMap = new Map(); // Maps node ID to centrality score (0-1)
 
         /**
          * /ME PAGE "2ND DEGREE" NODE TRACKING
@@ -8120,6 +8164,43 @@
             }, 300);
         }
 
+        // Set node sizing mode (strength vs centrality)
+        function setNodeSizingMode(mode) {
+            nodeSizingMode = mode;
+
+            // Update UI
+            document.querySelectorAll('.node-sizing-toggle .sizing-option').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === mode);
+            });
+
+            // Update node sizes in place without rebuilding the graph
+            if (graphSvg) {
+                // Get current zoom compensation factor
+                const zoomCompensation = Math.min(2.5, Math.max(0.7, 1 / Math.pow(currentZoomScale, 0.5)));
+
+                // Update circle radii
+                graphSvg.selectAll('.graph-node circle')
+                    .transition()
+                    .duration(300)
+                    .attr('r', d => getNodeRadius(d) * zoomCompensation);
+
+                // Update label positions to match new node sizes
+                graphSvg.selectAll('.graph-node text')
+                    .transition()
+                    .duration(300)
+                    .attr('dy', d => (getNodeRadius(d) * zoomCompensation) + 12);
+
+                // Update hide button positions
+                graphSvg.selectAll('.node-hide-btn')
+                    .transition()
+                    .duration(300)
+                    .attr('transform', d => {
+                        const r = getNodeRadius(d) * zoomCompensation;
+                        return `translate(${r * 0.7}, ${-r * 0.7})`;
+                    });
+            }
+        }
+
         // Calculate filtered edge weight based on selected sources
         function calculateFilteredWeight(edge, selectedSources) {
             let weight = 0;
@@ -8243,7 +8324,7 @@
                     name: node.name,
                     category: node.category,
                     degree: node.degree,  // 0 = center, 1 = first-degree, 2 = second-degree
-                    strength: node.strength,
+                    strength: node.category === 'self' ? 100 : node.strength,  // "Me" node always 100%
                     interactionCount: node.interaction_count
                 }));
 
@@ -8298,11 +8379,20 @@
             }
         }
 
-        // Get node radius based on degree and strength
+        // Get node radius based on sizing mode (strength or centrality)
         function getNodeRadius(node) {
-            // Normalize strength to 0-1 (API returns 0-100 scale)
-            const normalizedStrength = (node.strength || 0) / 100;
-            const baseRadius = 8 + normalizedStrength * 15;
+            let normalizedValue;
+
+            if (nodeSizingMode === 'centrality') {
+                // Use centrality score (0-1) from the map
+                normalizedValue = nodeCentralityMap.get(node.id) || 0;
+            } else {
+                // Use relationship strength (API returns 0-100 scale)
+                normalizedValue = (node.strength || 0) / 100;
+            }
+
+            const baseRadius = 8 + normalizedValue * 15;
+
             // Center node (degree 0) is largest, first-degree normal, second-degree smaller
             if (node.degree === 0) {
                 return baseRadius * 1.5;  // Center person is 50% larger
@@ -9658,6 +9748,26 @@
                 graphNodes = filteredNodes;
                 graphLinks = finalLinks;
                 graphWeightRange = { min: minWeight, max: maxWeight, range: weightRange };
+
+                // Calculate node centrality (degree centrality based on visible edges)
+                // Use rank-based normalization for better visual differentiation
+                nodeCentralityMap.clear();
+                const degreeCount = new Map();
+                finalLinks.forEach(link => {
+                    const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
+                    const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+                    degreeCount.set(sourceId, (degreeCount.get(sourceId) || 0) + 1);
+                    degreeCount.set(targetId, (degreeCount.get(targetId) || 0) + 1);
+                });
+                // Sort nodes by degree and assign rank-based scores (percentile)
+                const sortedByDegree = Array.from(degreeCount.entries())
+                    .sort((a, b) => a[1] - b[1]);  // Sort ascending by degree
+                const nodeCount = sortedByDegree.length;
+                sortedByDegree.forEach(([nodeId, degree], index) => {
+                    // Map rank to 0-1 range (lowest degree = 0, highest = 1)
+                    const rankScore = nodeCount > 1 ? index / (nodeCount - 1) : 0.5;
+                    nodeCentralityMap.set(nodeId, rankScore);
+                });
 
                 // Check if we have anything to show
                 if (filteredNodes.length <= 1) {
