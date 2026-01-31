@@ -62,3 +62,12 @@ build/
 Thumbs.db
 venv.bak/
 vault/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Data exports in archive
+docs/archive/*.csv
+
+# Temp test files
+tests/test_p91_*.py
