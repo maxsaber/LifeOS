@@ -6,8 +6,13 @@ Live queries only (no bulk indexing).
 """
 import base64
 import logging
+import socket
 import time
 import re
+
+# Set a default socket timeout for all network operations (30 seconds)
+# This prevents Gmail API calls from hanging indefinitely
+socket.setdefaulttimeout(30)
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from typing import Optional
@@ -186,11 +191,19 @@ class GmailService:
 
     @property
     def service(self):
-        """Get or create Gmail API service."""
+        """Get or create Gmail API service with timeout."""
         if self._service is None:
+            import httplib2
+            from google_auth_httplib2 import AuthorizedHttp
+
             auth = get_google_auth(self.account_type)
             credentials = auth.get_credentials()
-            self._service = build("gmail", "v1", credentials=credentials)
+
+            # Create HTTP client with 30 second timeout
+            http = httplib2.Http(timeout=30)
+            authorized_http = AuthorizedHttp(credentials, http=http)
+
+            self._service = build("gmail", "v1", http=authorized_http)
         return self._service
 
     def _rate_limit(self):
@@ -265,33 +278,58 @@ class GmailService:
     def get_message(
         self,
         message_id: str,
-        include_body: bool = True
+        include_body: bool = True,
+        max_retries: int = 3,
     ) -> Optional[EmailMessage]:
         """
-        Get a specific email message.
+        Get a specific email message with retry logic for transient errors.
 
         Args:
             message_id: Gmail message ID
             include_body: Whether to fetch full body
+            max_retries: Maximum retry attempts for transient errors (500, 503)
 
         Returns:
             EmailMessage or None if not found
         """
-        try:
-            self._rate_limit()
-            format_type = "full" if include_body else "metadata"
-            msg = self.service.users().messages().get(
-                userId="me",
-                id=message_id,
-                format=format_type,
-                metadataHeaders=["Subject", "From", "To", "Date"] if not include_body else None,
-            ).execute()
+        from googleapiclient.errors import HttpError
 
-            return self._parse_message(msg, include_body)
+        format_type = "full" if include_body else "metadata"
+        last_error = None
 
-        except Exception as e:
-            logger.error(f"Failed to get message {message_id}: {e}")
-            return None
+        for attempt in range(max_retries + 1):
+            try:
+                self._rate_limit()
+                logger.debug(f"API call starting for message {message_id[:8]}...")
+                msg = self.service.users().messages().get(
+                    userId="me",
+                    id=message_id,
+                    format=format_type,
+                    metadataHeaders=["Subject", "From", "To", "Cc", "Date"] if not include_body else None,
+                ).execute()
+                logger.debug(f"API call completed for message {message_id[:8]}")
+
+                return self._parse_message(msg, include_body)
+
+            except HttpError as e:
+                last_error = e
+                # Retry on transient errors (500, 502, 503, 504)
+                if e.resp.status in (500, 502, 503, 504) and attempt < max_retries:
+                    wait_time = (2 ** attempt) + 0.5  # Exponential backoff: 1.5s, 2.5s, 4.5s
+                    logger.warning(f"Gmail API error {e.resp.status} for {message_id}, retrying in {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(wait_time)
+                    continue
+                # Don't retry on 404 (not found) or 4xx client errors
+                logger.error(f"Failed to get message {message_id}: {e}")
+                return None
+
+            except Exception as e:
+                logger.error(f"Failed to get message {message_id}: {e}")
+                return None
+
+        # All retries exhausted
+        logger.error(f"Failed to get message {message_id} after {max_retries} retries: {last_error}")
+        return None
 
     def _parse_message(self, msg: dict, include_body: bool = False) -> Optional[EmailMessage]:
         """

@@ -353,7 +353,8 @@ class InteractionStore:
             person_id: PersonEntity ID
             days_back: Only return interactions from last N days (default from config)
             limit: Maximum interactions to return (default from config)
-            source_type: Filter by source type (optional)
+            source_type: Filter by source type. Supports comma-separated values for
+                         multiple types (e.g., "imessage,whatsapp" for messages).
             specific_date: Filter to a specific date (YYYY-MM-DD format, optional)
 
         Returns:
@@ -364,20 +365,30 @@ class InteractionStore:
 
         conn = self._get_connection()
         try:
+            # Parse source_type into list if comma-separated (e.g., "imessage,whatsapp")
+            # This enables compound filters like "messages" = imessage + whatsapp
+            source_types = None
+            if source_type:
+                source_types = [s.strip() for s in source_type.split(",") if s.strip()]
+
             # Build query based on filters
             if specific_date:
                 # Filter to a specific day
                 date_start = f"{specific_date}T00:00:00"
                 date_end = f"{specific_date}T23:59:59"
-                if source_type:
+
+                if source_types:
+                    # Use IN clause for multiple source types
+                    placeholders = ",".join("?" * len(source_types))
                     cursor = conn.execute(
-                        """
+                        f"""
                         SELECT * FROM interactions
-                        WHERE person_id = ? AND timestamp >= ? AND timestamp <= ? AND source_type = ?
+                        WHERE person_id = ? AND timestamp >= ? AND timestamp <= ?
+                            AND source_type IN ({placeholders})
                         ORDER BY timestamp DESC
                         LIMIT ?
-                    """,
-                        (person_id, date_start, date_end, source_type, limit),
+                        """,
+                        (person_id, date_start, date_end, *source_types, limit),
                     )
                 else:
                     cursor = conn.execute(
@@ -386,7 +397,7 @@ class InteractionStore:
                         WHERE person_id = ? AND timestamp >= ? AND timestamp <= ?
                         ORDER BY timestamp DESC
                         LIMIT ?
-                    """,
+                        """,
                         (person_id, date_start, date_end, limit),
                     )
             else:
@@ -394,15 +405,19 @@ class InteractionStore:
                 if days_back is None:
                     days_back = InteractionConfig.DEFAULT_WINDOW_DAYS
                 cutoff = datetime.now() - timedelta(days=days_back)
-                if source_type:
+
+                if source_types:
+                    # Use IN clause for multiple source types
+                    placeholders = ",".join("?" * len(source_types))
                     cursor = conn.execute(
-                        """
+                        f"""
                         SELECT * FROM interactions
-                        WHERE person_id = ? AND timestamp > ? AND source_type = ?
+                        WHERE person_id = ? AND timestamp > ?
+                            AND source_type IN ({placeholders})
                         ORDER BY timestamp DESC
                         LIMIT ?
-                    """,
-                        (person_id, cutoff.isoformat(), source_type, limit),
+                        """,
+                        (person_id, cutoff.isoformat(), *source_types, limit),
                     )
                 else:
                     cursor = conn.execute(
@@ -411,7 +426,7 @@ class InteractionStore:
                         WHERE person_id = ? AND timestamp > ?
                         ORDER BY timestamp DESC
                         LIMIT ?
-                    """,
+                        """,
                         (person_id, cutoff.isoformat(), limit),
                     )
 
@@ -747,32 +762,59 @@ class InteractionStore:
         start_date: datetime,
         end_date: datetime,
         exclude_person_ids: list[str] = None,
+        source_type: Optional[str] = None,
+        limit: Optional[int] = None,
+        specific_date: Optional[str] = None,
     ) -> list[Interaction]:
         """
         Get all interactions within a date range.
 
-        Used for aggregate views like the "Me" dashboard.
+        Used for aggregate views like the "Me" dashboard and timeline.
 
         Args:
             start_date: Start of date range (inclusive)
             end_date: End of date range (inclusive)
             exclude_person_ids: Person IDs to exclude (e.g., self)
+            source_type: Filter by source type. Supports comma-separated values
+                         (e.g., "imessage,whatsapp" for messages).
+            limit: Maximum number of interactions to return
+            specific_date: Filter to a specific date (YYYY-MM-DD), overrides start/end
 
         Returns:
             List of interactions in the date range
         """
         conn = self._get_connection()
         try:
-            # Format dates for SQLite
-            start_str = start_date.strftime('%Y-%m-%d')
-            end_str = end_date.strftime('%Y-%m-%d 23:59:59')
+            # Handle specific date filter (overrides start/end range)
+            # Note: Timestamps in DB are ISO format (e.g., 2026-02-24T16:00:00-05:00)
+            # Use simple date comparison which works with ISO strings
+            if specific_date:
+                # For single date: timestamp >= 'YYYY-MM-DD' AND timestamp < next day
+                start_str = specific_date
+                # Calculate next day for exclusive upper bound
+                from datetime import datetime as dt, timedelta
+                next_day = (dt.strptime(specific_date, '%Y-%m-%d') + timedelta(days=1)).strftime('%Y-%m-%d')
+                end_str = next_day
+                use_less_than = True
+            else:
+                # Format dates for SQLite
+                start_str = start_date.strftime('%Y-%m-%d')
+                end_str = end_date.strftime('%Y-%m-%d 23:59:59')
+                use_less_than = False
 
-            # Build query
-            query = """
-                SELECT id, person_id, timestamp, source_type, title, snippet, source_link, source_id
-                FROM interactions
-                WHERE timestamp >= ? AND timestamp <= ?
-            """
+            # Build query - use < for specific date (exclusive upper bound), <= otherwise
+            if use_less_than:
+                query = """
+                    SELECT id, person_id, timestamp, source_type, title, snippet, source_link, source_id
+                    FROM interactions
+                    WHERE timestamp >= ? AND timestamp < ?
+                """
+            else:
+                query = """
+                    SELECT id, person_id, timestamp, source_type, title, snippet, source_link, source_id
+                    FROM interactions
+                    WHERE timestamp >= ? AND timestamp <= ?
+                """
             params = [start_str, end_str]
 
             # Exclude specific person IDs if provided
@@ -781,7 +823,19 @@ class InteractionStore:
                 query += f" AND person_id NOT IN ({placeholders})"
                 params.extend(exclude_person_ids)
 
+            # Filter by source type(s) - supports comma-separated values
+            if source_type:
+                source_types = [s.strip() for s in source_type.split(",") if s.strip()]
+                if source_types:
+                    placeholders = ','.join('?' * len(source_types))
+                    query += f" AND source_type IN ({placeholders})"
+                    params.extend(source_types)
+
             query += " ORDER BY timestamp DESC"
+
+            # Apply limit if specified
+            if limit:
+                query += f" LIMIT {int(limit)}"
 
             conn.row_factory = sqlite3.Row
             cursor = conn.execute(query, params)

@@ -8,6 +8,7 @@ Key changes from PersonRecord:
 - Includes confidence_score for merge quality tracking
 - Includes display_name for disambiguation (e.g., "Sarah (Movement)")
 """
+import fcntl
 import json
 import logging
 import sqlite3
@@ -564,6 +565,11 @@ class PersonEntityStore:
             logger.info(f"No existing entity store at {self.storage_path}")
             return
 
+        # Check for empty file
+        if self.storage_path.stat().st_size == 0:
+            logger.info(f"Empty entity store at {self.storage_path}")
+            return
+
         try:
             with open(self.storage_path, "r") as f:
                 data = json.load(f)
@@ -614,13 +620,18 @@ class PersonEntityStore:
                 self._phone_index.pop(phone, None)
 
     def save(self) -> None:
-        """Persist entities to disk."""
+        """Persist entities to disk with file locking for concurrent access safety."""
         self.storage_path.parent.mkdir(parents=True, exist_ok=True)
 
         data = [entity.to_dict() for entity in self._entities.values()]
 
+        # Use exclusive lock to prevent concurrent writes from corrupting the file
         with open(self.storage_path, "w") as f:
-            json.dump(data, f, indent=2)
+            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+            try:
+                json.dump(data, f, indent=2)
+            finally:
+                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
 
         logger.info(f"Saved {len(data)} entities to {self.storage_path}")
 

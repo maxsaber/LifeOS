@@ -169,6 +169,7 @@ class SlackSync:
             "channels_skipped": 0,
             "messages_indexed": 0,
             "interactions_created": 0,
+            "affected_person_ids": set(),
             "errors": [],
         }
 
@@ -205,6 +206,7 @@ class SlackSync:
                     stats["channels_processed"] += 1
                     stats["messages_indexed"] += channel_stats["messages_indexed"]
                     stats["interactions_created"] += channel_stats["interactions_created"]
+                    stats["affected_person_ids"].update(channel_stats.get("affected_person_ids", set()))
 
                 except Exception as e:
                     error_msg = f"Error syncing channel {channel.channel_id}: {e}"
@@ -252,6 +254,7 @@ class SlackSync:
         stats = {
             "messages_indexed": 0,
             "interactions_created": 0,
+            "affected_person_ids": set(),
         }
 
         # Determine oldest timestamp for fetch
@@ -290,11 +293,12 @@ class SlackSync:
 
         # Create interactions for DMs
         if create_interactions and (channel.is_im or channel.is_mpim):
-            interactions_created = self._create_interactions_for_channel(
+            interactions_created, affected_ids = self._create_interactions_for_channel(
                 channel=channel,
                 messages=messages,
             )
             stats["interactions_created"] = interactions_created
+            stats["affected_person_ids"].update(affected_ids)
 
         return stats
 
@@ -302,7 +306,7 @@ class SlackSync:
         self,
         channel: SlackChannel,
         messages: list[SlackMessage],
-    ) -> int:
+    ) -> tuple[int, set[str]]:
         """
         Create Interaction records for DM messages.
 
@@ -314,24 +318,26 @@ class SlackSync:
             messages: List of messages from the channel
 
         Returns:
-            Number of interactions created
+            Tuple of (interactions created, affected person IDs)
         """
+        affected_person_ids: set[str] = set()
+
         if not messages:
-            return 0
+            return 0, affected_person_ids
 
         created = 0
 
         # For DMs, resolve the other person
         dm_partner_id = channel.name if channel.is_im else None
         if not dm_partner_id:
-            return 0
+            return 0, affected_person_ids
 
         # Try to resolve person_id from SourceEntity
         person_id = self._resolve_person_id(dm_partner_id)
         if not person_id:
             # Skip if we can't resolve the person
             logger.debug(f"Could not resolve person for Slack user {dm_partner_id}")
-            return 0
+            return 0, affected_person_ids
 
         # Get the other person's name for display
         partner = self.client.get_user_cached(dm_partner_id, self._workspace_id)
@@ -386,8 +392,9 @@ class SlackSync:
             _, was_added = self.interaction_store.add_if_not_exists(interaction)
             if was_added:
                 created += 1
+                affected_person_ids.add(person_id)
 
-        return created
+        return created, affected_person_ids
 
     def _resolve_person_id(self, slack_user_id: str) -> Optional[str]:
         """
@@ -464,6 +471,13 @@ class SlackSync:
         elapsed = time.time() - start_time
         results["elapsed_seconds"] = round(elapsed, 1)
 
+        # Refresh PersonEntity stats for all affected people
+        affected_ids = results.get("messages", {}).get("affected_person_ids", set())
+        if affected_ids:
+            from api.services.person_stats import refresh_person_stats
+            logger.info(f"Refreshing stats for {len(affected_ids)} affected people...")
+            refresh_person_stats(list(affected_ids))
+
         logger.info(f"Full Slack sync complete in {elapsed:.1f}s")
         return results
 
@@ -481,11 +495,20 @@ class SlackSync:
         """
         logger.info("Starting incremental Slack sync")
 
-        return self.sync_messages(
+        results = self.sync_messages(
             full=False,
             dm_only=True,
             create_interactions=create_interactions,
         )
+
+        # Refresh PersonEntity stats for all affected people
+        affected_ids = results.get("affected_person_ids", set())
+        if affected_ids:
+            from api.services.person_stats import refresh_person_stats
+            logger.info(f"Refreshing stats for {len(affected_ids)} affected people...")
+            refresh_person_stats(list(affected_ids))
+
+        return results
 
 
 # Singleton instance

@@ -298,6 +298,8 @@ class TestPersonEntityStore:
         """Create a temporary store for testing."""
         with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as f:
             store = PersonEntityStore(f.name)
+            # Clear blocklist to ensure test isolation from production data
+            store._blocklist.clear()
             yield store
             # Cleanup
             Path(f.name).unlink(missing_ok=True)

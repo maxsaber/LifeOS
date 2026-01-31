@@ -132,22 +132,41 @@ class IndexerService:
             Number of files indexed
         """
         count = 0
+        all_affected_person_ids: set[str] = set()
+
         for md_file in self.vault_path.rglob("*.md"):
             try:
-                self.index_file(str(md_file))
+                # Collect affected person IDs instead of refreshing per-file
+                affected_ids = self.index_file(str(md_file), skip_stats_refresh=True)
+                if affected_ids:
+                    all_affected_person_ids.update(affected_ids)
                 count += 1
+                if count % 500 == 0:
+                    logger.info(f"  Indexed {count} files...")
             except Exception as e:
                 logger.error(f"Failed to index {md_file}: {e}")
 
         logger.info(f"Indexed {count} files")
+
+        # Batch refresh all affected person stats ONCE at the end
+        if all_affected_person_ids:
+            from api.services.person_stats import refresh_person_stats
+            logger.info(f"Refreshing stats for {len(all_affected_person_ids)} affected people...")
+            refresh_person_stats(list(all_affected_person_ids))
+
         return count
 
-    def index_file(self, file_path: str) -> None:
+    def index_file(self, file_path: str, skip_stats_refresh: bool = False) -> set[str] | None:
         """
         Index a single file.
 
         Args:
             file_path: Path to the file
+            skip_stats_refresh: If True, return affected person IDs instead of refreshing.
+                               Used by index_all() to batch refresh at the end.
+
+        Returns:
+            Set of affected person IDs if skip_stats_refresh=True, else None
         """
         path = Path(file_path)
         if not path.exists() or not path.suffix == ".md":
@@ -179,6 +198,7 @@ class IndexerService:
         all_people = list(set(extracted_people + frontmatter_people))
 
         # Sync to v2 people system if available
+        affected_person_ids: set[str] = set()
         if HAS_V2_PEOPLE and all_people:
             try:
                 from datetime import timezone
@@ -188,7 +208,12 @@ class IndexerService:
                 else:
                     # Use file mtime as fallback for undated notes
                     note_date = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
-                self._sync_people_to_v2(path, all_people, note_date, is_granola)
+                affected_person_ids = self._sync_people_to_v2(path, all_people, note_date, is_granola)
+
+                # Refresh stats for affected people (unless caller will batch refresh)
+                if affected_person_ids and not skip_stats_refresh:
+                    from api.services.person_stats import refresh_person_stats
+                    refresh_person_stats(list(affected_person_ids))
             except Exception as e:
                 logger.warning(f"Failed to sync people to v2 for {file_path}: {e}")
 
@@ -243,6 +268,11 @@ class IndexerService:
             logger.warning(f"Summary generation failed for {file_path}: {e}")
 
         logger.debug(f"Indexed {file_path} with {len(chunks)} chunks")
+
+        # Return affected person IDs for batch refresh (when called from index_all)
+        if skip_stats_refresh:
+            return affected_person_ids
+        return None
 
     def delete_file(self, file_path: str) -> None:
         """
@@ -333,7 +363,7 @@ class IndexerService:
         people: list[str],
         note_date: datetime,
         is_granola: bool = False,
-    ) -> None:
+    ) -> set[str]:
         """
         Resolve extracted people and create vault mention interactions and source entities.
 
@@ -341,16 +371,22 @@ class IndexerService:
         1. Resolve each person name to a PersonEntity (creating if needed)
         2. Create an interaction record for the vault mention
         3. Create a source entity for the vault/granola mention (for split UI)
-        4. Update entity stats (mention_count, related_notes)
+
+        Note: PersonEntity stats (mention_count) are updated via refresh_person_stats()
+        after sync completes, not manually here.
 
         Args:
             path: Path to the note file
             people: List of extracted person names
             note_date: Date of the note (for interaction timestamp)
             is_granola: Whether this is a Granola meeting note
+
+        Returns:
+            Set of affected person IDs (for stats refresh)
         """
+        affected_person_ids: set[str] = set()
         if not HAS_V2_PEOPLE:
-            return
+            return affected_person_ids
 
         resolver = get_entity_resolver()
         interaction_store = get_interaction_store()
@@ -391,6 +427,10 @@ class IndexerService:
                 # Add interaction (avoiding duplicates on re-index)
                 _, was_added = interaction_store.add_if_not_exists(interaction)
 
+                # Track affected person for stats refresh
+                if was_added:
+                    affected_person_ids.add(entity.id)
+
                 # Create source entity for split UI visibility
                 # This uses add_or_update so re-indexing won't create duplicates
                 source_metadata = {
@@ -421,10 +461,7 @@ class IndexerService:
                 source_entity_store.add_or_update(source_entity)
 
                 if was_added:
-                    # Update entity stats
-                    entity.mention_count += 1
-
-                    # Add to related_notes if not already present
+                    # Update related_notes (not a count, just a list)
                     if file_path_str not in entity.related_notes:
                         entity.related_notes.append(file_path_str)
 
@@ -437,7 +474,7 @@ class IndexerService:
                     if source_type not in entity.sources:
                         entity.sources.append(source_type)
 
-                    # Persist entity changes
+                    # Persist entity changes (stats updated via refresh_person_stats)
                     resolver.store.update(entity)
 
                     logger.debug(
@@ -449,6 +486,8 @@ class IndexerService:
                 logger.warning(
                     f"Failed to sync person '{person_name}' to v2: {e}"
                 )
+
+        return affected_person_ids
 
     def start_watching(self) -> None:
         """Start watching the vault for changes."""
