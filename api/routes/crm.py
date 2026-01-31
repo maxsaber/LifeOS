@@ -599,7 +599,7 @@ async def list_people(
     min_interactions: int = Query(default=0, ge=0, description="Minimum total interactions (emails + meetings + mentions + messages)"),
     sort: str = Query(default="strength", description="Sort field: interactions, last_seen, name, strength"),
     offset: int = Query(default=0, ge=0, description="Offset for pagination"),
-    limit: int = Query(default=50, ge=1, le=200, description="Max results"),
+    limit: int = Query(default=50, ge=1, le=10000, description="Max results (up to 10000 for Dunbar calculation)"),
 ):
     """
     List people with filtering and sorting.
