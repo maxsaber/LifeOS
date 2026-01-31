@@ -176,6 +176,7 @@ SYNC_ORDER = [
     # === Phase 4: Vector Store Indexing ===
     # Index content with fresh people data available for entity resolution
     "vault_reindex",            # Reindex vault notes to ChromaDB + BM25
+    "crm_vectorstore",          # Index CRM people for semantic search
 
     # === Phase 5: Content Sync ===
     # Pull external content into vault (will be indexed on next run)
@@ -206,6 +207,7 @@ SYNC_SCRIPTS = {
 
     # Phase 4: Vector Store Indexing
     "vault_reindex": ("scripts/sync_vault_reindex.py", ["--execute"]),
+    "crm_vectorstore": ("scripts/sync_crm_to_vectorstore.py", ["--execute"]),
 
     # Phase 5: Content Sync
     "google_docs": ("scripts/sync_google_docs.py", ["--execute"]),

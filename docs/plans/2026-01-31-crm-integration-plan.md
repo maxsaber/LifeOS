@@ -1,8 +1,22 @@
 # CRM Integration Plan: Relationship-Centric Routing
 
 **Date:** 2026-01-31
-**Status:** 📋 Planning
+**Status:** ✅ Complete
 **Goal:** Make relationship strength and channel-specific interaction data drive smart routing
+
+---
+
+## Implementation Progress
+
+| Phase | Task | Status | Notes |
+|-------|------|--------|-------|
+| 1.1 | Add `get_last_interaction_by_source()` | ✅ Complete | Added to `interaction_store.py`, tests pass |
+| 1.2 | Create `RelationshipSummary` helper | ✅ Complete | New `relationship_summary.py`, tests pass |
+| 2 | Enhance `PersonResponse` + MCP | ✅ Complete | Added relationship_strength, active_channels, days_since_contact to response; updated MCP description and formatting |
+| 3 | Update query router with person context | ✅ Complete | Relationship context fetched after entity resolution |
+| 4 | Update chat route to use context | ✅ Complete | Auto-queries active channels (iMessage/WhatsApp), adds relationship context to synthesis |
+| 5 | Create person profile indexer | ✅ Complete | New `person_indexer.py` with `sync_people_to_vectorstore()` |
+| 6 | Add to sync pipeline | ✅ Complete | Added `crm_vectorstore` to Phase 4 in `run_all_syncs.py` |
 
 ---
 
@@ -598,3 +612,35 @@ sync_crm_to_vectorstore()
 - **Deep facts integration** - Facts are included when available but not the focus
 - **Dunbar circles** - Future enhancement, not needed for routing
 - **Live API caching** - Keep current architecture (live APIs stay live)
+
+---
+
+## Completion Notes (2026-01-31)
+
+### Files Created
+- `api/services/relationship_summary.py` - RelationshipSummary dataclass and helpers
+- `api/services/person_indexer.py` - Person profile vector store indexing
+- `scripts/sync_crm_to_vectorstore.py` - Sync script for nightly pipeline
+- `tests/test_relationship_summary.py` - Tests for RelationshipSummary
+
+### Files Modified
+- `api/services/interaction_store.py` - Added `get_last_interaction_by_source()`
+- `api/routes/people.py` - Enhanced PersonResponse with relationship context
+- `api/routes/chat.py` - Auto-query active channels, add relationship context
+- `mcp_server.py` - Updated lifeos_people_search description and formatting
+- `scripts/run_all_syncs.py` - Added crm_vectorstore to Phase 4
+- `api/services/sync_health.py` - Added crm_vectorstore source config
+- `tests/test_interaction_store.py` - Added tests for new method
+
+### Test Results
+All 78 relevant tests pass:
+- `test_interaction_store.py` - 32 passed
+- `test_relationship_summary.py` - 10 passed  
+- `test_query_router.py` - 26 passed
+- `test_people.py` - 16 passed
+
+### Next Steps (Post-Implementation)
+1. Restart server: `./scripts/server.sh restart`
+2. Run initial CRM vector sync: `uv run python scripts/sync_crm_to_vectorstore.py --execute`
+3. Test MCP tool: Search for a person and verify relationship context in response
+4. Test chat: Ask "Tell me about [name]" and verify active channels are auto-queried

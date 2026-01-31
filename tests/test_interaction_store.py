@@ -291,6 +291,58 @@ class TestInteractionStore:
         assert last is not None
         assert "1 days ago" in last.title
 
+    def test_get_last_interaction_by_source(self, temp_store):
+        """Test getting most recent interaction per source type."""
+        person_id = "person-channel-recency"
+
+        # Add interactions across different channels at different times
+        # Gmail: 10 days ago, 5 days ago (most recent gmail = 5 days ago)
+        # iMessage: 2 days ago (most recent imessage = 2 days ago)
+        # Calendar: 30 days ago (most recent calendar = 30 days ago)
+        interactions = [
+            ("gmail", 10),
+            ("gmail", 5),
+            ("imessage", 2),
+            ("calendar", 30),
+        ]
+
+        for source, days_ago in interactions:
+            interaction = Interaction(
+                id=str(uuid.uuid4()),
+                person_id=person_id,
+                timestamp=datetime.now() - timedelta(days=days_ago),
+                source_type=source,
+                title=f"{source} {days_ago} days ago",
+            )
+            temp_store.add(interaction)
+
+        recency = temp_store.get_last_interaction_by_source(person_id)
+
+        # Should have 3 keys (gmail, imessage, calendar)
+        assert len(recency) == 3
+        assert "gmail" in recency
+        assert "imessage" in recency
+        assert "calendar" in recency
+
+        # Verify the most recent timestamp for each source
+        now = datetime.now()
+        gmail_days_ago = (now - recency["gmail"].replace(tzinfo=None)).days
+        imessage_days_ago = (now - recency["imessage"].replace(tzinfo=None)).days
+        calendar_days_ago = (now - recency["calendar"].replace(tzinfo=None)).days
+
+        assert gmail_days_ago == 5  # Most recent gmail was 5 days ago
+        assert imessage_days_ago == 2  # Most recent imessage was 2 days ago
+        assert calendar_days_ago == 30  # Most recent calendar was 30 days ago
+
+        # All returned datetimes should be timezone-aware
+        for dt in recency.values():
+            assert dt.tzinfo is not None
+
+    def test_get_last_interaction_by_source_empty(self, temp_store):
+        """Test channel recency for person with no interactions."""
+        recency = temp_store.get_last_interaction_by_source("nonexistent-person")
+        assert recency == {}
+
     def test_delete(self, temp_store):
         """Test deleting an interaction."""
         interaction = Interaction(

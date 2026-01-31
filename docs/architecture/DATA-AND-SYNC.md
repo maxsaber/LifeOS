@@ -365,6 +365,7 @@ All sync scripts in `scripts/` follow the pattern:
 | Script | Purpose | Data Source |
 |--------|---------|-------------|
 | `sync_vault_reindex.py` | Reindex vault to ChromaDB + BM25 | Vault files |
+| `sync_crm_to_vectorstore.py` | Index CRM people for semantic search | `data/crm.db` |
 
 ### Phase 5: Content Sync
 
@@ -482,6 +483,7 @@ The unified sync runner (`run_all_syncs.py`) executes in this order:
 
 **Phase 4: Vector Store Indexing**
 14. `vault_reindex` - Reindex vault to ChromaDB + BM25
+15. `crm_vectorstore` - Index CRM people for semantic search
 
 **Phase 5: Content Sync**
 15. `google_docs` - Sync Google Docs to vault

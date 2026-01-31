@@ -122,6 +122,13 @@ SYNC_SOURCES = {
         "phase": 4,
         "depends_on": ["strengths"],  # Run after all CRM processing
     },
+    "crm_vectorstore": {
+        "description": "Index CRM people to vector store for semantic search",
+        "script": "scripts/sync_crm_to_vectorstore.py",
+        "frequency": "daily",
+        "phase": 4,
+        "depends_on": ["strengths"],  # Run after relationship metrics computed
+    },
 
     # === Phase 5: Content Sync ===
     "google_docs": {

@@ -35,6 +35,10 @@ class PersonResponse(BaseModel):
     linkedin_url: Optional[str] = None
     display_name: Optional[str] = None
     aliases: Optional[list[str]] = None
+    # Relationship context fields (for smart routing)
+    relationship_strength: float = 0.0  # 0-100 scale
+    active_channels: list[str] = []  # Channels with activity in last 7 days
+    days_since_contact: int = 999  # 999 = never contacted
 
 
 class SearchResponse(BaseModel):
@@ -87,9 +91,17 @@ class InteractionsResponse(BaseModel):
     formatted_history: str = ""
 
 
-def _entity_to_response(entity) -> PersonResponse:
-    """Convert PersonEntity to API response."""
-    return PersonResponse(
+def _entity_to_response(entity, include_channels: bool = True) -> PersonResponse:
+    """
+    Convert PersonEntity to API response.
+
+    Args:
+        entity: PersonEntity to convert
+        include_channels: If True, fetch active_channels from InteractionStore.
+                         Set to False for bulk operations to improve performance.
+    """
+    # Basic fields from entity
+    response = PersonResponse(
         canonical_name=entity.canonical_name,
         email=entity.emails[0] if entity.emails else None,
         company=entity.company,
@@ -104,7 +116,40 @@ def _entity_to_response(entity) -> PersonResponse:
         linkedin_url=entity.linkedin_url,
         display_name=entity.display_name,
         aliases=entity.aliases,
+        # Relationship context - strength comes from entity directly
+        relationship_strength=entity.relationship_strength,
     )
+
+    # Compute days_since_contact from last_seen
+    if entity.last_seen:
+        now = datetime.now(timezone.utc)
+        last = entity.last_seen
+        if last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)
+        response.days_since_contact = (now - last).days
+    else:
+        response.days_since_contact = 999
+
+    # Fetch active channels if requested (uses new get_last_interaction_by_source)
+    if include_channels and entity.id:
+        try:
+            interaction_store = get_interaction_store()
+            recency_by_source = interaction_store.get_last_interaction_by_source(entity.id)
+
+            now = datetime.now(timezone.utc)
+            active = []
+            for source_type, last_dt in recency_by_source.items():
+                if last_dt:
+                    last_aware = last_dt if last_dt.tzinfo else last_dt.replace(tzinfo=timezone.utc)
+                    days_ago = (now - last_aware).days
+                    if days_ago <= 7:  # Active = within 7 days
+                        active.append(source_type)
+            response.active_channels = active
+        except Exception as e:
+            logger.debug(f"Could not get active channels for {entity.id}: {e}")
+            response.active_channels = []
+
+    return response
 
 
 @router.get("/search", response_model=SearchResponse)

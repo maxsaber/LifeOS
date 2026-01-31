@@ -79,7 +79,17 @@ CURATED_ENDPOINTS = {
     },
     "/api/people/search": {
         "name": "lifeos_people_search",
-        "description": "Search for people in your network by name or email.",
+        "description": """Search for people in your network by name or email.
+
+Returns relationship context to guide follow-up queries:
+- relationship_strength: How important this person is (0-100)
+- active_channels: Which channels have recent activity (last 7 days)
+- days_since_contact: How long since last interaction
+
+Use active_channels to decide what to query next:
+- If "imessage" is active, call lifeos_imessage_search with their entity_id
+- If "gmail" is active, call lifeos_gmail_search with their email
+- If no active channels, they may be a dormant contact""",
         "method": "GET"
     },
     "/health/full": {
@@ -505,6 +515,19 @@ class LifeOSMCPServer:
                 text += f"- **{name}**"
                 if email := p.get("email"):
                     text += f" ({email})"
+                text += "\n"
+                # Show relationship context for routing decisions
+                strength = p.get("relationship_strength", 0)
+                days = p.get("days_since_contact", 999)
+                active = p.get("active_channels", [])
+                entity_id = p.get("entity_id", "")
+                text += f"  Strength: {strength:.0f}/100 | Last contact: {days} days ago\n"
+                if active:
+                    text += f"  Active channels: {', '.join(active)}\n"
+                else:
+                    text += f"  Active channels: none recently\n"
+                if entity_id:
+                    text += f"  Entity ID: {entity_id}\n"
                 text += "\n"
             return text
 

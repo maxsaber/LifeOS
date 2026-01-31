@@ -1028,6 +1028,7 @@ async def ask_stream(request: AskStreamRequest):
                         print(f"  Found email from calendar: {person_email}")
 
                     # Resolve entity to get entity_id for message queries
+                    relationship_summary = None
                     try:
                         from api.services.entity_resolver import get_entity_resolver
                         resolver = get_entity_resolver()
@@ -1035,6 +1036,24 @@ async def ask_stream(request: AskStreamRequest):
                         if result:
                             entity_id = result.entity.id
                             print(f"  Resolved entity: {result.entity.canonical_name} ({entity_id})")
+
+                            # Fetch relationship context for smart routing
+                            from api.services.relationship_summary import (
+                                get_relationship_summary,
+                                format_relationship_context,
+                            )
+                            relationship_summary = get_relationship_summary(entity_id)
+                            if relationship_summary:
+                                print(f"  Relationship strength: {relationship_summary.relationship_strength}/100")
+                                print(f"  Active channels: {relationship_summary.active_channels or 'none'}")
+                                print(f"  Primary channel: {relationship_summary.primary_channel}")
+
+                                # Add relationship context for synthesis
+                                context_str = format_relationship_context(relationship_summary)
+                                extra_context.append({
+                                    "source": "relationship_context",
+                                    "content": context_str,
+                                })
                     except Exception as e:
                         print(f"  Entity resolution error: {e}")
 
@@ -1042,18 +1061,37 @@ async def ask_stream(request: AskStreamRequest):
                     start_date, end_date = extract_message_date_range(request.question)
                     search_term = extract_message_search_terms(request.question, person_name)
 
-                    # If date range or search term specified, query messages directly
-                    if entity_id and (start_date or end_date or search_term):
+                    # Determine if we should auto-query messages based on active channels
+                    # Auto-query if: (1) explicit date/search, OR (2) imessage/whatsapp is active
+                    active_channels = relationship_summary.active_channels if relationship_summary else []
+                    should_query_messages = (
+                        entity_id and (
+                            start_date or end_date or search_term or
+                            "imessage" in active_channels or
+                            "whatsapp" in active_channels
+                        )
+                    )
+
+                    if should_query_messages:
                         try:
                             from api.services.imessage import query_person_messages
-                            print(f"  Querying messages: dates={start_date} to {end_date}, search={search_term}")
+
+                            # If no explicit date range but auto-querying, use last 30 days
+                            effective_start = start_date
+                            effective_end = end_date
+                            if not start_date and not end_date and not search_term:
+                                from datetime import datetime, timedelta
+                                effective_start = (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+                                print(f"  Auto-querying messages (active channel): last 30 days")
+                            else:
+                                print(f"  Querying messages: dates={start_date} to {end_date}, search={search_term}")
 
                             msg_result = query_person_messages(
                                 entity_id=entity_id,
                                 search_term=search_term,
-                                start_date=start_date,
-                                end_date=end_date,
-                                limit=150,  # More messages for context
+                                start_date=effective_start,
+                                end_date=effective_end,
+                                limit=150 if (start_date or search_term) else 50,  # Fewer for auto-queries
                             )
 
                             if msg_result["count"] > 0:

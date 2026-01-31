@@ -2492,6 +2492,31 @@
             color: var(--text-primary);
         }
 
+        .edge-panel-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .edge-panel-copy {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.9rem;
+            padding: 0;
+            line-height: 1;
+            transition: color 0.15s;
+        }
+
+        .edge-panel-copy:hover {
+            color: var(--text-primary);
+        }
+
+        .edge-panel-copy.copied {
+            color: var(--accent);
+        }
+
         .edge-panel-people {
             display: flex;
             align-items: center;
@@ -4536,7 +4561,15 @@
                             <div id="edgePanel" class="edge-panel">
                                 <div class="edge-panel-header">
                                     <div class="edge-panel-title">Connection Details</div>
-                                    <button class="edge-panel-close" onclick="closeEdgePanel()">&times;</button>
+                                    <div class="edge-panel-header-actions">
+                                        <button class="edge-panel-copy" onclick="copyEdgeId()" title="Copy edge ID">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                            </svg>
+                                        </button>
+                                        <button class="edge-panel-close" onclick="closeEdgePanel()">&times;</button>
+                                    </div>
                                 </div>
                                 <div class="edge-panel-people">
                                     <span class="edge-panel-person" id="edgePanelPersonA" onclick="navigateToEdgePerson('a')">Person A</span>
@@ -4594,7 +4627,15 @@
                             <div id="nodePanel" class="edge-panel node-panel">
                                 <div class="edge-panel-header">
                                     <div class="edge-panel-title" id="nodePanelTitle">Person Details</div>
-                                    <button class="edge-panel-close" onclick="closeNodePanel()">&times;</button>
+                                    <div class="edge-panel-header-actions">
+                                        <button class="edge-panel-copy" onclick="copyPersonId()" title="Copy person ID">
+                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                                            </svg>
+                                        </button>
+                                        <button class="edge-panel-close" onclick="closeNodePanel()">&times;</button>
+                                    </div>
                                 </div>
                                 <div class="node-panel-name" id="nodePanelName">Person Name</div>
                                 <div class="node-panel-category" id="nodePanelCategory">Category</div>
@@ -9268,6 +9309,13 @@
             selectedEdgeKey = null;
         }
 
+        // Copy edge ID to clipboard
+        function copyEdgeId() {
+            if (!edgePanelData) return;
+            const edgeId = `${edgePanelData.personAId}|${edgePanelData.personBId}`;
+            copyToClipboardWithFeedback(edgeId, '#edgePanel .edge-panel-copy');
+        }
+
         // Navigate to person from edge panel
         function navigateToEdgePerson(which) {
             const personId = which === 'a' ? edgePanelData.personAId : edgePanelData.personBId;
@@ -9445,6 +9493,14 @@
 
             // Revert edge highlighting to show center node's first-degree edges
             updateEdgeHighlighting(null);
+        }
+
+        /**
+         * Copy person ID to clipboard.
+         */
+        function copyPersonId() {
+            if (!nodePanelPersonId) return;
+            copyToClipboardWithFeedback(nodePanelPersonId, '#nodePanel .edge-panel-copy');
         }
 
         /**
@@ -10123,6 +10179,24 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        /**
+         * Copy text to clipboard and show visual feedback on the button.
+         * @param {string} text - Text to copy
+         * @param {string} buttonSelector - CSS selector for the button to animate
+         */
+        async function copyToClipboardWithFeedback(text, buttonSelector) {
+            try {
+                await navigator.clipboard.writeText(text);
+                const btn = document.querySelector(buttonSelector);
+                if (btn) {
+                    btn.classList.add('copied');
+                    setTimeout(() => btn.classList.remove('copied'), 1000);
+                }
+            } catch (err) {
+                console.error('Failed to copy:', err);
+            }
         }
 
         function formatDate(dateStr) {

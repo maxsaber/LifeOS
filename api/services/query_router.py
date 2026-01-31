@@ -72,10 +72,14 @@ class QueryRouter:
     def _extract_person_name(self, query: str) -> Optional[str]:
         """Extract person name from a people-related query."""
         # Common words that should NOT be captured as part of a name
+        # Includes verb forms that regex might accidentally capture
         stop_words = {'on', 'at', 'today', 'tomorrow', 'this', 'next', 'monday',
                       'tuesday', 'wednesday', 'thursday', 'friday', 'saturday',
                       'sunday', 'morning', 'afternoon', 'evening', 'week', 'about',
-                      'last', 'month', 'year', 'recently', 'lately'}
+                      'last', 'month', 'year', 'recently', 'lately',
+                      # Verb forms that patterns might accidentally capture
+                      'been', 'being', 'be', 'am', 'is', 'are', 'was', 'were',
+                      'do', 'does', 'did', 'have', 'has', 'had', 'just', 'ever'}
 
         patterns = [
             # Email patterns (allow lowercase names like "tay")
@@ -107,6 +111,9 @@ class QueryRouter:
             match = re.search(pattern, query, re.IGNORECASE)
             if match:
                 name = match.group(1).strip()
+                # Skip if the entire captured name is a stop word
+                if name.lower() in stop_words:
+                    continue
                 # Remove trailing stop words (captured due to IGNORECASE)
                 words = name.split()
                 while words and words[-1].lower() in stop_words:

@@ -488,6 +488,43 @@ class InteractionStore:
         finally:
             conn.close()
 
+    def get_last_interaction_by_source(self, person_id: str) -> dict[str, datetime]:
+        """
+        Get the most recent interaction timestamp for each source type.
+
+        Used for channel-aware routing: knowing when you last communicated
+        with someone on each channel helps decide which sources to query.
+
+        Args:
+            person_id: PersonEntity ID
+
+        Returns:
+            Dict mapping source_type to last interaction timestamp.
+            e.g., {"gmail": datetime(...), "imessage": datetime(...)}
+            Only includes source types with at least one interaction.
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(
+                """
+                SELECT source_type, MAX(timestamp) as last_ts
+                FROM interactions
+                WHERE person_id = ?
+                GROUP BY source_type
+                """,
+                (person_id,),
+            )
+            result = {}
+            for row in cursor.fetchall():
+                source_type = row[0]
+                ts_str = row[1]
+                if ts_str:
+                    dt = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
+                    result[source_type] = _make_aware(dt)
+            return result
+        finally:
+            conn.close()
+
     def get_first_interaction_dates(self, min_interactions: int = 1) -> dict[str, datetime]:
         """
         Get the earliest interaction timestamp for each person.
