@@ -402,16 +402,9 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
         save_merged_ids(merged_ids)
         logger.info(f"   Recorded: {secondary_id} -> {canonical_primary_id}")
 
-    # 7. Update primary stats and delete secondary
-    logger.info("\n7. Updating stats and cleaning up...")
+    # 7. Update primary metadata and delete secondary
+    logger.info("\n7. Updating metadata and cleaning up...")
     if not dry_run:
-        # Recalculate stats for primary
-        primary.email_count = (primary.email_count or 0) + (secondary.email_count or 0)
-        primary.meeting_count = (primary.meeting_count or 0) + (secondary.meeting_count or 0)
-        primary.message_count = (primary.message_count or 0) + (secondary.message_count or 0)
-        primary.mention_count = (primary.mention_count or 0) + (secondary.mention_count or 0)
-        primary.source_entity_count = (primary.source_entity_count or 0) + (secondary.source_entity_count or 0)
-
         # Update last_seen to most recent
         if secondary.last_seen:
             if primary.last_seen is None or secondary.last_seen > primary.last_seen:
@@ -432,6 +425,14 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
         store.save()
 
         logger.info(f"   Deleted secondary record: {secondary.canonical_name}")
+
+        # Refresh stats from InteractionStore (the source of truth)
+        from api.services.person_stats import refresh_person_stats
+        logger.info("   Refreshing stats from InteractionStore...")
+        refresh_person_stats([canonical_primary_id])
+
+        # Reload to get updated counts
+        primary = store.get_by_id(canonical_primary_id)
 
     # 8. Recalculate relationship strength for primary
     logger.info("\n8. Recalculating relationship strength...")

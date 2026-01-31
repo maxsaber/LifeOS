@@ -123,6 +123,7 @@ def main():
     print(f"Processing {len(corrections)} vault match corrections...\n")
 
     stats = {'fixed': 0, 'unlinked': 0, 'skipped': 0, 'errors': []}
+    affected_person_ids: set[str] = set()  # Track for stats refresh
 
     for corr in corrections:
         source_name = corr['source_name']
@@ -176,6 +177,8 @@ def main():
                 UPDATE interactions SET person_id = ?
                 WHERE person_id = ? AND source_type IN ('vault', 'granola')
             """, (target_id, source_id))
+            affected_person_ids.add(source_id)
+            affected_person_ids.add(target_id)
             print(f"  -> Reassigned {len(interactions)} to '{target_name}'")
             stats['fixed'] += len(interactions)
 
@@ -201,6 +204,8 @@ def main():
                         if target_id and target_id != source_id:
                             conn.execute("UPDATE interactions SET person_id = ? WHERE id = ?",
                                        (target_id, int_id))
+                            affected_person_ids.add(source_id)
+                            affected_person_ids.add(target_id)
                             fixed_count += 1
                         matched = True
                         break
@@ -211,6 +216,7 @@ def main():
                     if has_default:
                         # Delete the incorrectly linked interaction
                         conn.execute("DELETE FROM interactions WHERE id = ?", (int_id,))
+                        affected_person_ids.add(source_id)
                         unlinked_count += 1
 
             if fixed_count:
@@ -226,11 +232,18 @@ def main():
                 DELETE FROM interactions
                 WHERE person_id = ? AND source_type IN ('vault', 'granola')
             """, (source_id,))
+            affected_person_ids.add(source_id)
             print(f"  -> Deleted {len(interactions)} (no match)")
             stats['unlinked'] += len(interactions)
 
     conn.commit()
     conn.close()
+
+    # Refresh PersonEntity stats for all affected people
+    if affected_person_ids:
+        from api.services.person_stats import refresh_person_stats
+        print(f"\nRefreshing stats for {len(affected_person_ids)} affected people...")
+        refresh_person_stats(list(affected_person_ids))
 
     print(f"\n{'='*60}")
     print(f"Summary:")
