@@ -219,7 +219,7 @@ SYNC_SCRIPTS = {
 SYNC_TIMEOUTS = {
     "gmail": 3600,                  # 60 min - fetches 365 days of emails via individual API calls
     "relationship_discovery": 3600, # 60 min - processes all interactions for relationship edges
-    "vault_reindex": 3600,          # 60 min - indexes ~5000 files with vector embeddings
+    "vault_reindex": 5400,          # 90 min - indexes ~5000 files with vector embeddings
 }
 
 
