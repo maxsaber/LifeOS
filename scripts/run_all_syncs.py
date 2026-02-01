@@ -217,8 +217,9 @@ SYNC_SCRIPTS = {
 # Per-source timeout overrides (seconds)
 # Default is 30 minutes (1800). These sources need more time.
 SYNC_TIMEOUTS = {
-    "gmail": 3600,        # 60 min - fetches 365 days of emails via individual API calls
-    "vault_reindex": 3600,  # 60 min - indexes ~5000 files with vector embeddings
+    "gmail": 3600,                  # 60 min - fetches 365 days of emails via individual API calls
+    "relationship_discovery": 3600, # 60 min - processes all interactions for relationship edges
+    "vault_reindex": 3600,          # 60 min - indexes ~5000 files with vector embeddings
 }
 
 
