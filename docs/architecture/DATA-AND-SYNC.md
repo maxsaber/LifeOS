@@ -325,6 +325,51 @@ Where:
 - diversity = source_types_with_interactions / 6
 ```
 
+### Manual Overrides (Strength & Circle)
+
+Some relationships require manual overrides that persist through sync cycles. These are configured by **person ID** (not name) for durability.
+
+**Configuration File:** `config/relationship_weights.py`
+
+```python
+# Strength overrides - force specific relationship_strength values
+STRENGTH_OVERRIDES_BY_ID = {
+    "cb93e7bd-036c-4ef5-adb9-34a9147c4984": 100.0,  # Taylor Walker
+    "23b9aca8-8817-494a-a13e-7d7799f9b282": 100.0,  # Malea Ramia
+    "3f41e143-719f-4dc9-a9f1-389b2db5b166": 100.0,  # Nathan Ramia (self)
+    "04bf94f8-20b7-4285-abb4-c64131b5542f": 90.0,   # Thy Nguyen
+}
+
+# Circle overrides - force specific Dunbar circle assignments
+CIRCLE_OVERRIDES_BY_ID = {
+    "cb93e7bd-036c-4ef5-adb9-34a9147c4984": 0,  # Taylor Walker
+    "23b9aca8-8817-494a-a13e-7d7799f9b282": 0,  # Malea Ramia
+    "3f41e143-719f-4dc9-a9f1-389b2db5b166": 0,  # Nathan Ramia (self)
+}
+```
+
+**Where Overrides Are Applied:**
+
+| Override Type | Used In | When Applied |
+|---------------|---------|--------------|
+| `STRENGTH_OVERRIDES_BY_ID` | `api/services/relationship_metrics.py` | Dunbar circle computation (sorting) |
+| `STRENGTH_OVERRIDES_BY_ID` | `api/routes/crm.py` | API responses (display strength) |
+| `CIRCLE_OVERRIDES_BY_ID` | `api/services/relationship_metrics.py` | `compute_all_dunbar_circles()` |
+
+**How It Works:**
+
+1. **Strength overrides** affect both the displayed `relationship_strength` in API responses AND the sorting order when computing Dunbar circles
+2. **Circle overrides** force specific people into specific circles regardless of their ranking
+3. Both use **person IDs** (UUIDs) as keys, not names, so renames don't break overrides
+4. Overrides are respected during nightly sync when `sync_strengths.py` runs
+
+**Important:** To find a person's ID, use the API: `GET /api/crm/people?search=name`
+
+**Why ID-Based:**
+- Names can change (renames, typos, merges)
+- IDs are immutable UUIDs assigned at person creation
+- Prevents overrides from silently breaking when names change
+
 ---
 
 ## Sync Scripts

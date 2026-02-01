@@ -88,19 +88,15 @@ FAMILY_EXACT_NAMES = {
     "jeremy prenger",
 }
 
-# Manual strength overrides (name -> strength 0-100)
-STRENGTH_OVERRIDES = {
-    "taylor walker": 100.0,
-    "nathan ramia": 100.0,
-    "thy nguyen": 90.0,
-}
+# Import manual strength overrides from centralized config
+from config.relationship_weights import STRENGTH_OVERRIDES_BY_ID
 
 
-def _get_strength_override(name: str) -> float | None:
-    """Check if a person has a manual strength override."""
-    if not name:
+def _get_strength_override(person_id: str) -> float | None:
+    """Check if a person has a manual strength override (by ID)."""
+    if not person_id:
         return None
-    return STRENGTH_OVERRIDES.get(name.lower().strip())
+    return STRENGTH_OVERRIDES_BY_ID.get(person_id)
 
 
 def _is_family_member(name: str) -> bool:
@@ -553,8 +549,8 @@ def _person_to_detail_response(
     # Compute category dynamically based on source entities and email domains
     computed_category = compute_person_category(person, source_entities)
 
-    # Check for manual strength override
-    strength_override = _get_strength_override(person.canonical_name)
+    # Check for manual strength override (by ID)
+    strength_override = _get_strength_override(person.id)
     computed_strength = strength_override if strength_override is not None else person.relationship_strength
 
     response = PersonDetailResponse(
@@ -660,8 +656,8 @@ async def list_people(
     if sort == "name":
         people.sort(key=lambda p: p.canonical_name.lower())
     elif sort == "strength":
-        # Use strength override if available
-        people.sort(key=lambda p: _get_strength_override(p.canonical_name) or p.relationship_strength, reverse=True)
+        # Use strength override if available (by ID)
+        people.sort(key=lambda p: _get_strength_override(p.id) or p.relationship_strength, reverse=True)
     elif sort == "interactions":
         # Sort by total interaction count (emails + meetings + mentions + messages)
         people.sort(

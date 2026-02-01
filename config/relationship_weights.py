@@ -47,6 +47,29 @@ PERIPHERAL_THRESHOLD = 3.0
 
 
 # =============================================================================
+# MANUAL STRENGTH OVERRIDES
+# =============================================================================
+# Force specific people to have a fixed relationship strength regardless of
+# calculated value. These also affect Dunbar circle placement.
+# Keys are person IDs (UUIDs), values are strength (0-100).
+
+STRENGTH_OVERRIDES_BY_ID = {
+    "cb93e7bd-036c-4ef5-adb9-34a9147c4984": 100.0,  # Taylor Walker
+    "23b9aca8-8817-494a-a13e-7d7799f9b282": 100.0,  # Malea Ramia
+    "3f41e143-719f-4dc9-a9f1-389b2db5b166": 100.0,  # Nathan Ramia (self)
+    "04bf94f8-20b7-4285-abb4-c64131b5542f": 90.0,   # Thy Nguyen
+}
+
+# Manual Dunbar circle overrides (person_id -> circle)
+# Circle 0 = closest relationships
+CIRCLE_OVERRIDES_BY_ID = {
+    "cb93e7bd-036c-4ef5-adb9-34a9147c4984": 0,  # Taylor Walker
+    "23b9aca8-8817-494a-a13e-7d7799f9b282": 0,  # Malea Ramia
+    "3f41e143-719f-4dc9-a9f1-389b2db5b166": 0,  # Nathan Ramia (self)
+}
+
+
+# =============================================================================
 # INTERACTION TYPE WEIGHTS
 # =============================================================================
 # Weight applied to each interaction when calculating frequency score.

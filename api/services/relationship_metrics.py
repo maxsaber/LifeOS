@@ -39,6 +39,8 @@ from config.relationship_weights import (
     MIN_INTERACTIONS_FOR_FULL_RECENCY,
     ZERO_INTERACTION_RECENCY_MULTIPLIER,
     PERIPHERAL_THRESHOLD,
+    STRENGTH_OVERRIDES_BY_ID,
+    CIRCLE_OVERRIDES_BY_ID,
 )
 import math
 
@@ -415,6 +417,14 @@ def update_all_strengths() -> dict:
     }
 
 
+def _get_effective_strength(person: PersonEntity) -> float:
+    """Get relationship strength, applying manual overrides if defined (by ID)."""
+    override = STRENGTH_OVERRIDES_BY_ID.get(person.id)
+    if override is not None:
+        return override
+    return person.relationship_strength or 0
+
+
 def compute_all_dunbar_circles(store=None) -> dict:
     """
     Compute Dunbar circles for all non-peripheral contacts.
@@ -429,6 +439,8 @@ def compute_all_dunbar_circles(store=None) -> dict:
     - Circle 6: Next 1500 (recognizable)
     - Circle 7: Everyone else (peripheral, pre-assigned)
 
+    Manual STRENGTH_OVERRIDES are respected when ranking people.
+
     Args:
         store: PersonEntityStore instance (optional, will get if not provided)
 
@@ -438,22 +450,27 @@ def compute_all_dunbar_circles(store=None) -> dict:
     if store is None:
         store = get_person_entity_store()
 
-    # Get all non-peripheral contacts, sorted by strength descending
+    # Get all non-peripheral contacts, sorted by effective strength descending
+    # Effective strength = override if defined, else computed strength
     all_people = store.get_all(include_hidden=True)
     non_peripheral = [p for p in all_people if not p.is_peripheral_contact]
-    non_peripheral.sort(key=lambda p: p.relationship_strength or 0, reverse=True)
+    non_peripheral.sort(key=_get_effective_strength, reverse=True)
 
     # Dunbar circle thresholds (cumulative sizes)
     circle_thresholds = [3, 8, 23, 73, 223, 723, 2223]  # 3, 5, 15, 50, 150, 500, 1500
 
     assigned = 0
     for i, person in enumerate(non_peripheral):
-        # Find which circle this person belongs to
-        circle = 6  # Default to circle 6 if beyond all thresholds
-        for c, threshold in enumerate(circle_thresholds):
-            if i < threshold:
-                circle = c
-                break
+        # Check for manual circle override first
+        if person.id in CIRCLE_OVERRIDES_BY_ID:
+            circle = CIRCLE_OVERRIDES_BY_ID[person.id]
+        else:
+            # Find which circle this person belongs to based on ranking
+            circle = 6  # Default to circle 6 if beyond all thresholds
+            for c, threshold in enumerate(circle_thresholds):
+                if i < threshold:
+                    circle = c
+                    break
 
         if person.dunbar_circle != circle:
             person.dunbar_circle = circle
