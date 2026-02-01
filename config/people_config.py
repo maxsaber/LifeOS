@@ -100,11 +100,11 @@ class EntityResolutionConfig:
 class InteractionConfig:
     """Configuration for interaction tracking."""
 
-    # Default time window for interaction queries
-    DEFAULT_WINDOW_DAYS: int = 365
+    # Default time window for interaction queries (10 years - volume controlled by limit)
+    DEFAULT_WINDOW_DAYS: int = 3650
 
-    # Maximum time window allowed for timeline queries (10 years)
-    MAX_WINDOW_DAYS: int = 3650
+    # Maximum time window allowed for timeline queries (10 years + buffer)
+    MAX_WINDOW_DAYS: int = 3660
 
     # Maximum interactions to return in a single query (default when no limit specified)
     MAX_INTERACTIONS_PER_QUERY: int = 1000

@@ -60,15 +60,15 @@ INTERACTION_TYPE_WEIGHTS: dict[str, float] = {
     "imessage": 1.5,          # Personal text message
     "whatsapp": 1.5,          # Personal messaging app
     "signal": 1.5,            # Secure personal messaging
-    "slack": 1.2,             # Work DM (slightly less personal than text)
+    "slack": 0.6,             # Work DM (less personal, often noisy)
 
     # Voice/Video (highest effort, synchronous)
-    "phone_call": 2.0,        # Voice call - high effort
-    "phone": 2.0,             # Phone call (alternate name)
+    "phone_call": 3.0,        # Voice call - high effort
+    "phone": 3.0,             # Phone call (alternate name)
     "facetime": 2.0,          # Video call - high effort
 
-    # Calendar (meetings - synchronous but often group)
-    "calendar": 1.0,          # Default meeting weight
+    # Calendar (meetings - synchronous, high signal)
+    "calendar": 5.0,          # Meetings - strong relationship signal
     # Future: calendar_1on1: 1.5, calendar_small_group: 1.0, calendar_large_meeting: 0.5
 
     # Email (async, often broadcast/CC)
