@@ -99,6 +99,10 @@ class PersonEntity:
     # Formula: (recency × 0.3) + (frequency × 0.4) + (diversity × 0.3)
     _relationship_strength: Optional[float] = field(default=None, repr=False)
 
+    # Manual Dunbar circle override (0-7, or None for auto-calculated)
+    # When set, this value is used instead of the calculated circle position
+    manual_dunbar_circle: Optional[int] = None
+
     def __post_init__(self):
         """Set display_name to canonical_name if not specified."""
         if not self.display_name and self.canonical_name:
@@ -333,6 +337,8 @@ class PersonEntity:
         data.setdefault("hidden", False)
         data.setdefault("hidden_at", None)
         data.setdefault("hidden_reason", "")
+        # Handle manual Dunbar circle (default to None = auto-calculated)
+        data.setdefault("manual_dunbar_circle", None)
         return cls(**data)
 
     @classmethod

@@ -182,6 +182,11 @@ SYNC_ORDER = [
     # Pull external content into vault (will be indexed on next run)
     "google_docs",              # Sync Google Docs to vault as markdown
     "google_sheets",            # Sync Google Sheets to vault as markdown
+
+    # === Phase 6: Analytics ===
+    # Extract insights from interaction data
+    "sentiment",                # Extract sentiment for top contacts
+    "commitments",              # Extract commitments/promises for top contacts
 ]
 
 # Scripts that can be run directly
@@ -212,6 +217,10 @@ SYNC_SCRIPTS = {
     # Phase 5: Content Sync
     "google_docs": ("scripts/sync_google_docs.py", ["--execute"]),
     "google_sheets": ("scripts/sync_google_sheets.py", ["--execute"]),
+
+    # Phase 6: Analytics
+    "sentiment": ("scripts/sync_sentiment.py", ["--execute", "--top", "50"]),
+    "commitments": ("scripts/sync_commitments.py", ["--execute", "--top", "50"]),
 }
 
 # Per-source timeout overrides (seconds)
