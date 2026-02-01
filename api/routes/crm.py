@@ -599,6 +599,7 @@ async def list_people(
     q: Optional[str] = Query(default=None, description="Search query"),
     category: Optional[str] = Query(default=None, description="Filter by category"),
     source: Optional[str] = Query(default=None, description="Filter by source"),
+    dunbar_circles: Optional[str] = Query(default=None, description="Filter by dunbar circles (comma-separated, e.g., '5,6+')"),
     has_interactions: Optional[bool] = Query(default=None, description="Filter by interaction count > 0"),
     min_interactions: int = Query(default=0, ge=0, description="Minimum total interactions (emails + meetings + mentions + messages)"),
     sort: str = Query(default="strength", description="Sort field: interactions, last_seen, name, strength"),
@@ -649,6 +650,16 @@ async def list_people(
             p for p in people
             if (p.email_count or 0) + (p.meeting_count or 0) + (p.mention_count or 0) + getattr(p, 'message_count', 0) >= min_interactions
         ]
+
+    # Apply dunbar circles filter
+    if dunbar_circles:
+        circles = set(dunbar_circles.split(','))
+        def matches_dunbar(p):
+            dc = p.dunbar_circle if p.dunbar_circle is not None else 7
+            if dc >= 6:
+                return '6+' in circles
+            return str(dc) in circles
+        people = [p for p in people if matches_dunbar(p)]
 
     total = len(people)
 

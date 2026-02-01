@@ -260,6 +260,93 @@
             color: white;
         }
 
+        .people-filter-dropdown {
+            position: relative;
+        }
+
+        .people-filter-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.375rem 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            color: var(--text-primary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .people-filter-btn:hover {
+            background: var(--bg-primary);
+            border-color: var(--people);
+        }
+
+        .people-filter-options {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 4px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.5rem;
+            min-width: 160px;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .people-filter-options.show {
+            display: block;
+        }
+
+        .people-filter-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.375rem 0.5rem;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+
+        .people-filter-option:hover {
+            background: var(--bg-primary);
+        }
+
+        .people-filter-option input {
+            margin: 0;
+        }
+
+        .people-filter-toggles {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.25rem 0.5rem 0.5rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 0.25rem;
+        }
+
+        .filter-toggle-btn {
+            flex: 1;
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .filter-toggle-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border-color: var(--people);
+        }
+
         .people-list {
             flex: 1;
             overflow-y: auto;
@@ -821,6 +908,17 @@
             flex-direction: column;
             overflow: hidden;
             background: var(--bg-primary);
+        }
+
+        #detailContent {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #detailContent[style*="display: flex"] {
+            flex-direction: column;
         }
 
         .detail-empty {
@@ -3227,22 +3325,11 @@
 
         .family-dashboard.visible {
             display: block;
+            padding-bottom: 2rem;
         }
 
-        .family-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+        .family-member-selector-row {
             margin-bottom: 1.5rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .family-title {
-            font-size: 1.25rem;
-            font-weight: 600;
-            color: var(--text-primary);
-            margin: 0;
         }
 
         .family-member-selector {
@@ -4378,10 +4465,74 @@
                 </div>
             </div>
             <div class="filters">
-                <div class="filter-chip active" data-filter="all" onclick="setFilter('all')">All</div>
-                <div class="filter-chip" data-filter="work" onclick="setFilter('work')">Work</div>
-                <div class="filter-chip" data-filter="personal" onclick="setFilter('personal')">Personal</div>
-                <div class="filter-chip" data-filter="family" onclick="setFilter('family')">Family</div>
+                <div class="people-filter-dropdown" id="peopleCategoryDropdown">
+                    <button class="people-filter-btn" onclick="togglePeopleCategoryFilter()">
+                        <span id="peopleCategoryLabel">All Categories</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                    <div class="people-filter-options" id="peopleCategoryOptions">
+                        <div class="people-filter-toggles">
+                            <button class="filter-toggle-btn" onclick="selectAllCategories()">All</button>
+                            <button class="filter-toggle-btn" onclick="selectNoCategories()">None</button>
+                        </div>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="self" checked onchange="updatePeopleCategoryFilter()">
+                            <span class="category-dot" style="background: #ffffff; border: 1px solid #666;"></span> Self
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="family" checked onchange="updatePeopleCategoryFilter()">
+                            <span class="category-dot" style="background: #daa520;"></span> Family
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="personal" checked onchange="updatePeopleCategoryFilter()">
+                            <span class="category-dot" style="background: #00bcd4;"></span> Personal
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="work" checked onchange="updatePeopleCategoryFilter()">
+                            <span class="category-dot" style="background: #4f46e5;"></span> Work
+                        </label>
+                    </div>
+                </div>
+                <div class="people-filter-dropdown" id="peopleDunbarDropdown">
+                    <button class="people-filter-btn" onclick="togglePeopleDunbarFilter()">
+                        <span id="peopleDunbarLabel">All Circles</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                    <div class="people-filter-options" id="peopleDunbarOptions">
+                        <div class="people-filter-toggles">
+                            <button class="filter-toggle-btn" onclick="selectAllDunbar()">All</button>
+                            <button class="filter-toggle-btn" onclick="selectNoDunbar()">None</button>
+                        </div>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="0" checked onchange="updatePeopleDunbarFilter()">
+                            <span class="category-dot" style="background: #e94560;"></span> 0: Intimate
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="1" checked onchange="updatePeopleDunbarFilter()">
+                            <span class="category-dot" style="background: #ff6b6b;"></span> 1: Close
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="2" checked onchange="updatePeopleDunbarFilter()">
+                            <span class="category-dot" style="background: #ffa502;"></span> 2: Good Friends
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="3" checked onchange="updatePeopleDunbarFilter()">
+                            <span class="category-dot" style="background: #2ed573;"></span> 3: Friends
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="4" checked onchange="updatePeopleDunbarFilter()">
+                            <span class="category-dot" style="background: #1e90ff;"></span> 4: Acquaintances
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="5" checked onchange="updatePeopleDunbarFilter()">
+                            <span class="category-dot" style="background: #5352ed;"></span> 5: Known
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="6+" checked onchange="updatePeopleDunbarFilter()">
+                            <span class="category-dot" style="background: #747d8c;"></span> 6+: Contacts
+                        </label>
+                    </div>
+                </div>
             </div>
             <div class="merge-toolbar" id="mergeToolbar">
                 <div class="merge-toolbar-info">
@@ -4684,9 +4835,8 @@
 
                         <!-- Family Dashboard (shown only for /family route) -->
                         <div class="family-dashboard" id="familyDashboard" style="display: none;">
-                            <!-- Family Header with Multi-Select -->
-                            <div class="family-header">
-                                <h2 class="family-title">Family Dashboard</h2>
+                            <!-- Family Member Selector (header is set via JS in main detail-header) -->
+                            <div class="family-member-selector-row">
                                 <div class="family-member-selector">
                                     <button class="family-selector-btn" onclick="toggleFamilyDropdown()">
                                         <span id="familySelectorLabel">Select family members...</span>
@@ -5242,8 +5392,10 @@
         // State
         let people = [];
         let selectedPersonId = null;
-        let currentFilter = 'all';
         let searchQuery = '';
+        // People list filters (multi-select)
+        let peopleCategoryFilters = new Set(['self', 'family', 'personal', 'work']);
+        let peopleDunbarFilters = new Set(['0', '1', '2', '3', '4', '5', '6+']);
         let selectedForMerge = new Set();  // IDs selected for merge
         let mergePrimaryId = null;  // Primary person for merge
         let dunbarCircleMap = new Map();  // Map person ID to Dunbar circle
@@ -5511,14 +5663,20 @@
                 const searchTerms = searchQuery ? searchQuery.split('|').map(t => t.trim()).filter(t => t) : [''];
 
                 // Fetch results for each search term in parallel
+                // Note: We apply category filter client-side for multi-select flexibility
+                // For dunbar circles, if only outer circles (5, 6+) are selected, pass to API
+                const onlyOuterCircles = peopleDunbarFilters.size > 0 &&
+                    [...peopleDunbarFilters].every(c => c === '5' || c === '6+');
+
                 const fetchPromises = searchTerms.map(term => {
                     const params = new URLSearchParams();
                     if (term) params.set('q', term);
-                    if (currentFilter !== 'all') {
-                        params.set('category', currentFilter);
-                    }
                     params.set('sort', 'strength');
-                    params.set('limit', '100');
+                    params.set('limit', '300');
+                    // If only outer circles selected, filter server-side to get relevant results
+                    if (onlyOuterCircles) {
+                        params.set('dunbar_circles', [...peopleDunbarFilters].join(','));
+                    }
                     return api(`/people?${params}`);
                 });
 
@@ -5567,12 +5725,33 @@
         function renderPeopleList() {
             const listEl = document.getElementById('peopleList');
 
-            if (people.length === 0) {
+            // Apply category and dunbar filters
+            const allCategoriesSelected = peopleCategoryFilters.size === 4;
+            const allDunbarSelected = peopleDunbarFilters.size === 7;
+
+            const filteredPeople = people.filter(person => {
+                // Category filter
+                if (!allCategoriesSelected) {
+                    const category = person.category || 'personal';  // Default to personal if no category
+                    if (!peopleCategoryFilters.has(category)) return false;
+                }
+
+                // Dunbar filter
+                if (!allDunbarSelected) {
+                    const dunbar = person.dunbar_circle ?? 7;
+                    const dunbarKey = dunbar >= 6 ? '6+' : String(dunbar);
+                    if (!peopleDunbarFilters.has(dunbarKey)) return false;
+                }
+
+                return true;
+            });
+
+            if (filteredPeople.length === 0) {
                 listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">👥</div><p>No people found</p></div>';
                 return;
             }
 
-            listEl.innerHTML = people.map(person => `
+            listEl.innerHTML = filteredPeople.map(person => `
                 <div class="person-card ${person.id === selectedPersonId ? 'selected' : ''}"
                      onclick="selectPerson('${person.id}')">
                     <div class="person-checkbox ${selectedForMerge.has(person.id) ? 'checked' : ''}"
@@ -7082,6 +7261,13 @@
 
         // Family dashboard state
         let familyMembers = [];
+        // Default family members: Bill, Patricia, Malea, Anna Ramia
+        const DEFAULT_FAMILY_IDS = [
+            '29a732c3-2356-4f60-bf21-956b3652883a',  // Bill Ramia
+            '8205b758-a86f-456c-8c1c-ae3d3b2aa434',  // Patricia Ramia
+            '23b9aca8-8817-494a-a13e-7d7799f9b282',  // Malea Ramia
+            '1aa519d6-db2c-4ae4-acd7-131f83575930',  // Anna Ramia
+        ];
         let selectedFamilyIds = [];
         let familyHealthPeriod = 'quarter';
         let familyTrendPeriod = 'quarter';
@@ -7149,9 +7335,16 @@
 
             renderFamilyDropdown();
 
-            // If no family members selected, select all by default
+            // If no family members selected, use defaults (Bill, Patricia, Malea, Anna)
             if (selectedFamilyIds.length === 0 && familyMembers.length > 0) {
-                selectedFamilyIds = familyMembers.map(m => m.id);
+                // Filter to only include defaults that exist in the family members list
+                selectedFamilyIds = DEFAULT_FAMILY_IDS.filter(id =>
+                    familyMembers.some(m => m.id === id)
+                );
+                // Fall back to all if none of the defaults exist
+                if (selectedFamilyIds.length === 0) {
+                    selectedFamilyIds = familyMembers.map(m => m.id);
+                }
             }
 
             updateFamilySelectorLabel();
@@ -11915,16 +12108,108 @@
             }
         }
 
-        // Set filter
-        function setFilter(filter) {
-            currentFilter = filter;
-
-            // Update UI
-            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-            document.querySelector(`[data-filter="${filter}"]`).classList.add('active');
-
-            loadPeople();
+        // People list filter functions
+        function togglePeopleCategoryFilter() {
+            const options = document.getElementById('peopleCategoryOptions');
+            options.classList.toggle('show');
+            // Close dunbar dropdown if open
+            document.getElementById('peopleDunbarOptions').classList.remove('show');
         }
+
+        function togglePeopleDunbarFilter() {
+            const options = document.getElementById('peopleDunbarOptions');
+            options.classList.toggle('show');
+            // Close category dropdown if open
+            document.getElementById('peopleCategoryOptions').classList.remove('show');
+        }
+
+        function updatePeopleCategoryFilter() {
+            const checkboxes = document.querySelectorAll('#peopleCategoryOptions input[type="checkbox"]');
+            peopleCategoryFilters.clear();
+            checkboxes.forEach(cb => {
+                if (cb.checked) peopleCategoryFilters.add(cb.value);
+            });
+
+            // Update label
+            const label = document.getElementById('peopleCategoryLabel');
+            if (peopleCategoryFilters.size === 4) {
+                label.textContent = 'All Categories';
+            } else if (peopleCategoryFilters.size === 0) {
+                label.textContent = 'None';
+            } else {
+                label.textContent = `${peopleCategoryFilters.size} Selected`;
+            }
+
+            renderPeopleList();
+        }
+
+        function updatePeopleDunbarFilter() {
+            // Check if we were previously in "only outer circles" mode
+            const wasOnlyOuter = peopleDunbarFilters.size > 0 &&
+                [...peopleDunbarFilters].every(c => c === '5' || c === '6+');
+
+            const checkboxes = document.querySelectorAll('#peopleDunbarOptions input[type="checkbox"]');
+            peopleDunbarFilters.clear();
+            checkboxes.forEach(cb => {
+                if (cb.checked) peopleDunbarFilters.add(cb.value);
+            });
+
+            // Check if we are now in "only outer circles" mode
+            const isOnlyOuter = peopleDunbarFilters.size > 0 &&
+                [...peopleDunbarFilters].every(c => c === '5' || c === '6+');
+
+            // Update label
+            const label = document.getElementById('peopleDunbarLabel');
+            if (peopleDunbarFilters.size === 7) {
+                label.textContent = 'All Circles';
+            } else if (peopleDunbarFilters.size === 0) {
+                label.textContent = 'None';
+            } else {
+                label.textContent = `${peopleDunbarFilters.size} Selected`;
+            }
+
+            // If switching to/from "only outer circles", reload from API
+            if (wasOnlyOuter !== isOnlyOuter) {
+                loadPeople();
+            } else {
+                renderPeopleList();
+            }
+        }
+
+        // All/None toggle functions for category filter
+        function selectAllCategories() {
+            document.querySelectorAll('#peopleCategoryOptions input[type="checkbox"]').forEach(cb => cb.checked = true);
+            updatePeopleCategoryFilter();
+        }
+
+        function selectNoCategories() {
+            document.querySelectorAll('#peopleCategoryOptions input[type="checkbox"]').forEach(cb => cb.checked = false);
+            updatePeopleCategoryFilter();
+        }
+
+        // All/None toggle functions for dunbar filter
+        function selectAllDunbar() {
+            document.querySelectorAll('#peopleDunbarOptions input[type="checkbox"]').forEach(cb => cb.checked = true);
+            updatePeopleDunbarFilter();
+        }
+
+        function selectNoDunbar() {
+            document.querySelectorAll('#peopleDunbarOptions input[type="checkbox"]').forEach(cb => cb.checked = false);
+            updatePeopleDunbarFilter();
+        }
+
+        // Close people filter dropdowns when clicking outside
+        document.addEventListener('click', function(e) {
+            const categoryDropdown = document.getElementById('peopleCategoryDropdown');
+            const dunbarDropdown = document.getElementById('peopleDunbarDropdown');
+
+            if (categoryDropdown && !categoryDropdown.contains(e.target)) {
+                document.getElementById('peopleCategoryOptions').classList.remove('show');
+            }
+            if (dunbarDropdown && !dunbarDropdown.contains(e.target)) {
+                document.getElementById('peopleDunbarOptions').classList.remove('show');
+            }
+        });
 
         // Handle search
         let searchTimeout;
