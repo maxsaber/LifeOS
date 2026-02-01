@@ -1,22 +1,21 @@
 """
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> 16a54d32367a6c2c8b917207fb0cac371a0ae897
 Weekly digest helpers for relationship follow-ups.
 
 Determines which people are slipping or need a reach-out based on
 configurable thresholds.
 """
-from typing import Iterable
+from datetime import datetime, timezone
+from typing import Iterable, Optional
 
+from api.services.interaction_store import get_interaction_store
+from api.services.person_entity import PersonEntity, get_person_entity_store
+from api.services.relationship_metrics import compute_strength_for_person
+from api.services.relationship_summary import RelationshipSummary, get_relationship_summary
 from config.relationship_weights import (
     RECENT_INTERACTION_DAYS,
     SLIPPING_DAYS,
     REACHOUT_DAYS,
 )
-from api.services.person_entity import get_person_entity_store
-from api.services.relationship_summary import RelationshipSummary, get_relationship_summary
 
 
 def determine_contact_status(days_since_contact: int) -> str:
@@ -66,18 +65,6 @@ def get_weekly_digest_candidates() -> dict[str, list[RelationshipSummary]]:
             summaries.append(summary)
 
     return split_people_by_status(summaries)
-<<<<<<< HEAD
-=======
-Weekly digest service.
-
-Builds digest sections from PersonEntity + interaction data.
-"""
-from datetime import datetime, timezone
-from typing import Optional
-
-from api.services.interaction_store import get_interaction_store
-from api.services.person_entity import PersonEntity, get_person_entity_store
-from api.services.relationship_metrics import compute_strength_for_person
 
 # Classification thresholds
 STRONG_RELATIONSHIP_THRESHOLD = 60.0
@@ -263,6 +250,3 @@ def _days_since(last_seen: Optional[datetime], reference: datetime) -> Optional[
     last_seen = _ensure_aware(last_seen)
     reference = _ensure_aware(reference)
     return max((reference - last_seen).days, 0)
->>>>>>> fe61eca (Add weekly digest service)
-=======
->>>>>>> 16a54d32367a6c2c8b917207fb0cac371a0ae897
