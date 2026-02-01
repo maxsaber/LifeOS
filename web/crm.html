@@ -6296,9 +6296,11 @@
                 familyDashboard.classList.remove('visible');
             }
 
-            // Show person header, tabs, and heatmap (in case coming from family dashboard)
-            document.querySelector('.person-header').style.display = '';
-            document.querySelector('.tab-nav').style.display = '';
+            // Restore elements that family dashboard hides
+            // (headerIndicators already declared above)
+            const detailTabs = document.querySelector('.detail-tabs');
+            if (headerIndicators) headerIndicators.style.display = '';
+            if (detailTabs) detailTabs.style.display = '';
             const heatmapSectionEl = document.getElementById('heatmapSection');
             if (heatmapSectionEl) heatmapSectionEl.style.display = '';
 
@@ -7102,9 +7104,29 @@
             const heatmapSection = document.getElementById('heatmapSection');
             if (heatmapSection) heatmapSection.style.display = 'none';
 
-            // Hide person header elements
-            document.querySelector('.person-header').style.display = 'none';
-            document.querySelector('.tab-nav').style.display = 'none';
+            // Hide source entities footer
+            const sourceEntitiesFooter = document.getElementById('sourceEntitiesFooter');
+            if (sourceEntitiesFooter) sourceEntitiesFooter.style.display = 'none';
+
+            // Customize header for family (like /me page does)
+            const detailAvatar = document.getElementById('detailAvatar');
+            const detailName = document.getElementById('detailName');
+            const detailCompany = document.getElementById('detailCompany');
+            const detailContactQuick = document.getElementById('detailContactQuick');
+            const detailTagsChips = document.getElementById('detailTagsChips');
+            if (detailAvatar) detailAvatar.textContent = '👨‍👩‍👧';
+            if (detailName) detailName.textContent = 'Family Dashboard';
+            if (detailCompany) detailCompany.textContent = 'Aggregated Family Metrics';
+            if (detailContactQuick) detailContactQuick.innerHTML = '';
+            if (detailTagsChips) detailTagsChips.innerHTML = '';
+
+            // Hide strength ring and dunbar circle for family view
+            const headerIndicators = document.querySelector('.header-indicators');
+            if (headerIndicators) headerIndicators.style.display = 'none';
+
+            // Hide tabs for family view (we only have overview)
+            const detailTabs = document.querySelector('.detail-tabs');
+            if (detailTabs) detailTabs.style.display = 'none';
 
             // Load family members if not already loaded
             if (familyMembers.length === 0) {
@@ -7150,6 +7172,7 @@
         // Toggle family dropdown visibility
         function toggleFamilyDropdown() {
             const dropdown = document.getElementById('familyDropdown');
+            if (!dropdown) return;
             dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
         }
 

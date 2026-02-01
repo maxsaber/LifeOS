@@ -210,8 +210,12 @@ class TestInteractionStore:
             )
             temp_store.add(interaction)
 
-        # Default window (365 days)
+        # Default window is 3650 days (10 years), so all 4 interactions are included
         results = temp_store.get_for_person(person_id)
+        assert len(results) == 4
+
+        # Explicit 365-day window excludes 500-day-old interaction
+        results = temp_store.get_for_person(person_id, days_back=365)
         assert len(results) == 3  # Excludes 500 days ago
 
         # Custom window

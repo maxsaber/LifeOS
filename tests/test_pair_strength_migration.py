@@ -164,9 +164,12 @@ class TestNetworkGraphIntegration:
         """Network graph edges should have weight field."""
         from api.services.relationship import get_relationship_store
         from api.services.person_entity import get_person_entity_store
+        from config.settings import settings
 
         person_store = get_person_entity_store()
-        owner = person_store.get_by_name("Nathan Ramia")
+        # Use settings.my_person_id to get the correct owner ID
+        # (get_by_name may return wrong ID if there are duplicates)
+        owner = person_store.get_by_id(settings.my_person_id)
         assert owner is not None, "Owner should exist"
 
         rel_store = get_relationship_store()

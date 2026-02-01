@@ -74,12 +74,15 @@ class TestFrequencyScore:
     def test_one_interaction(self):
         """Test with single interaction."""
         score = compute_frequency_score(1)
-        assert score == 1 / FREQUENCY_TARGET
+        # With logarithmic scaling, 1 interaction gives a small but non-zero score
+        # log(2) / log(FREQUENCY_TARGET + 1) ≈ 0.125 for target=250
+        assert 0.05 < score < 0.20
 
     def test_half_target(self):
         """Test at half the target."""
         score = compute_frequency_score(FREQUENCY_TARGET // 2)
-        assert 0.45 < score < 0.55
+        # With logarithmic scaling, half target gives ~0.87 (log compresses high values)
+        assert 0.80 < score < 0.95
 
     def test_at_target(self):
         """Test at exactly the target."""
@@ -150,7 +153,8 @@ class TestRelationshipStrength:
             sources=["gmail", "calendar"],
         )
         # Recency is 0, but frequency and diversity contribute (scale is 0-100)
-        assert 30 < strength < 60
+        # With logarithmic frequency scaling, the score is slightly higher
+        assert 30 < strength < 70
 
     def test_recent_but_inactive(self):
         """Test with recent last_seen but few interactions."""
