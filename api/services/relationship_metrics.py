@@ -463,18 +463,21 @@ def compute_all_dunbar_circles(store=None) -> dict:
     circle_thresholds = [5, 20, 70, 220, 720, 2220]  # 5, 15, 50, 150, 500, 1500
 
     assigned = 0
-    for i, person in enumerate(non_peripheral):
+    ranking_index = 0  # Separate counter for non-override people
+    for person in non_peripheral:
         # Check for manual circle override first
         if person.id in CIRCLE_OVERRIDES_BY_ID:
             circle = CIRCLE_OVERRIDES_BY_ID[person.id]
+            # Override people don't count toward ranking thresholds
         else:
-            # Find which circle this person belongs to based on ranking
-            # Circle 0 is reserved for overrides, so ranking starts at circle 1
+            # Find which circle this person belongs to based on their ranking
+            # among non-override people (circle 0 overrides don't consume slots)
             circle = 6  # Default to circle 6 if beyond all thresholds
             for c, threshold in enumerate(circle_thresholds):
-                if i < threshold:
+                if ranking_index < threshold:
                     circle = c + 1  # +1 because circle 0 is reserved
                     break
+            ranking_index += 1
 
         if person.dunbar_circle != circle:
             person.dunbar_circle = circle
