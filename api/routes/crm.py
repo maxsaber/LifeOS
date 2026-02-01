@@ -2973,7 +2973,7 @@ async def get_me_timeline(
 
 @router.get("/me/interactions", response_model=MeInteractionsResponse)
 async def get_me_interactions(
-    days_back: int = Query(default=365, ge=1, le=1095, description="Days of history (up to 3 years)"),
+    days_back: int = Query(default=365, ge=1, le=3660, description="Days of history (up to 10 years)"),
     trend_period: str = Query(default="quarter", description="Trend comparison period: week, month, quarter, year"),
     health_period: str = Query(default="quarter", description="Health score history period: month, quarter, year"),
 ):
