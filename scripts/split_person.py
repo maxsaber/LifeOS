@@ -30,7 +30,7 @@ from datetime import datetime, timezone
 
 from api.services.person_entity import get_person_entity_store, PersonEntity
 from api.services.source_entity import get_source_entity_store
-from api.services.interaction_store import get_interaction_db_path
+from api.services.interaction_store import ensure_interaction_db
 from api.services.link_override import get_link_override_store, LinkOverride
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -105,7 +105,7 @@ def move_source_entities(from_person_id: str, to_person_id: str, source_types: l
 
 def move_interactions(from_person_id: str, to_person_id: str, source_types: list[str], dry_run: bool = True) -> int:
     """Move interactions from one person to another based on source types."""
-    int_db = get_interaction_db_path()
+    int_db = ensure_interaction_db()
     conn = sqlite3.connect(int_db)
 
     placeholders = ','.join('?' * len(source_types))

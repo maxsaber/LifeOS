@@ -9,7 +9,7 @@ Usage:
     python mcp_server.py
 
 Register with Claude Code:
-    claude mcp add lifeos -s user -- python /path/to/mcp_server.py
+    claude mcp add lifeos -s user -- python3 /Users/maxsaber/_gitPersonal/LifeOS/mcp_server.py
 """
 import json
 import sys

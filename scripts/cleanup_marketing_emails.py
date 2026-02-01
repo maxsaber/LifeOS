@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from api.services.interaction_store import get_interaction_db_path
+from api.services.interaction_store import ensure_interaction_db
 from api.services.person_entity import get_person_entity_store
 
 # Import marketing filter from sync script
@@ -32,7 +32,7 @@ def main():
     args = parser.parse_args()
 
     person_store = get_person_entity_store()
-    db_path = get_interaction_db_path()
+    db_path = ensure_interaction_db()
     conn = sqlite3.connect(db_path)
 
     # Step 1: Find person entities with marketing emails

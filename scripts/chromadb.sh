@@ -17,7 +17,7 @@ LOG_FILE="$PROJECT_DIR/logs/chromadb.log"
 PID_FILE="$PROJECT_DIR/logs/chromadb.pid"
 HEALTH_URL="http://$HOST:$PORT/api/v2/heartbeat"
 STARTUP_TIMEOUT=30
-CHROMA="$HOME/.venvs/lifeos/bin/chroma"
+CHROMA="$PROJECT_DIR/venv/bin/chroma"
 
 # Ensure directories exist
 mkdir -p "$PROJECT_DIR/logs"

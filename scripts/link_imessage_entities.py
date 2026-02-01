@@ -7,7 +7,13 @@ phone numbers in the CRM source_entities table.
 """
 import sqlite3
 import logging
+import sys
 from pathlib import Path
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from api.services.imessage import IMessageStore
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -62,6 +68,9 @@ def link_imessage_entities(dry_run: bool = True) -> dict:
     Returns:
         Stats dict
     """
+    # Ensure imessage.db schema exists
+    IMessageStore(storage_path=str(IMESSAGE_DB))
+
     phone_to_person = get_phone_to_person_mapping()
 
     conn = sqlite3.connect(IMESSAGE_DB)

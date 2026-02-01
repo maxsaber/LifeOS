@@ -36,6 +36,55 @@ def get_interaction_db_path() -> str:
     return str(db_dir / "interactions.db")
 
 
+def ensure_interaction_db() -> str:
+    """
+    Ensure the interactions database and tables exist.
+
+    Returns the database path. Use this instead of get_interaction_db_path()
+    when you need to access the database directly with sqlite3.
+    """
+    db_path = get_interaction_db_path()
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS interactions (
+                id TEXT PRIMARY KEY,
+                person_id TEXT NOT NULL,
+                timestamp TIMESTAMP NOT NULL,
+                source_type TEXT NOT NULL,
+                title TEXT NOT NULL,
+                snippet TEXT,
+                source_link TEXT,
+                source_id TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_interactions_person_timestamp
+            ON interactions(person_id, timestamp DESC)
+        """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_interactions_source
+            ON interactions(source_type, source_id)
+        """
+        )
+        conn.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_interactions_timestamp
+            ON interactions(timestamp DESC)
+        """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return db_path
+
+
 @dataclass
 class Interaction:
     """

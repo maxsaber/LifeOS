@@ -17,7 +17,7 @@ from pathlib import Path
 sys.path.insert(0, '/Users/nathanramia/Documents/Code/LifeOS')
 
 from api.services.person_entity import PersonEntityStore
-from api.services.interaction_store import get_interaction_db_path
+from api.services.interaction_store import ensure_interaction_db
 
 CSV_PATH = '/Users/nathanramia/Documents/Code/LifeOS/docs/archive/vault_matches.csv'
 
@@ -98,7 +98,7 @@ def find_person_id(store: PersonEntityStore, name: str) -> str | None:
 
 def main():
     store = PersonEntityStore()
-    db_path = get_interaction_db_path()
+    db_path = ensure_interaction_db()
     conn = sqlite3.connect(db_path)
 
     # Read CSV

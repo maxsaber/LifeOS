@@ -167,9 +167,9 @@ class TestDataFlowDiagnosis:
         instead of the actual PersonEntity UUID.
         """
         import sqlite3
-        from api.services.interaction_store import get_interaction_db_path
+        from api.services.interaction_store import ensure_interaction_db
 
-        conn = sqlite3.connect(get_interaction_db_path())
+        conn = sqlite3.connect(ensure_interaction_db())
         cursor = conn.execute("SELECT DISTINCT person_id FROM interactions LIMIT 10")
         person_ids = [row[0] for row in cursor.fetchall()]
         conn.close()
@@ -194,9 +194,9 @@ class TestDataFlowDiagnosis:
         This helps diagnose if Taylor's interactions exist but under a different person_id.
         """
         import sqlite3
-        from api.services.interaction_store import get_interaction_db_path
+        from api.services.interaction_store import ensure_interaction_db
 
-        conn = sqlite3.connect(get_interaction_db_path())
+        conn = sqlite3.connect(ensure_interaction_db())
 
         # Check if there's a title or snippet mentioning Taylor
         cursor = conn.execute("""

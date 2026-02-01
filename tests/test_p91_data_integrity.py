@@ -17,7 +17,7 @@ import pytest
 from pathlib import Path
 
 from api.services.person_entity import get_person_entity_store
-from api.services.interaction_store import get_interaction_store, get_interaction_db_path
+from api.services.interaction_store import get_interaction_store, ensure_interaction_db
 
 
 # All classes in this file require database access
@@ -29,7 +29,7 @@ class TestR1CleanDatabase:
 
     def test_no_temp_directory_interactions(self):
         """No interactions should point to /tmp or /var/folders paths."""
-        conn = sqlite3.connect(get_interaction_db_path())
+        conn = sqlite3.connect(ensure_interaction_db())
         cursor = conn.execute("""
             SELECT COUNT(*) FROM interactions
             WHERE source_id LIKE '/private/var/folders%'
@@ -43,7 +43,7 @@ class TestR1CleanDatabase:
 
     def test_all_vault_files_exist(self):
         """All vault interactions must point to files that actually exist."""
-        conn = sqlite3.connect(get_interaction_db_path())
+        conn = sqlite3.connect(ensure_interaction_db())
         cursor = conn.execute("""
             SELECT source_id, title FROM interactions
             WHERE source_type IN ('vault', 'granola')
@@ -68,7 +68,7 @@ class TestR1CleanDatabase:
         store = get_person_entity_store()
         entity_ids = {e.id for e in store.get_all()}
 
-        conn = sqlite3.connect(get_interaction_db_path())
+        conn = sqlite3.connect(ensure_interaction_db())
         cursor = conn.execute("SELECT DISTINCT person_id FROM interactions")
         interaction_person_ids = {row[0] for row in cursor.fetchall()}
         conn.close()
@@ -91,7 +91,7 @@ class TestR2EntityResolution:
         Sample 20 random vault interactions and verify each one.
         """
         store = get_person_entity_store()
-        conn = sqlite3.connect(get_interaction_db_path())
+        conn = sqlite3.connect(ensure_interaction_db())
 
         # Get vault interactions with real file paths
         cursor = conn.execute("""
@@ -166,7 +166,7 @@ class TestR3VaultLinks:
 
     def test_vault_source_ids_are_valid_paths(self):
         """Vault source_ids must be valid file paths."""
-        conn = sqlite3.connect(get_interaction_db_path())
+        conn = sqlite3.connect(ensure_interaction_db())
         cursor = conn.execute("""
             SELECT source_id FROM interactions
             WHERE source_type IN ('vault', 'granola')
@@ -189,7 +189,7 @@ class TestR3VaultLinks:
 
     def test_can_construct_obsidian_url(self):
         """Should be able to construct obsidian:// URL from vault path."""
-        conn = sqlite3.connect(get_interaction_db_path())
+        conn = sqlite3.connect(ensure_interaction_db())
         cursor = conn.execute("""
             SELECT source_id FROM interactions
             WHERE source_type IN ('vault', 'granola')
@@ -214,7 +214,7 @@ class TestR4GmailLinks:
 
     def test_gmail_interactions_have_message_id(self):
         """Gmail interactions must have message_id in source_id."""
-        conn = sqlite3.connect(get_interaction_db_path())
+        conn = sqlite3.connect(ensure_interaction_db())
         cursor = conn.execute("""
             SELECT source_id, title FROM interactions
             WHERE source_type = 'gmail'
@@ -234,7 +234,7 @@ class TestR4GmailLinks:
 
     def test_gmail_link_format(self):
         """Gmail links must be constructable to open specific email."""
-        conn = sqlite3.connect(get_interaction_db_path())
+        conn = sqlite3.connect(ensure_interaction_db())
         cursor = conn.execute("""
             SELECT source_id FROM interactions
             WHERE source_type = 'gmail'
@@ -259,7 +259,7 @@ class TestR5CalendarLinks:
 
     def test_calendar_interactions_have_event_id(self):
         """Calendar interactions must have event_id in source_id."""
-        conn = sqlite3.connect(get_interaction_db_path())
+        conn = sqlite3.connect(ensure_interaction_db())
         cursor = conn.execute("""
             SELECT source_id, title FROM interactions
             WHERE source_type = 'calendar'
@@ -282,7 +282,7 @@ class TestR6InteractionCounts:
     def test_counts_match_database(self):
         """PersonEntity counts must match actual interactions in database."""
         store = get_person_entity_store()
-        conn = sqlite3.connect(get_interaction_db_path())
+        conn = sqlite3.connect(ensure_interaction_db())
 
         # Get top 10 people by stored counts
         all_people = store.get_all()
@@ -362,7 +362,7 @@ class TestR7TaylorCanonical:
         person = store.get_by_email(self.TAYLOR_EMAIL)
         assert person is not None
 
-        conn = sqlite3.connect(get_interaction_db_path())
+        conn = sqlite3.connect(ensure_interaction_db())
         cursor = conn.execute("""
             SELECT DISTINCT source_type FROM interactions
             WHERE person_id = ?
@@ -378,7 +378,7 @@ class TestR7TaylorCanonical:
         person = store.get_by_email(self.TAYLOR_EMAIL)
         assert person is not None
 
-        conn = sqlite3.connect(get_interaction_db_path())
+        conn = sqlite3.connect(ensure_interaction_db())
         cursor = conn.execute("""
             SELECT source_id, title FROM interactions
             WHERE person_id = ? AND source_type IN ('vault', 'granola')
@@ -439,7 +439,7 @@ class TestR8Top10Verification:
     def test_top_10_all_have_interactions(self):
         """Top 10 people by interaction count must all have real interactions."""
         store = get_person_entity_store()
-        conn = sqlite3.connect(get_interaction_db_path())
+        conn = sqlite3.connect(ensure_interaction_db())
 
         # Get actual top 10 from database
         cursor = conn.execute("""
@@ -467,7 +467,7 @@ class TestR8Top10Verification:
     def test_top_10_have_valid_interactions(self):
         """Top 10 must have at least one interaction with valid source."""
         store = get_person_entity_store()
-        conn = sqlite3.connect(get_interaction_db_path())
+        conn = sqlite3.connect(ensure_interaction_db())
 
         cursor = conn.execute("""
             SELECT person_id, COUNT(*) as cnt

@@ -27,7 +27,7 @@ import re
 from datetime import datetime, timezone
 
 from api.services.entity_resolver import get_entity_resolver
-from api.services.interaction_store import get_interaction_db_path
+from api.services.interaction_store import ensure_interaction_db
 from api.services.source_entity import (
     get_source_entity_store,
     SourceEntity,
@@ -338,7 +338,7 @@ def sync_whatsapp_messages(dry_run: bool = True) -> dict:
         return stats
 
     resolver = get_entity_resolver()
-    interaction_db = get_interaction_db_path()
+    interaction_db = ensure_interaction_db()
 
     # Connect to wacli database
     wacli_conn = sqlite3.connect(str(wacli_db_path))

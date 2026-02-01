@@ -16,12 +16,13 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from api.services.interaction_store import get_interaction_db_path
+from api.services.interaction_store import ensure_interaction_db
 from api.services.person_entity import get_person_entity_store
 from api.services.source_entity import (
     get_source_entity_store,
     create_imessage_source_entity,
 )
+from api.services.imessage import sync_and_join_imessages
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
@@ -36,6 +37,9 @@ def sync_imessage_interactions(dry_run: bool = True, limit: int = None) -> dict:
     """
     Sync iMessage data to interactions database.
 
+    First exports messages from macOS Messages database to imessage.db,
+    then creates Interaction records for messages linked to people.
+
     Args:
         dry_run: If True, don't actually insert anything
         limit: Max messages to process (for testing)
@@ -43,8 +47,19 @@ def sync_imessage_interactions(dry_run: bool = True, limit: int = None) -> dict:
     Returns:
         Stats dict
     """
+    # Step 1: Export from macOS Messages and join with CRM
+    if not dry_run:
+        try:
+            logger.info("Exporting messages from macOS Messages database...")
+            export_stats = sync_and_join_imessages()
+            logger.info(f"Exported {export_stats['export']['messages_exported']} messages, "
+                       f"matched {export_stats['join']['phones_matched']} phone numbers")
+        except PermissionError as e:
+            logger.warning(f"Cannot export from macOS Messages (Full Disk Access required): {e}")
+            logger.info("Continuing with existing exported messages...")
+
     imessage_db = get_imessage_db_path()
-    interactions_db = get_interaction_db_path()
+    interactions_db = ensure_interaction_db()
     person_store = get_person_entity_store()
     source_entity_store = get_source_entity_store()
 

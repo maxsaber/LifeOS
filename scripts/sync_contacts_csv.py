@@ -100,19 +100,32 @@ def sync_contacts_csv(csv_path: str = None, dry_run: bool = True) -> dict:
                     stats['skipped'] += 1
                     continue
 
-                # Get emails
+                # Get emails (check multiple possible column names)
                 emails = []
-                for col in ['E-mail Address', 'E-mail Address 2', 'E-mail Address 3']:
+                for col in ['Home Email', 'Work Email', 'Email (other)',
+                            'E-mail Address', 'E-mail Address 2', 'E-mail Address 3']:
                     email = row.get(col, '').strip().lower()
                     if email and '@' in email:
                         emails.append(email)
 
-                # Get phones
+                # Get phones (check multiple possible column names)
                 phones = []
-                for col in ['Mobile Phone', 'Home Phone', 'Business Phone']:
+                for col in ['Mobile Phone', 'Home Phone', 'Work Phone', 'Other Phone',
+                            'Business Phone']:
                     phone = normalize_phone(row.get(col, ''))
                     if phone:
                         phones.append(phone)
+
+                # Also parse phone numbers from Notes field
+                notes = row.get('Notes', '')
+                if notes:
+                    # Find phone patterns like +1 (512) 975-0925
+                    phone_pattern = r'\+?1?\s*\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}'
+                    found_phones = re.findall(phone_pattern, notes)
+                    for p in found_phones:
+                        normalized = normalize_phone(p)
+                        if normalized and normalized not in phones:
+                            phones.append(normalized)
 
                 # Skip if no email or phone
                 if not emails and not phones:
