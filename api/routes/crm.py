@@ -3168,37 +3168,28 @@ async def get_me_interactions(
     # ===== NEW WIDGETS =====
 
     # 1. Relationship Health Score (0-100)
-    # Based on: recency of contacts, frequency, weighted by circle
+    # Uses "vs. average" approach with personal/family interactions only
+    # Counts: iMessage, WhatsApp, phone calls, calendar events, and email
+    # Limited to top 25 family/personal contacts by relationship strength
+    HEALTH_INTERACTION_TYPES = {'imessage', 'whatsapp', 'phone', 'phone_call', 'calendar', 'gmail'}
+
+    # Get top 25 family/personal contacts by relationship strength
+    personal_family_people = [
+        p for p in person_lookup.values()
+        if p.category in ('family', 'personal') and p.id != MY_PERSON_ID
+    ]
+    personal_family_people.sort(key=lambda p: p.relationship_strength or 0, reverse=True)
+    top_25_ids = {p.id for p in personal_family_people[:25]}
+
+    # Filter to personal interactions with top 25 family/personal contacts
+    personal_interactions = [
+        i for i in all_interactions
+        if (i.source_type or "").lower() in HEALTH_INTERACTION_TYPES
+        and i.person_id in top_25_ids
+    ]
+
+    # Current health score will be calculated after we build the history
     health_score = 0
-    if person_lookup:
-        score_components = []
-        for person in person_lookup.values():
-            if person.id == MY_PERSON_ID:
-                continue
-            circle = circle_map.get(person.id, 7)
-            if circle > 4:  # Only count circles 0-4 for health
-                continue
-            # Weight by circle (closer = more important)
-            circle_weight = {0: 5, 1: 4, 2: 3, 3: 2, 4: 1}.get(circle, 0)
-            if circle_weight == 0:
-                continue
-            # Recency score (100 if contacted today, decays over 90 days)
-            last_seen = person.last_seen
-            if last_seen:
-                if last_seen.tzinfo is None:
-                    last_seen = last_seen.replace(tzinfo=timezone.utc)
-                days_ago = (now - last_seen).days
-                recency_score = max(0, 100 - (days_ago * 100 / 90))
-            else:
-                recency_score = 0
-            score_components.append(recency_score * circle_weight)
-        if score_components:
-            # Weighted average
-            total_weight = sum({0: 5, 1: 4, 2: 3, 3: 2, 4: 1}.get(circle_map.get(p.id, 7), 0)
-                              for p in person_lookup.values()
-                              if p.id != MY_PERSON_ID and circle_map.get(p.id, 7) <= 4)
-            if total_weight > 0:
-                health_score = int(sum(score_components) / total_weight)
 
     # 2. Neglected Contacts
     # People in circles 0-3 who haven't been contacted in longer than their typical gap
@@ -3249,69 +3240,70 @@ async def get_me_interactions(
     # Sort by circle (closer first), then by how overdue they are
     neglected.sort(key=lambda x: (x.dunbar_circle, -(x.days_since_contact / x.typical_gap_days)))
 
-    # 2b. Health Score History (longitudinal)
-    # Calculate health score at different points in time
+    # 2b. Health Score History (longitudinal) - using "vs. average" approach
+    # Count personal interactions per period, score relative to average
     health_score_history = []
 
     # Determine time points based on health_period
-    # Each period shows exactly 2x that period (2 months, 2 quarters, 2 years)
     if health_period == "month":
-        # 2 months back, weekly intervals (9 points: 0, 1, 2, ..., 8 weeks)
         total_days = 61  # ~2 months
         num_points = 9
-        time_points = [now - timedelta(days=int(i * total_days / (num_points - 1))) for i in range(num_points)]
     elif health_period == "year":
-        # 2 years back, bi-monthly intervals (13 points)
         total_days = 730  # 2 years
         num_points = 13
-        time_points = [now - timedelta(days=int(i * total_days / (num_points - 1))) for i in range(num_points)]
     else:  # quarter (default)
-        # 6 months back (2 quarters), bi-weekly intervals (13 points)
         total_days = 183  # ~6 months
         num_points = 13
-        time_points = [now - timedelta(days=int(i * total_days / (num_points - 1))) for i in range(num_points)]
 
+    time_points = [now - timedelta(days=int(i * total_days / (num_points - 1))) for i in range(num_points)]
     time_points = sorted(time_points)  # oldest first
 
-    # Pre-calculate total weight (doesn't change over time)
-    total_weight = sum(
-        {0: 5, 1: 4, 2: 3, 3: 2, 4: 1}.get(circle_map.get(p.id, 7), 0)
-        for p in person_lookup.values()
-        if p.id != MY_PERSON_ID and circle_map.get(p.id, 7) <= 4
-    )
-
-    for point_date in time_points:
-        score_components = []
-        for person in person_lookup.values():
-            if person.id == MY_PERSON_ID:
-                continue
-            circle = circle_map.get(person.id, 7)
-            if circle > 4:
-                continue
-            circle_weight = {0: 5, 1: 4, 2: 3, 3: 2, 4: 1}.get(circle, 0)
-            if circle_weight == 0:
-                continue
-
-            # Find most recent interaction before point_date
-            person_dates = person_interaction_dates.get(person.id, [])
-            dates_before = [d for d in person_dates if d <= point_date]
-            if dates_before:
-                last_contact = max(dates_before)
-                days_ago = (point_date - last_contact).days
-                recency_score = max(0, 100 - (days_ago * 100 / 90))
-            else:
-                recency_score = 0
-            score_components.append(recency_score * circle_weight)
-
-        if total_weight > 0 and score_components:
-            point_score = int(sum(score_components) / total_weight)
+    # First pass: collect raw personal interaction counts for each period
+    health_raw_counts = []
+    for i, point_date in enumerate(time_points):
+        if i == 0:
+            interval = (time_points[1] - time_points[0]).days if len(time_points) > 1 else 14
+            prev_date = point_date - timedelta(days=interval)
         else:
-            point_score = 0
+            prev_date = time_points[i - 1]
+
+        # Count personal interactions in this period
+        period_count = 0
+        for interaction in personal_interactions:
+            if interaction.timestamp:
+                ts = interaction.timestamp
+                if hasattr(ts, 'tzinfo') and ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                elif not hasattr(ts, 'tzinfo'):
+                    ts = datetime.fromisoformat(str(ts)[:10]).replace(tzinfo=timezone.utc)
+                if prev_date < ts <= point_date:
+                    period_count += 1
+
+        health_raw_counts.append(period_count)
+
+    # Calculate average for normalization
+    if health_raw_counts:
+        health_avg = sum(health_raw_counts) / len(health_raw_counts)
+    else:
+        health_avg = 0
+
+    # Convert counts to 0-100 scores (more interactions = higher score)
+    # At avg: score = 50, at 2x avg: score = 100, at 0: score = 0
+    for i, point_date in enumerate(time_points):
+        count = health_raw_counts[i]
+        if health_avg > 0:
+            # Score based on ratio to average: avg = 50, 2x avg = 100
+            score = int(min(100, (count / health_avg) * 50))
+        else:
+            score = 50 if count > 0 else 0
 
         health_score_history.append(HealthScorePoint(
             date=point_date.strftime('%Y-%m-%d'),
-            score=point_score,
+            score=score,
         ))
+
+    # Set current health score to the most recent value
+    health_score = health_score_history[-1].score if health_score_history else 0
 
     # 3. Network Growth Timeline
     # Use FIRST INTERACTION date across ALL time (not limited by days_back query)

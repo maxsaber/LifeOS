@@ -7029,11 +7029,21 @@
                 ` L ${xScale(history.length - 1)} ${padding.top + chartHeight}` +
                 ` L ${padding.left} ${padding.top + chartHeight} Z`;
 
-            // Build dots with data attributes for tooltips
+            // Helper to get dot color based on score relative to average (50)
+            function getDotColor(score) {
+                if (score >= 80) return '#22c55e';      // Bright green - excellent
+                if (score >= 60) return '#86efac';      // Light green - above avg
+                if (score >= 40) return '#9ca3af';      // Light gray - around avg
+                if (score >= 25) return '#f97316';      // Orange - below avg
+                return '#ef4444';                        // Red - poor
+            }
+
+            // Build dots with data attributes for tooltips, colored by score
             const dots = history.map((point, i) => {
                 const x = xScale(i);
                 const y = yScale(point.score);
-                return `<circle class="health-chart-dot" cx="${x}" cy="${y}" r="4" data-index="${i}" data-score="${point.score}" data-date="${point.date}"/>`;
+                const color = getDotColor(point.score);
+                return `<circle class="health-chart-dot" cx="${x}" cy="${y}" r="4" data-index="${i}" data-score="${point.score}" data-date="${point.date}" fill="${color}"/>`;
             }).join('');
 
             // Y-axis grid lines (at 25, 50, 75)
@@ -7042,10 +7052,10 @@
                 return `<line class="health-chart-grid-line" x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}"/>`;
             }).join('');
 
-            // Y-axis labels
-            const yLabels = [0, 50, 100].map(val => {
+            // Y-axis labels (show "Avg" at 50)
+            const yLabels = [{val: 0, label: '0'}, {val: 50, label: 'Avg'}, {val: 100, label: '100'}].map(({val, label}) => {
                 const y = yScale(val);
-                return `<text x="${padding.left - 5}" y="${y + 3}" font-size="11" fill="var(--text-primary)" text-anchor="end">${val}</text>`;
+                return `<text x="${padding.left - 5}" y="${y + 3}" font-size="11" fill="var(--text-primary)" text-anchor="end">${label}</text>`;
             }).join('');
 
             // X-axis labels (first, middle, last)
@@ -7068,8 +7078,8 @@
                     <svg class="health-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
                         ${gridLines}
                         ${yLabels}
-                        <path class="health-chart-area" d="${areaPath}"/>
-                        <path class="health-chart-line" d="${linePath}"/>
+                        <path class="health-chart-area" d="${areaPath}" style="fill: #9ca3af; opacity: 0.1;"/>
+                        <path class="health-chart-line" d="${linePath}" style="stroke: #9ca3af;"/>
                         ${dots}
                         ${xLabels.join('')}
                     </svg>
@@ -7237,12 +7247,21 @@
                 ` L ${xScale(history.length - 1)} ${padding.top + chartHeight}` +
                 ` L ${padding.left} ${padding.top + chartHeight} Z`;
 
-            // Build dots
-            const inverseClass = isInverse ? ' inverse' : '';
+            // Helper to get dot color based on score relative to average (50)
+            function getDotColor(score) {
+                if (score >= 80) return '#22c55e';      // Bright green - excellent
+                if (score >= 60) return '#86efac';      // Light green - above avg
+                if (score >= 40) return '#9ca3af';      // Light gray - around avg
+                if (score >= 25) return '#f97316';      // Orange - below avg
+                return '#ef4444';                        // Red - poor
+            }
+
+            // Build dots with colors based on score
             const dots = history.map((point, i) => {
                 const x = xScale(i);
                 const y = yScale(point.score);
-                return `<circle class="tracked-chart-dot${inverseClass}" cx="${x}" cy="${y}" r="4" data-index="${i}" data-score="${point.score}" data-date="${point.date}"/>`;
+                const color = getDotColor(point.score);
+                return `<circle class="tracked-chart-dot" cx="${x}" cy="${y}" r="4" data-index="${i}" data-score="${point.score}" data-date="${point.date}" fill="${color}"/>`;
             }).join('');
 
             // Y-axis grid lines (at 25, 50, 75 like health score)
@@ -7251,10 +7270,10 @@
                 return `<line class="health-chart-grid-line" x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}"/>`;
             }).join('');
 
-            // Y-axis labels (0, 50, 100 like health score)
-            const yLabels = [0, 50, 100].map(val => {
+            // Y-axis labels (show "Avg" at 50)
+            const yLabels = [{val: 0, label: '0'}, {val: 50, label: 'Avg'}, {val: 100, label: '100'}].map(({val, label}) => {
                 const y = yScale(val);
-                return `<text x="${padding.left - 5}" y="${y + 3}" font-size="11" fill="var(--text-primary)" text-anchor="end">${val}</text>`;
+                return `<text x="${padding.left - 5}" y="${y + 3}" font-size="11" fill="var(--text-primary)" text-anchor="end">${label}</text>`;
             }).join('');
 
             // X-axis labels
@@ -7277,8 +7296,8 @@
                     <svg class="health-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
                         ${gridLines}
                         ${yLabels}
-                        <path class="tracked-chart-area${inverseClass}" d="${areaPath}"/>
-                        <path class="tracked-chart-line${inverseClass}" d="${linePath}"/>
+                        <path d="${areaPath}" style="fill: #9ca3af; opacity: 0.1;"/>
+                        <path d="${linePath}" style="fill: none; stroke: #9ca3af; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"/>
                         ${dots}
                         ${xLabels.join('')}
                     </svg>
