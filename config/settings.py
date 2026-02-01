@@ -38,7 +38,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
 
     # Embedding Model
-    embedding_model: str = "all-MiniLM-L6-v2"
+    embedding_model: str = "Alibaba-NLP/gte-Qwen2-1.5B-instruct"
+    embedding_cache_dir: str = "/Volumes/NVMe External Storage/huggingface_cache"
 
     # Chunking
     chunk_size: int = 500  # tokens
