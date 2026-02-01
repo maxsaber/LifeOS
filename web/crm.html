@@ -907,6 +907,7 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            min-height: 0; /* Allow flex child to scroll */
             background: var(--bg-primary);
         }
 
@@ -915,6 +916,7 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            min-height: 0; /* Allow flex child to scroll */
         }
 
         #detailContent[style*="display: flex"] {
@@ -3328,6 +3330,12 @@
             padding-bottom: 2rem;
         }
 
+        /* Ensure scrolling works when family dashboard is visible */
+        .detail-content:has(.family-dashboard.visible) {
+            overflow-y: auto;
+            min-height: 0;
+        }
+
         .family-member-selector-row {
             margin-bottom: 1.5rem;
         }
@@ -3432,6 +3440,552 @@
         .family-member-strength {
             font-size: 0.75rem;
             color: var(--text-muted);
+        }
+
+        /* ================================================
+           FAMILY INSIGHTS VISUALIZATIONS
+           ================================================ */
+
+        .family-insights-section {
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .family-insights-title {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1.25rem;
+            letter-spacing: -0.01em;
+        }
+
+        .family-insights-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .family-insights-row:has(.full-width) {
+            grid-template-columns: 1fr;
+        }
+
+        .family-insight-card {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(22, 33, 62, 0.8) 100%);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .family-insight-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent) 0%, var(--people) 100%);
+            opacity: 0.6;
+        }
+
+        .family-insight-card.full-width {
+            grid-column: 1 / -1;
+        }
+
+        /* Allow tooltips to overflow on channel mix card */
+        .family-insight-card.channel-mix-card {
+            overflow: visible;
+        }
+
+        .insight-card-header {
+            margin-bottom: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 0.5rem;
+        }
+
+        .insight-card-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-right: auto;
+        }
+
+        .insight-card-subtitle {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            width: 100%;
+            order: 3;
+        }
+
+        .insight-period-select {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            cursor: pointer;
+            order: 2;
+        }
+
+        .insight-period-select:hover {
+            border-color: var(--accent);
+        }
+
+        .insight-period-select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(0, 188, 212, 0.2);
+            font-weight: 400;
+        }
+
+        .insight-loading {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        /* Days Since Contact Card */
+        .days-since-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .days-since-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.625rem 0.75rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .days-since-item:hover {
+            transform: translateX(4px);
+            box-shadow: -2px 0 0 var(--accent);
+        }
+
+        .days-since-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-tertiary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .days-since-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .days-since-name {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .days-since-expected {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        .days-since-badge {
+            padding: 0.25rem 0.625rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        .days-since-badge.on-track {
+            background: rgba(76, 175, 80, 0.2);
+            color: #81c784;
+            border: 1px solid rgba(76, 175, 80, 0.3);
+        }
+
+        .days-since-badge.warning {
+            background: rgba(255, 152, 0, 0.2);
+            color: #ffb74d;
+            border: 1px solid rgba(255, 152, 0, 0.3);
+        }
+
+        .days-since-badge.overdue {
+            background: rgba(233, 69, 96, 0.2);
+            color: #e57373;
+            border: 1px solid rgba(233, 69, 96, 0.3);
+        }
+
+        .days-since-badge.recent {
+            background: rgba(0, 188, 212, 0.2);
+            color: #4dd0e1;
+            border: 1px solid rgba(0, 188, 212, 0.3);
+        }
+
+        /* Streak Tracker Card */
+        .streak-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .streak-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.625rem 0.75rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .streak-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-tertiary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .streak-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .streak-name {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .streak-visual {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            margin-top: 0.25rem;
+        }
+
+        .streak-flame {
+            font-size: 0.75rem;
+        }
+
+        .streak-days {
+            display: flex;
+            gap: 2px;
+        }
+
+        .streak-day {
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            background: var(--bg-primary);
+        }
+
+        .streak-day.active {
+            background: linear-gradient(135deg, #ff6b6b 0%, #e94560 100%);
+            box-shadow: 0 0 4px rgba(233, 69, 96, 0.4);
+        }
+
+        .streak-count {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            min-width: 40px;
+            text-align: right;
+        }
+
+        .streak-count.hot {
+            color: #ff6b6b;
+            text-shadow: 0 0 8px rgba(255, 107, 107, 0.4);
+        }
+
+        .streak-count.warm {
+            color: #ffb74d;
+        }
+
+        .streak-count.cold {
+            color: var(--text-muted);
+        }
+
+        /* Channel Mix Card */
+        .channel-mix-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .channel-mix-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .channel-mix-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .channel-mix-name {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .channel-mix-total {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .channel-mix-bar {
+            display: flex;
+            height: 28px;
+            border-radius: 6px;
+            /* overflow: hidden removed to allow tooltips to appear above */
+            background: var(--bg-primary);
+        }
+
+        .channel-segment {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 0;
+            transition: all 0.2s ease;
+            cursor: default;
+            position: relative;
+        }
+
+        .channel-segment:hover {
+            filter: brightness(1.15);
+        }
+
+        .channel-segment-tooltip {
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.1s ease;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            color: var(--text-primary);
+        }
+
+        .channel-segment:hover .channel-segment-tooltip {
+            opacity: 1;
+        }
+
+        .channel-segment-label {
+            font-size: 0.65rem;
+            color: white;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0 0.375rem;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Channel colors - vibrant, distinctive palette */
+        .channel-imessage { background: linear-gradient(135deg, #34c759 0%, #30d158 100%); }
+        .channel-whatsapp { background: linear-gradient(135deg, #25d366 0%, #128c7e 100%); }
+        .channel-gmail { background: linear-gradient(135deg, #ea4335 0%, #c5221f 100%); }
+        .channel-calendar { background: linear-gradient(135deg, #5856d6 0%, #7c3aed 100%); }
+        .channel-phone { background: linear-gradient(135deg, #ff9500 0%, #ff6b00 100%); }
+        .channel-slack { background: linear-gradient(135deg, #e01e5a 0%, #d91a52 100%); }
+        .channel-vault { background: linear-gradient(135deg, #00bcd4 0%, #0097a7 100%); }
+        .channel-granola { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
+        .channel-linkedin { background: linear-gradient(135deg, #0077b5 0%, #005582 100%); }
+        .channel-other { background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); }
+
+        /* Channel Mix Legend */
+        .channel-legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .channel-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .channel-legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+        }
+
+        /* Communication Gaps Card */
+        .gaps-timeline-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .gaps-person-section {
+            padding: 0.75rem;
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 8px;
+        }
+
+        .gaps-person-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .gaps-person-name {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .gaps-person-stats {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        .gaps-timeline {
+            position: relative;
+            height: 32px;
+            background: var(--bg-primary);
+            border-radius: 4px;
+            /* overflow: hidden removed to allow tooltips to appear above */
+        }
+
+        .gaps-bar-fill {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: rgba(0, 188, 212, 0.3);
+        }
+
+        .gap-marker {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: linear-gradient(180deg, rgba(233, 69, 96, 0.6) 0%, rgba(233, 69, 96, 0.3) 100%);
+            border-left: 2px solid var(--accent);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .gap-marker:hover {
+            background: linear-gradient(180deg, rgba(233, 69, 96, 0.8) 0%, rgba(233, 69, 96, 0.5) 100%);
+        }
+
+        .gap-marker-tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.7rem;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            z-index: 10;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .gap-marker:hover .gap-marker-tooltip {
+            opacity: 1;
+        }
+
+        .gaps-timeline-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.25rem;
+            font-size: 0.6rem;
+            color: var(--text-muted);
+        }
+
+        .gaps-summary {
+            display: flex;
+            gap: 1.5rem;
+            padding: 0.75rem 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            margin-top: 0.5rem;
+        }
+
+        .gaps-summary-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .gaps-summary-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .gaps-summary-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* No data state */
+        .insight-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            text-align: center;
+        }
+
+        .insight-empty-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.5;
         }
 
         .me-widget {
@@ -3614,6 +4168,29 @@
         /* Health Score Widget */
         .me-health-panel {
             min-height: 200px;
+        }
+
+        /* Family dashboard panels - equal height */
+        .family-dashboard .me-widgets-row {
+            align-items: stretch;
+        }
+
+        .family-dashboard .me-health-panel,
+        .family-dashboard .family-trends-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .family-dashboard .family-trends-panel #familyRelationshipTrends {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        /* Taller chart for family health panel */
+        .family-dashboard .health-chart-container {
+            height: 200px;
+            flex: 1;
         }
 
         .health-current-score {
@@ -3973,8 +4550,7 @@
             padding-bottom: 0.5rem;
         }
 
-        .me-compact-panel #meTopContacts,
-        .me-compact-panel #familyTopContacts {
+        .me-compact-panel #meTopContacts {
             flex: 1;
             overflow-y: auto;
             max-height: 170px;
@@ -4884,19 +5460,8 @@
                                     <div class="health-chart-container" id="familyHealthChartContainer"></div>
                                 </div>
 
-                                <!-- Family Top Contacts -->
-                                <div class="overview-panel me-compact-panel">
-                                    <div class="overview-panel-header">
-                                        <span class="overview-panel-title">Top Contacts (30 Days)</span>
-                                    </div>
-                                    <div id="familyTopContacts"></div>
-                                </div>
-                            </div>
-
-                            <!-- Family Trends Row -->
-                            <div class="me-widgets-row">
-                                <!-- Relationship Trends -->
-                                <div class="overview-panel">
+                                <!-- Relationship Trends (replaces Top Contacts) -->
+                                <div class="overview-panel family-trends-panel">
                                     <div class="overview-panel-header">
                                         <span class="overview-panel-title">Relationship Trends</span>
                                     </div>
@@ -4914,6 +5479,82 @@
                                         <div class="trends-section" id="familyTrendsCooling">
                                             <div class="trends-title">❄️ Cooling</div>
                                             <div id="familyTrendsCoolingList"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- NEW: Family Insights Visualizations -->
+                            <div class="family-insights-section">
+                                <h3 class="family-insights-title">Family Insights</h3>
+
+                                <!-- Row 1: Days Since Contact + Streak Tracker -->
+                                <div class="family-insights-row">
+                                    <!-- Days Since Last Contact -->
+                                    <div class="family-insight-card days-since-card">
+                                        <div class="insight-card-header">
+                                            <span class="insight-card-title">Days Since Contact</span>
+                                            <span class="insight-card-subtitle">Based on Dunbar circle expectations</span>
+                                        </div>
+                                        <div class="days-since-grid" id="daysSinceGrid">
+                                            <div class="insight-loading">Loading...</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Streak Tracker -->
+                                    <div class="family-insight-card streak-card">
+                                        <div class="insight-card-header">
+                                            <span class="insight-card-title">Contact Streaks</span>
+                                            <span class="insight-card-subtitle">Consecutive weeks in touch</span>
+                                        </div>
+                                        <div class="streak-grid" id="streakGrid">
+                                            <div class="insight-loading">Loading...</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Row 2: Channel Mix -->
+                                <div class="family-insights-row">
+                                    <div class="family-insight-card channel-mix-card full-width">
+                                        <div class="insight-card-header">
+                                            <span class="insight-card-title">Communication Channels</span>
+                                            <span class="insight-card-subtitle">How you connect with each person</span>
+                                            <select class="insight-period-select" id="channelMixYears" onchange="changeChannelMixYears(this.value)">
+                                                <option value="1" selected>1 year</option>
+                                                <option value="2">2 years</option>
+                                                <option value="3">3 years</option>
+                                                <option value="4">4 years</option>
+                                                <option value="5">5 years</option>
+                                                <option value="6">6 years</option>
+                                                <option value="7">7 years</option>
+                                                <option value="8">8 years</option>
+                                                <option value="9">9 years</option>
+                                                <option value="10">10 years</option>
+                                            </select>
+                                        </div>
+                                        <div class="channel-mix-container" id="channelMixContainer">
+                                            <div class="insight-loading">Loading...</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Row 3: Communication Gaps Timeline -->
+                                <div class="family-insights-row">
+                                    <div class="family-insight-card gaps-card full-width">
+                                        <div class="insight-card-header">
+                                            <span class="insight-card-title">Communication Gaps</span>
+                                            <span class="insight-card-subtitle">Periods of extended silence (14+ days)</span>
+                                            <select class="insight-period-select" id="gapsMonths" onchange="changeGapsMonths(this.value)">
+                                                <option value="1">1 month</option>
+                                                <option value="2">2 months</option>
+                                                <option value="3">3 months</option>
+                                                <option value="6">6 months</option>
+                                                <option value="9">9 months</option>
+                                                <option value="12" selected>12 months</option>
+                                            </select>
+                                        </div>
+                                        <div class="gaps-timeline-container" id="gapsTimelineContainer">
+                                            <div class="insight-loading">Loading...</div>
                                         </div>
                                     </div>
                                 </div>
@@ -7551,7 +8192,6 @@
         function renderEmptyFamilyDashboard() {
             document.getElementById('familyHealthCurrentScore').textContent = '--';
             document.getElementById('familyHealthChartContainer').innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-muted);">Select family members to see data</div>';
-            document.getElementById('familyTopContacts').innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No data</div>';
             document.getElementById('familyTrendsWarmingList').innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No data</div>';
             document.getElementById('familyTrendsCoolingList').innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No data</div>';
             // Reset hero stats
@@ -7559,6 +8199,16 @@
             document.getElementById('familyStatMessages').textContent = '0';
             document.getElementById('familyStatPhone').textContent = '0';
             document.getElementById('familyStatCalendar').textContent = '0';
+            // Reset family insights
+            const emptyMessage = '<div class="insight-empty"><span class="insight-empty-icon">📊</span>Select family members to see data</div>';
+            const daysSince = document.getElementById('daysSinceGrid');
+            const streakGrid = document.getElementById('streakGrid');
+            const channelMix = document.getElementById('channelMixContainer');
+            const gapsTimeline = document.getElementById('gapsTimelineContainer');
+            if (daysSince) daysSince.innerHTML = emptyMessage;
+            if (streakGrid) streakGrid.innerHTML = emptyMessage;
+            if (channelMix) channelMix.innerHTML = emptyMessage;
+            if (gapsTimeline) gapsTimeline.innerHTML = emptyMessage;
         }
 
         // Render family dashboard with data
@@ -7577,11 +8227,11 @@
             // Render health score chart
             renderFamilyHealthScore(data);
 
-            // Render top contacts
-            renderFamilyTopContacts(data);
-
             // Render trends
             renderFamilyTrends(data);
+
+            // Render family insights visualizations
+            renderFamilyInsights();
         }
 
         // Load and render heatmap for family view (aggregate across selected family members)
@@ -7751,31 +8401,6 @@
         }
 
         // Render family top contacts
-        function renderFamilyTopContacts(data) {
-            const container = document.getElementById('familyTopContacts');
-            if (!container) return;
-
-            const topContacts = data.top_contacts || [];
-
-            if (topContacts.length === 0) {
-                container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No recent interactions</div>';
-                return;
-            }
-
-            let html = '';
-            topContacts.slice(0, 10).forEach((contact, idx) => {
-                html += `<div class="top-contact" onclick="selectPerson('${contact.person_id}')">
-                    <div class="top-contact-rank">${idx + 1}</div>
-                    <div class="top-contact-info">
-                        <div class="top-contact-name">${escapeHtml(contact.person_name)}</div>
-                        <div class="top-contact-count">${contact.count} interactions</div>
-                    </div>
-                </div>`;
-            });
-
-            container.innerHTML = html;
-        }
-
         // Render family trends
         function renderFamilyTrends(data) {
             const warmingList = document.getElementById('familyTrendsWarmingList');
@@ -7810,6 +8435,532 @@
             coolingList.innerHTML = cooling.length > 0
                 ? cooling.slice(0, 5).map(c => renderTrend(c, false)).join('')
                 : '<div style="color: var(--text-muted); font-size: 0.75rem; padding: 0.25rem;">No cooling trends</div>';
+        }
+
+        // ================================================
+        // FAMILY INSIGHTS VISUALIZATIONS
+        // ================================================
+
+        // Dunbar circle contact expectations (in days)
+        const DUNBAR_CONTACT_EXPECTATIONS = {
+            0: 7,    // Circle 0 (Intimate): every week
+            1: 7,    // Circle 1 (Close): every week
+            2: 14,   // Circle 2 (Good Friends): every 2 weeks
+            3: 30,   // Circle 3 (Friends): every month
+            4: 90,   // Circle 4 (Acquaintances): every quarter
+            5: 365,  // Circle 5 (Known): every year
+            6: 365,  // Circle 6+: every year
+            7: 365,  // Peripheral: every year
+        };
+
+        // Get expected contact frequency label
+        function getExpectedContactLabel(circle) {
+            const days = DUNBAR_CONTACT_EXPECTATIONS[circle] || 365;
+            if (days <= 7) return 'weekly';
+            if (days <= 14) return 'bi-weekly';
+            if (days <= 30) return 'monthly';
+            if (days <= 90) return 'quarterly';
+            return 'yearly';
+        }
+
+        // Get initials from name
+        function getInitials(name) {
+            return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        }
+
+        // Render Days Since Contact visualization
+        function renderDaysSinceContact() {
+            const container = document.getElementById('daysSinceGrid');
+            if (!container || familyMembers.length === 0) {
+                if (container) container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">📅</span>No family members selected</div>';
+                return;
+            }
+
+            const now = new Date();
+            const selectedMembers = familyMembers.filter(m => selectedFamilyIds.includes(m.id));
+
+            if (selectedMembers.length === 0) {
+                container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">📅</span>No family members selected</div>';
+                return;
+            }
+
+            // Calculate days since contact for each member
+            const membersWithDays = selectedMembers.map(member => {
+                const lastSeen = member.last_seen ? new Date(member.last_seen) : null;
+                const daysSince = lastSeen ? Math.floor((now - lastSeen) / (1000 * 60 * 60 * 24)) : null;
+                const circle = member.dunbar_circle ?? 5;
+                const expectedDays = DUNBAR_CONTACT_EXPECTATIONS[circle] || 365;
+
+                let status = 'on-track';
+                if (daysSince === null) {
+                    status = 'warning';
+                } else if (daysSince <= 2) {
+                    status = 'recent';
+                } else if (daysSince > expectedDays * 1.5) {
+                    status = 'overdue';
+                } else if (daysSince > expectedDays) {
+                    status = 'warning';
+                }
+
+                return { ...member, daysSince, expectedDays, status, circle };
+            });
+
+            // Sort alphabetically by name for consistency across all visualizations
+            membersWithDays.sort((a, b) => a.name.localeCompare(b.name));
+
+            container.innerHTML = membersWithDays.map(member => {
+                const daysText = member.daysSince === null ? '?' :
+                    member.daysSince === 0 ? 'Today' :
+                    member.daysSince === 1 ? '1 day' :
+                    `${member.daysSince}d`;
+                const expectedLabel = getExpectedContactLabel(member.circle);
+
+                return `
+                    <div class="days-since-item" onclick="selectPerson('${member.id}')">
+                        <div class="days-since-avatar">${getInitials(member.name)}</div>
+                        <div class="days-since-info">
+                            <div class="days-since-name">${escapeHtml(member.name)}</div>
+                            <div class="days-since-expected">Target: ${expectedLabel}</div>
+                        </div>
+                        <div class="days-since-badge ${member.status}">${daysText}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Render Streak Tracker visualization (weeks-based)
+        function renderStreakTracker() {
+            const container = document.getElementById('streakGrid');
+            if (!container || familyMembers.length === 0) {
+                if (container) container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">🔥</span>No family members selected</div>';
+                return;
+            }
+
+            const selectedMembers = familyMembers.filter(m => selectedFamilyIds.includes(m.id));
+
+            if (selectedMembers.length === 0) {
+                container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">🔥</span>No family members selected</div>';
+                return;
+            }
+
+            // Sort alphabetically by name for consistency across all visualizations
+            const sorted = [...selectedMembers].sort((a, b) => a.name.localeCompare(b.name));
+
+            container.innerHTML = sorted.map(member => {
+                const streakWeeks = member.current_streak || 0;  // API returns weeks directly
+                const streakClass = streakWeeks >= 4 ? 'hot' : streakWeeks >= 2 ? 'warm' : 'cold';
+                const flame = streakWeeks >= 4 ? '🔥' : streakWeeks >= 2 ? '🌡️' : '❄️';
+
+                // Show last 8 weeks as dots
+                const dots = [];
+                for (let i = 0; i < 8; i++) {
+                    dots.push(`<div class="streak-day ${i < streakWeeks ? 'active' : ''}"></div>`);
+                }
+
+                return `
+                    <div class="streak-item" onclick="selectPerson('${member.id}')">
+                        <div class="streak-avatar">${getInitials(member.name)}</div>
+                        <div class="streak-info">
+                            <div class="streak-name">${escapeHtml(member.name)}</div>
+                            <div class="streak-visual">
+                                <span class="streak-flame">${flame}</span>
+                                <div class="streak-days">${dots.join('')}</div>
+                            </div>
+                        </div>
+                        <div class="streak-count ${streakClass}">${streakWeeks}w</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Channel colors for the mix visualization
+        const CHANNEL_COLORS = {
+            imessage: 'channel-imessage',
+            whatsapp: 'channel-whatsapp',
+            gmail: 'channel-gmail',
+            calendar: 'channel-calendar',
+            phone: 'channel-phone',
+            slack: 'channel-slack',
+            vault: 'channel-vault',
+            granola: 'channel-granola',
+            linkedin: 'channel-linkedin',
+        };
+
+        const CHANNEL_LABELS = {
+            imessage: '💬 iMessage',
+            whatsapp: '📱 WhatsApp',
+            gmail: '📧 Email',
+            calendar: '📅 Calendar',
+            phone: '📞 Phone',
+            slack: '💼 Slack',
+            vault: '📝 Notes',
+            granola: '🥣 Granola',
+            linkedin: '🔗 LinkedIn',
+        };
+
+        // Render Channel Mix visualization
+        function renderChannelMix() {
+            const container = document.getElementById('channelMixContainer');
+            if (!container || familyMembers.length === 0) {
+                if (container) container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">📊</span>No family members selected</div>';
+                return;
+            }
+
+            const selectedMembers = familyMembers.filter(m => selectedFamilyIds.includes(m.id));
+
+            if (selectedMembers.length === 0) {
+                container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">📊</span>No family members selected</div>';
+                return;
+            }
+
+            // Sort alphabetically by name for consistency across all visualizations
+            selectedMembers.sort((a, b) => a.name.localeCompare(b.name));
+
+            // Collect all unique channels
+            const allChannels = new Set();
+            selectedMembers.forEach(m => {
+                Object.keys(m.by_source || {}).forEach(ch => allChannels.add(ch));
+            });
+
+            // Build HTML for each member
+            let html = selectedMembers.map(member => {
+                const sources = member.by_source || {};
+                const total = Object.values(sources).reduce((a, b) => a + b, 0);
+
+                if (total === 0) {
+                    return `
+                        <div class="channel-mix-item">
+                            <div class="channel-mix-header">
+                                <span class="channel-mix-name">${escapeHtml(member.name)}</span>
+                                <span class="channel-mix-total">No interactions</span>
+                            </div>
+                            <div class="channel-mix-bar">
+                                <div class="channel-segment channel-other" style="width: 100%">
+                                    <span class="channel-segment-label">No data</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Sort channels by count
+                const sortedChannels = Object.entries(sources)
+                    .sort((a, b) => b[1] - a[1]);
+
+                const segments = sortedChannels.map(([channel, count]) => {
+                    const pct = (count / total) * 100;
+                    const colorClass = CHANNEL_COLORS[channel] || 'channel-other';
+                    const label = pct >= 15 ? CHANNEL_LABELS[channel]?.split(' ')[0] || channel : '';
+
+                    const tooltipLabel = CHANNEL_LABELS[channel] || channel;
+                    return `<div class="channel-segment ${colorClass}" style="width: ${pct}%">
+                        <span class="channel-segment-label">${label}</span>
+                        <div class="channel-segment-tooltip"><strong>${tooltipLabel}</strong><br>${count.toLocaleString()} (${Math.round(pct)}%)</div>
+                    </div>`;
+                }).join('');
+
+                return `
+                    <div class="channel-mix-item">
+                        <div class="channel-mix-header">
+                            <span class="channel-mix-name">${escapeHtml(member.name)}</span>
+                            <span class="channel-mix-total">${total.toLocaleString()} interactions</span>
+                        </div>
+                        <div class="channel-mix-bar">${segments}</div>
+                    </div>
+                `;
+            }).join('');
+
+            // Add legend
+            const usedChannels = [...allChannels].filter(ch => CHANNEL_LABELS[ch]);
+            if (usedChannels.length > 0) {
+                html += `
+                    <div class="channel-legend">
+                        ${usedChannels.map(ch => `
+                            <div class="channel-legend-item">
+                                <div class="channel-legend-dot ${CHANNEL_COLORS[ch] || 'channel-other'}"></div>
+                                <span>${CHANNEL_LABELS[ch] || ch}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        // Cache for communication gaps data
+        let communicationGapsData = null;
+        let gapsMonths = 12;  // Default to 12 months
+        let channelMixYears = 1;  // Default to 1 year
+
+        // Change gaps time period
+        async function changeGapsMonths(months) {
+            gapsMonths = parseInt(months, 10);
+            await loadCommunicationGaps();
+        }
+
+        // Change channel mix time period
+        async function changeChannelMixYears(years) {
+            channelMixYears = parseInt(years, 10);
+            await loadChannelMixData();
+        }
+
+        // Load channel mix data from API with time filtering
+        async function loadChannelMixData() {
+            const container = document.getElementById('channelMixContainer');
+            if (!container) return;
+
+            if (selectedFamilyIds.length === 0) {
+                container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">📊</span>No family members selected</div>';
+                return;
+            }
+
+            container.innerHTML = '<div class="insight-loading">Loading channel data...</div>';
+
+            try {
+                const idsParam = selectedFamilyIds.join(',');
+                const daysBack = channelMixYears * 365;
+                const data = await api(`/family/channel-mix?person_ids=${encodeURIComponent(idsParam)}&days_back=${daysBack}`);
+                renderChannelMixWithData(data);
+            } catch (error) {
+                console.error('Failed to load channel mix:', error);
+                // Fallback to using familyMembers data (lifetime totals)
+                renderChannelMix();
+            }
+        }
+
+        // Render Channel Mix with API data
+        function renderChannelMixWithData(data) {
+            const container = document.getElementById('channelMixContainer');
+            if (!container || !data || !data.members) {
+                renderChannelMix();  // Fallback
+                return;
+            }
+
+            const members = data.members;
+            if (members.length === 0) {
+                container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">📊</span>No data for selected period</div>';
+                return;
+            }
+
+            // Sort alphabetically by name for consistency across all visualizations
+            members.sort((a, b) => a.name.localeCompare(b.name));
+
+            // Collect all unique channels
+            const allChannels = new Set();
+            members.forEach(m => {
+                Object.keys(m.by_source || {}).forEach(ch => allChannels.add(ch));
+            });
+
+            // Build HTML for each member
+            let html = members.map(member => {
+                const sources = member.by_source || {};
+                const total = Object.values(sources).reduce((a, b) => a + b, 0);
+
+                if (total === 0) {
+                    return `
+                        <div class="channel-mix-item">
+                            <div class="channel-mix-header">
+                                <span class="channel-mix-name">${escapeHtml(member.name)}</span>
+                                <span class="channel-mix-total">No interactions</span>
+                            </div>
+                            <div class="channel-mix-bar">
+                                <div class="channel-segment channel-other" style="width: 100%">
+                                    <span class="channel-segment-label">No data</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Sort channels by count
+                const sortedChannels = Object.entries(sources)
+                    .sort((a, b) => b[1] - a[1]);
+
+                const segments = sortedChannels.map(([channel, count]) => {
+                    const pct = (count / total) * 100;
+                    const colorClass = CHANNEL_COLORS[channel] || 'channel-other';
+                    const label = pct >= 15 ? CHANNEL_LABELS[channel]?.split(' ')[0] || channel : '';
+
+                    const tooltipLabel = CHANNEL_LABELS[channel] || channel;
+                    return `<div class="channel-segment ${colorClass}" style="width: ${pct}%">
+                        <span class="channel-segment-label">${label}</span>
+                        <div class="channel-segment-tooltip"><strong>${tooltipLabel}</strong><br>${count.toLocaleString()} (${Math.round(pct)}%)</div>
+                    </div>`;
+                }).join('');
+
+                return `
+                    <div class="channel-mix-item">
+                        <div class="channel-mix-header">
+                            <span class="channel-mix-name">${escapeHtml(member.name)}</span>
+                            <span class="channel-mix-total">${total.toLocaleString()} interactions</span>
+                        </div>
+                        <div class="channel-mix-bar">${segments}</div>
+                    </div>
+                `;
+            }).join('');
+
+            // Add legend
+            const usedChannels = [...allChannels].filter(ch => CHANNEL_LABELS[ch]);
+            if (usedChannels.length > 0) {
+                html += `
+                    <div class="channel-legend">
+                        ${usedChannels.map(ch => `
+                            <div class="channel-legend-item">
+                                <div class="channel-legend-dot ${CHANNEL_COLORS[ch] || 'channel-other'}"></div>
+                                <span>${CHANNEL_LABELS[ch] || ch}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        // Load and render Communication Gaps visualization
+        // Calculate minimum gap threshold based on time period
+        // Linear scale: 1 month → 5 days, 12 months → 20 days
+        function getMinGapDays(months) {
+            // Linear interpolation: 5 + (months - 1) * (20 - 5) / (12 - 1)
+            return Math.round(5 + (months - 1) * 15 / 11);
+        }
+
+        async function loadCommunicationGaps() {
+            const container = document.getElementById('gapsTimelineContainer');
+            if (!container) return;
+
+            if (selectedFamilyIds.length === 0) {
+                container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">📉</span>No family members selected</div>';
+                return;
+            }
+
+            container.innerHTML = '<div class="insight-loading">Analyzing communication patterns...</div>';
+
+            try {
+                const idsParam = selectedFamilyIds.join(',');
+                const daysBack = gapsMonths * 30;  // Approximate days from months
+                const minGapDays = getMinGapDays(gapsMonths);
+
+                // Update subtitle to show current threshold
+                const subtitle = document.querySelector('.gaps-card .insight-card-subtitle');
+                if (subtitle) {
+                    subtitle.textContent = `Periods of extended silence (${minGapDays}+ days)`;
+                }
+
+                communicationGapsData = await api(`/family/communication-gaps?person_ids=${encodeURIComponent(idsParam)}&days_back=${daysBack}&min_gap_days=${minGapDays}`);
+                renderCommunicationGaps();
+            } catch (error) {
+                console.error('Failed to load communication gaps:', error);
+                container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">⚠️</span>Failed to load data</div>';
+            }
+        }
+
+        // Render Communication Gaps visualization
+        function renderCommunicationGaps() {
+            const container = document.getElementById('gapsTimelineContainer');
+            if (!container || !communicationGapsData) return;
+
+            const { gaps, person_summaries } = communicationGapsData;
+            const minGapDays = getMinGapDays(gapsMonths);
+
+            if (!person_summaries || person_summaries.length === 0) {
+                container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">✨</span>No significant communication gaps found</div>';
+                return;
+            }
+
+            // Sort alphabetically by name for consistency across all visualizations
+            person_summaries.sort((a, b) => (a.person_name || a.name || '').localeCompare(b.person_name || b.name || ''));
+
+            const now = new Date();
+            const periodStart = new Date(now);
+            periodStart.setDate(periodStart.getDate() - (gapsMonths * 30));
+            const totalDays = gapsMonths * 30;
+
+            // Build HTML for each person
+            let html = person_summaries.map(summary => {
+                const personGaps = gaps.filter(g => g.person_id === summary.person_id);
+
+                // Create gap markers
+                const markers = personGaps.map(gap => {
+                    const startDate = new Date(gap.start_date);
+                    const endDate = new Date(gap.end_date);
+                    const daysSinceStart = Math.floor((startDate - periodStart) / (1000 * 60 * 60 * 24));
+                    const leftPct = Math.max(0, Math.min(100, (daysSinceStart / totalDays) * 100));
+                    const widthPct = Math.max(1, (gap.gap_days / totalDays) * 100);
+
+                    const startLabel = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    const endLabel = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                    return `
+                        <div class="gap-marker" style="left: ${leftPct}%; width: ${widthPct}%;">
+                            <div class="gap-marker-tooltip">
+                                <strong>${gap.gap_days} days</strong><br>
+                                ${startLabel} → ${endLabel}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                const gapCount = personGaps.length;
+                const statsText = gapCount === 0
+                    ? `No gaps over ${minGapDays} days`
+                    : `${gapCount} gap${gapCount > 1 ? 's' : ''} | Avg: ${summary.avg_gap_days}d | Max: ${summary.max_gap_days}d`;
+
+                return `
+                    <div class="gaps-person-section">
+                        <div class="gaps-person-header">
+                            <span class="gaps-person-name">${escapeHtml(summary.person_name)}</span>
+                            <span class="gaps-person-stats">${statsText}</span>
+                        </div>
+                        <div class="gaps-timeline">
+                            ${markers}
+                        </div>
+                        <div class="gaps-timeline-labels">
+                            <span>${periodStart.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}</span>
+                            <span>Now</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Add overall summary - convert streak to weeks
+            const totalGaps = gaps.length;
+            const avgGapDays = person_summaries.reduce((a, b) => a + b.avg_gap_days, 0) / person_summaries.length;
+            const maxGapDays = Math.max(...person_summaries.map(s => s.max_gap_days));
+            const bestStreakDays = Math.max(...person_summaries.map(s => s.longest_streak));
+            const bestStreakWeeks = Math.round(bestStreakDays / 7 * 10) / 10;  // Round to 1 decimal
+
+            html += `
+                <div class="gaps-summary">
+                    <div class="gaps-summary-item">
+                        <span class="gaps-summary-value">${totalGaps}</span>
+                        <span class="gaps-summary-label">Total Gaps</span>
+                    </div>
+                    <div class="gaps-summary-item">
+                        <span class="gaps-summary-value">${Math.round(avgGapDays)}d</span>
+                        <span class="gaps-summary-label">Avg Gap</span>
+                    </div>
+                    <div class="gaps-summary-item">
+                        <span class="gaps-summary-value">${maxGapDays}d</span>
+                        <span class="gaps-summary-label">Longest Gap</span>
+                    </div>
+                    <div class="gaps-summary-item">
+                        <span class="gaps-summary-value">${bestStreakWeeks}w</span>
+                        <span class="gaps-summary-label">Best Streak</span>
+                    </div>
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        // Render all family insights visualizations
+        function renderFamilyInsights() {
+            renderDaysSinceContact();
+            renderStreakTracker();
+            renderChannelMix();
+            loadCommunicationGaps();
         }
 
         // Change family health period
@@ -7870,6 +9021,10 @@
 
                 const data = await api(`/family/timeline?${params.toString()}`);
                 timelineData = data.items || [];
+
+                // Update the count display
+                updateTimelineCount(data.count || timelineData.length, data.has_more || false);
+
                 renderTimeline();
 
                 // Update filter visibility based on data
@@ -7877,6 +9032,7 @@
             } catch (error) {
                 console.error('Failed to load family timeline:', error);
                 container.innerHTML = '<div class="loading">Failed to load timeline</div>';
+                updateTimelineCount(0, false);
             }
         }
 

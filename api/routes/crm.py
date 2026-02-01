@@ -2892,10 +2892,16 @@ class MeInteractionsResponse(BaseModel):
 
 
 class FamilyMember(BaseModel):
-    """Family member for multi-select dropdown."""
+    """Family member for multi-select dropdown and visualizations."""
     id: str
     name: str
     relationship_strength: float = 0.0
+    dunbar_circle: Optional[int] = None
+    last_seen: Optional[str] = None
+    # Interaction breakdowns for channel mix visualization
+    by_source: dict[str, int] = {}
+    # Current streak (consecutive days with contact)
+    current_streak: int = 0
 
 
 class FamilyMembersResponse(BaseModel):
@@ -3601,12 +3607,21 @@ async def get_me_interactions(
 @router.get("/family/members", response_model=FamilyMembersResponse)
 async def get_family_members():
     """
-    Get all family members for the multi-select dropdown.
+    Get all family members for the multi-select dropdown and visualizations.
 
     Returns people with category="family" sorted by relationship strength.
+    Includes dunbar_circle, last_seen, by_source breakdown, and streak data.
     """
+    from datetime import timedelta
+    from collections import defaultdict
+
     person_store = get_person_entity_store()
+    interaction_store = get_interaction_store()
     all_people = person_store.get_all()
+
+    # Get current date for streak calculation
+    now = datetime.now(timezone.utc)
+    today = now.date()
 
     # Filter to family members only
     family_members = []
@@ -3615,10 +3630,58 @@ async def get_family_members():
             continue
         computed_category = compute_person_category(person, [])
         if computed_category == "family":
+            # Get interaction breakdown by source (last 365 days)
+            interactions = interaction_store.get_for_person(person.id, days_back=365)
+            by_source: dict[str, int] = defaultdict(int)
+            for i in interactions:
+                by_source[i.source_type] += 1
+
+            # Calculate current streak (consecutive WEEKS with at least one contact)
+            # A week counts if there's any contact in that 7-day period
+            interaction_dates = set()
+            for i in interactions:
+                if hasattr(i.timestamp, 'date'):
+                    interaction_dates.add(i.timestamp.date())
+                else:
+                    try:
+                        dt = datetime.fromisoformat(str(i.timestamp).replace('Z', '+00:00'))
+                        interaction_dates.add(dt.date())
+                    except Exception:
+                        pass
+
+            # Group dates by week (week 0 = last 7 days, week -1 = 8-14 days ago, etc.)
+            def get_week_number(d, reference):
+                days_diff = (reference - d).days
+                return -(days_diff // 7)
+
+            weeks_with_contact = set()
+            for d in interaction_dates:
+                week_num = get_week_number(d, today)
+                weeks_with_contact.add(week_num)
+
+            # Count consecutive weeks starting from week 0 (or -1 if no contact this week)
+            current_streak = 0
+            if 0 in weeks_with_contact:
+                start_week = 0
+            elif -1 in weeks_with_contact:
+                start_week = -1
+            else:
+                start_week = None
+
+            if start_week is not None:
+                check_week = start_week
+                while check_week in weeks_with_contact:
+                    current_streak += 1
+                    check_week -= 1
+
             family_members.append(FamilyMember(
                 id=person.id,
                 name=person.canonical_name,
                 relationship_strength=person.relationship_strength or 0.0,
+                dunbar_circle=person.dunbar_circle,
+                last_seen=person.last_seen.isoformat() if person.last_seen else None,
+                by_source=dict(by_source),
+                current_streak=current_streak,
             ))
 
     # Sort by relationship strength descending
@@ -3973,6 +4036,196 @@ async def get_family_interactions(
         health_score_history=health_score_history,
         health_score_average=round(health_avg, 1),
     )
+
+
+class CommunicationGap(BaseModel):
+    """A period of no contact with a family member."""
+    person_id: str
+    person_name: str
+    start_date: str
+    end_date: str
+    gap_days: int
+    # Context: what was typical contact frequency before/after
+    avg_gap_days_before: Optional[float] = None
+
+
+class CommunicationGapsResponse(BaseModel):
+    """Communication gaps for family members over time."""
+    gaps: list[CommunicationGap]
+    # Per-person summary
+    person_summaries: list[dict]
+
+
+@router.get("/family/communication-gaps", response_model=CommunicationGapsResponse)
+async def get_family_communication_gaps(
+    person_ids: str = Query(
+        ...,
+        description="Comma-separated list of person IDs"
+    ),
+    days_back: int = Query(default=365, ge=30, le=3660, description="Days of history to analyze"),
+    min_gap_days: int = Query(default=14, ge=1, description="Minimum gap size to report"),
+):
+    """
+    Get communication gaps for selected family members.
+
+    Identifies periods where you went unusually long without contact.
+    """
+    from collections import defaultdict
+    from datetime import timedelta
+
+    # Parse person IDs
+    selected_ids = [pid.strip() for pid in person_ids.split(",") if pid.strip()]
+    if not selected_ids:
+        return CommunicationGapsResponse(gaps=[], person_summaries=[])
+
+    person_store = get_person_entity_store()
+    interaction_store = get_interaction_store()
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=days_back)
+
+    gaps = []
+    person_summaries = []
+
+    for person_id in selected_ids:
+        person = person_store.get_by_id(person_id)
+        if not person:
+            continue
+
+        # Get all interactions with this person (use high limit for accurate gap analysis)
+        interactions = interaction_store.get_for_person(person_id, days_back=days_back, limit=10000)
+
+        # Extract dates
+        interaction_dates = []
+        for i in interactions:
+            if hasattr(i.timestamp, 'date'):
+                interaction_dates.append(i.timestamp.date())
+            else:
+                try:
+                    dt = datetime.fromisoformat(str(i.timestamp).replace('Z', '+00:00'))
+                    interaction_dates.append(dt.date())
+                except Exception:
+                    pass
+
+        if not interaction_dates:
+            continue
+
+        interaction_dates = sorted(set(interaction_dates))
+
+        # Calculate gaps
+        person_gaps = []
+        all_gap_sizes = []
+
+        for i in range(1, len(interaction_dates)):
+            gap_days = (interaction_dates[i] - interaction_dates[i-1]).days
+            all_gap_sizes.append(gap_days)
+
+            if gap_days >= min_gap_days:
+                # Calculate average gap before this point
+                gaps_before = all_gap_sizes[:-1] if len(all_gap_sizes) > 1 else []
+                avg_before = sum(gaps_before) / len(gaps_before) if gaps_before else None
+
+                person_gaps.append(CommunicationGap(
+                    person_id=person_id,
+                    person_name=person.canonical_name,
+                    start_date=interaction_dates[i-1].isoformat(),
+                    end_date=interaction_dates[i].isoformat(),
+                    gap_days=gap_days,
+                    avg_gap_days_before=round(avg_before, 1) if avg_before else None,
+                ))
+
+        gaps.extend(person_gaps)
+
+        # Summary for this person
+        avg_gap = sum(all_gap_sizes) / len(all_gap_sizes) if all_gap_sizes else 0
+        max_gap = max(all_gap_sizes) if all_gap_sizes else 0
+        longest_streak = 0
+        current_streak_calc = 1
+        for i in range(1, len(interaction_dates)):
+            if (interaction_dates[i] - interaction_dates[i-1]).days == 1:
+                current_streak_calc += 1
+                longest_streak = max(longest_streak, current_streak_calc)
+            else:
+                current_streak_calc = 1
+
+        person_summaries.append({
+            "person_id": person_id,
+            "person_name": person.canonical_name,
+            "avg_gap_days": round(avg_gap, 1),
+            "max_gap_days": max_gap,
+            "longest_streak": longest_streak,
+            "total_gaps_over_threshold": len(person_gaps),
+        })
+
+    # Sort gaps by size (largest first)
+    gaps.sort(key=lambda g: g.gap_days, reverse=True)
+
+    return CommunicationGapsResponse(
+        gaps=gaps[:50],  # Limit to top 50 gaps
+        person_summaries=person_summaries,
+    )
+
+
+class ChannelMixMember(BaseModel):
+    """Channel mix data for a single family member."""
+    id: str
+    name: str
+    by_source: dict[str, int] = {}
+
+
+class ChannelMixResponse(BaseModel):
+    """Response for channel mix by family members."""
+    members: list[ChannelMixMember]
+
+
+@router.get("/family/channel-mix", response_model=ChannelMixResponse)
+async def get_family_channel_mix(
+    person_ids: str = Query(
+        ...,
+        description="Comma-separated list of person IDs"
+    ),
+    days_back: int = Query(default=365, ge=30, le=3660, description="Days of history to analyze"),
+):
+    """
+    Get communication channel breakdown by source type for selected family members.
+
+    Returns interaction counts grouped by source (imessage, gmail, calendar, etc.)
+    filtered to the specified time period.
+    """
+    from collections import defaultdict
+    from datetime import timedelta
+
+    # Parse person IDs
+    selected_ids = [pid.strip() for pid in person_ids.split(",") if pid.strip()]
+    if not selected_ids:
+        return ChannelMixResponse(members=[])
+
+    person_store = get_person_entity_store()
+    interaction_store = get_interaction_store()
+
+    members = []
+
+    for person_id in selected_ids:
+        person = person_store.get_by_id(person_id)
+        if not person:
+            continue
+
+        # Get interactions within time period (use high limit for accurate aggregation)
+        interactions = interaction_store.get_for_person(person_id, days_back=days_back, limit=10000)
+
+        # Count by source type
+        by_source: dict[str, int] = defaultdict(int)
+        for i in interactions:
+            source_type = i.source_type or 'other'
+            by_source[source_type] += 1
+
+        members.append(ChannelMixMember(
+            id=person_id,
+            name=person.canonical_name,
+            by_source=dict(by_source),
+        ))
+
+    return ChannelMixResponse(members=members)
 
 
 # Sync Health Monitoring Routes
