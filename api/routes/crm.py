@@ -2877,6 +2877,40 @@ class MeInteractionsResponse(BaseModel):
     relationship_health_score: int = 0  # 0-100
     health_score_history: list[HealthScorePoint] = []  # Longitudinal health scores
     health_score_average: float = 0.0  # Average interaction count for the period
+
+
+class FamilyMember(BaseModel):
+    """Family member for multi-select dropdown."""
+    id: str
+    name: str
+    relationship_strength: float = 0.0
+
+
+class FamilyMembersResponse(BaseModel):
+    """List of family members for selection."""
+    members: list[FamilyMember]
+
+
+class FamilyInteractionsResponse(BaseModel):
+    """Aggregated interaction data for selected family members."""
+    # Selected people info
+    selected_ids: list[str]
+    selected_names: list[str]
+    # Daily aggregates for heatmap
+    daily: list[DailyAggregate]
+    # Breakdown totals
+    by_source: dict[str, int]
+    by_month: dict[str, int]
+    # Top contacts among selected (by interaction count)
+    top_contacts: list[TopContact]
+    # Trends
+    warming: list[TrendPerson]
+    cooling: list[TrendPerson]
+    total_count: int
+    # Health score for selected group
+    relationship_health_score: int = 0
+    health_score_history: list[HealthScorePoint] = []
+    health_score_average: float = 0.0
     neglected_contacts: list[NeglectedContact] = []
     network_growth: list[MonthlyNetworkGrowth] = []
     messaging_by_circle: list[MonthlyMessagingVolume] = []
@@ -3541,6 +3575,266 @@ async def get_me_interactions(
         network_growth=network_growth,
         messaging_by_circle=messaging_by_circle,
         tracked_relationships=tracked_relationships,
+    )
+
+
+# Family Dashboard Routes
+# =======================
+
+
+@router.get("/family/members", response_model=FamilyMembersResponse)
+async def get_family_members():
+    """
+    Get all family members for the multi-select dropdown.
+
+    Returns people with category="family" sorted by relationship strength.
+    """
+    person_store = get_person_entity_store()
+    all_people = person_store.get_all()
+
+    # Filter to family members only
+    family_members = []
+    for person in all_people:
+        if person.id == MY_PERSON_ID:
+            continue
+        computed_category = compute_person_category(person, [])
+        if computed_category == "family":
+            family_members.append(FamilyMember(
+                id=person.id,
+                name=person.canonical_name,
+                relationship_strength=person.relationship_strength or 0.0,
+            ))
+
+    # Sort by relationship strength descending
+    family_members.sort(key=lambda m: m.relationship_strength, reverse=True)
+
+    return FamilyMembersResponse(members=family_members)
+
+
+@router.get("/family/interactions", response_model=FamilyInteractionsResponse)
+async def get_family_interactions(
+    person_ids: str = Query(
+        ...,
+        description="Comma-separated list of person IDs to aggregate"
+    ),
+    days_back: int = Query(default=365, ge=1, le=3660, description="Days of history"),
+    trend_period: str = Query(default="quarter", description="Trend period: week, month, quarter, year"),
+    health_period: str = Query(default="quarter", description="Health score period: month, quarter, year"),
+):
+    """
+    Get aggregated interaction data for selected family members.
+
+    Similar to /me/interactions but aggregates only interactions WITH the selected people.
+    """
+    from datetime import timedelta
+    from collections import defaultdict
+
+    # Parse person IDs
+    selected_ids = [pid.strip() for pid in person_ids.split(",") if pid.strip()]
+    if not selected_ids:
+        raise HTTPException(status_code=400, detail="At least one person_id required")
+
+    interaction_store = get_interaction_store()
+    person_store = get_person_entity_store()
+
+    # Calculate date range
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=days_back)
+
+    # Build person lookup
+    person_lookup = {p.id: p for p in person_store.get_all()}
+
+    # Get selected person names
+    selected_names = []
+    for pid in selected_ids:
+        person = person_lookup.get(pid)
+        if person:
+            selected_names.append(person.canonical_name)
+        else:
+            selected_names.append("Unknown")
+
+    # Get interactions only with selected people
+    all_interactions_raw = interaction_store.get_all_in_range(
+        start_date=start_date,
+        end_date=end_date,
+        exclude_person_ids=[MY_PERSON_ID],  # Don't exclude selected people
+    )
+
+    # Filter to only interactions with selected people
+    all_interactions = [
+        i for i in all_interactions_raw
+        if i.person_id in selected_ids
+    ]
+
+    # Aggregation structures
+    daily_data = defaultdict(lambda: {"total": 0, "sources": defaultdict(int)})
+    by_source = defaultdict(int)
+    by_month = defaultdict(int)
+    person_counts_30d = defaultdict(int)
+    person_counts_recent = defaultdict(int)
+    person_counts_previous = defaultdict(int)
+
+    now = datetime.now(timezone.utc)
+    period_days = {
+        "week": 7,
+        "month": 30,
+        "quarter": 90,
+        "year": 365,
+    }
+    trend_days = period_days.get(trend_period, 90)
+    trend_recent_start = now - timedelta(days=trend_days)
+    trend_previous_start = now - timedelta(days=trend_days * 2)
+    thirty_days_ago = now - timedelta(days=30)
+
+    total_count = 0
+
+    for interaction in all_interactions:
+        if interaction.timestamp:
+            if hasattr(interaction.timestamp, 'strftime'):
+                ts = interaction.timestamp
+                if ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                date_str = ts.strftime('%Y-%m-%d')
+                month_str = ts.strftime('%Y-%m')
+            else:
+                date_str = str(interaction.timestamp)[:10]
+                month_str = date_str[:7]
+                ts = datetime.fromisoformat(date_str).replace(tzinfo=timezone.utc)
+        else:
+            continue
+
+        source = (interaction.source_type or "unknown").lower()
+        person_id = interaction.person_id
+
+        # Daily aggregates
+        daily_data[date_str]["total"] += 1
+        daily_data[date_str]["sources"][source] += 1
+
+        # Breakdown totals
+        by_source[source] += 1
+        by_month[month_str] += 1
+
+        # Top contacts (last 30 days)
+        if ts >= thirty_days_ago:
+            person_counts_30d[person_id] += 1
+
+        # Trend data
+        if ts >= trend_recent_start:
+            person_counts_recent[person_id] += 1
+        elif ts >= trend_previous_start:
+            person_counts_previous[person_id] += 1
+
+        total_count += 1
+
+    # Build daily aggregates list
+    daily_list = [
+        DailyAggregate(date=date, total=data["total"], sources=dict(data["sources"]))
+        for date, data in sorted(daily_data.items())
+    ]
+
+    # Build top contacts
+    top_contacts = []
+    for person_id, count in sorted(person_counts_30d.items(), key=lambda x: -x[1])[:10]:
+        person = person_lookup.get(person_id)
+        top_contacts.append(TopContact(
+            person_id=person_id,
+            person_name=person.canonical_name if person else "Unknown",
+            count=count,
+        ))
+
+    # Build trends
+    warming = []
+    cooling = []
+    for person_id in selected_ids:
+        recent = person_counts_recent.get(person_id, 0)
+        prev = person_counts_previous.get(person_id, 0)
+        if recent == prev:
+            continue
+        person = person_lookup.get(person_id)
+        trend_person = TrendPerson(
+            person_id=person_id,
+            person_name=person.canonical_name if person else "Unknown",
+            recent_count=recent,
+            previous_count=prev,
+        )
+        if recent > prev:
+            warming.append(trend_person)
+        else:
+            cooling.append(trend_person)
+
+    warming.sort(key=lambda x: x.recent_count - x.previous_count, reverse=True)
+    cooling.sort(key=lambda x: x.previous_count - x.recent_count, reverse=True)
+
+    # Health Score History
+    health_score_history = []
+
+    if health_period == "month":
+        total_days_history = 61
+        num_points = 9
+    elif health_period == "year":
+        total_days_history = 730
+        num_points = 13
+    else:  # quarter
+        total_days_history = 183
+        num_points = 13
+
+    time_points = [now - timedelta(days=int(i * total_days_history / (num_points - 1))) for i in range(num_points)]
+    time_points = sorted(time_points)
+
+    # Collect raw counts for each period
+    health_raw_counts = []
+    for i, point_date in enumerate(time_points):
+        if i == 0:
+            interval = (time_points[1] - time_points[0]).days if len(time_points) > 1 else 14
+            prev_date = point_date - timedelta(days=interval)
+        else:
+            prev_date = time_points[i - 1]
+
+        period_count = 0
+        for interaction in all_interactions:
+            if interaction.timestamp:
+                ts = interaction.timestamp
+                if hasattr(ts, 'tzinfo') and ts.tzinfo is None:
+                    ts = ts.replace(tzinfo=timezone.utc)
+                elif not hasattr(ts, 'tzinfo'):
+                    ts = datetime.fromisoformat(str(ts)[:10]).replace(tzinfo=timezone.utc)
+                if prev_date < ts <= point_date:
+                    period_count += 1
+
+        health_raw_counts.append(period_count)
+
+    # Calculate average
+    health_avg = sum(health_raw_counts) / len(health_raw_counts) if health_raw_counts else 0
+
+    # Convert to 0-100 scores
+    for i, point_date in enumerate(time_points):
+        count = health_raw_counts[i]
+        if health_avg > 0:
+            score = int(min(100, (count / health_avg) * 50))
+        else:
+            score = 50 if count > 0 else 0
+
+        health_score_history.append(HealthScorePoint(
+            date=point_date.strftime('%Y-%m-%d'),
+            score=score,
+            count=count,
+        ))
+
+    health_score = health_score_history[-1].score if health_score_history else 0
+
+    return FamilyInteractionsResponse(
+        selected_ids=selected_ids,
+        selected_names=selected_names,
+        daily=daily_list,
+        by_source=dict(by_source),
+        by_month=dict(by_month),
+        top_contacts=top_contacts[:10],
+        warming=warming[:10],
+        cooling=cooling[:10],
+        total_count=total_count,
+        relationship_health_score=health_score,
+        health_score_history=health_score_history,
+        health_score_average=round(health_avg, 1),
     )
 
 

@@ -3220,6 +3220,133 @@
             display: block;
         }
 
+        /* Family Dashboard */
+        .family-dashboard {
+            display: none;
+        }
+
+        .family-dashboard.visible {
+            display: block;
+        }
+
+        .family-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .family-title {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin: 0;
+        }
+
+        .family-member-selector {
+            position: relative;
+        }
+
+        .family-selector-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            cursor: pointer;
+            min-width: 200px;
+            justify-content: space-between;
+        }
+
+        .family-selector-btn:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .family-selector-arrow {
+            font-size: 0.625rem;
+            color: var(--text-muted);
+        }
+
+        .family-dropdown {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 0.25rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            min-width: 280px;
+            max-height: 400px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            z-index: 100;
+        }
+
+        .family-dropdown-actions {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .family-action-btn {
+            flex: 1;
+            padding: 0.375rem 0.5rem;
+            font-size: 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 0.25rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .family-action-btn:hover {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .family-dropdown-list {
+            max-height: 320px;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+
+        .family-member-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+        }
+
+        .family-member-option:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .family-member-option input[type="checkbox"] {
+            width: 1rem;
+            height: 1rem;
+            accent-color: var(--people);
+        }
+
+        .family-member-name {
+            flex: 1;
+            font-size: 0.875rem;
+            color: var(--text-primary);
+        }
+
+        .family-member-strength {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
         .me-widget {
             background: var(--bg-secondary);
             border-radius: 8px;
@@ -4231,6 +4358,7 @@
             </nav>
         </div>
         <div class="header-right">
+            <a href="/family" class="nav-link me-link">👨‍👩‍👧 Family</a>
             <a href="/me" class="nav-link me-link">👤 Me</a>
             <div class="stats-display">
                 <div class="stat-item">
@@ -4548,6 +4676,96 @@
                                         <div class="trends-section" id="trendsCooling">
                                             <div class="trends-title">❄️ Cooling</div>
                                             <div id="trendsCoolingList"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Family Dashboard (shown only for /family route) -->
+                        <div class="family-dashboard" id="familyDashboard" style="display: none;">
+                            <!-- Family Header with Multi-Select -->
+                            <div class="family-header">
+                                <h2 class="family-title">Family Dashboard</h2>
+                                <div class="family-member-selector">
+                                    <button class="family-selector-btn" onclick="toggleFamilyDropdown()">
+                                        <span id="familySelectorLabel">Select family members...</span>
+                                        <span class="family-selector-arrow">▼</span>
+                                    </button>
+                                    <div class="family-dropdown" id="familyDropdown" style="display: none;">
+                                        <div class="family-dropdown-actions">
+                                            <button class="family-action-btn" onclick="selectAllFamily()">Select All</button>
+                                            <button class="family-action-btn" onclick="clearAllFamily()">Clear All</button>
+                                        </div>
+                                        <div class="family-dropdown-list" id="familyDropdownList">
+                                            <!-- Family members populated by JS -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Family Stats Row -->
+                            <div class="me-widgets-row">
+                                <!-- Family Health Score -->
+                                <div class="overview-panel me-health-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">
+                                            Family Contact Health
+                                            <span class="health-info-icon">i
+                                                <div class="health-info-tooltip">
+                                                    <strong>Family Contact Health</strong>
+                                                    Tracks interaction frequency with selected family members. Score is relative to your average: 50 = average, 100 = 2× average.
+                                                </div>
+                                            </span>
+                                        </span>
+                                        <span class="health-current-score" id="familyHealthCurrentScore">--</span>
+                                    </div>
+                                    <div class="health-period-selector">
+                                        <button class="health-period-pill" data-period="month" onclick="changeFamilyHealthPeriod('month')">Month</button>
+                                        <button class="health-period-pill active" data-period="quarter" onclick="changeFamilyHealthPeriod('quarter')">Quarter</button>
+                                        <button class="health-period-pill" data-period="year" onclick="changeFamilyHealthPeriod('year')">Year</button>
+                                    </div>
+                                    <div class="health-chart-container" id="familyHealthChartContainer"></div>
+                                </div>
+
+                                <!-- Family Top Contacts -->
+                                <div class="overview-panel me-compact-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">Top Contacts (30 Days)</span>
+                                    </div>
+                                    <div id="familyTopContacts"></div>
+                                </div>
+                            </div>
+
+                            <!-- Family Trends Row -->
+                            <div class="me-widgets-row">
+                                <!-- Interaction Breakdown by Source -->
+                                <div class="overview-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">By Source</span>
+                                    </div>
+                                    <div class="chart-bar-container" id="familyBySourceChart"></div>
+                                </div>
+
+                                <!-- Relationship Trends -->
+                                <div class="overview-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">Relationship Trends</span>
+                                    </div>
+                                    <div class="trends-period-selector" id="familyTrendsPeriodSelector">
+                                        <button class="trends-period-pill" data-period="week" onclick="changeFamilyTrendPeriod('week')">Week</button>
+                                        <button class="trends-period-pill" data-period="month" onclick="changeFamilyTrendPeriod('month')">Month</button>
+                                        <button class="trends-period-pill active" data-period="quarter" onclick="changeFamilyTrendPeriod('quarter')">Quarter</button>
+                                        <button class="trends-period-pill" data-period="year" onclick="changeFamilyTrendPeriod('year')">Year</button>
+                                    </div>
+                                    <div id="familyRelationshipTrends">
+                                        <div class="trends-section" id="familyTrendsWarming">
+                                            <div class="trends-title">🔥 Warming</div>
+                                            <div id="familyTrendsWarmingList"></div>
+                                        </div>
+                                        <div class="trends-section" id="familyTrendsCooling">
+                                            <div class="trends-title">❄️ Cooling</div>
+                                            <div id="familyTrendsCoolingList"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -5149,9 +5367,19 @@
         // ===============================
 
         // Parse URL to get person ID and tab
-        // Supports: /crm, /crm/{personId}, /crm/{personId}/{tab}, /me, /me/{tab}
+        // Supports: /crm, /crm/{personId}, /crm/{personId}/{tab}, /me, /me/{tab}, /family
         function parseUrl() {
             const path = window.location.pathname;
+
+            // Handle /family route
+            if (path === '/family' || path === '/family/') {
+                return {
+                    personId: null,
+                    tab: null,
+                    isMe: false,
+                    isFamily: true
+                };
+            }
 
             // Handle /me route (alias for owner's profile)
             const meMatch = path.match(/^\/me(?:\/([^\/]+))?/);
@@ -5159,19 +5387,21 @@
                 return {
                     personId: DUNBAR_CONFIG.myPersonId,
                     tab: meMatch[1] || null,
-                    isMe: true
+                    isMe: true,
+                    isFamily: false
                 };
             }
 
             // Handle /crm routes
             const match = path.match(/^\/crm(?:\/([^\/]+))?(?:\/([^\/]+))?/);
-            if (!match) return { personId: null, tab: null, isMe: false };
+            if (!match) return { personId: null, tab: null, isMe: false, isFamily: false };
 
             const personId = match[1] || null;
             return {
                 personId: personId,
                 tab: match[2] || null,
-                isMe: personId === DUNBAR_CONFIG.myPersonId
+                isMe: personId === DUNBAR_CONFIG.myPersonId,
+                isFamily: false
             };
         }
 
@@ -5208,8 +5438,11 @@
             closeEdgePanel();
             closeNodePanel();
 
-            const { personId, tab } = parseUrl();
-            if (personId) {
+            const { personId, tab, isFamily } = parseUrl();
+            if (isFamily) {
+                // Show family dashboard
+                showFamilyDashboard();
+            } else if (personId) {
                 selectedPersonId = personId;
                 renderPeopleList();
                 await loadPersonDetail(personId, false);
@@ -5237,8 +5470,11 @@
             await loadStatistics();
 
             // Restore state from URL
-            const { personId, tab } = parseUrl();
-            if (personId) {
+            const { personId, tab, isFamily } = parseUrl();
+            if (isFamily) {
+                // Show family dashboard
+                await showFamilyDashboard();
+            } else if (personId) {
                 await selectPerson(personId, false, true); // true = don't push to history
                 if (tab) {
                     await switchTab(tab, true); // true = don't update URL
@@ -6053,6 +6289,19 @@
                 lastSeenStat.style.display = isMePage ? 'none' : 'flex';
             }
 
+            // Hide family dashboard when viewing any person
+            const familyDashboard = document.getElementById('familyDashboard');
+            if (familyDashboard) {
+                familyDashboard.style.display = 'none';
+                familyDashboard.classList.remove('visible');
+            }
+
+            // Show person header, tabs, and heatmap (in case coming from family dashboard)
+            document.querySelector('.person-header').style.display = '';
+            document.querySelector('.tab-nav').style.display = '';
+            const heatmapSectionEl = document.getElementById('heatmapSection');
+            if (heatmapSectionEl) heatmapSectionEl.style.display = '';
+
             if (isMePage) {
                 meDashboard.style.display = 'grid';
                 personContentGrid.style.display = 'none';
@@ -6800,6 +7049,425 @@
             // Existing widgets
             renderTopContacts(data);
             renderRelationshipTrends(data);
+        }
+
+        // ===============================
+        // Family Dashboard
+        // ===============================
+
+        // Global helper to get dot color based on score relative to average (50)
+        function getDotColor(score) {
+            if (score >= 80) return '#22c55e';      // Bright green - excellent
+            if (score >= 60) return '#86efac';      // Light green - above avg
+            if (score >= 40) return '#9ca3af';      // Light gray - around avg
+            if (score >= 25) return '#f97316';      // Orange - below avg
+            return '#ef4444';                        // Red - poor
+        }
+
+        // Family dashboard state
+        let familyMembers = [];
+        let selectedFamilyIds = [];
+        let familyHealthPeriod = 'quarter';
+        let familyTrendPeriod = 'quarter';
+        let familyData = null;
+
+        // Load family members from API
+        async function loadFamilyMembers() {
+            try {
+                const data = await api('/family/members');
+                familyMembers = data.members || [];
+                return familyMembers;
+            } catch (error) {
+                console.error('Failed to load family members:', error);
+                familyMembers = [];
+                return [];
+            }
+        }
+
+        // Show family dashboard
+        async function showFamilyDashboard() {
+            // Hide other views
+            document.getElementById('detailEmpty').style.display = 'none';
+            document.getElementById('detailContent').style.display = 'flex';
+            document.getElementById('meDashboard').style.display = 'none';
+            document.getElementById('meDashboard').classList.remove('visible');
+            document.getElementById('personContentGrid').style.display = 'none';
+
+            // Show family dashboard
+            const familyDashboard = document.getElementById('familyDashboard');
+            familyDashboard.style.display = 'block';
+            familyDashboard.classList.add('visible');
+
+            // Hide heatmap for family view
+            const heatmapSection = document.getElementById('heatmapSection');
+            if (heatmapSection) heatmapSection.style.display = 'none';
+
+            // Hide person header elements
+            document.querySelector('.person-header').style.display = 'none';
+            document.querySelector('.tab-nav').style.display = 'none';
+
+            // Load family members if not already loaded
+            if (familyMembers.length === 0) {
+                await loadFamilyMembers();
+            }
+
+            renderFamilyDropdown();
+
+            // If no family members selected, select all by default
+            if (selectedFamilyIds.length === 0 && familyMembers.length > 0) {
+                selectedFamilyIds = familyMembers.map(m => m.id);
+            }
+
+            updateFamilySelectorLabel();
+            await loadFamilyInteractions();
+        }
+
+        // Render family member dropdown
+        function renderFamilyDropdown() {
+            const listEl = document.getElementById('familyDropdownList');
+            if (!listEl) return;
+
+            if (familyMembers.length === 0) {
+                listEl.innerHTML = '<div style="padding: 1rem; color: var(--text-muted); text-align: center;">No family members found</div>';
+                return;
+            }
+
+            let html = '';
+            familyMembers.forEach(member => {
+                const isSelected = selectedFamilyIds.includes(member.id);
+                html += `
+                    <label class="family-member-option">
+                        <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleFamilyMember('${member.id}')">
+                        <span class="family-member-name">${escapeHtml(member.name)}</span>
+                        <span class="family-member-strength">${Math.round(member.relationship_strength)}</span>
+                    </label>
+                `;
+            });
+
+            listEl.innerHTML = html;
+        }
+
+        // Toggle family dropdown visibility
+        function toggleFamilyDropdown() {
+            const dropdown = document.getElementById('familyDropdown');
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('familyDropdown');
+            const selector = document.querySelector('.family-member-selector');
+            if (dropdown && selector && !selector.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        // Toggle individual family member selection
+        async function toggleFamilyMember(memberId) {
+            if (selectedFamilyIds.includes(memberId)) {
+                selectedFamilyIds = selectedFamilyIds.filter(id => id !== memberId);
+            } else {
+                selectedFamilyIds.push(memberId);
+            }
+            updateFamilySelectorLabel();
+            await loadFamilyInteractions();
+        }
+
+        // Select all family members
+        async function selectAllFamily() {
+            selectedFamilyIds = familyMembers.map(m => m.id);
+            renderFamilyDropdown();
+            updateFamilySelectorLabel();
+            await loadFamilyInteractions();
+        }
+
+        // Clear all family member selections
+        async function clearAllFamily() {
+            selectedFamilyIds = [];
+            renderFamilyDropdown();
+            updateFamilySelectorLabel();
+            renderEmptyFamilyDashboard();
+        }
+
+        // Update the selector label with count
+        function updateFamilySelectorLabel() {
+            const label = document.getElementById('familySelectorLabel');
+            if (!label) return;
+
+            if (selectedFamilyIds.length === 0) {
+                label.textContent = 'Select family members...';
+            } else if (selectedFamilyIds.length === familyMembers.length) {
+                label.textContent = `All family (${familyMembers.length})`;
+            } else {
+                label.textContent = `${selectedFamilyIds.length} selected`;
+            }
+        }
+
+        // Load family interactions from API
+        async function loadFamilyInteractions() {
+            if (selectedFamilyIds.length === 0) {
+                renderEmptyFamilyDashboard();
+                return;
+            }
+
+            try {
+                const idsParam = selectedFamilyIds.join(',');
+                familyData = await api(`/family/interactions?person_ids=${encodeURIComponent(idsParam)}&health_period=${familyHealthPeriod}&trend_period=${familyTrendPeriod}`);
+                renderFamilyDashboard(familyData);
+            } catch (error) {
+                console.error('Failed to load family interactions:', error);
+                renderEmptyFamilyDashboard();
+            }
+        }
+
+        // Render empty family dashboard
+        function renderEmptyFamilyDashboard() {
+            document.getElementById('familyHealthCurrentScore').textContent = '--';
+            document.getElementById('familyHealthChartContainer').innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-muted);">Select family members to see data</div>';
+            document.getElementById('familyTopContacts').innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No data</div>';
+            document.getElementById('familyBySourceChart').innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No data</div>';
+            document.getElementById('familyTrendsWarmingList').innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No data</div>';
+            document.getElementById('familyTrendsCoolingList').innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No data</div>';
+        }
+
+        // Render family dashboard with data
+        function renderFamilyDashboard(data) {
+            if (!data) {
+                renderEmptyFamilyDashboard();
+                return;
+            }
+
+            // Render health score chart
+            renderFamilyHealthScore(data);
+
+            // Render top contacts
+            renderFamilyTopContacts(data);
+
+            // Render by source chart
+            renderBarChart('familyBySourceChart', data.by_source || {}, 'source');
+
+            // Render trends
+            renderFamilyTrends(data);
+        }
+
+        // Render family health score chart
+        function renderFamilyHealthScore(data) {
+            const container = document.getElementById('familyHealthChartContainer');
+            const scoreEl = document.getElementById('familyHealthCurrentScore');
+
+            if (!container || !scoreEl) return;
+
+            const history = data.health_score_history || [];
+            const currentScore = data.relationship_health_score || 0;
+            const avgCount = data.health_score_average || 0;
+
+            // Update current score with color
+            scoreEl.textContent = currentScore;
+            let color = '#ef4444';
+            if (currentScore >= 80) color = '#22c55e';
+            else if (currentScore >= 60) color = '#86efac';
+            else if (currentScore >= 40) color = '#9ca3af';
+            else if (currentScore >= 25) color = '#f97316';
+            scoreEl.style.color = color;
+
+            if (history.length === 0) {
+                container.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-muted);">No health data available</div>';
+                return;
+            }
+
+            // Reuse the same SVG rendering as renderHealthScore
+            const width = 600;
+            const height = 120;
+            const padding = { top: 10, right: 10, bottom: 25, left: 35 };
+            const chartWidth = width - padding.left - padding.right;
+            const chartHeight = height - padding.top - padding.bottom;
+
+            const xScale = (i) => padding.left + (i / (history.length - 1)) * chartWidth;
+            const yScale = (score) => padding.top + (1 - score / 100) * chartHeight;
+
+            // Build path
+            let pathD = '';
+            history.forEach((point, i) => {
+                const x = xScale(i);
+                const y = yScale(point.score);
+                if (i === 0) {
+                    pathD += `M ${x} ${y}`;
+                } else {
+                    pathD += ` L ${x} ${y}`;
+                }
+            });
+
+            // Build area
+            let areaD = pathD + ` L ${xScale(history.length - 1)} ${yScale(0)} L ${xScale(0)} ${yScale(0)} Z`;
+
+            // Build dots
+            const dots = history.map((point, i) => {
+                const x = xScale(i);
+                const y = yScale(point.score);
+                const dotColor = getDotColor(point.score);
+                const count = point.count || 0;
+                return `<circle class="health-chart-dot" cx="${x}" cy="${y}" r="4" data-index="${i}" data-score="${point.score}" data-count="${count}" data-avg="${avgCount}" data-date="${point.date}" style="fill: ${dotColor};"/>`;
+            }).join('');
+
+            // X-axis labels
+            const xLabels = [];
+            const labelCount = Math.min(5, history.length);
+            for (let i = 0; i < labelCount; i++) {
+                const idx = Math.floor(i * (history.length - 1) / (labelCount - 1));
+                const point = history[idx];
+                const date = new Date(point.date);
+                const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                xLabels.push(`<text x="${xScale(idx)}" y="${height - 5}" text-anchor="middle" fill="var(--text-muted)" font-size="10">${label}</text>`);
+            }
+
+            container.innerHTML = `
+                <svg class="health-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+                    <!-- Grid lines -->
+                    <line x1="${padding.left}" y1="${yScale(100)}" x2="${width - padding.right}" y2="${yScale(100)}" stroke="var(--border-color)" stroke-dasharray="2,2"/>
+                    <line x1="${padding.left}" y1="${yScale(50)}" x2="${width - padding.right}" y2="${yScale(50)}" stroke="var(--border-color)" stroke-dasharray="2,2"/>
+                    <line x1="${padding.left}" y1="${yScale(0)}" x2="${width - padding.right}" y2="${yScale(0)}" stroke="var(--border-color)" stroke-dasharray="2,2"/>
+
+                    <!-- Y-axis labels -->
+                    <text x="${padding.left - 5}" y="${yScale(100) + 4}" text-anchor="end" fill="var(--text-muted)" font-size="10">100</text>
+                    <text x="${padding.left - 5}" y="${yScale(50) + 4}" text-anchor="end" fill="var(--text-muted)" font-size="10">Avg</text>
+                    <text x="${padding.left - 5}" y="${yScale(0) + 4}" text-anchor="end" fill="var(--text-muted)" font-size="10">0</text>
+
+                    <!-- Area fill -->
+                    <path d="${areaD}" fill="var(--text-muted)" fill-opacity="0.1"/>
+
+                    <!-- Line -->
+                    <path d="${pathD}" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-opacity="0.4"/>
+
+                    <!-- Dots -->
+                    ${dots}
+
+                    <!-- X-axis labels -->
+                    ${xLabels.join('')}
+                </svg>
+                <div class="health-chart-tooltip" id="familyHealthTooltip"></div>
+            `;
+
+            setupFamilyHealthChartTooltips();
+        }
+
+        // Setup tooltips for family health chart
+        function setupFamilyHealthChartTooltips() {
+            const container = document.getElementById('familyHealthChartContainer');
+            const tooltip = document.getElementById('familyHealthTooltip');
+            if (!container || !tooltip) return;
+
+            const dots = container.querySelectorAll('.health-chart-dot');
+            dots.forEach(dot => {
+                dot.addEventListener('mouseenter', (e) => {
+                    const score = dot.getAttribute('data-score');
+                    const count = dot.getAttribute('data-count');
+                    const avg = dot.getAttribute('data-avg');
+                    const date = dot.getAttribute('data-date');
+                    const formattedDate = new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+                    tooltip.innerHTML = `
+                        <div class="health-chart-tooltip-date">${formattedDate}</div>
+                        <div class="health-chart-tooltip-score">Score: ${score}</div>
+                        <div style="font-size: 0.6rem; color: var(--text-muted);">Interactions: ${count}</div>
+                        <div style="font-size: 0.6rem; color: var(--text-muted);">Avg. for Period: ${avg}</div>
+                    `;
+                    tooltip.style.display = 'block';
+
+                    const rect = container.getBoundingClientRect();
+                    const dotRect = dot.getBoundingClientRect();
+                    tooltip.style.left = (dotRect.left - rect.left + dotRect.width / 2) + 'px';
+                    tooltip.style.top = (dotRect.top - rect.top - 10) + 'px';
+                });
+
+                dot.addEventListener('mouseleave', () => {
+                    tooltip.style.display = 'none';
+                });
+            });
+        }
+
+        // Render family top contacts
+        function renderFamilyTopContacts(data) {
+            const container = document.getElementById('familyTopContacts');
+            if (!container) return;
+
+            const topContacts = data.top_contacts || [];
+
+            if (topContacts.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No recent interactions</div>';
+                return;
+            }
+
+            let html = '';
+            topContacts.slice(0, 10).forEach((contact, idx) => {
+                html += `<div class="top-contact" onclick="selectPerson('${contact.person_id}')">
+                    <div class="top-contact-rank">${idx + 1}</div>
+                    <div class="top-contact-info">
+                        <div class="top-contact-name">${escapeHtml(contact.person_name)}</div>
+                        <div class="top-contact-count">${contact.count} interactions</div>
+                    </div>
+                </div>`;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Render family trends
+        function renderFamilyTrends(data) {
+            const warmingList = document.getElementById('familyTrendsWarmingList');
+            const coolingList = document.getElementById('familyTrendsCoolingList');
+
+            if (!warmingList || !coolingList) return;
+
+            const warming = data.warming || [];
+            const cooling = data.cooling || [];
+
+            if (warming.length === 0) {
+                warmingList.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No warming trends</div>';
+            } else {
+                warmingList.innerHTML = warming.slice(0, 5).map(person => `
+                    <div class="trend-item" onclick="selectPerson('${person.person_id}')">
+                        <span class="trend-indicator warming">↑</span>
+                        <span class="trend-name">${escapeHtml(person.person_name)}</span>
+                        <span class="trend-counts">${person.previous_count} → ${person.recent_count}</span>
+                    </div>
+                `).join('');
+            }
+
+            if (cooling.length === 0) {
+                coolingList.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No cooling trends</div>';
+            } else {
+                coolingList.innerHTML = cooling.slice(0, 5).map(person => `
+                    <div class="trend-item" onclick="selectPerson('${person.person_id}')">
+                        <span class="trend-indicator cooling">↓</span>
+                        <span class="trend-name">${escapeHtml(person.person_name)}</span>
+                        <span class="trend-counts">${person.previous_count} → ${person.recent_count}</span>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Change family health period
+        async function changeFamilyHealthPeriod(period) {
+            familyHealthPeriod = period;
+
+            // Update button active state
+            document.querySelectorAll('#familyDashboard .me-health-panel .health-period-pill').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-period') === period);
+            });
+
+            await loadFamilyInteractions();
+        }
+
+        // Change family trend period
+        async function changeFamilyTrendPeriod(period) {
+            familyTrendPeriod = period;
+
+            // Update button active state
+            document.querySelectorAll('#familyTrendsPeriodSelector .trends-period-pill').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-period') === period);
+            });
+
+            await loadFamilyInteractions();
         }
 
         // Update hero stats for Me page with phone/slack counts
@@ -8630,12 +9298,16 @@
 
             // Apply date range filter if set (this is a client-side refinement)
             // The date range picker allows narrowing down within the fetched data
-            if (timelineDateRangeFrom || timelineDateRangeTo) {
+            // Use string comparison on YYYY-MM-DD to avoid timezone conversion issues
+            const fromDateStr = document.getElementById('timelineDateFrom')?.value || null;
+            const toDateStr = document.getElementById('timelineDateTo')?.value || null;
+            if (fromDateStr || toDateStr) {
                 items = items.filter(item => {
-                    const itemDate = new Date(item.timestamp);
-                    itemDate.setHours(0, 0, 0, 0);
-                    if (timelineDateRangeFrom && itemDate < timelineDateRangeFrom) return false;
-                    if (timelineDateRangeTo && itemDate > timelineDateRangeTo) return false;
+                    // Extract YYYY-MM-DD from ISO timestamp (e.g., "2020-11-10T00:00:00+00:00" -> "2020-11-10")
+                    // This matches how the aggregated timeline groups dates, ensuring consistency
+                    const itemDateStr = item.timestamp.split('T')[0];
+                    if (fromDateStr && itemDateStr < fromDateStr) return false;
+                    if (toDateStr && itemDateStr > toDateStr) return false;
                     return true;
                 });
             }
