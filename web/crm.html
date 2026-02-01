@@ -7001,14 +7001,15 @@
             // Use most recent chart value as current score (more accurate)
             const currentScore = history.length > 0 ? history[history.length - 1].score : (data.relationship_health_score || 0);
 
-            // Update current score display
+            // Update current score display with same color as dots
             if (scoreEl) {
                 scoreEl.textContent = currentScore;
-                // Color based on score
-                let color = '#ef4444';
-                if (currentScore >= 80) color = '#22c55e';
-                else if (currentScore >= 60) color = '#eab308';
-                else if (currentScore >= 50) color = '#f97316';
+                // Color matches dot colors
+                let color = '#ef4444';                        // Red - poor (<25)
+                if (currentScore >= 80) color = '#22c55e';    // Bright green - excellent
+                else if (currentScore >= 60) color = '#86efac'; // Light green - above avg
+                else if (currentScore >= 40) color = '#9ca3af'; // Light gray - around avg
+                else if (currentScore >= 25) color = '#f97316'; // Orange - below avg
                 scoreEl.style.color = color;
             }
 
@@ -7210,16 +7211,17 @@
             const history = data.history || [];
             const isInverse = data.healthy_direction === 'less';  // fewer = healthier
 
-            // Update current score display (0-100 scale like health score)
+            // Update current score display with same color as dots
             if (countEl) {
                 const currentScore = data.current_score || 0;
                 countEl.textContent = currentScore;
 
-                // Color based on score value (like health score)
-                let color = '#ef4444';  // Red for low
-                if (currentScore >= 80) color = '#22c55e';  // Green for excellent
-                else if (currentScore >= 60) color = '#eab308';  // Yellow for good
-                else if (currentScore >= 50) color = '#f97316';  // Orange for okay
+                // Color matches dot colors
+                let color = '#ef4444';                        // Red - poor (<25)
+                if (currentScore >= 80) color = '#22c55e';    // Bright green - excellent
+                else if (currentScore >= 60) color = '#86efac'; // Light green - above avg
+                else if (currentScore >= 40) color = '#9ca3af'; // Light gray - around avg
+                else if (currentScore >= 25) color = '#f97316'; // Orange - below avg
                 countEl.style.color = color;
                 countEl.className = 'tracked-current-count';
             }
