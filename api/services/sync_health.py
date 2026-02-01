@@ -137,6 +137,22 @@ SYNC_SOURCES = {
         "frequency": "daily",
         "phase": 5,
     },
+
+    # === Phase 6: Analytics ===
+    "sentiment": {
+        "description": "Extract sentiment from interactions for top contacts",
+        "script": "scripts/sync_sentiment.py",
+        "frequency": "daily",
+        "phase": 6,
+        "depends_on": ["gmail", "calendar", "imessage", "whatsapp", "slack"],
+    },
+    "commitments": {
+        "description": "Extract commitments/promises from conversations for top contacts",
+        "script": "scripts/sync_commitments.py",
+        "frequency": "daily",
+        "phase": 6,
+        "depends_on": ["gmail", "imessage", "whatsapp", "slack"],
+    },
 }
 
 

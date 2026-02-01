@@ -444,6 +444,20 @@
         .dunbar-badge.circle-4 { background: #1e90ff; color: white; }
         .dunbar-badge.circle-5 { background: #5352ed; color: white; }
         .dunbar-badge.circle-6 { background: #747d8c; color: white; }
+        .dunbar-badge.circle-7 { background: #64748b; color: white; }
+
+        /* Manual override indicator for list badges */
+        .dunbar-badge.manual {
+            position: relative;
+        }
+        .dunbar-badge.manual::after {
+            content: '★';
+            position: absolute;
+            bottom: -3px;
+            right: -3px;
+            font-size: 0.5rem;
+            color: #ffa502;
+        }
 
         .source-badges {
             display: flex;
@@ -1020,6 +1034,105 @@
         .header-dunbar-circle.circle-5 { background: #5352ed; }
         .header-dunbar-circle.circle-6 { background: #747d8c; }
         .header-dunbar-circle.circle-7 { background: #747d8c; }
+
+        /* Make dunbar circle clickable for editing */
+        .header-dunbar-circle {
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            position: relative;
+        }
+        .header-dunbar-circle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        /* Manual override indicator */
+        .header-dunbar-circle.manual-override::after {
+            content: '★';
+            position: absolute;
+            bottom: -2px;
+            right: -2px;
+            font-size: 0.6rem;
+            background: var(--bg-primary);
+            border-radius: 50%;
+            width: 14px;
+            height: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffa502;
+        }
+
+        /* Dunbar circle edit dropdown */
+        .dunbar-edit-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-top: 0.5rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.5rem;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .dunbar-edit-dropdown.show {
+            display: block;
+        }
+        .dunbar-edit-options {
+            display: flex;
+            gap: 0.25rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 200px;
+        }
+        .dunbar-edit-option {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: white;
+            transition: transform 0.1s, border-color 0.1s;
+        }
+        .dunbar-edit-option:hover {
+            transform: scale(1.15);
+            border-color: white;
+        }
+        .dunbar-edit-option.selected {
+            border-color: white;
+            box-shadow: 0 0 0 2px var(--accent);
+        }
+        .dunbar-edit-option.circle-0 { background: #e94560; }
+        .dunbar-edit-option.circle-1 { background: #ff6b6b; }
+        .dunbar-edit-option.circle-2 { background: #ffa502; }
+        .dunbar-edit-option.circle-3 { background: #2ed573; }
+        .dunbar-edit-option.circle-4 { background: #1e90ff; }
+        .dunbar-edit-option.circle-5 { background: #5352ed; }
+        .dunbar-edit-option.circle-6 { background: #747d8c; }
+        .dunbar-edit-option.circle-7 { background: #747d8c; }
+        .dunbar-edit-reset {
+            width: 100%;
+            margin-top: 0.5rem;
+            padding: 0.35rem 0.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+        .dunbar-edit-reset:hover {
+            background: var(--bg-hover);
+        }
 
         .header-indicator-label {
             font-size: 0.65rem;
@@ -3311,6 +3424,354 @@
             color: var(--warning);
         }
 
+        /* Sentiment Section */
+        .sentiment-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .sentiment-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .sentiment-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .sentiment-extract-btn {
+            padding: 0.375rem 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .sentiment-extract-btn:hover {
+            background: var(--people);
+            border-color: var(--people);
+            color: white;
+        }
+
+        .sentiment-extract-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .sentiment-content {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .sentiment-summary {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .sentiment-score-display {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 60px;
+        }
+
+        .sentiment-score-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            font-family: ui-monospace, 'SF Mono', Menlo, monospace;
+        }
+
+        .sentiment-score-value.positive { color: var(--success); }
+        .sentiment-score-value.neutral { color: var(--text-secondary); }
+        .sentiment-score-value.negative { color: var(--error); }
+
+        .sentiment-score-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .sentiment-trend {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.375rem 0.75rem;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+        }
+
+        .sentiment-trend-icon {
+            font-size: 1rem;
+        }
+
+        .sentiment-trend-icon.improving { color: var(--success); }
+        .sentiment-trend-icon.stable { color: var(--text-secondary); }
+        .sentiment-trend-icon.declining { color: var(--error); }
+
+        .sentiment-trend-text {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .sentiment-sparkline {
+            flex: 1;
+            height: 40px;
+            min-width: 100px;
+            position: relative;
+        }
+
+        .sentiment-sparkline svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .sentiment-sparkline-line {
+            fill: none;
+            stroke: var(--people);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .sentiment-sparkline-area {
+            fill: url(#sentimentGradient);
+            opacity: 0.3;
+        }
+
+        .sentiment-count {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-align: center;
+        }
+
+        .sentiment-empty {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            padding: 0.5rem 0;
+        }
+
+        /* Commitments Section */
+        .commitments-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .commitments-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .commitments-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .commitments-extract-btn {
+            padding: 0.375rem 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .commitments-extract-btn:hover {
+            background: var(--people);
+            border-color: var(--people);
+            color: white;
+        }
+
+        .commitments-extract-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .commitments-content {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .commitments-direction-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .commitments-direction-header {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+
+        .commitment-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: var(--bg-tertiary);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            transition: background 0.15s;
+        }
+
+        .commitment-item:hover {
+            background: var(--bg-primary);
+        }
+
+        .commitment-status-badge {
+            flex-shrink: 0;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-top: 0.375rem;
+        }
+
+        .commitment-status-badge.open { background: var(--warning); }
+        .commitment-status-badge.completed { background: var(--success); }
+        .commitment-status-badge.expired { background: var(--error); }
+        .commitment-status-badge.cancelled { background: var(--text-muted); }
+        .commitment-status-badge.overdue { background: var(--error); animation: pulse 1.5s infinite; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .commitment-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .commitment-description {
+            color: var(--text-primary);
+            line-height: 1.4;
+        }
+
+        .commitment-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.25rem;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .commitment-due {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .commitment-due.overdue {
+            color: var(--error);
+        }
+
+        .commitment-due.soon {
+            color: var(--warning);
+        }
+
+        .commitment-actions {
+            display: none;
+            gap: 0.25rem;
+            flex-shrink: 0;
+        }
+
+        .commitment-item:hover .commitment-actions {
+            display: flex;
+        }
+
+        .commitment-action-btn {
+            background: none;
+            border: none;
+            padding: 0.125rem 0.25rem;
+            cursor: pointer;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            opacity: 0.6;
+            transition: opacity 0.15s, color 0.15s;
+        }
+
+        .commitment-action-btn:hover {
+            opacity: 1;
+        }
+
+        .commitment-action-btn.complete:hover {
+            color: var(--success);
+        }
+
+        .commitment-action-btn.delete:hover {
+            color: var(--error);
+        }
+
+        .commitment-quote {
+            display: none;
+            margin-top: 0.375rem;
+            padding: 0.375rem;
+            background: var(--bg-secondary);
+            border-left: 2px solid var(--people);
+            border-radius: 0 4px 4px 0;
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+
+        .commitment-item:hover .commitment-quote {
+            display: block;
+        }
+
+        .commitments-empty {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            padding: 0.5rem 0;
+        }
+
+        .commitments-summary {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            margin-bottom: 0.75rem;
+        }
+
+        .commitments-summary-item {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+        }
+
+        .commitments-summary-count {
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
         /* Me Dashboard Widgets */
         .me-dashboard {
             display: none;
@@ -5152,9 +5613,22 @@
                             </div>
                             <span class="header-indicator-label">Strength</span>
                         </div>
-                        <div class="header-dunbar">
-                            <div class="header-dunbar-circle" id="headerDunbarCircle" title="Dunbar Circle">0</div>
+                        <div class="header-dunbar" style="position: relative;">
+                            <div class="header-dunbar-circle" id="headerDunbarCircle" title="Click to change Dunbar Circle" onclick="toggleDunbarEditDropdown(event)">0</div>
                             <span class="header-indicator-label" id="headerDunbarLabel">Intimate</span>
+                            <div class="dunbar-edit-dropdown" id="dunbarEditDropdown">
+                                <div class="dunbar-edit-options">
+                                    <div class="dunbar-edit-option circle-0" data-circle="0" onclick="setManualDunbarCircle(0)" title="Circle 0 - Intimate (5)">0</div>
+                                    <div class="dunbar-edit-option circle-1" data-circle="1" onclick="setManualDunbarCircle(1)" title="Circle 1 - Close (15)">1</div>
+                                    <div class="dunbar-edit-option circle-2" data-circle="2" onclick="setManualDunbarCircle(2)" title="Circle 2 - Good Friends (50)">2</div>
+                                    <div class="dunbar-edit-option circle-3" data-circle="3" onclick="setManualDunbarCircle(3)" title="Circle 3 - Friends (150)">3</div>
+                                    <div class="dunbar-edit-option circle-4" data-circle="4" onclick="setManualDunbarCircle(4)" title="Circle 4 - Acquaintances (500)">4</div>
+                                    <div class="dunbar-edit-option circle-5" data-circle="5" onclick="setManualDunbarCircle(5)" title="Circle 5 - Known (1500)">5</div>
+                                    <div class="dunbar-edit-option circle-6" data-circle="6" onclick="setManualDunbarCircle(6)" title="Circle 6 - Familiar (5000)">6</div>
+                                    <div class="dunbar-edit-option circle-7" data-circle="7" onclick="setManualDunbarCircle(7)" title="Circle 7 - Contacts">7</div>
+                                </div>
+                                <button class="dunbar-edit-reset" onclick="resetDunbarCircle()" title="Reset to auto-calculated">Reset to Auto</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -5573,6 +6047,34 @@
                                 </div>
                                 <div class="facts-categories" id="factsContainer">
                                     <div class="facts-empty">No facts extracted yet. Click "Extract Facts" to analyze interactions.</div>
+                                </div>
+                            </div>
+
+                            <!-- Sentiment Section -->
+                            <div class="sentiment-section overview-panel" id="sentimentSection">
+                                <div class="sentiment-header">
+                                    <span class="sentiment-title">
+                                        <span>Sentiment</span>
+                                    </span>
+                                    <button class="sentiment-extract-btn" id="extractSentimentBtn" onclick="extractSentiment()">
+                                        <span>Analyze</span>
+                                    </button>
+                                </div>
+                                <div class="sentiment-content" id="sentimentContent">
+                                    <div class="sentiment-empty">No sentiment data yet. Click "Analyze" to extract sentiment from interactions.</div>
+                                </div>
+                            </div>
+
+                            <!-- Commitments Section -->
+                            <div class="commitments-section overview-panel" id="commitmentsSection">
+                                <div class="commitments-header">
+                                    <span class="commitments-title">Commitments</span>
+                                    <button class="commitments-extract-btn" id="extractCommitmentsBtn" onclick="extractCommitments()">
+                                        <span>Extract</span>
+                                    </button>
+                                </div>
+                                <div class="commitments-content" id="commitmentsContent">
+                                    <div class="commitments-empty">No commitments tracked yet. Click "Extract" to find promises in conversations.</div>
                                 </div>
                             </div>
 
@@ -6031,6 +6533,8 @@
         // State
         let people = [];
         let selectedPersonId = null;
+        let currentPersonData = null;  // Full person data including manual_dunbar_circle
+        let currentFilter = 'all';
         let searchQuery = '';
         // People list filters (multi-select)
         let peopleCategoryFilters = new Set(['self', 'family', 'personal', 'work']);
@@ -6139,7 +6643,10 @@
 
             return peopleList.map(p => ({
                 ...p,
-                dunbar_circle: dunbarCircleMap.get(p.id) ?? 7
+                // Prefer manual_dunbar_circle if set, otherwise use calculated from map
+                dunbar_circle: (p.manual_dunbar_circle !== null && p.manual_dunbar_circle !== undefined)
+                    ? p.manual_dunbar_circle
+                    : (dunbarCircleMap.get(p.id) ?? 7)
             }));
         }
 
@@ -6400,7 +6907,7 @@
                         <div class="person-name">${escapeHtml(person.canonical_name)}</div>
                         <div class="person-company">${escapeHtml(person.company || '')}</div>
                     </div>
-                    <div class="dunbar-badge circle-${person.dunbar_circle ?? 7}" title="Dunbar Circle ${person.dunbar_circle ?? 7} (${getDunbarCircleSize(person.dunbar_circle ?? 7)})">${person.dunbar_circle ?? 7}</div>
+                    <div class="dunbar-badge circle-${person.dunbar_circle ?? 7}${person.manual_dunbar_circle !== null && person.manual_dunbar_circle !== undefined ? ' manual' : ''}" title="Dunbar Circle ${person.dunbar_circle ?? 7}${person.manual_dunbar_circle !== null && person.manual_dunbar_circle !== undefined ? ' (Manual)' : ''} (${getDunbarCircleSize(person.dunbar_circle ?? 7)})">${person.dunbar_circle ?? 7}</div>
                     <div class="person-strength">
                         <div class="person-strength-bar" style="width: ${person.relationship_strength || 0}%"></div>
                     </div>
@@ -7108,6 +7615,9 @@
 
         // Render person detail
         function renderPersonDetail(person) {
+            // Store person data for use by other functions (e.g., manual dunbar circle)
+            currentPersonData = person;
+
             const isMePage = isMyPage(person.id);
 
             // Toggle Me Dashboard vs Person Content Grid visibility
@@ -7200,9 +7710,11 @@
                 document.getElementById('detailTagsChips').innerHTML = '';
             }
 
-            // Load Quick Facts (skip for Me page - has its own dashboard)
+            // Load Quick Facts, Sentiment, and Commitments (skip for Me page - has its own dashboard)
             if (!isMePage) {
                 loadFacts(person.id);
+                loadSentiment(person.id);
+                loadCommitments(person.id);
             } else {
                 // Render Me dashboard widgets
                 renderMeDashboard();
@@ -7548,11 +8060,101 @@
             const labelEl = document.getElementById('headerDunbarLabel');
             if (!circleEl || !labelEl) return;
 
-            const circle = dunbarCircleMap.get(personId) ?? 7;
+            // Check for manual override from current person data
+            const manualCircle = currentPersonData?.manual_dunbar_circle;
+            const isManual = manualCircle !== null && manualCircle !== undefined;
+            const circle = isManual ? manualCircle : (dunbarCircleMap.get(personId) ?? 7);
+
             circleEl.textContent = circle;
-            circleEl.className = `header-dunbar-circle circle-${circle}`;
-            circleEl.title = `Dunbar Circle ${circle} (${getDunbarCircleSize(circle)})`;
+            circleEl.className = `header-dunbar-circle circle-${circle}${isManual ? ' manual-override' : ''}`;
+            circleEl.title = isManual
+                ? `Dunbar Circle ${circle} (Manual Override) - Click to change`
+                : `Dunbar Circle ${circle} (${getDunbarCircleSize(circle)}) - Click to change`;
             labelEl.textContent = getDunbarCircleLabel(circle);
+
+            // Update dropdown selection
+            updateDunbarDropdownSelection(circle, isManual);
+        }
+
+        // Update the dropdown to show current selection
+        function updateDunbarDropdownSelection(selectedCircle, isManual) {
+            const options = document.querySelectorAll('.dunbar-edit-option');
+            options.forEach(opt => {
+                const circleVal = parseInt(opt.dataset.circle);
+                opt.classList.toggle('selected', circleVal === selectedCircle);
+            });
+        }
+
+        // Toggle the Dunbar circle edit dropdown
+        function toggleDunbarEditDropdown(event) {
+            event.stopPropagation();
+            const dropdown = document.getElementById('dunbarEditDropdown');
+            dropdown.classList.toggle('show');
+
+            // Close dropdown when clicking outside
+            if (dropdown.classList.contains('show')) {
+                setTimeout(() => {
+                    document.addEventListener('click', closeDunbarDropdownOnClickOutside, { once: true });
+                }, 0);
+            }
+        }
+
+        function closeDunbarDropdownOnClickOutside(event) {
+            const dropdown = document.getElementById('dunbarEditDropdown');
+            if (!dropdown.contains(event.target)) {
+                dropdown.classList.remove('show');
+            }
+        }
+
+        // Set manual Dunbar circle
+        async function setManualDunbarCircle(circle) {
+            if (!selectedPersonId) return;
+
+            try {
+                await api(`/people/${selectedPersonId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ manual_dunbar_circle: circle })
+                });
+
+                // Update local data and re-render
+                if (currentPersonData) {
+                    currentPersonData.manual_dunbar_circle = circle;
+                }
+                renderDunbarCircle(selectedPersonId);
+
+                // Close dropdown
+                document.getElementById('dunbarEditDropdown').classList.remove('show');
+
+            } catch (error) {
+                console.error('Failed to set manual Dunbar circle:', error);
+                alert('Failed to update Dunbar circle');
+            }
+        }
+
+        // Reset to auto-calculated Dunbar circle
+        async function resetDunbarCircle() {
+            if (!selectedPersonId) return;
+
+            try {
+                // Send -1 to clear the manual override
+                await api(`/people/${selectedPersonId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ manual_dunbar_circle: -1 })
+                });
+
+                // Update local data and re-render
+                if (currentPersonData) {
+                    currentPersonData.manual_dunbar_circle = null;
+                }
+                renderDunbarCircle(selectedPersonId);
+
+                // Close dropdown
+                document.getElementById('dunbarEditDropdown').classList.remove('show');
+
+            } catch (error) {
+                console.error('Failed to reset Dunbar circle:', error);
+                alert('Failed to reset Dunbar circle');
+            }
         }
 
         // Render compact contact info for new two-column layout
@@ -11343,6 +11945,336 @@
                 await loadFacts(selectedPersonId);
             } catch (error) {
                 console.error('Failed to delete fact:', error);
+            }
+        }
+
+        // ===========================
+        // Sentiment Tracking
+        // ===========================
+
+        // Load sentiment data for a person
+        async function loadSentiment(personId) {
+            try {
+                const data = await api(`/people/${personId}/sentiment?days=365`);
+                renderSentiment(data);
+            } catch (error) {
+                console.error('Failed to load sentiment:', error);
+                document.getElementById('sentimentContent').innerHTML =
+                    '<div class="sentiment-empty">Failed to load sentiment data.</div>';
+            }
+        }
+
+        // Render sentiment display
+        function renderSentiment(data) {
+            const container = document.getElementById('sentimentContent');
+
+            if (!data || data.count === 0) {
+                container.innerHTML = '<div class="sentiment-empty">No sentiment data yet. Click "Analyze" to extract sentiment from interactions.</div>';
+                return;
+            }
+
+            // Determine score class
+            let scoreClass = 'neutral';
+            if (data.average_score > 0.2) scoreClass = 'positive';
+            else if (data.average_score < -0.2) scoreClass = 'negative';
+
+            // Trend icon
+            let trendIcon = '→';
+            let trendClass = 'stable';
+            if (data.trend === 'improving') {
+                trendIcon = '↗';
+                trendClass = 'improving';
+            } else if (data.trend === 'declining') {
+                trendIcon = '↘';
+                trendClass = 'declining';
+            }
+
+            // Format score display
+            const scoreDisplay = data.average_score >= 0
+                ? `+${data.average_score.toFixed(2)}`
+                : data.average_score.toFixed(2);
+
+            // Build HTML
+            let html = `
+                <div class="sentiment-summary">
+                    <div class="sentiment-score-display">
+                        <div class="sentiment-score-value ${scoreClass}">${scoreDisplay}</div>
+                        <div class="sentiment-score-label">Avg Score</div>
+                    </div>
+                    <div class="sentiment-trend">
+                        <span class="sentiment-trend-icon ${trendClass}">${trendIcon}</span>
+                        <span class="sentiment-trend-text">${data.trend}</span>
+                    </div>
+                    <div class="sentiment-sparkline" id="sentimentSparkline"></div>
+                </div>
+                <div class="sentiment-count">${data.count} interaction${data.count !== 1 ? 's' : ''} analyzed</div>
+            `;
+
+            container.innerHTML = html;
+
+            // Render sparkline if we have data
+            if (data.sparkline_data && data.sparkline_data.length > 0) {
+                renderSentimentSparkline(data.sparkline_data);
+            }
+        }
+
+        // Render sentiment sparkline chart
+        function renderSentimentSparkline(dataPoints) {
+            const container = document.getElementById('sentimentSparkline');
+            if (!container || dataPoints.length < 2) return;
+
+            const width = container.offsetWidth || 150;
+            const height = 40;
+            const padding = 2;
+
+            // Normalize data points to [-1, 1] range
+            const minVal = -1;
+            const maxVal = 1;
+            const range = maxVal - minVal;
+
+            // Calculate points for polyline
+            const stepX = (width - padding * 2) / (dataPoints.length - 1);
+            const points = dataPoints.map((val, i) => {
+                const x = padding + i * stepX;
+                const normalizedY = (val - minVal) / range; // 0 to 1
+                const y = height - padding - normalizedY * (height - padding * 2);
+                return `${x},${y}`;
+            }).join(' ');
+
+            // Create area points (close the path)
+            const areaPoints = [
+                `${padding},${height - padding}`,
+                ...dataPoints.map((val, i) => {
+                    const x = padding + i * stepX;
+                    const normalizedY = (val - minVal) / range;
+                    const y = height - padding - normalizedY * (height - padding * 2);
+                    return `${x},${y}`;
+                }),
+                `${width - padding},${height - padding}`
+            ].join(' ');
+
+            // Create SVG
+            container.innerHTML = `
+                <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none">
+                    <defs>
+                        <linearGradient id="sentimentGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:var(--people);stop-opacity:0.3" />
+                            <stop offset="100%" style="stop-color:var(--people);stop-opacity:0.05" />
+                        </linearGradient>
+                    </defs>
+                    <!-- Zero line -->
+                    <line x1="${padding}" y1="${height / 2}" x2="${width - padding}" y2="${height / 2}"
+                          stroke="var(--border)" stroke-width="1" stroke-dasharray="2,2" />
+                    <!-- Area fill -->
+                    <polygon class="sentiment-sparkline-area" points="${areaPoints}" />
+                    <!-- Line -->
+                    <polyline class="sentiment-sparkline-line" points="${points}" />
+                </svg>
+            `;
+        }
+
+        // Extract sentiment for a person
+        async function extractSentiment() {
+            if (!selectedPersonId) return;
+
+            const btn = document.getElementById('extractSentimentBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span>Analyzing...</span>';
+
+            try {
+                const data = await api(`/people/${selectedPersonId}/sentiment/extract?days=30`, { method: 'POST' });
+
+                if (data.status === 'no_interactions') {
+                    alert('No interactions found to analyze sentiment.');
+                } else {
+                    // Reload sentiment to show updated data
+                    await loadSentiment(selectedPersonId);
+                }
+            } catch (error) {
+                console.error('Failed to extract sentiment:', error);
+                alert('Failed to analyze sentiment. Please try again.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>Analyze</span>';
+            }
+        }
+
+        // ===========================
+        // Commitment Tracking
+        // ===========================
+
+        // Load commitments for a person
+        async function loadCommitments(personId) {
+            try {
+                const data = await api(`/people/${personId}/commitments`);
+                renderCommitments(data);
+            } catch (error) {
+                console.error('Failed to load commitments:', error);
+                document.getElementById('commitmentsContent').innerHTML =
+                    '<div class="commitments-empty">Failed to load commitments.</div>';
+            }
+        }
+
+        // Render commitments display
+        function renderCommitments(data) {
+            const container = document.getElementById('commitmentsContent');
+
+            if (!data || data.count === 0) {
+                container.innerHTML = '<div class="commitments-empty">No commitments tracked yet. Click "Extract" to find promises in conversations.</div>';
+                return;
+            }
+
+            // Summary counts
+            let html = `
+                <div class="commitments-summary">
+                    <div class="commitments-summary-item">
+                        <span class="commitments-summary-count">${data.open_count}</span> open
+                    </div>
+                    <div class="commitments-summary-item">
+                        <span class="commitments-summary-count">${data.overdue_count}</span> overdue
+                    </div>
+                </div>
+            `;
+
+            // Group by direction
+            const madeByMe = data.commitments.filter(c => c.direction === 'made_by_me');
+            const madeToMe = data.commitments.filter(c => c.direction === 'made_to_me');
+
+            if (madeByMe.length > 0) {
+                html += `
+                    <div class="commitments-direction-group">
+                        <div class="commitments-direction-header">📤 I promised them</div>
+                        ${madeByMe.map(c => renderCommitmentItem(c)).join('')}
+                    </div>
+                `;
+            }
+
+            if (madeToMe.length > 0) {
+                html += `
+                    <div class="commitments-direction-group">
+                        <div class="commitments-direction-header">📥 They promised me</div>
+                        ${madeToMe.map(c => renderCommitmentItem(c)).join('')}
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        // Render a single commitment item
+        function renderCommitmentItem(commitment) {
+            const statusClass = commitment.is_overdue ? 'overdue' : commitment.status;
+
+            // Due date display
+            let dueHtml = '';
+            if (commitment.due_date) {
+                const daysUntil = commitment.days_until_due;
+                let dueClass = '';
+                let dueText = '';
+
+                if (daysUntil === null) {
+                    dueText = '';
+                } else if (daysUntil < 0) {
+                    dueClass = 'overdue';
+                    dueText = `${Math.abs(daysUntil)} days overdue`;
+                } else if (daysUntil === 0) {
+                    dueClass = 'soon';
+                    dueText = 'Due today';
+                } else if (daysUntil <= 7) {
+                    dueClass = 'soon';
+                    dueText = `Due in ${daysUntil} days`;
+                } else {
+                    dueText = `Due ${formatRelativeDate(commitment.due_date)}`;
+                }
+
+                if (dueText) {
+                    dueHtml = `<span class="commitment-due ${dueClass}">📅 ${dueText}</span>`;
+                }
+            }
+
+            // Quote display
+            let quoteHtml = '';
+            if (commitment.source_quote) {
+                quoteHtml = `<div class="commitment-quote">"${escapeHtml(commitment.source_quote)}"</div>`;
+            }
+
+            // Actions (only show for open commitments)
+            let actionsHtml = '';
+            if (commitment.status === 'open') {
+                actionsHtml = `
+                    <div class="commitment-actions">
+                        <button class="commitment-action-btn complete" onclick="markCommitmentComplete('${commitment.id}')" title="Mark complete">✓</button>
+                        <button class="commitment-action-btn delete" onclick="deleteCommitment('${commitment.id}')" title="Delete">×</button>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="commitment-item" data-id="${commitment.id}">
+                    <div class="commitment-status-badge ${statusClass}"></div>
+                    <div class="commitment-content">
+                        <div class="commitment-description">${escapeHtml(commitment.description)}</div>
+                        <div class="commitment-meta">
+                            ${dueHtml}
+                        </div>
+                        ${quoteHtml}
+                    </div>
+                    ${actionsHtml}
+                </div>
+            `;
+        }
+
+        // Extract commitments for a person
+        async function extractCommitments() {
+            if (!selectedPersonId) return;
+
+            const btn = document.getElementById('extractCommitmentsBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span>Extracting...</span>';
+
+            try {
+                const data = await api(`/people/${selectedPersonId}/commitments/extract?days=30`, { method: 'POST' });
+
+                if (data.status === 'no_interactions') {
+                    alert('No message-based interactions found to analyze.');
+                } else {
+                    // Reload commitments to show updated data
+                    await loadCommitments(selectedPersonId);
+                }
+            } catch (error) {
+                console.error('Failed to extract commitments:', error);
+                alert('Failed to extract commitments. Please try again.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<span>Extract</span>';
+            }
+        }
+
+        // Mark a commitment as complete
+        async function markCommitmentComplete(commitmentId) {
+            try {
+                await api(`/commitments/${commitmentId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ status: 'completed' })
+                });
+                await loadCommitments(selectedPersonId);
+            } catch (error) {
+                console.error('Failed to complete commitment:', error);
+                alert('Failed to mark commitment as complete.');
+            }
+        }
+
+        // Delete a commitment
+        async function deleteCommitment(commitmentId) {
+            if (!confirm('Are you sure you want to delete this commitment?')) return;
+
+            try {
+                await api(`/commitments/${commitmentId}`, { method: 'DELETE' });
+                await loadCommitments(selectedPersonId);
+            } catch (error) {
+                console.error('Failed to delete commitment:', error);
+                alert('Failed to delete commitment.');
             }
         }
 

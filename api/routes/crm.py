@@ -43,6 +43,16 @@ from api.services.person_facts import (
     get_person_fact_extractor,
     FACT_CATEGORIES,
 )
+from api.services.sentiment import (
+    SentimentScore,
+    get_sentiment_store,
+    get_sentiment_extractor,
+)
+from api.services.commitments import (
+    Commitment,
+    get_commitment_store,
+    get_commitment_extractor,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -281,8 +291,8 @@ class PersonDetailResponse(BaseModel):
     email_count: int = 0
     mention_count: int = 0
     message_count: int = 0  # iMessage/SMS count
-    # Pre-computed Dunbar circle (0-6 for meaningful, 7 for peripheral)
-    dunbar_circle: Optional[int] = None
+    # Manual Dunbar circle override (0-7, or None for auto-calculated)
+    manual_dunbar_circle: Optional[int] = None
     # Related data
     source_entities: list[SourceEntityResponse] = []
     relationships: list[RelationshipResponse] = []
@@ -462,11 +472,94 @@ class FactExtractionResponse(BaseModel):
     facts: list[PersonFactResponse] = []
 
 
+# Sentiment Response Models
+# ========================
+
+class SentimentScoreResponse(BaseModel):
+    """Response model for a sentiment score."""
+    id: str
+    interaction_id: str
+    person_id: str
+    score: float  # -1.0 to +1.0
+    magnitude: float  # 0.0 to 1.0
+    label: str  # positive, neutral, negative
+    keywords: list[str] = []
+    extracted_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class SentimentResponse(BaseModel):
+    """Response for person sentiment endpoint."""
+    person_id: str
+    average_score: float  # -1.0 to +1.0
+    trend: str  # improving, stable, declining
+    trend_delta: float  # Change over period
+    scores: list[SentimentScoreResponse] = []
+    sparkline_data: list[float] = []  # Last 30 data points for chart
+    count: int = 0
+
+
+class SentimentExtractionResponse(BaseModel):
+    """Response for sentiment extraction."""
+    status: str
+    extracted_count: int
+    skipped_count: int = 0
+    errors: int = 0
+
+
+# Commitment Response Models
+# ==========================
+
+class CommitmentResponse(BaseModel):
+    """Response model for a commitment."""
+    id: str
+    person_id: str
+    person_name: Optional[str] = None
+    direction: str  # made_by_me, made_to_me
+    description: str
+    due_date: Optional[str] = None
+    status: str  # open, completed, expired, cancelled
+    confidence: float = 0.5
+    source_quote: Optional[str] = None
+    source_link: Optional[str] = None
+    source_interaction_id: Optional[str] = None
+    days_until_due: Optional[int] = None
+    is_overdue: bool = False
+    extracted_at: Optional[str] = None
+    completed_at: Optional[str] = None
+    created_at: Optional[str] = None
+
+
+class CommitmentsResponse(BaseModel):
+    """Response for commitments list."""
+    commitments: list[CommitmentResponse]
+    count: int
+    made_by_me_count: int = 0
+    made_to_me_count: int = 0
+    open_count: int = 0
+    overdue_count: int = 0
+
+
+class CommitmentUpdate(BaseModel):
+    """Request for updating a commitment."""
+    status: Optional[str] = None  # open, completed, expired, cancelled
+    description: Optional[str] = None
+    due_date: Optional[str] = None
+
+
+class CommitmentExtractionResponse(BaseModel):
+    """Response for commitment extraction."""
+    status: str
+    extracted_count: int
+    errors: int = 0
+
+
 class PersonUpdateRequest(BaseModel):
     """Request for updating a person."""
     notes: Optional[str] = None
     tags: Optional[list[str]] = None
     category: Optional[str] = None
+    manual_dunbar_circle: Optional[int] = None  # 0-7 to override, or explicit None to clear
 
 
 class PersonMergeRequest(BaseModel):
@@ -575,7 +668,7 @@ def _person_to_detail_response(
         email_count=person.email_count,
         mention_count=person.mention_count,
         message_count=person.message_count,
-        dunbar_circle=person.dunbar_circle,
+        manual_dunbar_circle=person.manual_dunbar_circle,
     )
 
     if include_related:
@@ -760,6 +853,14 @@ async def update_person(person_id: str, request: PersonUpdateRequest):
 
     if request.category is not None:
         person.category = request.category
+
+    # Handle manual_dunbar_circle: -1 means clear/reset to auto, 0-7 sets the circle
+    if request.manual_dunbar_circle is not None:
+        if request.manual_dunbar_circle == -1:
+            person.manual_dunbar_circle = None  # Clear to auto-calculate
+        elif 0 <= request.manual_dunbar_circle <= 7:
+            person.manual_dunbar_circle = request.manual_dunbar_circle
+        # Ignore invalid values outside 0-7 range (except -1)
 
     person_store.update(person)
     person_store.save()
@@ -2118,6 +2219,431 @@ async def confirm_person_fact(person_id: str, fact_id: str):
     fact_store.confirm(fact_id)
 
     return {"status": "confirmed", "fact_id": fact_id}
+
+
+# Sentiment Tracking Endpoints
+# ============================
+
+
+def _sentiment_to_response(score: SentimentScore) -> SentimentScoreResponse:
+    """Convert SentimentScore to API response."""
+    return SentimentScoreResponse(
+        id=score.id,
+        interaction_id=score.interaction_id,
+        person_id=score.person_id,
+        score=score.score,
+        magnitude=score.magnitude,
+        label=score.label,
+        keywords=score.keywords,
+        extracted_at=score.extracted_at.isoformat() if score.extracted_at else None,
+        created_at=score.created_at.isoformat() if score.created_at else None,
+    )
+
+
+@router.get("/people/{person_id}/sentiment", response_model=SentimentResponse)
+async def get_person_sentiment(
+    person_id: str,
+    days: int = Query(default=365, ge=1, le=3650, description="Days of sentiment data to retrieve"),
+):
+    """
+    Get sentiment analysis for a person.
+
+    Returns sentiment scores and trend analysis including:
+    - Average sentiment score (-1.0 to +1.0)
+    - Trend direction (improving, stable, declining)
+    - Individual sentiment scores by interaction
+    - Sparkline data for visualization
+    """
+    start_time = time.time()
+
+    person_store = get_person_entity_store()
+    person = person_store.get_by_id(person_id)
+
+    if not person:
+        raise HTTPException(status_code=404, detail=f"Person '{person_id}' not found")
+
+    sentiment_store = get_sentiment_store()
+    scores = sentiment_store.get_for_person(person_id, days=days)
+    trend_data = sentiment_store.get_trend(person_id, days=min(days, 90))
+
+    # Convert to responses
+    score_responses = [_sentiment_to_response(s) for s in scores]
+
+    elapsed = (time.time() - start_time) * 1000
+    logger.info(f"sentiment({person_id}) took {elapsed:.1f}ms ({len(score_responses)} scores)")
+
+    return SentimentResponse(
+        person_id=person_id,
+        average_score=trend_data["average"],
+        trend=trend_data["trend"],
+        trend_delta=trend_data["trend_delta"],
+        scores=score_responses,
+        sparkline_data=trend_data["sparkline_data"],
+        count=len(score_responses),
+    )
+
+
+@router.post("/people/{person_id}/sentiment/extract", response_model=SentimentExtractionResponse)
+async def extract_person_sentiment(
+    person_id: str,
+    force: bool = Query(default=False, description="Re-extract even if sentiment exists"),
+    days: int = Query(default=30, ge=1, le=365, description="Days of interactions to analyze"),
+    model: Optional[str] = Query(default=None, description="Model to use: haiku (default) or sonnet"),
+):
+    """
+    Extract sentiment from a person's recent interactions.
+
+    Analyzes the emotional tone of interactions using Claude.
+    By default only extracts for interactions without existing sentiment.
+    Use force=true to re-extract all.
+
+    Args:
+        person_id: The person's ID
+        force: Re-extract even if sentiment exists
+        days: Number of days of interactions to analyze
+        model: Claude model (haiku=cheaper/faster, sonnet=more accurate)
+    """
+    from api.services.sentiment import SentimentExtractor
+
+    # Translate simple model names
+    if model == "sonnet":
+        model = SentimentExtractor.MODEL_SONNET
+    elif model == "haiku":
+        model = SentimentExtractor.MODEL_HAIKU
+
+    person_store = get_person_entity_store()
+    person = person_store.get_by_id(person_id)
+
+    if not person:
+        raise HTTPException(status_code=404, detail=f"Person '{person_id}' not found")
+
+    # Get recent interactions
+    interaction_store = get_interaction_store()
+    interactions = interaction_store.get_for_person(
+        person_id,
+        days_back=days,
+        limit=500,  # Cap to prevent excessive API costs
+    )
+
+    if not interactions:
+        return SentimentExtractionResponse(
+            status="no_interactions",
+            extracted_count=0,
+            skipped_count=0,
+            errors=0,
+        )
+
+    # Convert to dict format expected by extractor
+    interaction_dicts = [
+        {
+            "id": i.id,
+            "source_type": i.source_type,
+            "title": i.title,
+            "snippet": i.snippet,
+            "timestamp": i.timestamp.isoformat() if i.timestamp else "",
+        }
+        for i in interactions
+    ]
+
+    # Extract sentiment
+    try:
+        extractor = get_sentiment_extractor()
+        result = extractor.extract_for_person(
+            person_id=person_id,
+            person_name=person.canonical_name,
+            interactions=interaction_dicts,
+            force=force,
+            model=model,
+        )
+
+        return SentimentExtractionResponse(
+            status="completed",
+            extracted_count=result.get("extracted", 0),
+            skipped_count=result.get("skipped", 0),
+            errors=result.get("errors", 0),
+        )
+    except Exception as e:
+        logger.error(f"Sentiment extraction failed for {person_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Sentiment extraction failed: {str(e)}")
+
+
+# Commitment Tracking Endpoints
+# =============================
+
+
+def _commitment_to_response(commitment: Commitment, person_name: Optional[str] = None) -> CommitmentResponse:
+    """Convert Commitment to API response."""
+    return CommitmentResponse(
+        id=commitment.id,
+        person_id=commitment.person_id,
+        person_name=person_name,
+        direction=commitment.direction,
+        description=commitment.description,
+        due_date=commitment.due_date.isoformat() if commitment.due_date else None,
+        status=commitment.status,
+        confidence=commitment.confidence,
+        source_quote=commitment.source_quote,
+        source_link=commitment.source_link,
+        source_interaction_id=commitment.source_interaction_id,
+        days_until_due=commitment.days_until_due,
+        is_overdue=commitment.is_overdue,
+        extracted_at=commitment.extracted_at.isoformat() if commitment.extracted_at else None,
+        completed_at=commitment.completed_at.isoformat() if commitment.completed_at else None,
+        created_at=commitment.created_at.isoformat() if commitment.created_at else None,
+    )
+
+
+@router.get("/people/{person_id}/commitments", response_model=CommitmentsResponse)
+async def get_person_commitments(
+    person_id: str,
+    status: Optional[str] = Query(default=None, description="Filter by status: open, completed, expired, cancelled"),
+    direction: Optional[str] = Query(default=None, description="Filter by direction: made_by_me, made_to_me"),
+):
+    """
+    Get commitments for a person.
+
+    Returns commitments with counts by direction and status.
+    """
+    start_time = time.time()
+
+    person_store = get_person_entity_store()
+    person = person_store.get_by_id(person_id)
+
+    if not person:
+        raise HTTPException(status_code=404, detail=f"Person '{person_id}' not found")
+
+    commitment_store = get_commitment_store()
+    commitments = commitment_store.get_for_person(person_id, status=status, direction=direction)
+
+    # Convert to responses
+    commitment_responses = [_commitment_to_response(c, person.canonical_name) for c in commitments]
+
+    # Calculate counts
+    made_by_me = sum(1 for c in commitments if c.direction == "made_by_me")
+    made_to_me = sum(1 for c in commitments if c.direction == "made_to_me")
+    open_count = sum(1 for c in commitments if c.status == "open")
+    overdue_count = sum(1 for c in commitments if c.is_overdue)
+
+    elapsed = (time.time() - start_time) * 1000
+    logger.info(f"commitments({person_id}) took {elapsed:.1f}ms ({len(commitment_responses)} commitments)")
+
+    return CommitmentsResponse(
+        commitments=commitment_responses,
+        count=len(commitment_responses),
+        made_by_me_count=made_by_me,
+        made_to_me_count=made_to_me,
+        open_count=open_count,
+        overdue_count=overdue_count,
+    )
+
+
+@router.post("/people/{person_id}/commitments/extract", response_model=CommitmentExtractionResponse)
+async def extract_person_commitments(
+    person_id: str,
+    days: int = Query(default=30, ge=1, le=365, description="Days of interactions to analyze"),
+    model: Optional[str] = Query(default=None, description="Model to use: haiku (default) or sonnet"),
+):
+    """
+    Extract commitments from a person's recent interactions.
+
+    Analyzes message-based interactions to find promises/commitments.
+
+    Args:
+        person_id: The person's ID
+        days: Number of days of interactions to analyze
+        model: Claude model (haiku=cheaper/faster, sonnet=more accurate)
+    """
+    from api.services.commitments import CommitmentExtractor
+
+    # Translate simple model names
+    if model == "sonnet":
+        model = CommitmentExtractor.MODEL_SONNET
+    elif model == "haiku":
+        model = CommitmentExtractor.MODEL_HAIKU
+
+    person_store = get_person_entity_store()
+    person = person_store.get_by_id(person_id)
+
+    if not person:
+        raise HTTPException(status_code=404, detail=f"Person '{person_id}' not found")
+
+    # Get recent interactions - focus on message-based sources
+    interaction_store = get_interaction_store()
+    interactions = interaction_store.get_for_person(
+        person_id,
+        days_back=days,
+        limit=300,
+    )
+
+    # Filter to message-based sources (where commitments are most likely)
+    message_sources = {"imessage", "whatsapp", "slack", "gmail"}
+    interactions = [i for i in interactions if i.source_type in message_sources]
+
+    if not interactions:
+        return CommitmentExtractionResponse(
+            status="no_interactions",
+            extracted_count=0,
+            errors=0,
+        )
+
+    # Convert to dict format
+    interaction_dicts = [
+        {
+            "id": i.id,
+            "source_type": i.source_type,
+            "title": i.title,
+            "snippet": i.snippet,
+            "timestamp": i.timestamp.isoformat() if i.timestamp else "",
+            "source_link": i.source_link,
+        }
+        for i in interactions
+    ]
+
+    # Extract commitments
+    try:
+        extractor = get_commitment_extractor()
+        result = extractor.extract_for_person(
+            person_id=person_id,
+            person_name=person.canonical_name,
+            interactions=interaction_dicts,
+            model=model,
+        )
+
+        return CommitmentExtractionResponse(
+            status="completed",
+            extracted_count=result.get("extracted", 0),
+            errors=result.get("errors", 0),
+        )
+    except Exception as e:
+        logger.error(f"Commitment extraction failed for {person_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Commitment extraction failed: {str(e)}")
+
+
+@router.patch("/commitments/{commitment_id}", response_model=CommitmentResponse)
+async def update_commitment(commitment_id: str, update: CommitmentUpdate):
+    """
+    Update a commitment's status or details.
+
+    Use this to mark commitments as completed, cancelled, etc.
+    """
+    commitment_store = get_commitment_store()
+    commitment = commitment_store.get_by_id(commitment_id)
+
+    if not commitment:
+        raise HTTPException(status_code=404, detail=f"Commitment '{commitment_id}' not found")
+
+    # Update fields
+    if update.status is not None:
+        valid_statuses = {"open", "completed", "expired", "cancelled"}
+        if update.status not in valid_statuses:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {update.status}")
+        commitment.status = update.status
+        if update.status == "completed":
+            commitment.completed_at = datetime.now(timezone.utc)
+
+    if update.description is not None:
+        commitment.description = update.description
+
+    if update.due_date is not None:
+        try:
+            commitment.due_date = datetime.fromisoformat(update.due_date)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid due_date format: {update.due_date}")
+
+    commitment_store.upsert(commitment)
+
+    # Get person name for response
+    person_store = get_person_entity_store()
+    person = person_store.get_by_id(commitment.person_id)
+    person_name = person.canonical_name if person else None
+
+    return _commitment_to_response(commitment, person_name)
+
+
+@router.delete("/commitments/{commitment_id}")
+async def delete_commitment(commitment_id: str):
+    """Delete a commitment."""
+    commitment_store = get_commitment_store()
+    commitment = commitment_store.get_by_id(commitment_id)
+
+    if not commitment:
+        raise HTTPException(status_code=404, detail=f"Commitment '{commitment_id}' not found")
+
+    commitment_store.delete(commitment_id)
+
+    return {"status": "deleted", "commitment_id": commitment_id}
+
+
+@router.get("/commitments/open", response_model=CommitmentsResponse)
+async def get_open_commitments():
+    """
+    Get all open commitments across all people.
+
+    Returns commitments sorted by due date (soonest first).
+    """
+    commitment_store = get_commitment_store()
+    commitments = commitment_store.get_open()
+
+    # Get person names
+    person_store = get_person_entity_store()
+    person_cache = {}
+
+    commitment_responses = []
+    for c in commitments:
+        if c.person_id not in person_cache:
+            person = person_store.get_by_id(c.person_id)
+            person_cache[c.person_id] = person.canonical_name if person else None
+        commitment_responses.append(_commitment_to_response(c, person_cache[c.person_id]))
+
+    made_by_me = sum(1 for c in commitments if c.direction == "made_by_me")
+    made_to_me = sum(1 for c in commitments if c.direction == "made_to_me")
+    overdue_count = sum(1 for c in commitments if c.is_overdue)
+
+    return CommitmentsResponse(
+        commitments=commitment_responses,
+        count=len(commitment_responses),
+        made_by_me_count=made_by_me,
+        made_to_me_count=made_to_me,
+        open_count=len(commitments),
+        overdue_count=overdue_count,
+    )
+
+
+@router.get("/commitments/due-soon", response_model=CommitmentsResponse)
+async def get_commitments_due_soon(
+    days: int = Query(default=7, ge=1, le=90, description="Days ahead to look"),
+):
+    """
+    Get commitments due within the specified number of days.
+
+    Includes overdue commitments as well.
+    """
+    commitment_store = get_commitment_store()
+    commitments = commitment_store.get_due_soon(days=days)
+
+    # Get person names
+    person_store = get_person_entity_store()
+    person_cache = {}
+
+    commitment_responses = []
+    for c in commitments:
+        if c.person_id not in person_cache:
+            person = person_store.get_by_id(c.person_id)
+            person_cache[c.person_id] = person.canonical_name if person else None
+        commitment_responses.append(_commitment_to_response(c, person_cache[c.person_id]))
+
+    made_by_me = sum(1 for c in commitments if c.direction == "made_by_me")
+    made_to_me = sum(1 for c in commitments if c.direction == "made_to_me")
+    overdue_count = sum(1 for c in commitments if c.is_overdue)
+
+    return CommitmentsResponse(
+        commitments=commitment_responses,
+        count=len(commitment_responses),
+        made_by_me_count=made_by_me,
+        made_to_me_count=made_to_me,
+        open_count=len(commitments),
+        overdue_count=overdue_count,
+    )
 
 
 @router.post("/people/{person_id}/hide")

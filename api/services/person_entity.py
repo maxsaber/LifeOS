@@ -99,13 +99,9 @@ class PersonEntity:
     # Formula: (recency × 0.3) + (frequency × 0.4) + (diversity × 0.3)
     _relationship_strength: Optional[float] = field(default=None, repr=False)
 
-    # Peripheral contact flag - True means excluded from expensive aggregations
-    # Set automatically when relationship_strength < PERIPHERAL_THRESHOLD (default 3.0)
-    is_peripheral_contact: bool = False
-
-    # Pre-computed Dunbar circle (0-6 for meaningful contacts, 7 for peripheral)
-    # Calculated based on relationship_strength ranking among non-peripheral contacts
-    dunbar_circle: Optional[int] = None
+    # Manual Dunbar circle override (0-7, or None for auto-calculated)
+    # When set, this value is used instead of the calculated circle position
+    manual_dunbar_circle: Optional[int] = None
 
     def __post_init__(self):
         """Set display_name to canonical_name if not specified."""
@@ -341,9 +337,8 @@ class PersonEntity:
         data.setdefault("hidden", False)
         data.setdefault("hidden_at", None)
         data.setdefault("hidden_reason", "")
-        # Handle peripheral contact fields (default to not peripheral, no circle)
-        data.setdefault("is_peripheral_contact", False)
-        data.setdefault("dunbar_circle", None)
+        # Handle manual Dunbar circle (default to None = auto-calculated)
+        data.setdefault("manual_dunbar_circle", None)
         return cls(**data)
 
     @classmethod
