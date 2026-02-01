@@ -1618,6 +1618,26 @@
             border-color: var(--people);
         }
 
+        .notes-save-btn {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.75rem;
+            background: var(--people);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .notes-save-btn:hover {
+            opacity: 0.9;
+        }
+
+        .notes-save-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
         /* Two-column content grid for Overview tab */
         .overview-content-grid {
             display: grid;
@@ -4324,10 +4344,14 @@
 
                                 <!-- Notes -->
                                 <div class="notes-panel-compact">
-                                    <div class="overview-panel-header">
+                                    <div class="overview-panel-header" style="display: flex; justify-content: space-between; align-items: center;">
                                         <span class="overview-panel-title">Notes</span>
+                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                            <span id="notesUnsavedIndicator" style="display: none; color: var(--warning); font-size: 0.75rem;">unsaved</span>
+                                            <button id="notesSaveBtn" class="notes-save-btn" onclick="saveNotes()" style="display: none;">Save</button>
+                                        </div>
                                     </div>
-                                    <textarea class="notes-area" id="notesArea" placeholder="Add notes about this person..." onchange="saveNotes()"></textarea>
+                                    <textarea class="notes-area" id="notesArea" placeholder="Add notes about this person..." oninput="onNotesInput()"></textarea>
                                 </div>
                             </div>
                         </div>
@@ -5784,8 +5808,12 @@
 
             contactEl.innerHTML = contactHtml || '<div class="info-item"><div class="info-value">No contact info</div></div>';
 
-            // Notes
-            document.getElementById('notesArea').value = person.notes || '';
+            // Notes - set value and track original for dirty checking
+            const notesValue = person.notes || '';
+            document.getElementById('notesArea').value = notesValue;
+            originalNotesValue = notesValue;
+            document.getElementById('notesSaveBtn').style.display = 'none';
+            document.getElementById('notesUnsavedIndicator').style.display = 'none';
 
             // Source entities - show count if available, loading state for list
             // (full list is loaded in background by loadRelatedData)
@@ -10098,19 +10126,55 @@
             }
         }
 
+        // Track original notes value for dirty checking
+        let originalNotesValue = '';
+
+        // Handle notes input - show save button when changed
+        function onNotesInput() {
+            const notesArea = document.getElementById('notesArea');
+            const saveBtn = document.getElementById('notesSaveBtn');
+            const indicator = document.getElementById('notesUnsavedIndicator');
+
+            const hasChanges = notesArea.value !== originalNotesValue;
+
+            if (hasChanges) {
+                saveBtn.style.display = 'inline-block';
+                indicator.style.display = 'inline';
+            } else {
+                saveBtn.style.display = 'none';
+                indicator.style.display = 'none';
+            }
+        }
+
         // Save notes
         async function saveNotes() {
             if (!selectedPersonId) return;
 
-            const notes = document.getElementById('notesArea').value;
+            const notesArea = document.getElementById('notesArea');
+            const saveBtn = document.getElementById('notesSaveBtn');
+            const indicator = document.getElementById('notesUnsavedIndicator');
+            const notes = notesArea.value;
+
+            // Disable button while saving
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
 
             try {
                 await api(`/people/${selectedPersonId}`, {
                     method: 'PATCH',
                     body: JSON.stringify({ notes })
                 });
+
+                // Update original value and hide save button
+                originalNotesValue = notes;
+                saveBtn.style.display = 'none';
+                indicator.style.display = 'none';
             } catch (error) {
                 console.error('Failed to save notes:', error);
+                alert('Failed to save notes. Please try again.');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save';
             }
         }
 

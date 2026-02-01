@@ -166,6 +166,8 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
         'emails_merged': 0,
         'phones_merged': 0,
         'aliases_added': 0,
+        'tags_merged': 0,
+        'notes_merged': 0,
     }
 
     store = get_person_entity_store()
@@ -239,6 +241,31 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
     if secondary_cat_priority < primary_cat_priority:
         logger.info(f"   ~ Category: {primary.category} -> {secondary.category}")
         primary.category = secondary.category
+
+    # Merge tags (combine and deduplicate)
+    stats['tags_merged'] = 0
+    for tag in (secondary.tags or []):
+        if tag and tag not in (primary.tags or []):
+            if primary.tags is None:
+                primary.tags = []
+            primary.tags.append(tag)
+            stats['tags_merged'] += 1
+            logger.info(f"   + Tag: {tag}")
+
+    # Merge notes (concatenate with separator if both have content)
+    stats['notes_merged'] = 0
+    if secondary.notes and secondary.notes.strip():
+        if primary.notes and primary.notes.strip():
+            # Both have notes - concatenate with separator
+            if secondary.notes.strip() != primary.notes.strip():
+                primary.notes = f"{primary.notes}\n\n---\n\n{secondary.notes}"
+                stats['notes_merged'] = 1
+                logger.info(f"   + Notes: concatenated from secondary")
+        else:
+            # Only secondary has notes - use them
+            primary.notes = secondary.notes
+            stats['notes_merged'] = 1
+            logger.info(f"   + Notes: copied from secondary")
 
     # 2. Update interactions
     logger.info("\n2. Updating interactions...")

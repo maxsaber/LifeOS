@@ -806,6 +806,8 @@ async def merge_people(request: PersonMergeRequest):
         'emails_merged': 0,
         'phones_merged': 0,
         'aliases_added': 0,
+        'tags_merged': 0,
+        'notes_merged': 0,
     }
 
     merged_ids = []

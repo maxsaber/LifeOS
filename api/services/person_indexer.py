@@ -114,7 +114,7 @@ def generate_person_document(person: PersonEntity, summary: RelationshipSummary)
             facts = fact_store.get_for_person(person.id)
             if facts:
                 parts.append("\n## Known Facts")
-                for fact in facts[:10]:  # Limit to top 10
+                for fact in facts[:30]:  # Limit to top 30
                     parts.append(f"- {fact.category}: {fact.value}")
         except Exception as e:
             logger.debug(f"Could not get facts for {person.id}: {e}")
