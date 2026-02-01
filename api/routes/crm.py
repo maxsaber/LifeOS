@@ -30,6 +30,7 @@ from api.services.relationship_metrics import (
     compute_strength_for_person,
     get_strength_breakdown,
     update_all_strengths,
+    update_strength_for_person,
 )
 from api.services.relationship_discovery import (
     run_full_discovery,
@@ -284,6 +285,8 @@ class PersonDetailResponse(BaseModel):
     email_count: int = 0
     mention_count: int = 0
     message_count: int = 0  # iMessage/SMS count
+    # Pre-computed Dunbar circle (0-6 for meaningful, 7 for peripheral)
+    dunbar_circle: Optional[int] = None
     # Related data
     source_entities: list[SourceEntityResponse] = []
     relationships: list[RelationshipResponse] = []
@@ -576,6 +579,7 @@ def _person_to_detail_response(
         email_count=person.email_count,
         mention_count=person.mention_count,
         message_count=person.message_count,
+        dunbar_circle=person.dunbar_circle,
     )
 
     if include_related:
@@ -716,8 +720,9 @@ async def get_person(
     # This is slow (~100-500ms) so skip by default
     if refresh_strength:
         try:
-            strength = compute_strength_for_person(person)
-            person.relationship_strength = strength
+            update_strength_for_person(person_id)
+            # Refresh person object to get updated values
+            person = person_store.get_by_id(person_id)
         except Exception as e:
             logger.warning(f"Failed to compute relationship strength: {e}")
 
@@ -1538,24 +1543,14 @@ async def split_person(request: PersonSplitRequest):
     int_conn_stats.close()
 
     # Recalculate relationship strength for both persons
-    from api.services.relationship_metrics import compute_strength_for_person
+    # (also updates is_peripheral_contact; dunbar_circle requires full recalc)
+    from_strength = update_strength_for_person(from_person.id)
+    if from_strength is not None:
+        logger.info(f"  {from_person.canonical_name} strength: {from_strength}")
 
-    from_person_refreshed = person_store.get_by_id(from_person.id)
-    to_person_refreshed = person_store.get_by_id(to_person.id)
-
-    if from_person_refreshed:
-        new_strength = compute_strength_for_person(from_person_refreshed)
-        if new_strength != from_person_refreshed._relationship_strength:
-            from_person_refreshed._relationship_strength = new_strength
-            person_store.update(from_person_refreshed)
-            logger.info(f"  {from_person.canonical_name} strength: {new_strength}")
-
-    if to_person_refreshed:
-        new_strength = compute_strength_for_person(to_person_refreshed)
-        if new_strength != to_person_refreshed._relationship_strength:
-            to_person_refreshed._relationship_strength = new_strength
-            person_store.update(to_person_refreshed)
-            logger.info(f"  {to_person.canonical_name} strength: {new_strength}")
+    to_strength = update_strength_for_person(to_person.id)
+    if to_strength is not None:
+        logger.info(f"  {to_person.canonical_name} strength: {to_strength}")
 
     person_store.save()
 
@@ -2877,6 +2872,10 @@ class MeInteractionsResponse(BaseModel):
     relationship_health_score: int = 0  # 0-100
     health_score_history: list[HealthScorePoint] = []  # Longitudinal health scores
     health_score_average: float = 0.0  # Average interaction count for the period
+    neglected_contacts: list[NeglectedContact] = []
+    network_growth: list[MonthlyNetworkGrowth] = []
+    messaging_by_circle: list[MonthlyMessagingVolume] = []
+    tracked_relationships: list[TrackedRelationship] = []  # Parent/Coparent tracking
 
 
 class FamilyMember(BaseModel):
@@ -3049,18 +3048,25 @@ async def get_me_interactions(
     start_date = end_date - timedelta(days=days_back)
 
     # Build person lookup for names (excludes hidden people by default)
-    person_lookup = {p.id: p for p in person_store.get_all()}
+    all_people = person_store.get_all()
+    person_lookup = {p.id: p for p in all_people}
 
     # Get hidden person IDs to exclude from metrics
     hidden_person_ids = {
         p.id for p in person_store.get_all(include_hidden=True) if p.hidden
     }
 
-    # Get all interactions in date range, excluding self and hidden people
+    # Get peripheral contact IDs to exclude from counts
+    # These are people with is_peripheral_contact=True (relationship_strength < 3.0)
+    peripheral_person_ids = {
+        p.id for p in all_people if p.is_peripheral_contact
+    }
+
+    # Get all interactions in date range, excluding self, hidden, and peripheral contacts
     all_interactions_raw = interaction_store.get_all_in_range(
         start_date=start_date,
         end_date=end_date,
-        exclude_person_ids=[MY_PERSON_ID] + list(hidden_person_ids),
+        exclude_person_ids=[MY_PERSON_ID] + list(hidden_person_ids) + list(peripheral_person_ids),
     )
 
     # Filter to only include interactions with known (non-orphaned) person IDs
@@ -3069,24 +3075,12 @@ async def get_me_interactions(
         if i.person_id in person_lookup
     ]
 
-    # Pre-compute Dunbar circles (simplified - by relationship strength ranking)
-    sorted_people = sorted(
-        person_store.get_all(),
-        key=lambda p: p.relationship_strength or 0,
-        reverse=True
-    )
-    circle_map = {}
-    circle_sizes = [3, 5, 15, 50, 150, 500, 1500]  # Cumulative thresholds
-    cumulative = 0
-    current_circle = 0
-    for i, person in enumerate(sorted_people):
-        if person.id == MY_PERSON_ID:
-            circle_map[person.id] = -1  # Self
-            continue
-        if current_circle < len(circle_sizes) and i >= circle_sizes[current_circle] + cumulative:
-            cumulative = circle_sizes[current_circle]
-            current_circle += 1
-        circle_map[person.id] = current_circle
+    # Use pre-computed Dunbar circles from person entities
+    circle_map = {
+        p.id: (p.dunbar_circle if p.dunbar_circle is not None else 7)
+        for p in all_people
+    }
+    circle_map[MY_PERSON_ID] = -1  # Self
 
     # Aggregation structures
     daily_data = defaultdict(lambda: {"total": 0, "sources": defaultdict(int)})
@@ -3354,6 +3348,8 @@ async def get_me_interactions(
             continue
         if person_id in hidden_person_ids:
             continue
+        if person_id in peripheral_person_ids:
+            continue  # Skip peripheral contacts from network growth counts
         if person_id not in person_lookup:
             continue  # Skip orphaned person IDs
         month_key = first_dt.strftime('%Y-%m')

@@ -5324,11 +5324,25 @@
         }
 
         // Apply pre-calculated Dunbar circles to a list of people
-        // Falls back to calculating from current data if map is empty
+        // Uses pre-computed dunbar_circle from API, falls back to client calculation if missing
         function applyDunbarCircles(peopleList) {
-            // If map is empty or very small, calculate from current data as fallback
+            // Check if API provided pre-computed values
+            const hasPrecomputed = peopleList.some(p => p.dunbar_circle !== undefined && p.dunbar_circle !== null);
+
+            if (hasPrecomputed) {
+                // Build dunbarCircleMap from API data for any code that still references it
+                peopleList.forEach(p => {
+                    if (p.dunbar_circle !== undefined && p.dunbar_circle !== null) {
+                        dunbarCircleMap.set(p.id, p.dunbar_circle);
+                    }
+                });
+                // Return as-is since circles are already set
+                return peopleList;
+            }
+
+            // Fallback: calculate client-side if API didn't provide values
+            console.warn('[Dunbar] No pre-computed circles from API, calculating client-side');
             if (dunbarCircleMap.size < 10 && peopleList.length > 10) {
-                console.warn('[Dunbar] Map is small, calculating from current data as fallback');
                 calculateAndStoreDunbarCircles(peopleList);
             }
 
@@ -5488,8 +5502,8 @@
             listEl.innerHTML = '<div class="loading">Loading people...</div>';
 
             try {
-                // Initialize global Dunbar circles on first load
-                await initializeDunbarCircles();
+                // Note: Dunbar circles are now pre-computed server-side
+                // No need to fetch all 14k people - each person has dunbar_circle in API response
 
                 let allPeople = [];
 

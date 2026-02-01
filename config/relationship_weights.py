@@ -40,6 +40,11 @@ LIFETIME_FREQUENCY_TARGET = 750  # Higher target for all-time (harder to max out
 MIN_INTERACTIONS_FOR_FULL_RECENCY = 3  # Need at least 3 interactions for full recency credit
 ZERO_INTERACTION_RECENCY_MULTIPLIER = 0.0  # Zero interactions = 0% recency (contacts/LinkedIn don't count)
 
+# Peripheral contact threshold
+# People with relationship_strength below this are marked as peripheral contacts
+# and excluded from expensive aggregation calculations (placed in Dunbar circle 7)
+PERIPHERAL_THRESHOLD = 3.0
+
 
 # =============================================================================
 # INTERACTION TYPE WEIGHTS

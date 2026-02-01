@@ -38,6 +38,7 @@ from config.relationship_weights import (
     LIFETIME_FREQUENCY_TARGET,
     MIN_INTERACTIONS_FOR_FULL_RECENCY,
     ZERO_INTERACTION_RECENCY_MULTIPLIER,
+    PERIPHERAL_THRESHOLD,
 )
 import math
 
@@ -342,7 +343,9 @@ def update_strength_for_person(person_id: str) -> Optional[float]:
     """
     Compute and update relationship strength for a person.
 
-    Updates the PersonEntity with the new strength score.
+    Updates the PersonEntity with the new strength score and peripheral contact flag.
+    Note: dunbar_circle is NOT updated here - it requires ranking all people
+    and is only computed by update_all_strengths().
 
     Args:
         person_id: ID of the person to update
@@ -359,15 +362,18 @@ def update_strength_for_person(person_id: str) -> Optional[float]:
 
     strength = compute_strength_for_person(person)
     person.relationship_strength = strength
+    person.is_peripheral_contact = strength < PERIPHERAL_THRESHOLD
     store.update(person)
 
-    logger.debug(f"Updated relationship strength for {person.canonical_name}: {strength}")
+    logger.debug(f"Updated relationship strength for {person.canonical_name}: {strength} (peripheral={person.is_peripheral_contact})")
     return strength
 
 
 def update_all_strengths() -> dict:
     """
     Update relationship strength for all people.
+
+    Also updates is_peripheral_contact and dunbar_circle for all people.
 
     Returns:
         Statistics about the update
@@ -377,25 +383,87 @@ def update_all_strengths() -> dict:
 
     updated = 0
     failed = 0
+    peripheral_count = 0
 
     for person in people:
         try:
             strength = compute_strength_for_person(person)
             person.relationship_strength = strength
+            person.is_peripheral_contact = strength < PERIPHERAL_THRESHOLD
+            if person.is_peripheral_contact:
+                person.dunbar_circle = 7  # Pre-assign peripheral contacts to circle 7
+                peripheral_count += 1
             store.update(person)
             updated += 1
         except Exception as e:
             logger.error(f"Failed to update strength for {person.id}: {e}")
             failed += 1
 
+    # Compute Dunbar circles for non-peripheral contacts
+    circles_result = compute_all_dunbar_circles(store)
+
     # Save all updates
     store.save()
 
-    logger.info(f"Updated relationship strength for {updated} people ({failed} failed)")
+    logger.info(f"Updated relationship strength for {updated} people ({failed} failed, {peripheral_count} peripheral)")
     return {
         "updated": updated,
         "failed": failed,
         "total": len(people),
+        "peripheral_count": peripheral_count,
+        "circles_computed": circles_result.get("assigned", 0),
+    }
+
+
+def compute_all_dunbar_circles(store=None) -> dict:
+    """
+    Compute Dunbar circles for all non-peripheral contacts.
+
+    Circles are assigned based on relationship_strength ranking:
+    - Circle 0: Top 3 people (closest)
+    - Circle 1: Next 5 (close friends)
+    - Circle 2: Next 15 (good friends)
+    - Circle 3: Next 50 (friends)
+    - Circle 4: Next 150 (meaningful acquaintances)
+    - Circle 5: Next 500 (acquaintances)
+    - Circle 6: Next 1500 (recognizable)
+    - Circle 7: Everyone else (peripheral, pre-assigned)
+
+    Args:
+        store: PersonEntityStore instance (optional, will get if not provided)
+
+    Returns:
+        Statistics about the assignment
+    """
+    if store is None:
+        store = get_person_entity_store()
+
+    # Get all non-peripheral contacts, sorted by strength descending
+    all_people = store.get_all(include_hidden=True)
+    non_peripheral = [p for p in all_people if not p.is_peripheral_contact]
+    non_peripheral.sort(key=lambda p: p.relationship_strength or 0, reverse=True)
+
+    # Dunbar circle thresholds (cumulative sizes)
+    circle_thresholds = [3, 8, 23, 73, 223, 723, 2223]  # 3, 5, 15, 50, 150, 500, 1500
+
+    assigned = 0
+    for i, person in enumerate(non_peripheral):
+        # Find which circle this person belongs to
+        circle = 6  # Default to circle 6 if beyond all thresholds
+        for c, threshold in enumerate(circle_thresholds):
+            if i < threshold:
+                circle = c
+                break
+
+        if person.dunbar_circle != circle:
+            person.dunbar_circle = circle
+            store.update(person)
+        assigned += 1
+
+    logger.info(f"Computed Dunbar circles for {assigned} non-peripheral contacts")
+    return {
+        "assigned": assigned,
+        "total_non_peripheral": len(non_peripheral),
     }
 
 
