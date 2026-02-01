@@ -2840,9 +2840,9 @@ class HealthScorePoint(BaseModel):
 
 
 class TrackedRelationshipPoint(BaseModel):
-    """Interaction count at a point in time for tracked relationships."""
+    """Score at a point in time for tracked relationships."""
     date: str  # "YYYY-MM-DD"
-    count: int  # Number of interactions in that period
+    score: int  # 0-100 normalized score
 
 
 class TrackedRelationship(BaseModel):
@@ -2850,10 +2850,9 @@ class TrackedRelationship(BaseModel):
     name: str  # Display name (e.g., "Parent Relationship")
     person_ids: list[str]  # People being tracked
     person_names: list[str]  # Names for display
-    current_count: int  # Interactions in current period
-    previous_count: int  # Interactions in previous period
+    current_score: int  # Current period score (0-100)
     trend: str  # "up", "down", "stable"
-    history: list[TrackedRelationshipPoint]  # Historical data points
+    history: list[TrackedRelationshipPoint]  # Historical score data points
     healthy_direction: str  # "more" or "less" - which direction is healthier
 
 
@@ -3422,15 +3421,12 @@ async def get_me_interactions(
 
         # Count interactions by period (same as health_period logic)
         if health_period == "month":
-            period_days = 30
             num_points = 9
             total_days = 61
         elif health_period == "year":
-            period_days = 365
             num_points = 13
             total_days = 730
         else:  # quarter
-            period_days = 90
             num_points = 13
             total_days = 183
 
@@ -3444,11 +3440,13 @@ async def get_me_interactions(
             if i.person_id in person_ids
         ]
 
-        # Build history
-        history = []
+        # First pass: collect raw counts for each period
+        raw_counts = []
         for i, point_date in enumerate(tracked_time_points):
             if i == 0:
-                prev_date = point_date - timedelta(days=period_days)
+                # For first point, use same interval as between points
+                interval = (tracked_time_points[1] - tracked_time_points[0]).days if len(tracked_time_points) > 1 else 14
+                prev_date = point_date - timedelta(days=interval)
             else:
                 prev_date = tracked_time_points[i - 1]
 
@@ -3464,19 +3462,56 @@ async def get_me_interactions(
                     if prev_date < ts <= point_date:
                         period_count += 1
 
+            raw_counts.append(period_count)
+
+        # Calculate baseline stats for normalization
+        # Use historical average as the baseline for scoring
+        if raw_counts:
+            avg_count = sum(raw_counts) / len(raw_counts)
+            max_count = max(raw_counts)
+        else:
+            avg_count = 0
+            max_count = 0
+
+        # Convert counts to 0-100 scores
+        # For "more is better": score = (count / target) * 100, where target = avg * 1.5
+        # For "less is better": score = 100 - (count / baseline) * 100, where baseline = avg
+        history = []
+        for i, point_date in enumerate(tracked_time_points):
+            count = raw_counts[i]
+
+            if healthy_direction == "more":
+                # More is better: target is 1.5x average, 100 = at or above target
+                target = max(avg_count * 1.5, 1)  # Avoid division by zero
+                score = int(min(100, (count / target) * 100))
+            else:
+                # Less is better: baseline is average, 0 interactions = 100, avg = 50, 2x avg = 0
+                if avg_count > 0:
+                    # Score decreases as count increases above 0
+                    # At 0: score = 100
+                    # At avg: score = 50
+                    # At 2x avg: score = 0
+                    score = int(max(0, 100 - (count / avg_count) * 50))
+                else:
+                    # No historical average, use max as reference
+                    if max_count > 0:
+                        score = int(max(0, 100 - (count / max_count) * 100))
+                    else:
+                        score = 100  # No interactions = perfect for "less is better"
+
             history.append(TrackedRelationshipPoint(
                 date=point_date.strftime('%Y-%m-%d'),
-                count=period_count,
+                score=score,
             ))
 
-        # Calculate current vs previous period
-        current_count = history[-1].count if history else 0
-        previous_count = history[-2].count if len(history) > 1 else 0
+        # Calculate current vs previous score for trend
+        current_score = history[-1].score if history else 0
+        previous_score = history[-2].score if len(history) > 1 else 0
 
-        # Determine trend
-        if current_count > previous_count:
+        # Determine trend based on score change (not count)
+        if current_score > previous_score:
             trend = "up"
-        elif current_count < previous_count:
+        elif current_score < previous_score:
             trend = "down"
         else:
             trend = "stable"
@@ -3485,8 +3520,7 @@ async def get_me_interactions(
             name=config["name"],
             person_ids=person_ids,
             person_names=person_names,
-            current_count=current_count,
-            previous_count=previous_count,
+            current_score=current_score,
             trend=trend,
             history=history,
             healthy_direction=healthy_direction,

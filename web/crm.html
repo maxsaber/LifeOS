@@ -7183,34 +7183,18 @@
             const history = data.history || [];
             const isInverse = data.healthy_direction === 'less';  // fewer = healthier
 
-            // Update current count display
+            // Update current score display (0-100 scale like health score)
             if (countEl) {
-                const currentCount = data.current_count || 0;
-                countEl.textContent = currentCount;
+                const currentScore = data.current_score || 0;
+                countEl.textContent = currentScore;
 
-                // Color based on trend and healthy direction
-                // For "more is healthier": up = green, down = red
-                // For "less is healthier": down = green, up = red
-                const trend = data.trend;
-                if (isInverse) {
-                    // Fewer is healthier
-                    if (trend === 'down') {
-                        countEl.className = 'tracked-current-count healthy';
-                    } else if (trend === 'up') {
-                        countEl.className = 'tracked-current-count unhealthy';
-                    } else {
-                        countEl.className = 'tracked-current-count tracked-inverse';
-                    }
-                } else {
-                    // More is healthier
-                    if (trend === 'up') {
-                        countEl.className = 'tracked-current-count healthy';
-                    } else if (trend === 'down') {
-                        countEl.className = 'tracked-current-count unhealthy';
-                    } else {
-                        countEl.className = 'tracked-current-count';
-                    }
-                }
+                // Color based on score value (like health score)
+                let color = '#ef4444';  // Red for low
+                if (currentScore >= 80) color = '#22c55e';  // Green for excellent
+                else if (currentScore >= 60) color = '#eab308';  // Yellow for good
+                else if (currentScore >= 50) color = '#f97316';  // Orange for okay
+                countEl.style.color = color;
+                countEl.className = 'tracked-current-count';
             }
 
             // Render people chips
@@ -7227,9 +7211,8 @@
                 return;
             }
 
-            // Find max count for Y-axis scaling
-            const maxCount = Math.max(...history.map(h => h.count), 1);
-            const yAxisMax = Math.ceil(maxCount * 1.2);  // Add 20% headroom
+            // Fixed 0-100 Y-axis for scores (like health score)
+            const yAxisMax = 100;
 
             // SVG dimensions
             const width = 600;
@@ -7240,12 +7223,12 @@
 
             // Scale functions
             const xScale = (i) => padding.left + (i / Math.max(history.length - 1, 1)) * chartWidth;
-            const yScale = (count) => padding.top + chartHeight - (count / yAxisMax) * chartHeight;
+            const yScale = (score) => padding.top + chartHeight - (score / yAxisMax) * chartHeight;
 
             // Build line path
             const linePath = history.map((point, i) => {
                 const x = xScale(i);
-                const y = yScale(point.count);
+                const y = yScale(point.score);
                 return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
             }).join(' ');
 
@@ -7258,19 +7241,18 @@
             const inverseClass = isInverse ? ' inverse' : '';
             const dots = history.map((point, i) => {
                 const x = xScale(i);
-                const y = yScale(point.count);
-                return `<circle class="tracked-chart-dot${inverseClass}" cx="${x}" cy="${y}" r="4" data-index="${i}" data-count="${point.count}" data-date="${point.date}"/>`;
+                const y = yScale(point.score);
+                return `<circle class="tracked-chart-dot${inverseClass}" cx="${x}" cy="${y}" r="4" data-index="${i}" data-score="${point.score}" data-date="${point.date}"/>`;
             }).join('');
 
-            // Y-axis grid lines
-            const gridValues = [Math.round(yAxisMax * 0.25), Math.round(yAxisMax * 0.5), Math.round(yAxisMax * 0.75)];
-            const gridLines = gridValues.map(val => {
+            // Y-axis grid lines (at 25, 50, 75 like health score)
+            const gridLines = [25, 50, 75].map(val => {
                 const y = yScale(val);
                 return `<line class="health-chart-grid-line" x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}"/>`;
             }).join('');
 
-            // Y-axis labels
-            const yLabels = [0, Math.round(yAxisMax / 2), yAxisMax].map(val => {
+            // Y-axis labels (0, 50, 100 like health score)
+            const yLabels = [0, 50, 100].map(val => {
                 const y = yScale(val);
                 return `<text x="${padding.left - 5}" y="${y + 3}" font-size="11" fill="var(--text-primary)" text-anchor="end">${val}</text>`;
             }).join('');
@@ -7318,14 +7300,14 @@
 
             dots.forEach(dot => {
                 dot.addEventListener('mouseenter', (e) => {
-                    const count = dot.dataset.count;
+                    const score = dot.dataset.score;
                     const dateStr = dot.dataset.date;
                     const d = new Date(dateStr);
                     const formattedDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
                     tooltip.innerHTML = `
                         <div class="health-chart-tooltip-date">${formattedDate}</div>
-                        <div class="health-chart-tooltip-score">Interactions: ${count}</div>
+                        <div class="health-chart-tooltip-score">Score: ${score}</div>
                     `;
 
                     const rect = dot.getBoundingClientRect();
