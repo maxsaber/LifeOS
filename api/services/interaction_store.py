@@ -404,7 +404,8 @@ class InteractionStore:
                 # Use days_back cutoff
                 if days_back is None:
                     days_back = InteractionConfig.DEFAULT_WINDOW_DAYS
-                cutoff = datetime.now() - timedelta(days=days_back)
+                now = datetime.now(timezone.utc)
+                cutoff = now - timedelta(days=days_back)
 
                 if source_types:
                     # Use IN clause for multiple source types
@@ -412,22 +413,22 @@ class InteractionStore:
                     cursor = conn.execute(
                         f"""
                         SELECT * FROM interactions
-                        WHERE person_id = ? AND timestamp > ?
+                        WHERE person_id = ? AND timestamp > ? AND timestamp <= ?
                             AND source_type IN ({placeholders})
                         ORDER BY timestamp DESC
                         LIMIT ?
                         """,
-                        (person_id, cutoff.isoformat(), *source_types, limit),
+                        (person_id, cutoff.isoformat(), now.isoformat(), *source_types, limit),
                     )
                 else:
                     cursor = conn.execute(
                         """
                         SELECT * FROM interactions
-                        WHERE person_id = ? AND timestamp > ?
+                        WHERE person_id = ? AND timestamp > ? AND timestamp <= ?
                         ORDER BY timestamp DESC
                         LIMIT ?
                         """,
-                        (person_id, cutoff.isoformat(), limit),
+                        (person_id, cutoff.isoformat(), now.isoformat(), limit),
                     )
 
             return [Interaction.from_row(row) for row in cursor.fetchall()]
