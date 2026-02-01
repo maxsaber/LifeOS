@@ -462,17 +462,17 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
         primary = store.get_by_id(canonical_primary_id)
 
     # 8. Recalculate relationship strength for primary
+    # (also updates is_peripheral_contact; dunbar_circle requires full recalc)
     logger.info("\n8. Recalculating relationship strength...")
     if not dry_run:
-        from api.services.relationship_metrics import compute_strength_for_person
-        new_strength = compute_strength_for_person(primary)
-        if new_strength != primary.relationship_strength:
-            logger.info(f"   Strength: {primary.relationship_strength} -> {new_strength}")
-            primary.relationship_strength = new_strength
-            store.update(primary)
-            store.save()
+        from api.services.relationship_metrics import update_strength_for_person
+        old_strength = primary.relationship_strength
+        new_strength = update_strength_for_person(canonical_primary_id)
+        if new_strength != old_strength:
+            logger.info(f"   Strength: {old_strength} -> {new_strength}")
         else:
             logger.info(f"   Strength unchanged: {new_strength}")
+        store.save()
 
     # Summary
     logger.info(f"\n=== Merge Summary ===")

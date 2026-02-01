@@ -453,7 +453,8 @@ class InteractionStore:
                 # Use days_back cutoff
                 if days_back is None:
                     days_back = InteractionConfig.DEFAULT_WINDOW_DAYS
-                cutoff = datetime.now() - timedelta(days=days_back)
+                now = datetime.now(timezone.utc)
+                cutoff = now - timedelta(days=days_back)
 
                 if source_types:
                     # Use IN clause for multiple source types
@@ -461,22 +462,22 @@ class InteractionStore:
                     cursor = conn.execute(
                         f"""
                         SELECT * FROM interactions
-                        WHERE person_id = ? AND timestamp > ?
+                        WHERE person_id = ? AND timestamp > ? AND timestamp <= ?
                             AND source_type IN ({placeholders})
                         ORDER BY timestamp DESC
                         LIMIT ?
                         """,
-                        (person_id, cutoff.isoformat(), *source_types, limit),
+                        (person_id, cutoff.isoformat(), now.isoformat(), *source_types, limit),
                     )
                 else:
                     cursor = conn.execute(
                         """
                         SELECT * FROM interactions
-                        WHERE person_id = ? AND timestamp > ?
+                        WHERE person_id = ? AND timestamp > ? AND timestamp <= ?
                         ORDER BY timestamp DESC
                         LIMIT ?
                         """,
-                        (person_id, cutoff.isoformat(), limit),
+                        (person_id, cutoff.isoformat(), now.isoformat(), limit),
                     )
 
             return [Interaction.from_row(row) for row in cursor.fetchall()]
@@ -554,17 +555,18 @@ class InteractionStore:
             conn.close()
 
     def get_last_interaction(self, person_id: str) -> Optional[Interaction]:
-        """Get the most recent interaction with a person."""
+        """Get the most recent interaction with a person (excludes future dates)."""
         conn = self._get_connection()
         try:
+            now = datetime.now(timezone.utc).isoformat()
             cursor = conn.execute(
                 """
                 SELECT * FROM interactions
-                WHERE person_id = ?
+                WHERE person_id = ? AND timestamp <= ?
                 ORDER BY timestamp DESC
                 LIMIT 1
             """,
-                (person_id,),
+                (person_id, now),
             )
             row = cursor.fetchone()
             if row:
@@ -587,17 +589,19 @@ class InteractionStore:
             Dict mapping source_type to last interaction timestamp.
             e.g., {"gmail": datetime(...), "imessage": datetime(...)}
             Only includes source types with at least one interaction.
+            Excludes future dates (e.g., from future calendar events).
         """
         conn = self._get_connection()
         try:
+            now = datetime.now(timezone.utc).isoformat()
             cursor = conn.execute(
                 """
                 SELECT source_type, MAX(timestamp) as last_ts
                 FROM interactions
-                WHERE person_id = ?
+                WHERE person_id = ? AND timestamp <= ?
                 GROUP BY source_type
                 """,
-                (person_id,),
+                (person_id, now),
             )
             result = {}
             for row in cursor.fetchall():

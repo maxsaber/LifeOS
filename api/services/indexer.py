@@ -2,10 +2,12 @@
 Indexer service for LifeOS.
 
 Watches the Obsidian vault for file changes and indexes content to ChromaDB.
+Supports incremental indexing based on file modification times.
 """
 import os
 import re
 import time
+import json
 import threading
 import logging
 from pathlib import Path
@@ -97,7 +99,11 @@ class IndexerService:
     Main indexer service.
 
     Handles indexing of Obsidian vault files to ChromaDB.
+    Supports incremental indexing based on file modification times.
     """
+
+    # State file for tracking indexed files
+    INDEX_STATE_FILE = "data/vault_index_state.json"
 
     def __init__(
         self,
@@ -124,29 +130,107 @@ class IndexerService:
         self._observer: Observer | None = None
         self._watching = False
 
-    def index_all(self) -> int:
+    def _load_index_state(self) -> dict:
+        """Load the index state (file paths -> last indexed mtime)."""
+        state_path = Path(self.INDEX_STATE_FILE)
+        if state_path.exists():
+            try:
+                return json.loads(state_path.read_text())
+            except Exception as e:
+                logger.warning(f"Failed to load index state: {e}")
+        return {}
+
+    def _save_index_state(self, state: dict) -> None:
+        """Save the index state."""
+        state_path = Path(self.INDEX_STATE_FILE)
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        state_path.write_text(json.dumps(state, indent=2))
+
+    def index_all(self, force: bool = False) -> int:
         """
-        Index all markdown files in the vault.
+        Index markdown files in the vault.
+
+        Uses incremental indexing by default - only indexes files that have
+        changed since the last index run. Use force=True to reindex everything.
+
+        Progress is saved incrementally every 50 files, so crashes don't lose work.
+
+        Args:
+            force: If True, reindex all files regardless of modification time
 
         Returns:
             Number of files indexed
         """
+        # Always load existing state - even in force mode, we track progress
+        # so we can resume if interrupted
+        index_state = self._load_index_state()
+
+        # Get all current markdown files with their mtimes
+        all_md_files = list(self.vault_path.rglob("*.md"))
+        current_files = {str(f): f.stat().st_mtime for f in all_md_files}
+
+        # Determine which files need indexing
+        files_to_index = []
+        for file_path, mtime in current_files.items():
+            prev_mtime = index_state.get(file_path)
+            if force:
+                # In force mode, reindex if not yet indexed in this run
+                # (allows resuming a force reindex after crash)
+                if prev_mtime is None or prev_mtime < mtime:
+                    files_to_index.append((file_path, mtime))
+            else:
+                # Normal incremental: only if file changed since last index
+                if prev_mtime is None or mtime > prev_mtime:
+                    files_to_index.append((file_path, mtime))
+
+        # Determine deleted files (in old state but not in current files)
+        deleted_files = set(index_state.keys()) - set(current_files.keys())
+
+        if force:
+            already_done = len(all_md_files) - len(files_to_index)
+            if already_done > 0:
+                logger.info(f"RESUMING FULL REINDEX: {len(files_to_index)} remaining, {already_done} already indexed")
+            else:
+                logger.info(f"FULL REINDEX: {len(all_md_files)} files")
+        else:
+            logger.info(f"Incremental index: {len(files_to_index)} changed, {len(deleted_files)} deleted, {len(all_md_files) - len(files_to_index)} unchanged")
+
+        # Delete removed files from index
+        for file_path in deleted_files:
+            try:
+                self.delete_file(file_path)
+                # Remove from state
+                index_state.pop(file_path, None)
+                logger.info(f"Removed deleted file from index: {file_path}")
+            except Exception as e:
+                logger.error(f"Failed to remove {file_path} from index: {e}")
+
+        # Index changed files, saving progress incrementally
         count = 0
         all_affected_person_ids: set[str] = set()
+        save_interval = 50  # Save state every N files
 
-        for md_file in self.vault_path.rglob("*.md"):
+        for file_path, mtime in files_to_index:
             try:
-                # Collect affected person IDs instead of refreshing per-file
-                affected_ids = self.index_file(str(md_file), skip_stats_refresh=True)
+                affected_ids = self.index_file(file_path, skip_stats_refresh=True)
                 if affected_ids:
                     all_affected_person_ids.update(affected_ids)
-                count += 1
-                if count % 500 == 0:
-                    logger.info(f"  Indexed {count} files...")
-            except Exception as e:
-                logger.error(f"Failed to index {md_file}: {e}")
 
-        logger.info(f"Indexed {count} files")
+                # Update state for this file
+                index_state[file_path] = mtime
+                count += 1
+
+                # Save progress periodically
+                if count % save_interval == 0:
+                    self._save_index_state(index_state)
+                    logger.info(f"  Indexed {count}/{len(files_to_index)} files (progress saved)...")
+
+            except Exception as e:
+                logger.error(f"Failed to index {file_path}: {e}")
+
+        # Final save
+        self._save_index_state(index_state)
+        logger.info(f"Indexed {count} files (final save)")
 
         # Batch refresh all affected person stats ONCE at the end
         if all_affected_person_ids:

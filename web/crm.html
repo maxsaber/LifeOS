@@ -260,6 +260,93 @@
             color: white;
         }
 
+        .people-filter-dropdown {
+            position: relative;
+        }
+
+        .people-filter-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+            padding: 0.375rem 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            color: var(--text-primary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .people-filter-btn:hover {
+            background: var(--bg-primary);
+            border-color: var(--people);
+        }
+
+        .people-filter-options {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 4px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.5rem;
+            min-width: 160px;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+
+        .people-filter-options.show {
+            display: block;
+        }
+
+        .people-filter-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.375rem 0.5rem;
+            cursor: pointer;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            white-space: nowrap;
+        }
+
+        .people-filter-option:hover {
+            background: var(--bg-primary);
+        }
+
+        .people-filter-option input {
+            margin: 0;
+        }
+
+        .people-filter-toggles {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.25rem 0.5rem 0.5rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 0.25rem;
+        }
+
+        .filter-toggle-btn {
+            flex: 1;
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            color: var(--text-secondary);
+            font-size: 0.7rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .filter-toggle-btn:hover {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border-color: var(--people);
+        }
+
         .people-list {
             flex: 1;
             overflow-y: auto;
@@ -834,7 +921,20 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            min-height: 0; /* Allow flex child to scroll */
             background: var(--bg-primary);
+        }
+
+        #detailContent {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-height: 0; /* Allow flex child to scroll */
+        }
+
+        #detailContent[style*="display: flex"] {
+            flex-direction: column;
         }
 
         .detail-empty {
@@ -1528,7 +1628,7 @@
         .heatmap-title {
             font-size: 0.875rem;
             font-weight: 600;
-            color: var(--text-primary);
+            color: #ffffff;
         }
 
         .heatmap-legend {
@@ -1536,7 +1636,7 @@
             align-items: center;
             gap: 0.25rem;
             font-size: 0.625rem;
-            color: var(--text-muted);
+            color: #ffffff;
         }
 
         .heatmap-years-select {
@@ -1683,6 +1783,59 @@
             border-top: 1px solid var(--border);
             font-weight: 600;
             color: var(--people);
+        }
+
+        /* Volume Chart Styles */
+        .volume-chart-container {
+            margin-top: 1.5rem;
+            padding: 0.75rem 0;
+            background: var(--bg-secondary);
+            border-radius: 0.5rem;
+        }
+
+        .volume-chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+            padding: 0 0.5rem;
+        }
+
+        .volume-chart-title {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #ffffff;
+        }
+
+        /* Chart Loading States */
+        .chart-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            min-height: 80px;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .chart-loading-spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border);
+            border-top-color: var(--people);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .volume-chart-canvas {
+            width: 100%;
+            height: 120px;
+            display: block;
         }
 
         .info-grid {
@@ -3628,6 +3781,674 @@
             display: block;
         }
 
+        /* Family Dashboard */
+        .family-dashboard {
+            display: none;
+        }
+
+        .family-dashboard.visible {
+            display: block;
+            padding-bottom: 2rem;
+        }
+
+        /* Ensure scrolling works when family dashboard is visible */
+        .detail-content:has(.family-dashboard.visible) {
+            overflow-y: auto;
+            min-height: 0;
+        }
+
+        .family-member-selector-row {
+            margin-bottom: 1.5rem;
+        }
+
+        .family-member-selector {
+            position: relative;
+        }
+
+        .family-selector-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            cursor: pointer;
+            min-width: 200px;
+            justify-content: space-between;
+        }
+
+        .family-selector-btn:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .family-selector-arrow {
+            font-size: 0.625rem;
+            color: var(--text-muted);
+        }
+
+        .family-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            margin-top: 0.25rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 0.5rem;
+            min-width: 280px;
+            max-height: 400px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            z-index: 100;
+        }
+
+        .family-dropdown-actions {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .family-action-btn {
+            flex: 1;
+            padding: 0.375rem 0.5rem;
+            font-size: 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 0.25rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .family-action-btn:hover {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .family-dropdown-list {
+            max-height: 320px;
+            overflow-y: auto;
+            padding: 0.5rem;
+        }
+
+        .family-member-option {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            cursor: pointer;
+        }
+
+        .family-member-option:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .family-member-option input[type="checkbox"] {
+            width: 1rem;
+            height: 1rem;
+            accent-color: var(--people);
+        }
+
+        .family-member-name {
+            flex: 1;
+            font-size: 0.875rem;
+            color: var(--text-primary);
+        }
+
+        .family-member-strength {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* ================================================
+           FAMILY INSIGHTS VISUALIZATIONS
+           ================================================ */
+
+        .family-insights-section {
+            margin-top: 2rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+        }
+
+        .family-insights-title {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1.25rem;
+            letter-spacing: -0.01em;
+        }
+
+        .family-insights-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .family-insights-row:has(.full-width) {
+            grid-template-columns: 1fr;
+        }
+
+        .family-insight-card {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(22, 33, 62, 0.8) 100%);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.25rem;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .family-insight-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--accent) 0%, var(--people) 100%);
+            opacity: 0.6;
+        }
+
+        .family-insight-card.full-width {
+            grid-column: 1 / -1;
+        }
+
+        /* Allow tooltips to overflow on channel mix card */
+        .family-insight-card.channel-mix-card {
+            overflow: visible;
+        }
+
+        .insight-card-header {
+            margin-bottom: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 0.5rem;
+        }
+
+        .insight-card-title {
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-right: auto;
+        }
+
+        .insight-card-subtitle {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            width: 100%;
+            order: 3;
+        }
+
+        .insight-period-select {
+            font-size: 0.7rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            cursor: pointer;
+            order: 2;
+        }
+
+        .insight-period-select:hover {
+            border-color: var(--accent);
+        }
+
+        .insight-period-select:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(0, 188, 212, 0.2);
+            font-weight: 400;
+        }
+
+        .insight-loading {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        /* Days Since Contact Card */
+        .days-since-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .days-since-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.625rem 0.75rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .days-since-item:hover {
+            transform: translateX(4px);
+            box-shadow: -2px 0 0 var(--accent);
+        }
+
+        .days-since-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-tertiary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .days-since-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .days-since-name {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .days-since-expected {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        .days-since-badge {
+            padding: 0.25rem 0.625rem;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            min-width: 50px;
+            text-align: center;
+        }
+
+        .days-since-badge.on-track {
+            background: rgba(76, 175, 80, 0.2);
+            color: #81c784;
+            border: 1px solid rgba(76, 175, 80, 0.3);
+        }
+
+        .days-since-badge.warning {
+            background: rgba(255, 152, 0, 0.2);
+            color: #ffb74d;
+            border: 1px solid rgba(255, 152, 0, 0.3);
+        }
+
+        .days-since-badge.overdue {
+            background: rgba(233, 69, 96, 0.2);
+            color: #e57373;
+            border: 1px solid rgba(233, 69, 96, 0.3);
+        }
+
+        .days-since-badge.recent {
+            background: rgba(0, 188, 212, 0.2);
+            color: #4dd0e1;
+            border: 1px solid rgba(0, 188, 212, 0.3);
+        }
+
+        /* Streak Tracker Card */
+        .streak-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+
+        .streak-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.625rem 0.75rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .streak-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--bg-tertiary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.875rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .streak-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .streak-name {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .streak-visual {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            margin-top: 0.25rem;
+        }
+
+        .streak-flame {
+            font-size: 0.75rem;
+        }
+
+        .streak-days {
+            display: flex;
+            gap: 2px;
+        }
+
+        .streak-day {
+            width: 8px;
+            height: 8px;
+            border-radius: 2px;
+            background: var(--bg-primary);
+        }
+
+        .streak-day.active {
+            background: linear-gradient(135deg, #ff6b6b 0%, #e94560 100%);
+            box-shadow: 0 0 4px rgba(233, 69, 96, 0.4);
+        }
+
+        .streak-count {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            min-width: 40px;
+            text-align: right;
+        }
+
+        .streak-count.hot {
+            color: #ff6b6b;
+            text-shadow: 0 0 8px rgba(255, 107, 107, 0.4);
+        }
+
+        .streak-count.warm {
+            color: #ffb74d;
+        }
+
+        .streak-count.cold {
+            color: var(--text-muted);
+        }
+
+        /* Channel Mix Card */
+        .channel-mix-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .channel-mix-item {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .channel-mix-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .channel-mix-name {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .channel-mix-total {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .channel-mix-bar {
+            display: flex;
+            height: 28px;
+            border-radius: 6px;
+            /* overflow: hidden removed to allow tooltips to appear above */
+            background: var(--bg-primary);
+        }
+
+        .channel-segment {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 0;
+            transition: all 0.2s ease;
+            cursor: default;
+            position: relative;
+        }
+
+        .channel-segment:hover {
+            filter: brightness(1.15);
+        }
+
+        .channel-segment-tooltip {
+            position: absolute;
+            bottom: calc(100% + 8px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.1s ease;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            color: var(--text-primary);
+        }
+
+        .channel-segment:hover .channel-segment-tooltip {
+            opacity: 1;
+        }
+
+        .channel-segment-label {
+            font-size: 0.65rem;
+            color: white;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 0 0.375rem;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Channel colors - vibrant, distinctive palette */
+        .channel-imessage { background: linear-gradient(135deg, #34c759 0%, #30d158 100%); }
+        .channel-whatsapp { background: linear-gradient(135deg, #25d366 0%, #128c7e 100%); }
+        .channel-gmail { background: linear-gradient(135deg, #ea4335 0%, #c5221f 100%); }
+        .channel-calendar { background: linear-gradient(135deg, #5856d6 0%, #7c3aed 100%); }
+        .channel-phone { background: linear-gradient(135deg, #ff9500 0%, #ff6b00 100%); }
+        .channel-slack { background: linear-gradient(135deg, #e01e5a 0%, #d91a52 100%); }
+        .channel-vault { background: linear-gradient(135deg, #00bcd4 0%, #0097a7 100%); }
+        .channel-granola { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
+        .channel-linkedin { background: linear-gradient(135deg, #0077b5 0%, #005582 100%); }
+        .channel-other { background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); }
+
+        /* Channel Mix Legend */
+        .channel-legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-top: 0.5rem;
+            padding-top: 0.75rem;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .channel-legend-item {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .channel-legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 3px;
+        }
+
+        /* Communication Gaps Card */
+        .gaps-timeline-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .gaps-person-section {
+            padding: 0.75rem;
+            background: rgba(0, 0, 0, 0.15);
+            border-radius: 8px;
+        }
+
+        .gaps-person-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.75rem;
+        }
+
+        .gaps-person-name {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .gaps-person-stats {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+        }
+
+        .gaps-timeline {
+            position: relative;
+            height: 32px;
+            background: var(--bg-primary);
+            border-radius: 4px;
+            /* overflow: hidden removed to allow tooltips to appear above */
+        }
+
+        .gaps-bar-fill {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: rgba(0, 188, 212, 0.3);
+        }
+
+        .gap-marker {
+            position: absolute;
+            top: 0;
+            bottom: 0;
+            background: linear-gradient(180deg, rgba(233, 69, 96, 0.6) 0%, rgba(233, 69, 96, 0.3) 100%);
+            border-left: 2px solid var(--accent);
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .gap-marker:hover {
+            background: linear-gradient(180deg, rgba(233, 69, 96, 0.8) 0%, rgba(233, 69, 96, 0.5) 100%);
+        }
+
+        .gap-marker-tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 0.5rem 0.75rem;
+            font-size: 0.7rem;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            z-index: 10;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .gap-marker:hover .gap-marker-tooltip {
+            opacity: 1;
+        }
+
+        .gaps-timeline-labels {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.25rem;
+            font-size: 0.6rem;
+            color: var(--text-muted);
+        }
+
+        .gaps-summary {
+            display: flex;
+            gap: 1.5rem;
+            padding: 0.75rem 1rem;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            margin-top: 0.5rem;
+        }
+
+        .gaps-summary-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .gaps-summary-value {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .gaps-summary-label {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* No data state */
+        .insight-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            text-align: center;
+        }
+
+        .insight-empty-icon {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.5;
+        }
+
         .me-widget {
             background: var(--bg-secondary);
             border-radius: 8px;
@@ -3810,6 +4631,29 @@
             min-height: 200px;
         }
 
+        /* Family dashboard panels - equal height */
+        .family-dashboard .me-widgets-row {
+            align-items: stretch;
+        }
+
+        .family-dashboard .me-health-panel,
+        .family-dashboard .family-trends-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .family-dashboard .family-trends-panel #familyRelationshipTrends {
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        /* Taller chart for family health panel */
+        .family-dashboard .health-chart-container {
+            height: 200px;
+            flex: 1;
+        }
+
         .health-current-score {
             font-size: 1.25rem;
             font-weight: 600;
@@ -3962,12 +4806,23 @@
         }
 
         .health-chart-dot {
-            fill: var(--people);
             cursor: pointer;
             transition: r 0.1s ease-out;
+            /* fill set via inline style based on score */
         }
 
         .health-chart-dot:hover {
+            r: 6;
+            filter: brightness(1.2);
+        }
+
+        .tracked-chart-dot {
+            cursor: pointer;
+            transition: r 0.1s ease-out;
+            /* fill set via inline style based on score */
+        }
+
+        .tracked-chart-dot:hover {
             r: 6;
             filter: brightness(1.2);
         }
@@ -3987,6 +4842,95 @@
             stroke: var(--border-color);
             stroke-width: 1;
             stroke-dasharray: 2, 2;
+        }
+
+        /* Tracked Relationships Widget */
+        .me-tracked-panel {
+            min-height: 200px;
+            flex: 1;
+        }
+
+        .tracked-current-count {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--people);
+        }
+
+        .tracked-current-count.tracked-inverse {
+            color: var(--people);
+        }
+
+        .tracked-current-count.healthy {
+            color: #22c55e;
+        }
+
+        .tracked-current-count.warning {
+            color: #eab308;
+        }
+
+        .tracked-current-count.unhealthy {
+            color: #ef4444;
+        }
+
+        .tracked-people-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.375rem;
+            padding: 0.375rem 0.5rem;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .tracked-person-chip {
+            padding: 0.15rem 0.4rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .tracked-person-chip:hover {
+            border-color: var(--people);
+            color: var(--people);
+        }
+
+        /* Tracked chart colors (green for healthy direction) */
+        .tracked-chart-line {
+            fill: none;
+            stroke: var(--people);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .tracked-chart-line.inverse {
+            stroke: #22c55e;  /* Green - fewer is better */
+        }
+
+        .tracked-chart-area {
+            fill: var(--people);
+            opacity: 0.1;
+        }
+
+        .tracked-chart-area.inverse {
+            fill: #22c55e;
+            opacity: 0.1;
+        }
+
+        .tracked-chart-dot {
+            fill: var(--people);
+            cursor: pointer;
+            transition: r 0.1s ease-out;
+        }
+
+        .tracked-chart-dot.inverse {
+            fill: #22c55e;
+        }
+
+        .tracked-chart-dot:hover {
+            r: 6;
+            filter: brightness(1.2);
         }
 
         /* Neglected Contacts Widget */
@@ -4539,6 +5483,7 @@
             </nav>
         </div>
         <div class="header-right">
+            <a href="/family" class="nav-link me-link">👨‍👩‍👧 Family</a>
             <a href="/me" class="nav-link me-link">👤 Me</a>
             <div class="stats-display">
                 <div class="stat-item">
@@ -4558,10 +5503,74 @@
                 </div>
             </div>
             <div class="filters">
-                <div class="filter-chip active" data-filter="all" onclick="setFilter('all')">All</div>
-                <div class="filter-chip" data-filter="work" onclick="setFilter('work')">Work</div>
-                <div class="filter-chip" data-filter="personal" onclick="setFilter('personal')">Personal</div>
-                <div class="filter-chip" data-filter="family" onclick="setFilter('family')">Family</div>
+                <div class="people-filter-dropdown" id="peopleCategoryDropdown">
+                    <button class="people-filter-btn" onclick="togglePeopleCategoryFilter()">
+                        <span id="peopleCategoryLabel">All Categories</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                    <div class="people-filter-options" id="peopleCategoryOptions">
+                        <div class="people-filter-toggles">
+                            <button class="filter-toggle-btn" onclick="selectAllCategories()">All</button>
+                            <button class="filter-toggle-btn" onclick="selectNoCategories()">None</button>
+                        </div>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="self" checked onchange="updatePeopleCategoryFilter()">
+                            <span class="category-dot" style="background: #ffffff; border: 1px solid #666;"></span> Self
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="family" checked onchange="updatePeopleCategoryFilter()">
+                            <span class="category-dot" style="background: #daa520;"></span> Family
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="personal" checked onchange="updatePeopleCategoryFilter()">
+                            <span class="category-dot" style="background: #00bcd4;"></span> Personal
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="work" checked onchange="updatePeopleCategoryFilter()">
+                            <span class="category-dot" style="background: #4f46e5;"></span> Work
+                        </label>
+                    </div>
+                </div>
+                <div class="people-filter-dropdown" id="peopleDunbarDropdown">
+                    <button class="people-filter-btn" onclick="togglePeopleDunbarFilter()">
+                        <span id="peopleDunbarLabel">All Circles</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                    <div class="people-filter-options" id="peopleDunbarOptions">
+                        <div class="people-filter-toggles">
+                            <button class="filter-toggle-btn" onclick="selectAllDunbar()">All</button>
+                            <button class="filter-toggle-btn" onclick="selectNoDunbar()">None</button>
+                        </div>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="0" checked onchange="updatePeopleDunbarFilter()">
+                            <span class="category-dot" style="background: #e94560;"></span> 0: Intimate
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="1" checked onchange="updatePeopleDunbarFilter()">
+                            <span class="category-dot" style="background: #ff6b6b;"></span> 1: Close
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="2" checked onchange="updatePeopleDunbarFilter()">
+                            <span class="category-dot" style="background: #ffa502;"></span> 2: Good Friends
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="3" checked onchange="updatePeopleDunbarFilter()">
+                            <span class="category-dot" style="background: #2ed573;"></span> 3: Friends
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="4" checked onchange="updatePeopleDunbarFilter()">
+                            <span class="category-dot" style="background: #1e90ff;"></span> 4: Acquaintances
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="5" checked onchange="updatePeopleDunbarFilter()">
+                            <span class="category-dot" style="background: #5352ed;"></span> 5: Known
+                        </label>
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="6+" checked onchange="updatePeopleDunbarFilter()">
+                            <span class="category-dot" style="background: #747d8c;"></span> 6+: Contacts
+                        </label>
+                    </div>
+                </div>
             </div>
             <div class="merge-toolbar" id="mergeToolbar">
                 <div class="merge-toolbar-info">
@@ -4682,6 +5691,30 @@
                             </div>
                         </div>
 
+                        <!-- Family Hero Stats (shown only for /family route, positioned before heatmap) -->
+                        <div class="hero-stats" id="familyHeroStats" style="display: none;">
+                            <div class="hero-stat hero-stat-clickable" onclick="navigateToTimelineFiltered('gmail')">
+                                <span class="hero-stat-icon">📧</span>
+                                <span class="hero-stat-value" id="familyStatEmails">0</span>
+                                <span class="hero-stat-label">emails</span>
+                            </div>
+                            <div class="hero-stat hero-stat-clickable" onclick="navigateToTimelineFiltered('messages')">
+                                <span class="hero-stat-icon">💬</span>
+                                <span class="hero-stat-value" id="familyStatMessages">0</span>
+                                <span class="hero-stat-label">messages</span>
+                            </div>
+                            <div class="hero-stat hero-stat-clickable" onclick="navigateToTimelineFiltered('phone')">
+                                <span class="hero-stat-icon">📞</span>
+                                <span class="hero-stat-value" id="familyStatPhone">0</span>
+                                <span class="hero-stat-label">calls</span>
+                            </div>
+                            <div class="hero-stat hero-stat-clickable" onclick="navigateToTimelineFiltered('calendar')">
+                                <span class="hero-stat-icon">📅</span>
+                                <span class="hero-stat-value" id="familyStatCalendar">0</span>
+                                <span class="hero-stat-label">events</span>
+                            </div>
+                        </div>
+
                         <!-- Heat map calendar -->
                         <div class="heatmap-container">
                             <div class="heatmap-header">
@@ -4726,6 +5759,13 @@
                                     </div>
                                 </div>
                             </div>
+                            <!-- Volume Line Chart -->
+                            <div class="volume-chart-container">
+                                <div class="volume-chart-header">
+                                    <div class="volume-chart-title">Interaction Volume Over Time</div>
+                                </div>
+                                <canvas id="volumeChartCanvas" class="volume-chart-canvas"></canvas>
+                            </div>
                         </div>
                         <div class="heatmap-tooltip" id="heatmapTooltip"></div>
 
@@ -4741,7 +5781,7 @@
                                             <span class="health-info-icon">i
                                                 <div class="health-info-tooltip">
                                                     <strong>How Relationship Health is calculated</strong>
-                                                    Measures how actively you're maintaining your relationships. Based on contact frequency with your inner circles (0-2), weighted by Dunbar number. Higher scores mean you're keeping up with close contacts. A score of 80+ is excellent.
+                                                    Tracks interaction frequency with your top 25 family/personal contacts. Score is relative to your average: 50 = average, 100 = 2× average. Includes messages, calls, meetings, and emails with close contacts.
                                                 </div>
                                             </span>
                                         </span>
@@ -4761,6 +5801,55 @@
                                         <span class="overview-panel-title">Need Attention</span>
                                     </div>
                                     <div class="neglected-list" id="neglectedContactsList"></div>
+                                </div>
+                            </div>
+
+                            <!-- Tracked Relationships Row -->
+                            <div class="me-widgets-row">
+                                <!-- Parent Relationship (more = healthier) -->
+                                <div class="overview-panel me-tracked-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">
+                                            Parent Relationship
+                                            <span class="health-info-icon">i
+                                                <div class="health-info-tooltip">
+                                                    <strong>Parent Relationship</strong>
+                                                    Tracks interactions with your parents. More frequent contact indicates a healthier relationship.
+                                                </div>
+                                            </span>
+                                        </span>
+                                        <span class="tracked-current-count" id="parentCurrentCount">--</span>
+                                    </div>
+                                    <div class="health-period-selector tracked-period-selector" id="parentPeriodSelector">
+                                        <button class="health-period-pill" data-period="month" onclick="changeTrackedPeriod('parent', 'month')">Month</button>
+                                        <button class="health-period-pill active" data-period="quarter" onclick="changeTrackedPeriod('parent', 'quarter')">Quarter</button>
+                                        <button class="health-period-pill" data-period="year" onclick="changeTrackedPeriod('parent', 'year')">Year</button>
+                                    </div>
+                                    <div class="health-chart-container" id="parentChartContainer"></div>
+                                    <div class="tracked-people-list" id="parentPeopleList"></div>
+                                </div>
+
+                                <!-- Parallel Parenting (less = healthier) -->
+                                <div class="overview-panel me-tracked-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">
+                                            Parallel Parenting
+                                            <span class="health-info-icon">i
+                                                <div class="health-info-tooltip">
+                                                    <strong>Parallel Parenting</strong>
+                                                    Tracks interactions with co-parent. Fewer interactions indicate healthier boundaries.
+                                                </div>
+                                            </span>
+                                        </span>
+                                        <span class="tracked-current-count tracked-inverse" id="coparentCurrentCount">--</span>
+                                    </div>
+                                    <div class="health-period-selector tracked-period-selector" id="coparentPeriodSelector">
+                                        <button class="health-period-pill" data-period="month" onclick="changeTrackedPeriod('coparent', 'month')">Month</button>
+                                        <button class="health-period-pill active" data-period="quarter" onclick="changeTrackedPeriod('coparent', 'quarter')">Quarter</button>
+                                        <button class="health-period-pill" data-period="year" onclick="changeTrackedPeriod('coparent', 'year')">Year</button>
+                                    </div>
+                                    <div class="health-chart-container" id="coparentChartContainer"></div>
+                                    <div class="tracked-people-list" id="coparentPeopleList"></div>
                                 </div>
                             </div>
 
@@ -4813,6 +5902,133 @@
                                         <div class="trends-section" id="trendsCooling">
                                             <div class="trends-title">❄️ Cooling</div>
                                             <div id="trendsCoolingList"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Family Dashboard (shown only for /family route) -->
+                        <div class="family-dashboard" id="familyDashboard" style="display: none;">
+                            <!-- Family Stats Row -->
+                            <div class="me-widgets-row">
+                                <!-- Family Health Score -->
+                                <div class="overview-panel me-health-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">
+                                            Family Contact Health
+                                            <span class="health-info-icon">i
+                                                <div class="health-info-tooltip">
+                                                    <strong>Family Contact Health</strong>
+                                                    Tracks interaction frequency with selected family members. Score is relative to your average: 50 = average, 100 = 2× average.
+                                                </div>
+                                            </span>
+                                        </span>
+                                        <span class="health-current-score" id="familyHealthCurrentScore">--</span>
+                                    </div>
+                                    <div class="health-period-selector">
+                                        <button class="health-period-pill" data-period="month" onclick="changeFamilyHealthPeriod('month')">Month</button>
+                                        <button class="health-period-pill active" data-period="quarter" onclick="changeFamilyHealthPeriod('quarter')">Quarter</button>
+                                        <button class="health-period-pill" data-period="year" onclick="changeFamilyHealthPeriod('year')">Year</button>
+                                    </div>
+                                    <div class="health-chart-container" id="familyHealthChartContainer"></div>
+                                </div>
+
+                                <!-- Relationship Trends (replaces Top Contacts) -->
+                                <div class="overview-panel family-trends-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">Relationship Trends</span>
+                                    </div>
+                                    <div class="trends-period-selector" id="familyTrendsPeriodSelector">
+                                        <button class="trends-period-pill" data-period="week" onclick="changeFamilyTrendPeriod('week')">Week</button>
+                                        <button class="trends-period-pill" data-period="month" onclick="changeFamilyTrendPeriod('month')">Month</button>
+                                        <button class="trends-period-pill active" data-period="quarter" onclick="changeFamilyTrendPeriod('quarter')">Quarter</button>
+                                        <button class="trends-period-pill" data-period="year" onclick="changeFamilyTrendPeriod('year')">Year</button>
+                                    </div>
+                                    <div id="familyRelationshipTrends">
+                                        <div class="trends-section" id="familyTrendsWarming">
+                                            <div class="trends-title">🔥 Warming</div>
+                                            <div id="familyTrendsWarmingList"></div>
+                                        </div>
+                                        <div class="trends-section" id="familyTrendsCooling">
+                                            <div class="trends-title">❄️ Cooling</div>
+                                            <div id="familyTrendsCoolingList"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- NEW: Family Insights Visualizations -->
+                            <div class="family-insights-section">
+                                <h3 class="family-insights-title">Family Insights</h3>
+
+                                <!-- Row 1: Days Since Contact + Streak Tracker -->
+                                <div class="family-insights-row">
+                                    <!-- Days Since Last Contact -->
+                                    <div class="family-insight-card days-since-card">
+                                        <div class="insight-card-header">
+                                            <span class="insight-card-title">Days Since Contact</span>
+                                            <span class="insight-card-subtitle">Based on Dunbar circle expectations</span>
+                                        </div>
+                                        <div class="days-since-grid" id="daysSinceGrid">
+                                            <div class="insight-loading">Loading...</div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Streak Tracker -->
+                                    <div class="family-insight-card streak-card">
+                                        <div class="insight-card-header">
+                                            <span class="insight-card-title">Contact Streaks</span>
+                                            <span class="insight-card-subtitle">Consecutive weeks in touch</span>
+                                        </div>
+                                        <div class="streak-grid" id="streakGrid">
+                                            <div class="insight-loading">Loading...</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Row 2: Channel Mix -->
+                                <div class="family-insights-row">
+                                    <div class="family-insight-card channel-mix-card full-width">
+                                        <div class="insight-card-header">
+                                            <span class="insight-card-title">Communication Channels</span>
+                                            <span class="insight-card-subtitle">How you connect with each person</span>
+                                            <select class="insight-period-select" id="channelMixYears" onchange="changeChannelMixYears(this.value)">
+                                                <option value="1" selected>1 year</option>
+                                                <option value="2">2 years</option>
+                                                <option value="3">3 years</option>
+                                                <option value="4">4 years</option>
+                                                <option value="5">5 years</option>
+                                                <option value="6">6 years</option>
+                                                <option value="7">7 years</option>
+                                                <option value="8">8 years</option>
+                                                <option value="9">9 years</option>
+                                                <option value="10">10 years</option>
+                                            </select>
+                                        </div>
+                                        <div class="channel-mix-container" id="channelMixContainer">
+                                            <div class="insight-loading">Loading...</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Row 3: Communication Gaps Timeline -->
+                                <div class="family-insights-row">
+                                    <div class="family-insight-card gaps-card full-width">
+                                        <div class="insight-card-header">
+                                            <span class="insight-card-title">Communication Gaps</span>
+                                            <span class="insight-card-subtitle">Periods of extended silence (14+ days)</span>
+                                            <select class="insight-period-select" id="gapsMonths" onchange="changeGapsMonths(this.value)">
+                                                <option value="1">1 month</option>
+                                                <option value="2">2 months</option>
+                                                <option value="3">3 months</option>
+                                                <option value="6">6 months</option>
+                                                <option value="9">9 months</option>
+                                                <option value="12" selected>12 months</option>
+                                            </select>
+                                        </div>
+                                        <div class="gaps-timeline-container" id="gapsTimelineContainer">
+                                            <div class="insight-loading">Loading...</div>
                                         </div>
                                     </div>
                                 </div>
@@ -5320,11 +6536,15 @@
         let currentPersonData = null;  // Full person data including manual_dunbar_circle
         let currentFilter = 'all';
         let searchQuery = '';
+        // People list filters (multi-select)
+        let peopleCategoryFilters = new Set(['self', 'family', 'personal', 'work']);
+        let peopleDunbarFilters = new Set(['0', '1', '2', '3', '4', '5', '6+']);
         let selectedForMerge = new Set();  // IDs selected for merge
         let mergePrimaryId = null;  // Primary person for merge
         let dunbarCircleMap = new Map();  // Map person ID to Dunbar circle
         let dunbarCirclesInitialized = false;  // Track if global circles have been calculated
         let meInteractionsCache = null;  // Cache for "Me" page interactions
+        let meInteractionsCacheYears = null; // Track which years setting the cache was loaded for
 
         // Dunbar Circle Configuration
         // Circle sizes: 0=3 (manual), 1=5, 2=15, 3=50, 4=150, 5=500, 6=1500, 7+=rest
@@ -5399,11 +6619,25 @@
         }
 
         // Apply pre-calculated Dunbar circles to a list of people
-        // Falls back to calculating from current data if map is empty
+        // Uses pre-computed dunbar_circle from API, falls back to client calculation if missing
         function applyDunbarCircles(peopleList) {
-            // If map is empty or very small, calculate from current data as fallback
+            // Check if API provided pre-computed values
+            const hasPrecomputed = peopleList.some(p => p.dunbar_circle !== undefined && p.dunbar_circle !== null);
+
+            if (hasPrecomputed) {
+                // Build dunbarCircleMap from API data for any code that still references it
+                peopleList.forEach(p => {
+                    if (p.dunbar_circle !== undefined && p.dunbar_circle !== null) {
+                        dunbarCircleMap.set(p.id, p.dunbar_circle);
+                    }
+                });
+                // Return as-is since circles are already set
+                return peopleList;
+            }
+
+            // Fallback: calculate client-side if API didn't provide values
+            console.warn('[Dunbar] No pre-computed circles from API, calculating client-side');
             if (dunbarCircleMap.size < 10 && peopleList.length > 10) {
-                console.warn('[Dunbar] Map is small, calculating from current data as fallback');
                 calculateAndStoreDunbarCircles(peopleList);
             }
 
@@ -5445,9 +6679,19 @@
         // ===============================
 
         // Parse URL to get person ID and tab
-        // Supports: /crm, /crm/{personId}, /crm/{personId}/{tab}, /me, /me/{tab}
+        // Supports: /crm, /crm/{personId}, /crm/{personId}/{tab}, /me, /me/{tab}, /family
         function parseUrl() {
             const path = window.location.pathname;
+
+            // Handle /family route
+            if (path === '/family' || path === '/family/') {
+                return {
+                    personId: null,
+                    tab: null,
+                    isMe: false,
+                    isFamily: true
+                };
+            }
 
             // Handle /me route (alias for owner's profile)
             const meMatch = path.match(/^\/me(?:\/([^\/]+))?/);
@@ -5455,19 +6699,21 @@
                 return {
                     personId: DUNBAR_CONFIG.myPersonId,
                     tab: meMatch[1] || null,
-                    isMe: true
+                    isMe: true,
+                    isFamily: false
                 };
             }
 
             // Handle /crm routes
             const match = path.match(/^\/crm(?:\/([^\/]+))?(?:\/([^\/]+))?/);
-            if (!match) return { personId: null, tab: null, isMe: false };
+            if (!match) return { personId: null, tab: null, isMe: false, isFamily: false };
 
             const personId = match[1] || null;
             return {
                 personId: personId,
                 tab: match[2] || null,
-                isMe: personId === DUNBAR_CONFIG.myPersonId
+                isMe: personId === DUNBAR_CONFIG.myPersonId,
+                isFamily: false
             };
         }
 
@@ -5504,8 +6750,11 @@
             closeEdgePanel();
             closeNodePanel();
 
-            const { personId, tab } = parseUrl();
-            if (personId) {
+            const { personId, tab, isFamily } = parseUrl();
+            if (isFamily) {
+                // Show family dashboard
+                showFamilyDashboard();
+            } else if (personId) {
                 selectedPersonId = personId;
                 renderPeopleList();
                 await loadPersonDetail(personId, false);
@@ -5533,8 +6782,11 @@
             await loadStatistics();
 
             // Restore state from URL
-            const { personId, tab } = parseUrl();
-            if (personId) {
+            const { personId, tab, isFamily } = parseUrl();
+            if (isFamily) {
+                // Show family dashboard
+                await showFamilyDashboard();
+            } else if (personId) {
                 await selectPerson(personId, false, true); // true = don't push to history
                 if (tab) {
                     await switchTab(tab, true); // true = don't update URL
@@ -5548,8 +6800,8 @@
             listEl.innerHTML = '<div class="loading">Loading people...</div>';
 
             try {
-                // Initialize global Dunbar circles on first load
-                await initializeDunbarCircles();
+                // Note: Dunbar circles are now pre-computed server-side
+                // No need to fetch all 14k people - each person has dunbar_circle in API response
 
                 let allPeople = [];
 
@@ -5557,14 +6809,20 @@
                 const searchTerms = searchQuery ? searchQuery.split('|').map(t => t.trim()).filter(t => t) : [''];
 
                 // Fetch results for each search term in parallel
+                // Note: We apply category filter client-side for multi-select flexibility
+                // For dunbar circles, if only outer circles (5, 6+) are selected, pass to API
+                const onlyOuterCircles = peopleDunbarFilters.size > 0 &&
+                    [...peopleDunbarFilters].every(c => c === '5' || c === '6+');
+
                 const fetchPromises = searchTerms.map(term => {
                     const params = new URLSearchParams();
                     if (term) params.set('q', term);
-                    if (currentFilter !== 'all') {
-                        params.set('category', currentFilter);
-                    }
                     params.set('sort', 'strength');
-                    params.set('limit', '100');
+                    params.set('limit', '300');
+                    // If only outer circles selected, filter server-side to get relevant results
+                    if (onlyOuterCircles) {
+                        params.set('dunbar_circles', [...peopleDunbarFilters].join(','));
+                    }
                     return api(`/people?${params}`);
                 });
 
@@ -5613,12 +6871,33 @@
         function renderPeopleList() {
             const listEl = document.getElementById('peopleList');
 
-            if (people.length === 0) {
+            // Apply category and dunbar filters
+            const allCategoriesSelected = peopleCategoryFilters.size === 4;
+            const allDunbarSelected = peopleDunbarFilters.size === 7;
+
+            const filteredPeople = people.filter(person => {
+                // Category filter
+                if (!allCategoriesSelected) {
+                    const category = person.category || 'personal';  // Default to personal if no category
+                    if (!peopleCategoryFilters.has(category)) return false;
+                }
+
+                // Dunbar filter
+                if (!allDunbarSelected) {
+                    const dunbar = person.dunbar_circle ?? 7;
+                    const dunbarKey = dunbar >= 6 ? '6+' : String(dunbar);
+                    if (!peopleDunbarFilters.has(dunbarKey)) return false;
+                }
+
+                return true;
+            });
+
+            if (filteredPeople.length === 0) {
                 listEl.innerHTML = '<div class="empty-state"><div class="empty-state-icon">👥</div><p>No people found</p></div>';
                 return;
             }
 
-            listEl.innerHTML = people.map(person => `
+            listEl.innerHTML = filteredPeople.map(person => `
                 <div class="person-card ${person.id === selectedPersonId ? 'selected' : ''}"
                      onclick="selectPerson('${person.id}')">
                     <div class="person-checkbox ${selectedForMerge.has(person.id) ? 'checked' : ''}"
@@ -6110,11 +7389,36 @@
             if (yearsSelect) {
                 yearsSelect.addEventListener('change', (e) => {
                     const years = parseInt(e.target.value, 10);
-                    if (currentHeatmapPersonId) {
+                    // Clear volume chart state so it fully reinitializes
+                    volumeChartPoints = [];
+                    volumeChartConfig = null;
+                    const canvas = document.getElementById('volumeChartCanvas');
+                    if (canvas) {
+                        canvas.dataset.hoverSetup = '';
+                        // Clear the canvas immediately
+                        const ctx = canvas.getContext('2d');
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    }
+                    // Check if we're on family view
+                    const { isFamily } = parseUrl();
+                    if (isFamily) {
+                        // For family view, re-fetch with new year range
+                        heatmapYears = years;
+                        loadFamilyInteractions();
+                    } else if (currentHeatmapPersonId) {
                         loadAndRenderHeatMap(currentHeatmapPersonId, years);
                     }
                 });
             }
+
+            // Debounced resize handler for volume chart
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    renderVolumeChart();
+                }, 150);
+            });
         });
 
         // ===============================
@@ -6127,6 +7431,10 @@
             hiddenNodeIds.clear(); // Clear hidden nodes when switching people
             closeEdgePanel(); // Close edge panel when switching people
             closeNodePanel(); // Close node panel when switching people
+
+            // Clear charts immediately to prevent stale data showing
+            clearChartsWithLoading();
+
             renderPeopleList();
 
             // Update URL immediately (unless called from popstate or initial load)
@@ -6192,6 +7500,78 @@
             document.getElementById('detailCompany').textContent = '';
             document.getElementById('detailAvatar').textContent = '...';
             document.getElementById('detailContactQuick').innerHTML = '';
+
+            // Clear and show loading state for charts
+            clearChartsWithLoading();
+
+            // Clear hero stats
+            document.getElementById('heroStatEmails').textContent = '-';
+            document.getElementById('heroStatEvents').textContent = '-';
+            document.getElementById('heroStatMessages').textContent = '-';
+
+            // Clear other dynamic content
+            const strengthRing = document.getElementById('strengthRing');
+            if (strengthRing) {
+                const ctx = strengthRing.getContext('2d');
+                ctx.clearRect(0, 0, strengthRing.width, strengthRing.height);
+            }
+        }
+
+        /**
+         * Clear charts and show loading state.
+         */
+        function clearChartsWithLoading() {
+            // Clear global chart data
+            heatmapData = {};
+            sourceTotals = {};
+            volumeChartPoints = [];
+            volumeChartConfig = null;
+
+            // Clear heatmap grid and show loading
+            const heatmapGrid = document.getElementById('heatmapGrid');
+            if (heatmapGrid) {
+                heatmapGrid.innerHTML = '<div class="chart-loading"><div class="chart-loading-spinner"></div>Loading...</div>';
+            }
+
+            // Clear month labels
+            const heatmapMonths = document.getElementById('heatmapMonths');
+            if (heatmapMonths) {
+                heatmapMonths.innerHTML = '';
+            }
+
+            // Clear volume chart canvas and show loading
+            const volumeCanvas = document.getElementById('volumeChartCanvas');
+            if (volumeCanvas) {
+                const ctx = volumeCanvas.getContext('2d');
+                const dpr = window.devicePixelRatio || 1;
+                const rect = volumeCanvas.getBoundingClientRect();
+                volumeCanvas.width = rect.width * dpr;
+                volumeCanvas.height = rect.height * dpr;
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.clearRect(0, 0, volumeCanvas.width, volumeCanvas.height);
+                ctx.scale(dpr, dpr);
+
+                // Draw loading text
+                ctx.fillStyle = '#888';
+                ctx.font = '12px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Loading...', rect.width / 2, rect.height / 2);
+
+                // Reset hover setup
+                volumeCanvas.dataset.hoverSetup = '';
+            }
+
+            // Reset title
+            const titleEl = document.getElementById('heatmapTitle');
+            if (titleEl) {
+                titleEl.textContent = 'Interaction History';
+            }
+
+            // Reset dropdown
+            const yearsSelect = document.getElementById('heatmapYearsSelect');
+            if (yearsSelect) {
+                yearsSelect.value = '1';
+            }
         }
 
         // Hide loading skeleton
@@ -6257,6 +7637,36 @@
                 lastSeenStat.style.display = isMePage ? 'none' : 'flex';
             }
 
+            // Hide family dashboard when viewing any person
+            const familyDashboard = document.getElementById('familyDashboard');
+            if (familyDashboard) {
+                familyDashboard.style.display = 'none';
+                familyDashboard.classList.remove('visible');
+            }
+
+            // Restore elements that family dashboard hides
+            // (headerIndicators already declared above)
+            const detailTabs = document.querySelector('.detail-tabs');
+            // Restore original header indicators content (strength ring, dunbar circle)
+            if (headerIndicators && originalHeaderIndicatorsHtml !== null) {
+                headerIndicators.innerHTML = originalHeaderIndicatorsHtml;
+            }
+            if (headerIndicators) headerIndicators.style.display = '';
+            if (detailTabs) {
+                detailTabs.style.display = '';
+                // Restore Graph tab that family view hides
+                const graphTab = detailTabs.querySelector('[data-tab="graph"]');
+                if (graphTab) graphTab.style.display = '';
+            }
+            const heatmapSectionEl = document.getElementById('heatmapSection');
+            if (heatmapSectionEl) heatmapSectionEl.style.display = '';
+            // Restore hero stats that family dashboard hides
+            const heroStats = document.getElementById('heroStats');
+            if (heroStats) heroStats.style.display = '';
+            // Hide family hero stats when viewing a person
+            const familyHeroStats = document.getElementById('familyHeroStats');
+            if (familyHeroStats) familyHeroStats.style.display = 'none';
+
             if (isMePage) {
                 meDashboard.style.display = 'grid';
                 personContentGrid.style.display = 'none';
@@ -6313,12 +7723,10 @@
             // Hero stats row
             renderHeroStats(person);
 
-            // Heat map calendar - show all years back to first interaction
-            const maxYears = calculateHeatmapYearsFromFirstSeen(person.first_seen);
-            heatmapYears = maxYears;
-            const yearsSelect = document.getElementById('heatmapYearsSelect');
-            if (yearsSelect) yearsSelect.value = maxYears.toString();
-            loadAndRenderHeatMap(person.id);
+            // Heat map calendar - load with max years, then auto-select based on actual data
+            // Start with 10 years to get all data, will be adjusted after loading
+            heatmapYears = 10;
+            loadAndRenderHeatMap(person.id, null, true); // true = auto-select years from data
 
             // Skip individual-specific rendering for Me page
             if (isMePage) {
@@ -6512,14 +7920,17 @@
         }
 
         // Load all interactions for "Me" page (for client-side processing)
-        async function loadMeInteractions() {
-            if (meInteractionsCache) {
+        async function loadMeInteractions(forceRefresh = false) {
+            // Use cache only if it matches current heatmapYears setting
+            if (meInteractionsCache && meInteractionsCacheYears === heatmapYears && !forceRefresh) {
                 return meInteractionsCache;
             }
             try {
-                // Use quarter as default trend period, fetch 2 years for chart navigation
-                const data = await api(`/me/interactions?days_back=1095&trend_period=${currentTrendPeriod}`);
+                // Fetch data for the selected number of years
+                const daysBack = (heatmapYears * 365) + 7;
+                const data = await api(`/me/interactions?days_back=${daysBack}&trend_period=${currentTrendPeriod}`);
                 meInteractionsCache = data; // Store the whole aggregated response
+                meInteractionsCacheYears = heatmapYears; // Remember which setting this was for
                 return meInteractionsCache;
             } catch (error) {
                 console.error('Failed to load Me interactions:', error);
@@ -6943,24 +8354,26 @@
         };
 
         // Load and render heat map
-        async function loadAndRenderHeatMap(personId, years = null) {
+        async function loadAndRenderHeatMap(personId, years = null, autoSelectYears = false) {
             const grid = document.getElementById('heatmapGrid');
             const monthsContainer = document.getElementById('heatmapMonths');
+
+            // Track if this is a new person (for logging/debugging)
+            const isNewPerson = currentHeatmapPersonId !== personId;
+            if (isNewPerson) {
+                // Data already cleared by clearChartsWithLoading() in selectPerson
+                // Just reset hover setup
+                const canvas = document.getElementById('volumeChartCanvas');
+                if (canvas) {
+                    canvas.dataset.hoverSetup = '';
+                }
+            }
 
             // Use provided years or current setting
             if (years !== null) {
                 heatmapYears = years;
             }
             currentHeatmapPersonId = personId;
-
-            // Update title based on years
-            const titleEl = document.getElementById('heatmapTitle');
-            if (titleEl) {
-                const days = heatmapYears * 365;
-                titleEl.textContent = heatmapYears === 1
-                    ? '365-Day Interaction History'
-                    : `${heatmapYears}-Year Interaction History`;
-            }
 
             try {
                 // For "Me" page, aggregate interactions across all people
@@ -6989,6 +8402,22 @@
                         sourceTotals[sourceType] = (sourceTotals[sourceType] || 0) + group.count;
                     });
                 });
+
+                // Auto-select years based on actual interaction data
+                if (autoSelectYears) {
+                    const yearsFromData = calculateYearsFromHeatmapData();
+                    heatmapYears = yearsFromData;
+                    const yearsSelect = document.getElementById('heatmapYearsSelect');
+                    if (yearsSelect) yearsSelect.value = yearsFromData.toString();
+                }
+
+                // Update title based on years
+                const titleEl = document.getElementById('heatmapTitle');
+                if (titleEl) {
+                    titleEl.textContent = heatmapYears === 1
+                        ? '365-Day Interaction History'
+                        : `${heatmapYears}-Year Interaction History`;
+                }
 
                 renderHeatMap();
                 // Don't overwrite hero stats - they show lifetime totals from PersonEntity,
@@ -7020,6 +8449,20 @@
                     heatmapData[day.date] = { total: day.total, sources: day.sources };
                 });
 
+                // For /me page, calculate years from actual interaction data
+                const yearsFromData = calculateYearsFromHeatmapData();
+                heatmapYears = yearsFromData;
+                const yearsSelect = document.getElementById('heatmapYearsSelect');
+                if (yearsSelect) yearsSelect.value = yearsFromData.toString();
+
+                // Update title based on calculated years
+                const titleEl = document.getElementById('heatmapTitle');
+                if (titleEl) {
+                    titleEl.textContent = heatmapYears === 1
+                        ? '365-Day Interaction History'
+                        : `${heatmapYears}-Year Interaction History`;
+                }
+
                 renderHeatMap();
                 // Don't call updateHeroStatsFromSources for Me page - we already set aggregate stats
             } catch (error) {
@@ -7028,6 +8471,21 @@
                 sourceTotals = {};
                 renderHeatMap();
             }
+        }
+
+        /**
+         * Calculate years needed from actual heatmapData dates.
+         */
+        function calculateYearsFromHeatmapData() {
+            const dates = Object.keys(heatmapData).sort();
+            if (dates.length === 0) return 1;
+
+            const earliestDate = new Date(dates[0] + 'T12:00:00');
+            const now = new Date();
+            const daysSince = Math.floor((now - earliestDate) / (1000 * 60 * 60 * 24));
+            const yearsNeeded = Math.ceil(daysSince / 365);
+
+            return Math.max(1, Math.min(10, yearsNeeded));
         }
 
         // Render Me dashboard widgets
@@ -7043,10 +8501,1141 @@
             renderNeglectedContacts(data);
             renderNetworkGrowth(data);
             renderMessagingByCircle(data);
+            renderTrackedRelationships(data);
 
             // Existing widgets
             renderTopContacts(data);
             renderRelationshipTrends(data);
+        }
+
+        // ===============================
+        // Family Dashboard
+        // ===============================
+
+        // Global helper to get dot color based on score relative to average (50)
+        function getDotColor(score) {
+            if (score >= 80) return '#22c55e';      // Bright green - excellent
+            if (score >= 60) return '#86efac';      // Light green - above avg
+            if (score >= 40) return '#9ca3af';      // Light gray - around avg
+            if (score >= 25) return '#f97316';      // Orange - below avg
+            return '#ef4444';                        // Red - poor
+        }
+
+        // Family dashboard state
+        let familyMembers = [];
+        let originalHeaderIndicatorsHtml = null;  // Save original header content for restore
+        // Default family members: Bill, Patricia, Malea, Anna Ramia
+        const DEFAULT_FAMILY_IDS = [
+            '29a732c3-2356-4f60-bf21-956b3652883a',  // Bill Ramia
+            '8205b758-a86f-456c-8c1c-ae3d3b2aa434',  // Patricia Ramia
+            '23b9aca8-8817-494a-a13e-7d7799f9b282',  // Malea Ramia
+            '1aa519d6-db2c-4ae4-acd7-131f83575930',  // Anna Ramia
+        ];
+        let selectedFamilyIds = [];
+        let familyHealthPeriod = 'quarter';
+        let familyTrendPeriod = 'quarter';
+        let familyData = null;
+
+        // Load family members from API
+        async function loadFamilyMembers() {
+            try {
+                const data = await api('/family/members');
+                familyMembers = data.members || [];
+                return familyMembers;
+            } catch (error) {
+                console.error('Failed to load family members:', error);
+                familyMembers = [];
+                return [];
+            }
+        }
+
+        // Show family dashboard
+        async function showFamilyDashboard() {
+            // Hide other views
+            document.getElementById('detailEmpty').style.display = 'none';
+            document.getElementById('detailContent').style.display = 'flex';
+            document.getElementById('meDashboard').style.display = 'none';
+            document.getElementById('meDashboard').classList.remove('visible');
+            document.getElementById('personContentGrid').style.display = 'none';
+
+            // Hide the person-level hero stats (they're in tabOverview which stays visible)
+            const personHeroStats = document.getElementById('heroStats');
+            if (personHeroStats) personHeroStats.style.display = 'none';
+
+            // Show family hero stats (positioned above heatmap)
+            const familyHeroStats = document.getElementById('familyHeroStats');
+            if (familyHeroStats) familyHeroStats.style.display = '';
+
+            // Show family dashboard
+            const familyDashboard = document.getElementById('familyDashboard');
+            familyDashboard.style.display = 'block';
+            familyDashboard.classList.add('visible');
+
+            // Show heatmap for family view (it will be populated with family data)
+            const heatmapContainer = document.querySelector('.heatmap-container');
+            if (heatmapContainer) heatmapContainer.style.display = '';
+
+            // Hide source entities footer
+            const sourceEntitiesFooter = document.getElementById('sourceEntitiesFooter');
+            if (sourceEntitiesFooter) sourceEntitiesFooter.style.display = 'none';
+
+            // Customize header for family (like /me page does)
+            const detailAvatar = document.getElementById('detailAvatar');
+            const detailName = document.getElementById('detailName');
+            const detailCompany = document.getElementById('detailCompany');
+            const detailContactQuick = document.getElementById('detailContactQuick');
+            const detailTagsChips = document.getElementById('detailTagsChips');
+            if (detailAvatar) detailAvatar.textContent = '👨‍👩‍👧';
+            if (detailName) detailName.textContent = 'Family Dashboard';
+            if (detailCompany) detailCompany.textContent = '';
+            if (detailContactQuick) detailContactQuick.innerHTML = '';
+            if (detailTagsChips) detailTagsChips.innerHTML = '';
+
+            // Put the family selector in the header-indicators area (right side)
+            const headerIndicators = document.querySelector('.header-indicators');
+            if (headerIndicators) {
+                // Save original content if not already saved
+                if (originalHeaderIndicatorsHtml === null) {
+                    originalHeaderIndicatorsHtml = headerIndicators.innerHTML;
+                }
+                headerIndicators.style.display = 'flex';
+                headerIndicators.innerHTML = `
+                    <div class="family-member-selector">
+                        <button class="family-selector-btn" onclick="toggleFamilyDropdown()">
+                            <span id="familySelectorLabel">Select family members...</span>
+                            <span class="family-selector-arrow">▼</span>
+                        </button>
+                        <div class="family-dropdown" id="familyDropdown" style="display: none;">
+                            <div class="family-dropdown-actions">
+                                <button class="family-action-btn" onclick="selectAllFamily()">Select All</button>
+                                <button class="family-action-btn" onclick="clearAllFamily()">Clear All</button>
+                            </div>
+                            <div class="family-dropdown-list" id="familyDropdownList"></div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Show tabs but hide Graph tab (family only has Overview and Timeline)
+            const detailTabs = document.querySelector('.detail-tabs');
+            if (detailTabs) {
+                detailTabs.style.display = '';
+                // Hide the Graph tab for family view
+                const graphTab = detailTabs.querySelector('[data-tab="graph"]');
+                if (graphTab) graphTab.style.display = 'none';
+            }
+
+            // Load family members if not already loaded
+            if (familyMembers.length === 0) {
+                await loadFamilyMembers();
+            }
+
+            // If no family members selected, use defaults (Bill, Patricia, Malea, Anna)
+            if (selectedFamilyIds.length === 0 && familyMembers.length > 0) {
+                // Filter to only include defaults that exist in the family members list
+                selectedFamilyIds = DEFAULT_FAMILY_IDS.filter(id =>
+                    familyMembers.some(m => m.id === id)
+                );
+                // Fall back to all if none of the defaults exist
+                if (selectedFamilyIds.length === 0) {
+                    selectedFamilyIds = familyMembers.map(m => m.id);
+                }
+            }
+
+            // Render dropdown AFTER defaults are set so checkboxes reflect selection
+            renderFamilyDropdown();
+            updateFamilySelectorLabel();
+
+            // Fetch up to 10 years of data initially (like person/me pages)
+            // The actual years will be auto-calculated from the data
+            heatmapYears = 10;
+
+            // Set years dropdown to 10 years on initial load
+            const yearsSelect = document.getElementById('heatmapYearsSelect');
+            if (yearsSelect) yearsSelect.value = '10';
+
+            // Load lifetime stats (hero stats) - these are independent of year selection
+            await loadFamilyStats();
+
+            // Load time-bounded interaction data for heatmap/charts
+            await loadFamilyInteractions();
+        }
+
+        // Render family member dropdown
+        function renderFamilyDropdown() {
+            const listEl = document.getElementById('familyDropdownList');
+            if (!listEl) return;
+
+            if (familyMembers.length === 0) {
+                listEl.innerHTML = '<div style="padding: 1rem; color: var(--text-muted); text-align: center;">No family members found</div>';
+                return;
+            }
+
+            let html = '';
+            familyMembers.forEach(member => {
+                const isSelected = selectedFamilyIds.includes(member.id);
+                html += `
+                    <label class="family-member-option">
+                        <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleFamilyMember('${member.id}')">
+                        <span class="family-member-name">${escapeHtml(member.name)}</span>
+                        <span class="family-member-strength">${Math.round(member.relationship_strength)}</span>
+                    </label>
+                `;
+            });
+
+            listEl.innerHTML = html;
+        }
+
+        // Toggle family dropdown visibility
+        function toggleFamilyDropdown() {
+            const dropdown = document.getElementById('familyDropdown');
+            if (!dropdown) return;
+            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('familyDropdown');
+            const selector = document.querySelector('.family-member-selector');
+            if (dropdown && selector && !selector.contains(e.target)) {
+                dropdown.style.display = 'none';
+            }
+        });
+
+        // Toggle individual family member selection
+        async function toggleFamilyMember(memberId) {
+            if (selectedFamilyIds.includes(memberId)) {
+                selectedFamilyIds = selectedFamilyIds.filter(id => id !== memberId);
+            } else {
+                selectedFamilyIds.push(memberId);
+            }
+            updateFamilySelectorLabel();
+            // Load both stats and interactions when family selection changes
+            await loadFamilyStats();
+            await loadFamilyInteractions();
+        }
+
+        // Select all family members
+        async function selectAllFamily() {
+            selectedFamilyIds = familyMembers.map(m => m.id);
+            renderFamilyDropdown();
+            updateFamilySelectorLabel();
+            await loadFamilyStats();
+            await loadFamilyInteractions();
+        }
+
+        // Clear all family member selections
+        async function clearAllFamily() {
+            selectedFamilyIds = [];
+            renderFamilyDropdown();
+            updateFamilySelectorLabel();
+            await loadFamilyStats();  // Reset stats to 0
+            renderEmptyFamilyDashboard();
+        }
+
+        // Update the selector label with count
+        function updateFamilySelectorLabel() {
+            const label = document.getElementById('familySelectorLabel');
+            if (!label) return;
+
+            if (selectedFamilyIds.length === 0) {
+                label.textContent = 'Select family members...';
+            } else if (selectedFamilyIds.length === familyMembers.length) {
+                label.textContent = `All family (${familyMembers.length})`;
+            } else {
+                label.textContent = `${selectedFamilyIds.length} selected`;
+            }
+        }
+
+        // Load family lifetime stats (hero stats - independent of year selection)
+        async function loadFamilyStats() {
+            if (selectedFamilyIds.length === 0) {
+                document.getElementById('familyStatEmails').textContent = '0';
+                document.getElementById('familyStatMessages').textContent = '0';
+                document.getElementById('familyStatPhone').textContent = '0';
+                document.getElementById('familyStatCalendar').textContent = '0';
+                return;
+            }
+
+            try {
+                const idsParam = selectedFamilyIds.join(',');
+                const stats = await api(`/family/stats?person_ids=${encodeURIComponent(idsParam)}`);
+                document.getElementById('familyStatEmails').textContent = formatCompactNumber(stats.total_emails || 0);
+                document.getElementById('familyStatMessages').textContent = formatCompactNumber(stats.total_messages || 0);
+                // Note: phone and calendar aren't in PersonEntity lifetime counts yet
+                // For now, use 0 or we could add them to the endpoint later
+                document.getElementById('familyStatPhone').textContent = '0';
+                document.getElementById('familyStatCalendar').textContent = formatCompactNumber(stats.total_meetings || 0);
+            } catch (error) {
+                console.error('Failed to load family stats:', error);
+            }
+        }
+
+        // Load family interactions from API
+        async function loadFamilyInteractions() {
+            if (selectedFamilyIds.length === 0) {
+                renderEmptyFamilyDashboard();
+                return;
+            }
+
+            try {
+                const idsParam = selectedFamilyIds.join(',');
+                // Fetch up to 10 years of data (like person/me pages do)
+                const daysBack = (heatmapYears * 365) + 7;
+                familyData = await api(`/family/interactions?person_ids=${encodeURIComponent(idsParam)}&days_back=${daysBack}&health_period=${familyHealthPeriod}&trend_period=${familyTrendPeriod}`);
+                renderFamilyDashboard(familyData);
+            } catch (error) {
+                console.error('Failed to load family interactions:', error);
+                renderEmptyFamilyDashboard();
+            }
+        }
+
+        // Render empty family dashboard
+        function renderEmptyFamilyDashboard() {
+            document.getElementById('familyHealthCurrentScore').textContent = '--';
+            document.getElementById('familyHealthChartContainer').innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-muted);">Select family members to see data</div>';
+            document.getElementById('familyTrendsWarmingList').innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No data</div>';
+            document.getElementById('familyTrendsCoolingList').innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No data</div>';
+            // Reset hero stats
+            document.getElementById('familyStatEmails').textContent = '0';
+            document.getElementById('familyStatMessages').textContent = '0';
+            document.getElementById('familyStatPhone').textContent = '0';
+            document.getElementById('familyStatCalendar').textContent = '0';
+            // Reset family insights
+            const emptyMessage = '<div class="insight-empty"><span class="insight-empty-icon">📊</span>Select family members to see data</div>';
+            const daysSince = document.getElementById('daysSinceGrid');
+            const streakGrid = document.getElementById('streakGrid');
+            const channelMix = document.getElementById('channelMixContainer');
+            const gapsTimeline = document.getElementById('gapsTimelineContainer');
+            if (daysSince) daysSince.innerHTML = emptyMessage;
+            if (streakGrid) streakGrid.innerHTML = emptyMessage;
+            if (channelMix) channelMix.innerHTML = emptyMessage;
+            if (gapsTimeline) gapsTimeline.innerHTML = emptyMessage;
+        }
+
+        // Render family dashboard with data
+        function renderFamilyDashboard(data) {
+            if (!data) {
+                renderEmptyFamilyDashboard();
+                return;
+            }
+
+            // Note: Hero stats are loaded separately via loadFamilyStats()
+            // They use lifetime totals from PersonEntity, not time-bounded data
+
+            // Render heatmap and volume chart with family data
+            loadFamilyHeatMap(data);
+
+            // Render health score chart
+            renderFamilyHealthScore(data);
+
+            // Render trends
+            renderFamilyTrends(data);
+
+            // Render family insights visualizations
+            renderFamilyInsights();
+        }
+
+        // Load and render heatmap for family view (aggregate across selected family members)
+        function loadFamilyHeatMap(data) {
+            if (!data || !data.daily) {
+                heatmapData = {};
+                sourceTotals = {};
+                renderHeatMap();
+                return;
+            }
+
+            // Use pre-aggregated daily data from family API
+            heatmapData = {};
+            sourceTotals = data.by_source || {};
+
+            (data.daily || []).forEach(day => {
+                heatmapData[day.date] = { total: day.total, sources: day.sources };
+            });
+
+            // Update title based on current heatmapYears
+            const titleEl = document.getElementById('heatmapTitle');
+            if (titleEl) {
+                titleEl.textContent = heatmapYears === 1
+                    ? '365-Day Interaction History'
+                    : `${heatmapYears}-Year Interaction History`;
+            }
+
+            renderHeatMap();
+        }
+
+        // Render family health score chart
+        function renderFamilyHealthScore(data) {
+            const container = document.getElementById('familyHealthChartContainer');
+            const scoreEl = document.getElementById('familyHealthCurrentScore');
+
+            if (!container || !scoreEl) {
+                return;
+            }
+
+            const history = data.health_score_history || [];
+            const currentScore = data.relationship_health_score || 0;
+            const avgCount = data.health_score_average || 0;
+
+            // Update current score with color
+            scoreEl.textContent = currentScore;
+            let color = '#ef4444';
+            if (currentScore >= 80) color = '#22c55e';
+            else if (currentScore >= 60) color = '#86efac';
+            else if (currentScore >= 40) color = '#9ca3af';
+            else if (currentScore >= 25) color = '#f97316';
+            scoreEl.style.color = color;
+
+            if (history.length === 0) {
+                container.innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-muted);">No health data available</div>';
+                return;
+            }
+
+            // Reuse the same SVG rendering as renderHealthScore
+            const width = 600;
+            const height = 120;
+            const padding = { top: 10, right: 10, bottom: 25, left: 35 };
+            const chartWidth = width - padding.left - padding.right;
+            const chartHeight = height - padding.top - padding.bottom;
+
+            const xScale = (i) => padding.left + (i / (history.length - 1)) * chartWidth;
+            const yScale = (score) => padding.top + (1 - score / 100) * chartHeight;
+
+            // Build path
+            let pathD = '';
+            history.forEach((point, i) => {
+                const x = xScale(i);
+                const y = yScale(point.score);
+                if (i === 0) {
+                    pathD += `M ${x} ${y}`;
+                } else {
+                    pathD += ` L ${x} ${y}`;
+                }
+            });
+
+            // Build area
+            let areaD = pathD + ` L ${xScale(history.length - 1)} ${yScale(0)} L ${xScale(0)} ${yScale(0)} Z`;
+
+            // Build dots
+            const dots = history.map((point, i) => {
+                const x = xScale(i);
+                const y = yScale(point.score);
+                const dotColor = getDotColor(point.score);
+                const count = point.count || 0;
+                return `<circle class="health-chart-dot" cx="${x}" cy="${y}" r="4" data-index="${i}" data-score="${point.score}" data-count="${count}" data-avg="${avgCount}" data-date="${point.date}" style="fill: ${dotColor};"/>`;
+            }).join('');
+
+            // X-axis labels
+            const xLabels = [];
+            const labelCount = Math.min(5, history.length);
+            for (let i = 0; i < labelCount; i++) {
+                const idx = Math.floor(i * (history.length - 1) / (labelCount - 1));
+                const point = history[idx];
+                const date = new Date(point.date);
+                const label = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                xLabels.push(`<text x="${xScale(idx)}" y="${height - 5}" text-anchor="middle" fill="var(--text-muted)" font-size="10">${label}</text>`);
+            }
+
+            const svgHtml = `
+                <svg class="health-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+                    <!-- Grid lines -->
+                    <line x1="${padding.left}" y1="${yScale(100)}" x2="${width - padding.right}" y2="${yScale(100)}" stroke="var(--border-color)" stroke-dasharray="2,2"/>
+                    <line x1="${padding.left}" y1="${yScale(50)}" x2="${width - padding.right}" y2="${yScale(50)}" stroke="var(--border-color)" stroke-dasharray="2,2"/>
+                    <line x1="${padding.left}" y1="${yScale(0)}" x2="${width - padding.right}" y2="${yScale(0)}" stroke="var(--border-color)" stroke-dasharray="2,2"/>
+
+                    <!-- Y-axis labels -->
+                    <text x="${padding.left - 5}" y="${yScale(100) + 4}" text-anchor="end" fill="var(--text-muted)" font-size="10">100</text>
+                    <text x="${padding.left - 5}" y="${yScale(50) + 4}" text-anchor="end" fill="var(--text-muted)" font-size="10">Avg</text>
+                    <text x="${padding.left - 5}" y="${yScale(0) + 4}" text-anchor="end" fill="var(--text-muted)" font-size="10">0</text>
+
+                    <!-- Area fill -->
+                    <path d="${areaD}" fill="var(--text-muted)" fill-opacity="0.1"/>
+
+                    <!-- Line -->
+                    <path d="${pathD}" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-opacity="0.4"/>
+
+                    <!-- Dots -->
+                    ${dots}
+
+                    <!-- X-axis labels -->
+                    ${xLabels.join('')}
+                </svg>
+                <div class="health-chart-tooltip" id="familyHealthTooltip"></div>
+            `;
+            container.innerHTML = svgHtml;
+            setupFamilyHealthChartTooltips();
+        }
+
+        // Setup tooltips for family health chart
+        function setupFamilyHealthChartTooltips() {
+            const container = document.getElementById('familyHealthChartContainer');
+            const tooltip = document.getElementById('familyHealthTooltip');
+            if (!container || !tooltip) return;
+
+            const dots = container.querySelectorAll('.health-chart-dot');
+            dots.forEach(dot => {
+                dot.addEventListener('mouseenter', (e) => {
+                    const score = dot.getAttribute('data-score');
+                    const count = dot.getAttribute('data-count');
+                    const avg = dot.getAttribute('data-avg');
+                    const date = dot.getAttribute('data-date');
+                    const formattedDate = new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+                    tooltip.innerHTML = `
+                        <div class="health-chart-tooltip-date">${formattedDate}</div>
+                        <div class="health-chart-tooltip-score">Score: ${score}</div>
+                        <div style="font-size: 0.6rem; color: var(--text-muted);">Interactions: ${count}</div>
+                        <div style="font-size: 0.6rem; color: var(--text-muted);">Avg. for Period: ${avg}</div>
+                    `;
+
+                    const rect = container.getBoundingClientRect();
+                    const dotRect = dot.getBoundingClientRect();
+                    tooltip.style.left = (dotRect.left - rect.left + dotRect.width / 2) + 'px';
+                    tooltip.style.top = (dotRect.top - rect.top - 8) + 'px';
+                    tooltip.style.transform = 'translate(-50%, -100%)';
+                    tooltip.classList.add('visible');
+                });
+
+                dot.addEventListener('mouseleave', () => {
+                    tooltip.classList.remove('visible');
+                });
+            });
+        }
+
+        // Render family top contacts
+        // Render family trends
+        function renderFamilyTrends(data) {
+            const warmingList = document.getElementById('familyTrendsWarmingList');
+            const coolingList = document.getElementById('familyTrendsCoolingList');
+
+            if (!warmingList || !coolingList) return;
+
+            const warming = data.warming || [];
+            const cooling = data.cooling || [];
+
+            // Render trend item (matching Me page style)
+            const renderTrend = (item, isWarming) => {
+                const pctChange = item.previous_count > 0
+                    ? Math.round(((item.recent_count - item.previous_count) / item.previous_count) * 100)
+                    : (item.recent_count > 0 ? 100 : 0);
+                const pctDisplay = pctChange >= 0 ? `+${pctChange}%` : `${pctChange}%`;
+                const pctClass = isWarming ? 'trend-pct-warming' : 'trend-pct-cooling';
+                return `
+                    <div class="trend-item ${isWarming ? 'trend-warming' : 'trend-cooling'}" onclick="selectPerson('${item.person_id}')">
+                        <span class="trend-indicator">${isWarming ? '↑' : '↓'}</span>
+                        <span class="trend-pct ${pctClass}">${pctDisplay}</span>
+                        <span class="trend-name">${escapeHtml(item.person_name)}</span>
+                        <span class="trend-change">${item.previous_count}→${item.recent_count}</span>
+                    </div>
+                `;
+            };
+
+            warmingList.innerHTML = warming.length > 0
+                ? warming.slice(0, 5).map(w => renderTrend(w, true)).join('')
+                : '<div style="color: var(--text-muted); font-size: 0.75rem; padding: 0.25rem;">No warming trends</div>';
+
+            coolingList.innerHTML = cooling.length > 0
+                ? cooling.slice(0, 5).map(c => renderTrend(c, false)).join('')
+                : '<div style="color: var(--text-muted); font-size: 0.75rem; padding: 0.25rem;">No cooling trends</div>';
+        }
+
+        // ================================================
+        // FAMILY INSIGHTS VISUALIZATIONS
+        // ================================================
+
+        // Dunbar circle contact expectations (in days)
+        const DUNBAR_CONTACT_EXPECTATIONS = {
+            0: 7,    // Circle 0 (Intimate): every week
+            1: 7,    // Circle 1 (Close): every week
+            2: 14,   // Circle 2 (Good Friends): every 2 weeks
+            3: 30,   // Circle 3 (Friends): every month
+            4: 90,   // Circle 4 (Acquaintances): every quarter
+            5: 365,  // Circle 5 (Known): every year
+            6: 365,  // Circle 6+: every year
+            7: 365,  // Peripheral: every year
+        };
+
+        // Get expected contact frequency label
+        function getExpectedContactLabel(circle) {
+            const days = DUNBAR_CONTACT_EXPECTATIONS[circle] || 365;
+            if (days <= 7) return 'weekly';
+            if (days <= 14) return 'bi-weekly';
+            if (days <= 30) return 'monthly';
+            if (days <= 90) return 'quarterly';
+            return 'yearly';
+        }
+
+        // Get initials from name
+        function getInitials(name) {
+            return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        }
+
+        // Render Days Since Contact visualization
+        function renderDaysSinceContact() {
+            const container = document.getElementById('daysSinceGrid');
+            if (!container || familyMembers.length === 0) {
+                if (container) container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">📅</span>No family members selected</div>';
+                return;
+            }
+
+            const now = new Date();
+            const selectedMembers = familyMembers.filter(m => selectedFamilyIds.includes(m.id));
+
+            if (selectedMembers.length === 0) {
+                container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">📅</span>No family members selected</div>';
+                return;
+            }
+
+            // Calculate days since contact for each member
+            const membersWithDays = selectedMembers.map(member => {
+                const lastSeen = member.last_seen ? new Date(member.last_seen) : null;
+                const daysSince = lastSeen ? Math.floor((now - lastSeen) / (1000 * 60 * 60 * 24)) : null;
+                const circle = member.dunbar_circle ?? 5;
+                const expectedDays = DUNBAR_CONTACT_EXPECTATIONS[circle] || 365;
+
+                let status = 'on-track';
+                if (daysSince === null) {
+                    status = 'warning';
+                } else if (daysSince <= 2) {
+                    status = 'recent';
+                } else if (daysSince > expectedDays * 1.5) {
+                    status = 'overdue';
+                } else if (daysSince > expectedDays) {
+                    status = 'warning';
+                }
+
+                return { ...member, daysSince, expectedDays, status, circle };
+            });
+
+            // Sort alphabetically by name for consistency across all visualizations
+            membersWithDays.sort((a, b) => a.name.localeCompare(b.name));
+
+            container.innerHTML = membersWithDays.map(member => {
+                const daysText = member.daysSince === null ? '?' :
+                    member.daysSince === 0 ? 'Today' :
+                    member.daysSince === 1 ? '1 day' :
+                    `${member.daysSince}d`;
+                const expectedLabel = getExpectedContactLabel(member.circle);
+
+                return `
+                    <div class="days-since-item" onclick="selectPerson('${member.id}')">
+                        <div class="days-since-avatar">${getInitials(member.name)}</div>
+                        <div class="days-since-info">
+                            <div class="days-since-name">${escapeHtml(member.name)}</div>
+                            <div class="days-since-expected">Target: ${expectedLabel}</div>
+                        </div>
+                        <div class="days-since-badge ${member.status}">${daysText}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Render Streak Tracker visualization (weeks-based)
+        function renderStreakTracker() {
+            const container = document.getElementById('streakGrid');
+            if (!container || familyMembers.length === 0) {
+                if (container) container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">🔥</span>No family members selected</div>';
+                return;
+            }
+
+            const selectedMembers = familyMembers.filter(m => selectedFamilyIds.includes(m.id));
+
+            if (selectedMembers.length === 0) {
+                container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">🔥</span>No family members selected</div>';
+                return;
+            }
+
+            // Sort alphabetically by name for consistency across all visualizations
+            const sorted = [...selectedMembers].sort((a, b) => a.name.localeCompare(b.name));
+
+            container.innerHTML = sorted.map(member => {
+                const streakWeeks = member.current_streak || 0;  // API returns weeks directly
+                const streakClass = streakWeeks >= 4 ? 'hot' : streakWeeks >= 2 ? 'warm' : 'cold';
+                const flame = streakWeeks >= 4 ? '🔥' : streakWeeks >= 2 ? '🌡️' : '❄️';
+
+                // Show last 8 weeks as dots
+                const dots = [];
+                for (let i = 0; i < 8; i++) {
+                    dots.push(`<div class="streak-day ${i < streakWeeks ? 'active' : ''}"></div>`);
+                }
+
+                return `
+                    <div class="streak-item" onclick="selectPerson('${member.id}')">
+                        <div class="streak-avatar">${getInitials(member.name)}</div>
+                        <div class="streak-info">
+                            <div class="streak-name">${escapeHtml(member.name)}</div>
+                            <div class="streak-visual">
+                                <span class="streak-flame">${flame}</span>
+                                <div class="streak-days">${dots.join('')}</div>
+                            </div>
+                        </div>
+                        <div class="streak-count ${streakClass}">${streakWeeks}w</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Channel colors for the mix visualization
+        const CHANNEL_COLORS = {
+            imessage: 'channel-imessage',
+            whatsapp: 'channel-whatsapp',
+            gmail: 'channel-gmail',
+            calendar: 'channel-calendar',
+            phone: 'channel-phone',
+            slack: 'channel-slack',
+            vault: 'channel-vault',
+            granola: 'channel-granola',
+            linkedin: 'channel-linkedin',
+        };
+
+        const CHANNEL_LABELS = {
+            imessage: '💬 iMessage',
+            whatsapp: '📱 WhatsApp',
+            gmail: '📧 Email',
+            calendar: '📅 Calendar',
+            phone: '📞 Phone',
+            slack: '💼 Slack',
+            vault: '📝 Notes',
+            granola: '🥣 Granola',
+            linkedin: '🔗 LinkedIn',
+        };
+
+        // Render Channel Mix visualization
+        function renderChannelMix() {
+            const container = document.getElementById('channelMixContainer');
+            if (!container || familyMembers.length === 0) {
+                if (container) container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">📊</span>No family members selected</div>';
+                return;
+            }
+
+            const selectedMembers = familyMembers.filter(m => selectedFamilyIds.includes(m.id));
+
+            if (selectedMembers.length === 0) {
+                container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">📊</span>No family members selected</div>';
+                return;
+            }
+
+            // Sort alphabetically by name for consistency across all visualizations
+            selectedMembers.sort((a, b) => a.name.localeCompare(b.name));
+
+            // Collect all unique channels
+            const allChannels = new Set();
+            selectedMembers.forEach(m => {
+                Object.keys(m.by_source || {}).forEach(ch => allChannels.add(ch));
+            });
+
+            // Build HTML for each member
+            let html = selectedMembers.map(member => {
+                const sources = member.by_source || {};
+                const total = Object.values(sources).reduce((a, b) => a + b, 0);
+
+                if (total === 0) {
+                    return `
+                        <div class="channel-mix-item">
+                            <div class="channel-mix-header">
+                                <span class="channel-mix-name">${escapeHtml(member.name)}</span>
+                                <span class="channel-mix-total">No interactions</span>
+                            </div>
+                            <div class="channel-mix-bar">
+                                <div class="channel-segment channel-other" style="width: 100%">
+                                    <span class="channel-segment-label">No data</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Sort channels by count
+                const sortedChannels = Object.entries(sources)
+                    .sort((a, b) => b[1] - a[1]);
+
+                const segments = sortedChannels.map(([channel, count]) => {
+                    const pct = (count / total) * 100;
+                    const colorClass = CHANNEL_COLORS[channel] || 'channel-other';
+                    const label = pct >= 15 ? CHANNEL_LABELS[channel]?.split(' ')[0] || channel : '';
+
+                    const tooltipLabel = CHANNEL_LABELS[channel] || channel;
+                    return `<div class="channel-segment ${colorClass}" style="width: ${pct}%">
+                        <span class="channel-segment-label">${label}</span>
+                        <div class="channel-segment-tooltip"><strong>${tooltipLabel}</strong><br>${count.toLocaleString()} (${Math.round(pct)}%)</div>
+                    </div>`;
+                }).join('');
+
+                return `
+                    <div class="channel-mix-item">
+                        <div class="channel-mix-header">
+                            <span class="channel-mix-name">${escapeHtml(member.name)}</span>
+                            <span class="channel-mix-total">${total.toLocaleString()} interactions</span>
+                        </div>
+                        <div class="channel-mix-bar">${segments}</div>
+                    </div>
+                `;
+            }).join('');
+
+            // Add legend
+            const usedChannels = [...allChannels].filter(ch => CHANNEL_LABELS[ch]);
+            if (usedChannels.length > 0) {
+                html += `
+                    <div class="channel-legend">
+                        ${usedChannels.map(ch => `
+                            <div class="channel-legend-item">
+                                <div class="channel-legend-dot ${CHANNEL_COLORS[ch] || 'channel-other'}"></div>
+                                <span>${CHANNEL_LABELS[ch] || ch}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        // Cache for communication gaps data
+        let communicationGapsData = null;
+        let gapsMonths = 12;  // Default to 12 months
+        let channelMixYears = 1;  // Default to 1 year
+
+        // Change gaps time period
+        async function changeGapsMonths(months) {
+            gapsMonths = parseInt(months, 10);
+            await loadCommunicationGaps();
+        }
+
+        // Change channel mix time period
+        async function changeChannelMixYears(years) {
+            channelMixYears = parseInt(years, 10);
+            await loadChannelMixData();
+        }
+
+        // Load channel mix data from API with time filtering
+        async function loadChannelMixData() {
+            const container = document.getElementById('channelMixContainer');
+            if (!container) return;
+
+            if (selectedFamilyIds.length === 0) {
+                container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">📊</span>No family members selected</div>';
+                return;
+            }
+
+            container.innerHTML = '<div class="insight-loading">Loading channel data...</div>';
+
+            try {
+                const idsParam = selectedFamilyIds.join(',');
+                const daysBack = channelMixYears * 365;
+                const data = await api(`/family/channel-mix?person_ids=${encodeURIComponent(idsParam)}&days_back=${daysBack}`);
+                renderChannelMixWithData(data);
+            } catch (error) {
+                console.error('Failed to load channel mix:', error);
+                // Fallback to using familyMembers data (lifetime totals)
+                renderChannelMix();
+            }
+        }
+
+        // Render Channel Mix with API data
+        function renderChannelMixWithData(data) {
+            const container = document.getElementById('channelMixContainer');
+            if (!container || !data || !data.members) {
+                renderChannelMix();  // Fallback
+                return;
+            }
+
+            const members = data.members;
+            if (members.length === 0) {
+                container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">📊</span>No data for selected period</div>';
+                return;
+            }
+
+            // Sort alphabetically by name for consistency across all visualizations
+            members.sort((a, b) => a.name.localeCompare(b.name));
+
+            // Collect all unique channels
+            const allChannels = new Set();
+            members.forEach(m => {
+                Object.keys(m.by_source || {}).forEach(ch => allChannels.add(ch));
+            });
+
+            // Build HTML for each member
+            let html = members.map(member => {
+                const sources = member.by_source || {};
+                const total = Object.values(sources).reduce((a, b) => a + b, 0);
+
+                if (total === 0) {
+                    return `
+                        <div class="channel-mix-item">
+                            <div class="channel-mix-header">
+                                <span class="channel-mix-name">${escapeHtml(member.name)}</span>
+                                <span class="channel-mix-total">No interactions</span>
+                            </div>
+                            <div class="channel-mix-bar">
+                                <div class="channel-segment channel-other" style="width: 100%">
+                                    <span class="channel-segment-label">No data</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Sort channels by count
+                const sortedChannels = Object.entries(sources)
+                    .sort((a, b) => b[1] - a[1]);
+
+                const segments = sortedChannels.map(([channel, count]) => {
+                    const pct = (count / total) * 100;
+                    const colorClass = CHANNEL_COLORS[channel] || 'channel-other';
+                    const label = pct >= 15 ? CHANNEL_LABELS[channel]?.split(' ')[0] || channel : '';
+
+                    const tooltipLabel = CHANNEL_LABELS[channel] || channel;
+                    return `<div class="channel-segment ${colorClass}" style="width: ${pct}%">
+                        <span class="channel-segment-label">${label}</span>
+                        <div class="channel-segment-tooltip"><strong>${tooltipLabel}</strong><br>${count.toLocaleString()} (${Math.round(pct)}%)</div>
+                    </div>`;
+                }).join('');
+
+                return `
+                    <div class="channel-mix-item">
+                        <div class="channel-mix-header">
+                            <span class="channel-mix-name">${escapeHtml(member.name)}</span>
+                            <span class="channel-mix-total">${total.toLocaleString()} interactions</span>
+                        </div>
+                        <div class="channel-mix-bar">${segments}</div>
+                    </div>
+                `;
+            }).join('');
+
+            // Add legend
+            const usedChannels = [...allChannels].filter(ch => CHANNEL_LABELS[ch]);
+            if (usedChannels.length > 0) {
+                html += `
+                    <div class="channel-legend">
+                        ${usedChannels.map(ch => `
+                            <div class="channel-legend-item">
+                                <div class="channel-legend-dot ${CHANNEL_COLORS[ch] || 'channel-other'}"></div>
+                                <span>${CHANNEL_LABELS[ch] || ch}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+
+            container.innerHTML = html;
+        }
+
+        // Load and render Communication Gaps visualization
+        // Calculate minimum gap threshold based on time period
+        // Linear scale: 1 month → 5 days, 12 months → 20 days
+        function getMinGapDays(months) {
+            // Linear interpolation: 5 + (months - 1) * (20 - 5) / (12 - 1)
+            return Math.round(5 + (months - 1) * 15 / 11);
+        }
+
+        async function loadCommunicationGaps() {
+            const container = document.getElementById('gapsTimelineContainer');
+            if (!container) return;
+
+            if (selectedFamilyIds.length === 0) {
+                container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">📉</span>No family members selected</div>';
+                return;
+            }
+
+            container.innerHTML = '<div class="insight-loading">Analyzing communication patterns...</div>';
+
+            try {
+                const idsParam = selectedFamilyIds.join(',');
+                const daysBack = gapsMonths * 30;  // Approximate days from months
+                const minGapDays = getMinGapDays(gapsMonths);
+
+                // Update subtitle to show current threshold
+                const subtitle = document.querySelector('.gaps-card .insight-card-subtitle');
+                if (subtitle) {
+                    subtitle.textContent = `Periods of extended silence (${minGapDays}+ days)`;
+                }
+
+                communicationGapsData = await api(`/family/communication-gaps?person_ids=${encodeURIComponent(idsParam)}&days_back=${daysBack}&min_gap_days=${minGapDays}`);
+                renderCommunicationGaps();
+            } catch (error) {
+                console.error('Failed to load communication gaps:', error);
+                container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">⚠️</span>Failed to load data</div>';
+            }
+        }
+
+        // Render Communication Gaps visualization
+        function renderCommunicationGaps() {
+            const container = document.getElementById('gapsTimelineContainer');
+            if (!container || !communicationGapsData) return;
+
+            const { gaps, person_summaries } = communicationGapsData;
+            const minGapDays = getMinGapDays(gapsMonths);
+
+            if (!person_summaries || person_summaries.length === 0) {
+                container.innerHTML = '<div class="insight-empty"><span class="insight-empty-icon">✨</span>No significant communication gaps found</div>';
+                return;
+            }
+
+            // Sort alphabetically by name for consistency across all visualizations
+            person_summaries.sort((a, b) => (a.person_name || a.name || '').localeCompare(b.person_name || b.name || ''));
+
+            const now = new Date();
+            const periodStart = new Date(now);
+            periodStart.setDate(periodStart.getDate() - (gapsMonths * 30));
+            const totalDays = gapsMonths * 30;
+
+            // Build HTML for each person
+            let html = person_summaries.map(summary => {
+                const personGaps = gaps.filter(g => g.person_id === summary.person_id);
+
+                // Create gap markers
+                const markers = personGaps.map(gap => {
+                    const startDate = new Date(gap.start_date);
+                    const endDate = new Date(gap.end_date);
+                    const daysSinceStart = Math.floor((startDate - periodStart) / (1000 * 60 * 60 * 24));
+                    const leftPct = Math.max(0, Math.min(100, (daysSinceStart / totalDays) * 100));
+                    const widthPct = Math.max(1, (gap.gap_days / totalDays) * 100);
+
+                    const startLabel = startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                    const endLabel = endDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+                    return `
+                        <div class="gap-marker" style="left: ${leftPct}%; width: ${widthPct}%;">
+                            <div class="gap-marker-tooltip">
+                                <strong>${gap.gap_days} days</strong><br>
+                                ${startLabel} → ${endLabel}
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                const gapCount = personGaps.length;
+                const statsText = gapCount === 0
+                    ? `No gaps over ${minGapDays} days`
+                    : `${gapCount} gap${gapCount > 1 ? 's' : ''} | Avg: ${summary.avg_gap_days}d | Max: ${summary.max_gap_days}d`;
+
+                return `
+                    <div class="gaps-person-section">
+                        <div class="gaps-person-header">
+                            <span class="gaps-person-name">${escapeHtml(summary.person_name)}</span>
+                            <span class="gaps-person-stats">${statsText}</span>
+                        </div>
+                        <div class="gaps-timeline">
+                            ${markers}
+                        </div>
+                        <div class="gaps-timeline-labels">
+                            <span>${periodStart.toLocaleDateString('en-US', { month: 'short', year: '2-digit' })}</span>
+                            <span>Now</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Add overall summary - convert streak to weeks
+            const totalGaps = gaps.length;
+            const avgGapDays = person_summaries.reduce((a, b) => a + b.avg_gap_days, 0) / person_summaries.length;
+            const maxGapDays = Math.max(...person_summaries.map(s => s.max_gap_days));
+            const bestStreakDays = Math.max(...person_summaries.map(s => s.longest_streak));
+            const bestStreakWeeks = Math.round(bestStreakDays / 7 * 10) / 10;  // Round to 1 decimal
+
+            html += `
+                <div class="gaps-summary">
+                    <div class="gaps-summary-item">
+                        <span class="gaps-summary-value">${totalGaps}</span>
+                        <span class="gaps-summary-label">Total Gaps</span>
+                    </div>
+                    <div class="gaps-summary-item">
+                        <span class="gaps-summary-value">${Math.round(avgGapDays)}d</span>
+                        <span class="gaps-summary-label">Avg Gap</span>
+                    </div>
+                    <div class="gaps-summary-item">
+                        <span class="gaps-summary-value">${maxGapDays}d</span>
+                        <span class="gaps-summary-label">Longest Gap</span>
+                    </div>
+                    <div class="gaps-summary-item">
+                        <span class="gaps-summary-value">${bestStreakWeeks}w</span>
+                        <span class="gaps-summary-label">Best Streak</span>
+                    </div>
+                </div>
+            `;
+
+            container.innerHTML = html;
+        }
+
+        // Render all family insights visualizations
+        function renderFamilyInsights() {
+            renderDaysSinceContact();
+            renderStreakTracker();
+            renderChannelMix();
+            loadCommunicationGaps();
+        }
+
+        // Change family health period
+        async function changeFamilyHealthPeriod(period) {
+            familyHealthPeriod = period;
+
+            // Update button active state
+            document.querySelectorAll('#familyDashboard .me-health-panel .health-period-pill').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-period') === period);
+            });
+
+            await loadFamilyInteractions();
+        }
+
+        // Change family trend period
+        async function changeFamilyTrendPeriod(period) {
+            familyTrendPeriod = period;
+
+            // Update button active state
+            document.querySelectorAll('#familyTrendsPeriodSelector .trends-period-pill').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-period') === period);
+            });
+
+            await loadFamilyInteractions();
+        }
+
+        // Load family timeline (interactions with selected family members)
+        async function loadFamilyTimeline() {
+            const container = document.getElementById('timelineContainer');
+            if (!container) return;
+
+            if (selectedFamilyIds.length === 0) {
+                container.innerHTML = '<div class="loading">Select family members to see timeline</div>';
+                return;
+            }
+
+            container.innerHTML = '<div class="loading">Loading timeline...</div>';
+
+            try {
+                const idsParam = selectedFamilyIds.join(',');
+                const params = new URLSearchParams();
+                params.set('person_ids', idsParam);
+
+                // Apply source type filter if set
+                const mappedSourceType = mapFilterToSourceType(timelineFilter);
+                if (mappedSourceType) {
+                    params.set('source_type', mappedSourceType);
+                }
+
+                // Apply date filter if set
+                const fromDate = document.getElementById('timelineDateFrom')?.value;
+                const toDate = document.getElementById('timelineDateTo')?.value;
+                if (fromDate && toDate && fromDate === toDate) {
+                    params.set('date', fromDate);
+                }
+
+                params.set('limit', TIMELINE_LIMIT.toString());
+
+                const data = await api(`/family/timeline?${params.toString()}`);
+                timelineData = data.items || [];
+
+                // Update the count display
+                updateTimelineCount(data.count || timelineData.length, data.has_more || false);
+
+                renderTimeline();
+
+                // Update filter visibility based on data
+                updateTimelineFilterVisibility();
+            } catch (error) {
+                console.error('Failed to load family timeline:', error);
+                container.innerHTML = '<div class="loading">Failed to load timeline</div>';
+                updateTimelineCount(0, false);
+            }
         }
 
         // Update hero stats for Me page with phone/slack counts
@@ -7248,14 +9837,15 @@
             // Use most recent chart value as current score (more accurate)
             const currentScore = history.length > 0 ? history[history.length - 1].score : (data.relationship_health_score || 0);
 
-            // Update current score display
+            // Update current score display with same color as dots
             if (scoreEl) {
                 scoreEl.textContent = currentScore;
-                // Color based on score
-                let color = '#ef4444';
-                if (currentScore >= 80) color = '#22c55e';
-                else if (currentScore >= 60) color = '#eab308';
-                else if (currentScore >= 50) color = '#f97316';
+                // Color matches dot colors
+                let color = '#ef4444';                        // Red - poor (<25)
+                if (currentScore >= 80) color = '#22c55e';    // Bright green - excellent
+                else if (currentScore >= 60) color = '#86efac'; // Light green - above avg
+                else if (currentScore >= 40) color = '#9ca3af'; // Light gray - around avg
+                else if (currentScore >= 25) color = '#f97316'; // Orange - below avg
                 scoreEl.style.color = color;
             }
 
@@ -7287,11 +9877,23 @@
                 ` L ${xScale(history.length - 1)} ${padding.top + chartHeight}` +
                 ` L ${padding.left} ${padding.top + chartHeight} Z`;
 
-            // Build dots with data attributes for tooltips
+            // Helper to get dot color based on score relative to average (50)
+            function getDotColor(score) {
+                if (score >= 80) return '#22c55e';      // Bright green - excellent
+                if (score >= 60) return '#86efac';      // Light green - above avg
+                if (score >= 40) return '#9ca3af';      // Light gray - around avg
+                if (score >= 25) return '#f97316';      // Orange - below avg
+                return '#ef4444';                        // Red - poor
+            }
+
+            // Build dots with data attributes for tooltips, colored by score
+            const avgCount = data.health_score_average || 0;
             const dots = history.map((point, i) => {
                 const x = xScale(i);
                 const y = yScale(point.score);
-                return `<circle class="health-chart-dot" cx="${x}" cy="${y}" r="4" data-index="${i}" data-score="${point.score}" data-date="${point.date}"/>`;
+                const color = getDotColor(point.score);
+                const count = point.count || 0;
+                return `<circle class="health-chart-dot" cx="${x}" cy="${y}" r="4" data-index="${i}" data-score="${point.score}" data-count="${count}" data-avg="${avgCount}" data-date="${point.date}" style="fill: ${color};"/>`;
             }).join('');
 
             // Y-axis grid lines (at 25, 50, 75)
@@ -7300,10 +9902,10 @@
                 return `<line class="health-chart-grid-line" x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}"/>`;
             }).join('');
 
-            // Y-axis labels
-            const yLabels = [0, 50, 100].map(val => {
+            // Y-axis labels (show "Avg" at 50)
+            const yLabels = [{val: 0, label: '0'}, {val: 50, label: 'Avg'}, {val: 100, label: '100'}].map(({val, label}) => {
                 const y = yScale(val);
-                return `<text x="${padding.left - 5}" y="${y + 3}" font-size="11" fill="var(--text-primary)" text-anchor="end">${val}</text>`;
+                return `<text x="${padding.left - 5}" y="${y + 3}" font-size="11" fill="var(--text-primary)" text-anchor="end">${label}</text>`;
             }).join('');
 
             // X-axis labels (first, middle, last)
@@ -7326,8 +9928,8 @@
                     <svg class="health-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
                         ${gridLines}
                         ${yLabels}
-                        <path class="health-chart-area" d="${areaPath}"/>
-                        <path class="health-chart-line" d="${linePath}"/>
+                        <path class="health-chart-area" d="${areaPath}" style="fill: #9ca3af; opacity: 0.1;"/>
+                        <path class="health-chart-line" d="${linePath}" style="stroke: #9ca3af;"/>
                         ${dots}
                         ${xLabels.join('')}
                     </svg>
@@ -7350,6 +9952,8 @@
             dots.forEach(dot => {
                 dot.addEventListener('mouseenter', (e) => {
                     const score = dot.dataset.score;
+                    const count = dot.dataset.count || 0;
+                    const avg = dot.dataset.avg || 0;
                     const dateStr = dot.dataset.date;
                     const d = new Date(dateStr);
                     const formattedDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -7357,6 +9961,8 @@
                     tooltip.innerHTML = `
                         <div class="health-chart-tooltip-date">${formattedDate}</div>
                         <div class="health-chart-tooltip-score">Score: ${score}</div>
+                        <div style="font-size: 0.6rem; color: var(--text-muted);">Interactions: ${count}</div>
+                        <div style="font-size: 0.6rem; color: var(--text-muted);">Avg. for Period: ${avg}</div>
                     `;
 
                     // Position tooltip near the dot
@@ -7378,9 +9984,14 @@
         async function changeHealthPeriod(period) {
             currentHealthPeriod = period;
 
-            // Update pill states
-            document.querySelectorAll('.health-period-pill').forEach(pill => {
-                pill.classList.toggle('active', pill.dataset.period === period);
+            // Update pill states (only the main health panel, not tracked panels)
+            document.querySelectorAll('#healthChartContainer').forEach(container => {
+                const panel = container.closest('.me-health-panel');
+                if (panel) {
+                    panel.querySelectorAll('.health-period-pill').forEach(pill => {
+                        pill.classList.toggle('active', pill.dataset.period === period);
+                    });
+                }
             });
 
             // Show loading
@@ -7395,6 +10006,235 @@
                 renderHealthScore(data);
             } catch (error) {
                 console.error('Failed to load health history:', error);
+                if (container) {
+                    container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 1rem;">Failed to load</div>';
+                }
+            }
+        }
+
+        // Tracked Relationships state
+        let currentTrackedPeriods = {
+            parent: 'quarter',
+            coparent: 'quarter'
+        };
+        let trackedRelationshipsData = [];
+
+        // Render all tracked relationships
+        function renderTrackedRelationships(data) {
+            trackedRelationshipsData = data.tracked_relationships || [];
+
+            trackedRelationshipsData.forEach(rel => {
+                if (rel.name === 'Parent Relationship') {
+                    renderTrackedChart('parent', rel);
+                } else if (rel.name === 'Parallel Parenting') {
+                    renderTrackedChart('coparent', rel);
+                }
+            });
+        }
+
+        // Render a single tracked relationship chart
+        function renderTrackedChart(type, data) {
+            const containerId = type === 'parent' ? 'parentChartContainer' : 'coparentChartContainer';
+            const countId = type === 'parent' ? 'parentCurrentCount' : 'coparentCurrentCount';
+            const peopleListId = type === 'parent' ? 'parentPeopleList' : 'coparentPeopleList';
+
+            const container = document.getElementById(containerId);
+            const countEl = document.getElementById(countId);
+            const peopleListEl = document.getElementById(peopleListId);
+
+            if (!container) return;
+
+            const history = data.history || [];
+            const isInverse = data.healthy_direction === 'less';  // fewer = healthier
+
+            // Update current score display with same color as dots
+            if (countEl) {
+                const currentScore = data.current_score || 0;
+                countEl.textContent = currentScore;
+
+                // Color matches dot colors
+                let color = '#ef4444';                        // Red - poor (<25)
+                if (currentScore >= 80) color = '#22c55e';    // Bright green - excellent
+                else if (currentScore >= 60) color = '#86efac'; // Light green - above avg
+                else if (currentScore >= 40) color = '#9ca3af'; // Light gray - around avg
+                else if (currentScore >= 25) color = '#f97316'; // Orange - below avg
+                countEl.style.color = color;
+                countEl.className = 'tracked-current-count';
+            }
+
+            // Render people chips
+            if (peopleListEl) {
+                const personIds = data.person_ids || [];
+                const personNames = data.person_names || [];
+                peopleListEl.innerHTML = personNames.map((name, i) => `
+                    <span class="tracked-person-chip" onclick="selectPerson('${personIds[i]}')">${escapeHtml(name)}</span>
+                `).join('');
+            }
+
+            if (history.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 1rem; text-align: center;">No interaction history</div>';
+                return;
+            }
+
+            // Fixed 0-100 Y-axis for scores (like health score)
+            const yAxisMax = 100;
+
+            // SVG dimensions
+            const width = 600;
+            const height = 120;
+            const padding = { top: 10, right: 15, bottom: 20, left: 30 };
+            const chartWidth = width - padding.left - padding.right;
+            const chartHeight = height - padding.top - padding.bottom;
+
+            // Scale functions
+            const xScale = (i) => padding.left + (i / Math.max(history.length - 1, 1)) * chartWidth;
+            const yScale = (score) => padding.top + chartHeight - (score / yAxisMax) * chartHeight;
+
+            // Build line path
+            const linePath = history.map((point, i) => {
+                const x = xScale(i);
+                const y = yScale(point.score);
+                return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+            }).join(' ');
+
+            // Build area path
+            const areaPath = linePath +
+                ` L ${xScale(history.length - 1)} ${padding.top + chartHeight}` +
+                ` L ${padding.left} ${padding.top + chartHeight} Z`;
+
+            // Helper to get dot color based on score relative to average (50)
+            function getDotColor(score) {
+                if (score >= 80) return '#22c55e';      // Bright green - excellent
+                if (score >= 60) return '#86efac';      // Light green - above avg
+                if (score >= 40) return '#9ca3af';      // Light gray - around avg
+                if (score >= 25) return '#f97316';      // Orange - below avg
+                return '#ef4444';                        // Red - poor
+            }
+
+            // Build dots with colors based on score
+            const avgCount = data.average || 0;
+            const dots = history.map((point, i) => {
+                const x = xScale(i);
+                const y = yScale(point.score);
+                const color = getDotColor(point.score);
+                const count = point.count || 0;
+                return `<circle class="tracked-chart-dot" cx="${x}" cy="${y}" r="4" data-index="${i}" data-score="${point.score}" data-count="${count}" data-avg="${avgCount}" data-date="${point.date}" style="fill: ${color};"/>`;
+            }).join('');
+
+            // Y-axis grid lines (at 25, 50, 75 like health score)
+            const gridLines = [25, 50, 75].map(val => {
+                const y = yScale(val);
+                return `<line class="health-chart-grid-line" x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}"/>`;
+            }).join('');
+
+            // Y-axis labels (show "Avg" at 50)
+            const yLabels = [{val: 0, label: '0'}, {val: 50, label: 'Avg'}, {val: 100, label: '100'}].map(({val, label}) => {
+                const y = yScale(val);
+                return `<text x="${padding.left - 5}" y="${y + 3}" font-size="11" fill="var(--text-primary)" text-anchor="end">${label}</text>`;
+            }).join('');
+
+            // X-axis labels
+            const xLabels = [];
+            if (history.length > 0) {
+                const formatLabel = (dateStr) => {
+                    const d = new Date(dateStr);
+                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                };
+                xLabels.push(`<text x="${xScale(0)}" y="${height - 2}" font-size="11" fill="var(--text-primary)" text-anchor="start">${formatLabel(history[0].date)}</text>`);
+                if (history.length > 2) {
+                    const midIdx = Math.floor(history.length / 2);
+                    xLabels.push(`<text x="${xScale(midIdx)}" y="${height - 2}" font-size="11" fill="var(--text-primary)" text-anchor="middle">${formatLabel(history[midIdx].date)}</text>`);
+                }
+                xLabels.push(`<text x="${xScale(history.length - 1)}" y="${height - 2}" font-size="11" fill="var(--text-primary)" text-anchor="end">${formatLabel(history[history.length - 1].date)}</text>`);
+            }
+
+            container.innerHTML = `
+                <div class="tracked-line-chart" style="position: relative;" data-type="${type}">
+                    <svg class="health-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+                        ${gridLines}
+                        ${yLabels}
+                        <path d="${areaPath}" style="fill: #9ca3af; opacity: 0.1;"/>
+                        <path d="${linePath}" style="fill: none; stroke: #9ca3af; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"/>
+                        ${dots}
+                        ${xLabels.join('')}
+                    </svg>
+                    <div class="health-chart-tooltip" id="${type}ChartTooltip"></div>
+                </div>
+            `;
+
+            // Setup tooltips
+            setupTrackedChartTooltips(type);
+        }
+
+        // Setup tooltips for tracked chart
+        function setupTrackedChartTooltips(type) {
+            const container = document.querySelector(`.tracked-line-chart[data-type="${type}"]`);
+            const tooltip = document.getElementById(`${type}ChartTooltip`);
+            const dots = container ? container.querySelectorAll('.tracked-chart-dot') : [];
+
+            if (!container || !tooltip) return;
+
+            dots.forEach(dot => {
+                dot.addEventListener('mouseenter', (e) => {
+                    const score = dot.dataset.score;
+                    const count = dot.dataset.count || 0;
+                    const avg = dot.dataset.avg || 0;
+                    const dateStr = dot.dataset.date;
+                    const d = new Date(dateStr);
+                    const formattedDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+                    tooltip.innerHTML = `
+                        <div class="health-chart-tooltip-date">${formattedDate}</div>
+                        <div class="health-chart-tooltip-score">Score: ${score}</div>
+                        <div style="font-size: 0.6rem; color: var(--text-muted);">Interactions: ${count}</div>
+                        <div style="font-size: 0.6rem; color: var(--text-muted);">Avg. for Period: ${avg}</div>
+                    `;
+
+                    const rect = dot.getBoundingClientRect();
+                    const containerRect = container.getBoundingClientRect();
+                    tooltip.style.left = `${rect.left - containerRect.left + rect.width / 2}px`;
+                    tooltip.style.top = `${rect.top - containerRect.top - 8}px`;
+                    tooltip.style.transform = 'translate(-50%, -100%)';
+                    tooltip.classList.add('visible');
+                });
+
+                dot.addEventListener('mouseleave', () => {
+                    tooltip.classList.remove('visible');
+                });
+            });
+        }
+
+        // Change tracked relationship period
+        async function changeTrackedPeriod(type, period) {
+            currentTrackedPeriods[type] = period;
+
+            // Update pill states for this panel only
+            const selectorId = type === 'parent' ? 'parentPeriodSelector' : 'coparentPeriodSelector';
+            const selector = document.getElementById(selectorId);
+            if (selector) {
+                selector.querySelectorAll('.health-period-pill').forEach(pill => {
+                    pill.classList.toggle('active', pill.dataset.period === period);
+                });
+            }
+
+            // Show loading
+            const containerId = type === 'parent' ? 'parentChartContainer' : 'coparentChartContainer';
+            const container = document.getElementById(containerId);
+            if (container) {
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 1rem;">Loading...</div>';
+            }
+
+            // Fetch new data
+            try {
+                const data = await api(`/me/interactions?days_back=1095&health_period=${period}`);
+                const tracked = data.tracked_relationships || [];
+                const targetName = type === 'parent' ? 'Parent Relationship' : 'Parallel Parenting';
+                const rel = tracked.find(r => r.name === targetName);
+                if (rel) {
+                    renderTrackedChart(type, rel);
+                }
+            } catch (error) {
+                console.error('Failed to load tracked relationship:', error);
                 if (container) {
                     container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 1rem;">Failed to load</div>';
                 }
@@ -8087,6 +10927,323 @@
 
             // Setup tooltip and click handlers
             setupHeatmapInteractions();
+
+            // Render volume chart with same time period
+            renderVolumeChart();
+        }
+
+        // Store volume chart data for hover interactions
+        let volumeChartPoints = [];
+        let volumeChartConfig = null;
+
+        /**
+         * Render a smoothed line chart showing interaction volume over time.
+         * Uses the same time period as the heatmap (heatmapYears).
+         */
+        function renderVolumeChart(highlightIndex = -1) {
+            const canvas = document.getElementById('volumeChartCanvas');
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+
+            // Set canvas size with device pixel ratio for sharpness
+            const rect = canvas.getBoundingClientRect();
+
+            // Skip if canvas not visible (zero dimensions)
+            if (rect.width === 0 || rect.height === 0) {
+                // Retry after layout completes
+                requestAnimationFrame(() => renderVolumeChart(highlightIndex));
+                return;
+            }
+
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+
+            const width = rect.width;
+            const height = rect.height;
+            // Minimal padding - balanced for Y-axis labels on left, minimal on right
+            const padding = { top: 15, right: 10, bottom: 20, left: 30 };
+            const chartWidth = width - padding.left - padding.right;
+            const chartHeight = height - padding.top - padding.bottom;
+
+            // Store config for hover detection
+            volumeChartConfig = { width, height, padding, chartWidth, chartHeight };
+
+            // Clear canvas completely
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.scale(dpr, dpr);
+
+            // Aggregate data by week or month depending on time range
+            const daysBack = heatmapYears * 365;
+            const useMonthly = heatmapYears >= 3;
+            const aggregated = aggregateVolumeData(heatmapData, daysBack, useMonthly);
+
+            if (aggregated.length === 0) {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '12px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('No interaction data', width / 2, height / 2);
+                volumeChartPoints = [];
+                return;
+            }
+
+            // Find max value for scaling
+            const maxValue = Math.max(...aggregated.map(d => d.value), 1);
+
+            // Calculate points and store globally for hover
+            volumeChartPoints = aggregated.map((d, i) => ({
+                x: padding.left + (i / (aggregated.length - 1 || 1)) * chartWidth,
+                y: padding.top + chartHeight - (d.value / maxValue) * chartHeight,
+                value: d.value,
+                label: d.label,
+                fullLabel: d.fullLabel || d.label
+            }));
+
+            // Draw grid lines
+            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#333';
+            ctx.lineWidth = 0.5;
+            const gridLines = 4;
+            for (let i = 0; i <= gridLines; i++) {
+                const y = padding.top + (i / gridLines) * chartHeight;
+                ctx.beginPath();
+                ctx.moveTo(padding.left, y);
+                ctx.lineTo(width - padding.right, y);
+                ctx.stroke();
+            }
+
+            // Draw Y-axis labels (white text)
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '10px system-ui, sans-serif';
+            ctx.textAlign = 'right';
+            for (let i = 0; i <= gridLines; i++) {
+                const value = Math.round(maxValue * (1 - i / gridLines));
+                const y = padding.top + (i / gridLines) * chartHeight;
+                ctx.fillText(value.toString(), padding.left - 5, y + 3);
+            }
+
+            // Draw smoothed line using cardinal spline
+            if (volumeChartPoints.length > 1) {
+                ctx.beginPath();
+                ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--people').trim() || '#00bcd4';
+                ctx.lineWidth = 2;
+                ctx.lineJoin = 'round';
+                ctx.lineCap = 'round';
+
+                // Draw smooth curve through points
+                drawSmoothLine(ctx, volumeChartPoints);
+                ctx.stroke();
+
+                // Fill area under curve
+                ctx.lineTo(volumeChartPoints[volumeChartPoints.length - 1].x, padding.top + chartHeight);
+                ctx.lineTo(volumeChartPoints[0].x, padding.top + chartHeight);
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(0, 188, 212, 0.15)';
+                ctx.fill();
+            }
+
+            // Draw X-axis labels (show a few evenly spaced, white text)
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '10px system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            const labelCount = Math.min(6, aggregated.length);
+            const step = Math.floor(aggregated.length / labelCount) || 1;
+            for (let i = 0; i < aggregated.length; i += step) {
+                const x = padding.left + (i / (aggregated.length - 1 || 1)) * chartWidth;
+                ctx.fillText(aggregated[i].label, x, height - 5);
+            }
+
+            // Draw highlight circle if hovering
+            if (highlightIndex >= 0 && highlightIndex < volumeChartPoints.length) {
+                const point = volumeChartPoints[highlightIndex];
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
+                ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--people').trim() || '#00bcd4';
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            // Setup hover interactions (only once)
+            if (!canvas.dataset.hoverSetup) {
+                setupVolumeChartHover(canvas);
+                canvas.dataset.hoverSetup = 'true';
+            }
+        }
+
+        /**
+         * Setup hover interactions for the volume chart.
+         */
+        function setupVolumeChartHover(canvas) {
+            const tooltip = document.getElementById('heatmapTooltip');
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (!volumeChartPoints.length || !volumeChartConfig) return;
+
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                // Find nearest point
+                let nearestIndex = -1;
+                let nearestDist = Infinity;
+
+                volumeChartPoints.forEach((point, i) => {
+                    const dist = Math.abs(point.x - x);
+                    if (dist < nearestDist && dist < 30) {
+                        nearestDist = dist;
+                        nearestIndex = i;
+                    }
+                });
+
+                if (nearestIndex >= 0) {
+                    const point = volumeChartPoints[nearestIndex];
+                    canvas.style.cursor = 'pointer';
+
+                    // Re-render with highlight
+                    renderVolumeChart(nearestIndex);
+
+                    // Show tooltip
+                    const useMonthly = heatmapYears >= 3;
+                    const periodLabel = useMonthly ? 'Month' : 'Week';
+                    tooltip.innerHTML = `
+                        <div class="heatmap-tooltip-date">${point.fullLabel}</div>
+                        <div class="heatmap-tooltip-item">${point.value} interaction${point.value !== 1 ? 's' : ''}</div>
+                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px;">${periodLabel} total</div>
+                    `;
+                    tooltip.classList.add('visible');
+
+                    // Position tooltip near cursor
+                    const tooltipRect = tooltip.getBoundingClientRect();
+                    let tooltipX = e.clientX + 15;
+                    let tooltipY = e.clientY - 10;
+
+                    // Keep tooltip in viewport
+                    if (tooltipX + tooltipRect.width > window.innerWidth) {
+                        tooltipX = e.clientX - tooltipRect.width - 15;
+                    }
+                    if (tooltipY + tooltipRect.height > window.innerHeight) {
+                        tooltipY = e.clientY - tooltipRect.height - 10;
+                    }
+
+                    tooltip.style.left = tooltipX + 'px';
+                    tooltip.style.top = tooltipY + 'px';
+                } else {
+                    canvas.style.cursor = 'default';
+                    tooltip.classList.remove('visible');
+                    // Re-render without highlight
+                    renderVolumeChart(-1);
+                }
+            });
+
+            canvas.addEventListener('mouseleave', () => {
+                tooltip.classList.remove('visible');
+                canvas.style.cursor = 'default';
+                renderVolumeChart(-1);
+            });
+        }
+
+        /**
+         * Aggregate heatmap data into weekly or monthly buckets for the volume chart.
+         * Creates buckets for the ENTIRE date range, including periods with no data.
+         */
+        function aggregateVolumeData(data, daysBack, useMonthly) {
+            const buckets = {};
+            const now = new Date();
+            now.setHours(12, 0, 0, 0);
+            const startDate = new Date(now);
+            startDate.setDate(startDate.getDate() - daysBack);
+
+            // First, create all buckets for the entire date range (including empty ones)
+            if (useMonthly) {
+                // Create monthly buckets from startDate to now
+                const current = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+                const endMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                while (current <= endMonth) {
+                    const bucketKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+                    buckets[bucketKey] = { value: 0, date: new Date(current) };
+                    current.setMonth(current.getMonth() + 1);
+                }
+            } else {
+                // Create weekly buckets from startDate to now
+                const current = new Date(startDate);
+                current.setDate(current.getDate() - current.getDay()); // Start of week (Sunday)
+                while (current <= now) {
+                    const bucketKey = current.toISOString().slice(0, 10);
+                    buckets[bucketKey] = { value: 0, date: new Date(current) };
+                    current.setDate(current.getDate() + 7);
+                }
+            }
+
+            // Now populate buckets with actual data
+            for (const [dateKey, dayData] of Object.entries(data)) {
+                const date = new Date(dateKey + 'T12:00:00');
+                if (date < startDate) continue;
+
+                let bucketKey;
+                if (useMonthly) {
+                    bucketKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                } else {
+                    // Weekly: use ISO week start (Sunday)
+                    const weekStart = new Date(date);
+                    weekStart.setDate(date.getDate() - date.getDay());
+                    bucketKey = weekStart.toISOString().slice(0, 10);
+                }
+
+                if (buckets[bucketKey]) {
+                    buckets[bucketKey].value += dayData.total || 0;
+                }
+            }
+
+            // Sort by date and format labels as MM/YY
+            const sorted = Object.entries(buckets)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([key, bucketData]) => {
+                    let label, fullLabel;
+                    if (useMonthly) {
+                        const [year, month] = key.split('-');
+                        const date = new Date(year, parseInt(month) - 1, 1);
+                        label = `${month}/${year.slice(-2)}`;
+                        fullLabel = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                    } else {
+                        const date = new Date(key + 'T12:00:00');
+                        const mm = String(date.getMonth() + 1).padStart(2, '0');
+                        const yy = String(date.getFullYear()).slice(-2);
+                        label = `${mm}/${yy}`;
+                        fullLabel = `Week of ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+                    }
+                    return { label, fullLabel, value: bucketData.value };
+                });
+
+            return sorted;
+        }
+
+        /**
+         * Draw a smooth curve through points using cardinal spline interpolation.
+         */
+        function drawSmoothLine(ctx, points) {
+            if (points.length < 2) return;
+
+            const tension = 0.3;
+
+            ctx.moveTo(points[0].x, points[0].y);
+
+            for (let i = 0; i < points.length - 1; i++) {
+                const p0 = points[i - 1] || points[0];
+                const p1 = points[i];
+                const p2 = points[i + 1];
+                const p3 = points[i + 2] || p2;
+
+                const cp1x = p1.x + (p2.x - p0.x) * tension;
+                const cp1y = p1.y + (p2.y - p0.y) * tension;
+                const cp2x = p2.x - (p3.x - p1.x) * tension;
+                const cp2y = p2.y - (p3.y - p1.y) * tension;
+
+                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+            }
         }
 
         // Setup tooltip and click interactions for heatmap
@@ -8171,6 +11328,11 @@
             // Update the date range state variables to match
             timelineDateRangeFrom = new Date(dateKey + 'T00:00:00');
             timelineDateRangeTo = new Date(dateKey + 'T23:59:59');
+
+            // Reset source filter to 'all' so we see all interactions for this date
+            timelineFilter = 'all';
+            document.querySelectorAll('.timeline-filter-chip').forEach(c => c.classList.remove('active'));
+            document.querySelector('[data-source="all"]')?.classList.add('active');
 
             // Switch to timeline tab - loadTimeline will use the date range for filtering
             await switchTab('timeline');
@@ -8309,12 +11471,16 @@
 
             // Apply date range filter if set (this is a client-side refinement)
             // The date range picker allows narrowing down within the fetched data
-            if (timelineDateRangeFrom || timelineDateRangeTo) {
+            // Use string comparison on YYYY-MM-DD to avoid timezone conversion issues
+            const fromDateStr = document.getElementById('timelineDateFrom')?.value || null;
+            const toDateStr = document.getElementById('timelineDateTo')?.value || null;
+            if (fromDateStr || toDateStr) {
                 items = items.filter(item => {
-                    const itemDate = new Date(item.timestamp);
-                    itemDate.setHours(0, 0, 0, 0);
-                    if (timelineDateRangeFrom && itemDate < timelineDateRangeFrom) return false;
-                    if (timelineDateRangeTo && itemDate > timelineDateRangeTo) return false;
+                    // Extract YYYY-MM-DD from ISO timestamp (e.g., "2020-11-10T00:00:00+00:00" -> "2020-11-10")
+                    // This matches how the aggregated timeline groups dates, ensuring consistency
+                    const itemDateStr = item.timestamp.split('T')[0];
+                    if (fromDateStr && itemDateStr < fromDateStr) return false;
+                    if (toDateStr && itemDateStr > toDateStr) return false;
                     return true;
                 });
             }
@@ -8396,8 +11562,10 @@
             document.querySelector(`[data-source="${source}"]`).classList.add('active');
 
             // Re-fetch from API with the new filter applied server-side
-            // This is the key change from the old client-side filtering approach
-            if (selectedPersonId) {
+            const { isFamily } = parseUrl();
+            if (isFamily) {
+                await loadFamilyTimeline();
+            } else if (selectedPersonId) {
                 await loadTimeline(selectedPersonId);
             }
         }
@@ -8437,7 +11605,10 @@
             document.querySelector('[data-source="all"]')?.classList.add('active');
 
             // Reload from API with the new date filter
-            if (selectedPersonId) {
+            const { isFamily } = parseUrl();
+            if (isFamily) {
+                await loadFamilyTimeline();
+            } else if (selectedPersonId) {
                 await loadTimeline(selectedPersonId);
             }
         }
@@ -8463,7 +11634,10 @@
             document.querySelector('[data-source="all"]')?.classList.add('active');
 
             // Reload from API to get unfiltered data
-            if (selectedPersonId) {
+            const { isFamily } = parseUrl();
+            if (isFamily) {
+                await loadFamilyTimeline();
+            } else if (selectedPersonId) {
                 await loadTimeline(selectedPersonId);
             }
 
@@ -11135,7 +14309,14 @@
             }
 
             // Load data if needed
-            if (selectedPersonId) {
+            const { isFamily } = parseUrl();
+            if (isFamily) {
+                // Family view - load family-specific data
+                if (tabName === 'timeline') {
+                    await loadFamilyTimeline();
+                }
+                // Graph not supported for family view
+            } else if (selectedPersonId) {
                 if (tabName === 'timeline') {
                     await loadTimeline(selectedPersonId);
                 } else if (tabName === 'graph') {
@@ -11215,16 +14396,108 @@
             }
         }
 
-        // Set filter
-        function setFilter(filter) {
-            currentFilter = filter;
-
-            // Update UI
-            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
-            document.querySelector(`[data-filter="${filter}"]`).classList.add('active');
-
-            loadPeople();
+        // People list filter functions
+        function togglePeopleCategoryFilter() {
+            const options = document.getElementById('peopleCategoryOptions');
+            options.classList.toggle('show');
+            // Close dunbar dropdown if open
+            document.getElementById('peopleDunbarOptions').classList.remove('show');
         }
+
+        function togglePeopleDunbarFilter() {
+            const options = document.getElementById('peopleDunbarOptions');
+            options.classList.toggle('show');
+            // Close category dropdown if open
+            document.getElementById('peopleCategoryOptions').classList.remove('show');
+        }
+
+        function updatePeopleCategoryFilter() {
+            const checkboxes = document.querySelectorAll('#peopleCategoryOptions input[type="checkbox"]');
+            peopleCategoryFilters.clear();
+            checkboxes.forEach(cb => {
+                if (cb.checked) peopleCategoryFilters.add(cb.value);
+            });
+
+            // Update label
+            const label = document.getElementById('peopleCategoryLabel');
+            if (peopleCategoryFilters.size === 4) {
+                label.textContent = 'All Categories';
+            } else if (peopleCategoryFilters.size === 0) {
+                label.textContent = 'None';
+            } else {
+                label.textContent = `${peopleCategoryFilters.size} Selected`;
+            }
+
+            renderPeopleList();
+        }
+
+        function updatePeopleDunbarFilter() {
+            // Check if we were previously in "only outer circles" mode
+            const wasOnlyOuter = peopleDunbarFilters.size > 0 &&
+                [...peopleDunbarFilters].every(c => c === '5' || c === '6+');
+
+            const checkboxes = document.querySelectorAll('#peopleDunbarOptions input[type="checkbox"]');
+            peopleDunbarFilters.clear();
+            checkboxes.forEach(cb => {
+                if (cb.checked) peopleDunbarFilters.add(cb.value);
+            });
+
+            // Check if we are now in "only outer circles" mode
+            const isOnlyOuter = peopleDunbarFilters.size > 0 &&
+                [...peopleDunbarFilters].every(c => c === '5' || c === '6+');
+
+            // Update label
+            const label = document.getElementById('peopleDunbarLabel');
+            if (peopleDunbarFilters.size === 7) {
+                label.textContent = 'All Circles';
+            } else if (peopleDunbarFilters.size === 0) {
+                label.textContent = 'None';
+            } else {
+                label.textContent = `${peopleDunbarFilters.size} Selected`;
+            }
+
+            // If switching to/from "only outer circles", reload from API
+            if (wasOnlyOuter !== isOnlyOuter) {
+                loadPeople();
+            } else {
+                renderPeopleList();
+            }
+        }
+
+        // All/None toggle functions for category filter
+        function selectAllCategories() {
+            document.querySelectorAll('#peopleCategoryOptions input[type="checkbox"]').forEach(cb => cb.checked = true);
+            updatePeopleCategoryFilter();
+        }
+
+        function selectNoCategories() {
+            document.querySelectorAll('#peopleCategoryOptions input[type="checkbox"]').forEach(cb => cb.checked = false);
+            updatePeopleCategoryFilter();
+        }
+
+        // All/None toggle functions for dunbar filter
+        function selectAllDunbar() {
+            document.querySelectorAll('#peopleDunbarOptions input[type="checkbox"]').forEach(cb => cb.checked = true);
+            updatePeopleDunbarFilter();
+        }
+
+        function selectNoDunbar() {
+            document.querySelectorAll('#peopleDunbarOptions input[type="checkbox"]').forEach(cb => cb.checked = false);
+            updatePeopleDunbarFilter();
+        }
+
+        // Close people filter dropdowns when clicking outside
+        document.addEventListener('click', function(e) {
+            const categoryDropdown = document.getElementById('peopleCategoryDropdown');
+            const dunbarDropdown = document.getElementById('peopleDunbarDropdown');
+
+            if (categoryDropdown && !categoryDropdown.contains(e.target)) {
+                document.getElementById('peopleCategoryOptions').classList.remove('show');
+            }
+            if (dunbarDropdown && !dunbarDropdown.contains(e.target)) {
+                document.getElementById('peopleDunbarOptions').classList.remove('show');
+            }
+        });
 
         // Handle search
         let searchTimeout;

@@ -282,12 +282,19 @@ def split_person(from_name: str, to_name: str, source_types: list[str],
             to_person = PersonEntity(
                 id=str(uuid.uuid4()),
                 canonical_name=new_person_name,
+                display_name=new_person_name,
                 sources=[],
             )
             store.add(to_person)
             store.save()
             stats['to_person'] = {'id': to_person.id, 'name': to_person.canonical_name}
-            logger.info(f"Created new person: {to_person.canonical_name} ({to_person.id[:8]})")
+            logger.info(f"Created new person: {to_person.canonical_name} ({to_person.id})")
+
+            # Verify the person was saved correctly
+            verify_person = store.get_by_id(to_person.id)
+            if not verify_person:
+                logger.error(f"CRITICAL: Person {to_person.id} was not saved correctly!")
+                raise RuntimeError(f"Failed to save new person: {to_person.canonical_name}")
     else:
         to_person = find_person_by_name(to_name)
         if not to_person:
@@ -336,21 +343,21 @@ def split_person(from_name: str, to_name: str, source_types: list[str],
         refresh_person_stats([from_person.id, to_id])
 
         # Recalculate relationship strength for both affected people
-        from api.services.relationship_metrics import compute_strength_for_person
+        # (also updates is_peripheral_contact; dunbar_circle requires full recalc)
+        from api.services.relationship_metrics import update_strength_for_person
         from api.services.person_entity import get_person_entity_store
         person_store = get_person_entity_store()
 
-        # Reload entities to get fresh stats
+        # Reload from_person to get fresh stats for logging
         from_person = person_store.get_by_id(from_person.id)
-        to_person_entity = person_store.get_by_id(to_id)
 
-        for person in [from_person, to_person_entity]:
-            if person:
-                new_strength = compute_strength_for_person(person)
-                if new_strength != person.relationship_strength:
-                    logger.info(f"   {person.canonical_name} strength: {person.relationship_strength} -> {new_strength}")
-                    person.relationship_strength = new_strength
-                    person_store.update(person)
+        for person_id, name in [(from_person.id, from_person.canonical_name), (to_id, to_id)]:
+            if person_id and person_id != 'NEW':
+                old_person = person_store.get_by_id(person_id)
+                old_strength = old_person.relationship_strength if old_person else None
+                new_strength = update_strength_for_person(person_id)
+                if new_strength is not None and new_strength != old_strength:
+                    logger.info(f"   {name} strength: {old_strength} -> {new_strength}")
 
         person_store.save()
 

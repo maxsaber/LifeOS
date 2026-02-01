@@ -38,6 +38,9 @@ from config.relationship_weights import (
     LIFETIME_FREQUENCY_TARGET,
     MIN_INTERACTIONS_FOR_FULL_RECENCY,
     ZERO_INTERACTION_RECENCY_MULTIPLIER,
+    PERIPHERAL_THRESHOLD,
+    STRENGTH_OVERRIDES_BY_ID,
+    CIRCLE_OVERRIDES_BY_ID,
 )
 import math
 
@@ -342,7 +345,9 @@ def update_strength_for_person(person_id: str) -> Optional[float]:
     """
     Compute and update relationship strength for a person.
 
-    Updates the PersonEntity with the new strength score.
+    Updates the PersonEntity with the new strength score and peripheral contact flag.
+    Note: dunbar_circle is NOT updated here - it requires ranking all people
+    and is only computed by update_all_strengths().
 
     Args:
         person_id: ID of the person to update
@@ -359,15 +364,18 @@ def update_strength_for_person(person_id: str) -> Optional[float]:
 
     strength = compute_strength_for_person(person)
     person.relationship_strength = strength
+    person.is_peripheral_contact = strength < PERIPHERAL_THRESHOLD
     store.update(person)
 
-    logger.debug(f"Updated relationship strength for {person.canonical_name}: {strength}")
+    logger.debug(f"Updated relationship strength for {person.canonical_name}: {strength} (peripheral={person.is_peripheral_contact})")
     return strength
 
 
 def update_all_strengths() -> dict:
     """
     Update relationship strength for all people.
+
+    Also updates is_peripheral_contact and dunbar_circle for all people.
 
     Returns:
         Statistics about the update
@@ -377,25 +385,109 @@ def update_all_strengths() -> dict:
 
     updated = 0
     failed = 0
+    peripheral_count = 0
 
     for person in people:
         try:
             strength = compute_strength_for_person(person)
             person.relationship_strength = strength
+            person.is_peripheral_contact = strength < PERIPHERAL_THRESHOLD
+            if person.is_peripheral_contact:
+                person.dunbar_circle = 7  # Pre-assign peripheral contacts to circle 7
+                peripheral_count += 1
             store.update(person)
             updated += 1
         except Exception as e:
             logger.error(f"Failed to update strength for {person.id}: {e}")
             failed += 1
 
+    # Compute Dunbar circles for non-peripheral contacts
+    circles_result = compute_all_dunbar_circles(store)
+
     # Save all updates
     store.save()
 
-    logger.info(f"Updated relationship strength for {updated} people ({failed} failed)")
+    logger.info(f"Updated relationship strength for {updated} people ({failed} failed, {peripheral_count} peripheral)")
     return {
         "updated": updated,
         "failed": failed,
         "total": len(people),
+        "peripheral_count": peripheral_count,
+        "circles_computed": circles_result.get("assigned", 0),
+    }
+
+
+def _get_effective_strength(person: PersonEntity) -> float:
+    """Get relationship strength, applying manual overrides if defined (by ID)."""
+    override = STRENGTH_OVERRIDES_BY_ID.get(person.id)
+    if override is not None:
+        return override
+    return person.relationship_strength or 0
+
+
+def compute_all_dunbar_circles(store=None) -> dict:
+    """
+    Compute Dunbar circles for all non-peripheral contacts.
+
+    Circle 0 is RESERVED for manual overrides only (spouse, children, self).
+    Other circles are assigned based on relationship_strength ranking:
+    - Circle 0: Manual overrides only (CIRCLE_OVERRIDES_BY_ID)
+    - Circle 1: Top 5 people (close friends/family)
+    - Circle 2: Next 15 (good friends)
+    - Circle 3: Next 50 (friends)
+    - Circle 4: Next 150 (meaningful acquaintances)
+    - Circle 5: Next 500 (acquaintances)
+    - Circle 6: Next 1500 (recognizable)
+    - Circle 7: Everyone else (peripheral, pre-assigned)
+
+    Manual STRENGTH_OVERRIDES are respected when ranking people.
+
+    Args:
+        store: PersonEntityStore instance (optional, will get if not provided)
+
+    Returns:
+        Statistics about the assignment
+    """
+    if store is None:
+        store = get_person_entity_store()
+
+    # Get all non-peripheral contacts, sorted by effective strength descending
+    # Effective strength = override if defined, else computed strength
+    all_people = store.get_all(include_hidden=True)
+    non_peripheral = [p for p in all_people if not p.is_peripheral_contact]
+    non_peripheral.sort(key=_get_effective_strength, reverse=True)
+
+    # Dunbar circle thresholds (cumulative sizes) - starts at circle 1
+    # Circle 0 is RESERVED for manual overrides only (e.g., spouse, children)
+    # Circle 1: top 5, Circle 2: next 15, Circle 3: next 50, etc.
+    circle_thresholds = [5, 20, 70, 220, 720, 2220]  # 5, 15, 50, 150, 500, 1500
+
+    assigned = 0
+    ranking_index = 0  # Separate counter for non-override people
+    for person in non_peripheral:
+        # Check for manual circle override first
+        if person.id in CIRCLE_OVERRIDES_BY_ID:
+            circle = CIRCLE_OVERRIDES_BY_ID[person.id]
+            # Override people don't count toward ranking thresholds
+        else:
+            # Find which circle this person belongs to based on their ranking
+            # among non-override people (circle 0 overrides don't consume slots)
+            circle = 6  # Default to circle 6 if beyond all thresholds
+            for c, threshold in enumerate(circle_thresholds):
+                if ranking_index < threshold:
+                    circle = c + 1  # +1 because circle 0 is reserved
+                    break
+            ranking_index += 1
+
+        if person.dunbar_circle != circle:
+            person.dunbar_circle = circle
+            store.update(person)
+        assigned += 1
+
+    logger.info(f"Computed Dunbar circles for {assigned} non-peripheral contacts")
+    return {
+        "assigned": assigned,
+        "total_non_peripheral": len(non_peripheral),
     }
 
 

@@ -90,6 +90,8 @@ class TestMeInteractionsEndpoint:
                 relationship_strength=90.0,
                 last_seen=now - timedelta(days=1),
                 first_seen=now - timedelta(days=365),
+                dunbar_circle=2,
+                category="personal",
             ),
             MagicMock(
                 id="person-2",
@@ -97,6 +99,8 @@ class TestMeInteractionsEndpoint:
                 relationship_strength=50.0,
                 last_seen=now - timedelta(days=2),
                 first_seen=now - timedelta(days=180),
+                dunbar_circle=3,
+                category="personal",
             ),
             MagicMock(
                 id=MY_PERSON_ID,
@@ -104,6 +108,8 @@ class TestMeInteractionsEndpoint:
                 relationship_strength=100.0,
                 last_seen=now,
                 first_seen=now - timedelta(days=730),
+                dunbar_circle=0,
+                category="personal",
             ),
         ]
         person_store.get_all.return_value = people
@@ -186,6 +192,8 @@ class TestMeInteractionsEndpoint:
                 relationship_strength=50.0,
                 last_seen=now - timedelta(days=5),
                 first_seen=now - timedelta(days=100),
+                dunbar_circle=2,
+                category="personal",
             )
         ]
 

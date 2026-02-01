@@ -62,6 +62,7 @@ def extract_phone_from_jid(jid: str) -> str:
 
     JID format: {phone}@s.whatsapp.net for individuals
                 {groupid}@g.us for groups
+                {lid}@lid for linked devices (not real phones)
 
     Args:
         jid: WhatsApp JID string
@@ -70,6 +71,9 @@ def extract_phone_from_jid(jid: str) -> str:
         E.164 formatted phone number or empty string
     """
     if not jid or is_group_jid(jid):
+        return ""
+    # Skip linked device IDs - they're not real phone numbers
+    if '@lid' in jid:
         return ""
     # Extract the part before @
     phone_part = jid.split('@')[0] if '@' in jid else jid
@@ -324,6 +328,8 @@ def sync_whatsapp_messages(dry_run: bool = True) -> dict:
         'messages_read': 0,
         'interactions_created': 0,
         'interactions_skipped': 0,
+        'skipped_lid': 0,
+        'skipped_large_group': 0,
         'persons_not_found': 0,
         'errors': 0,
     }
@@ -344,6 +350,15 @@ def sync_whatsapp_messages(dry_run: bool = True) -> dict:
     wacli_conn = sqlite3.connect(str(wacli_db_path))
     wacli_conn.row_factory = sqlite3.Row
     wacli_cursor = wacli_conn.cursor()
+
+    # Build group size lookup for filtering large groups
+    wacli_cursor.execute("""
+        SELECT group_jid, COUNT(*) as participant_count
+        FROM group_participants
+        GROUP BY group_jid
+    """)
+    group_sizes = {row['group_jid']: row['participant_count'] for row in wacli_cursor.fetchall()}
+    logger.info(f"Loaded sizes for {len(group_sizes)} groups")
 
     # Connect to interaction database
     int_conn = sqlite3.connect(interaction_db)
@@ -391,10 +406,23 @@ def sync_whatsapp_messages(dry_run: bool = True) -> dict:
 
             sender_jid = msg['sender_jid']
             sender_name = msg['sender_name']
+            chat_jid = msg['chat_jid']
             chat_name = msg['chat_name']
             timestamp = msg['ts']
             text = msg['display_text'] or msg['text'] or ''
-            is_group = is_group_jid(msg['chat_jid'])
+            is_group = is_group_jid(chat_jid)
+
+            # Skip messages from large groups (>20 participants)
+            if is_group:
+                group_size = group_sizes.get(chat_jid, 0)
+                if group_size > 20:
+                    stats['skipped_large_group'] += 1
+                    continue
+
+            # Skip linked device IDs (not real phone numbers)
+            if sender_jid and '@lid' in sender_jid:
+                stats['skipped_lid'] += 1
+                continue
 
             # Extract phone from sender JID
             phone = extract_phone_from_jid(sender_jid)
@@ -477,6 +505,8 @@ def sync_whatsapp_messages(dry_run: bool = True) -> dict:
     logger.info(f"Messages read: {stats['messages_read']}")
     logger.info(f"Interactions created: {stats['interactions_created']}")
     logger.info(f"Interactions skipped (duplicates): {stats['interactions_skipped']}")
+    logger.info(f"Skipped (linked device IDs): {stats['skipped_lid']}")
+    logger.info(f"Skipped (large groups >20): {stats['skipped_large_group']}")
     logger.info(f"Persons not found: {stats['persons_not_found']}")
     logger.info(f"Errors: {stats['errors']}")
 

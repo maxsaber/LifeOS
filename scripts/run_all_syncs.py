@@ -175,7 +175,7 @@ SYNC_ORDER = [
 
     # === Phase 4: Vector Store Indexing ===
     # Index content with fresh people data available for entity resolution
-    "vault_reindex",            # Reindex vault notes to ChromaDB + BM25
+    # "vault_reindex",            # TEMPORARILY DISABLED - manual reindex in progress
     "crm_vectorstore",          # Index CRM people for semantic search
 
     # === Phase 5: Content Sync ===
@@ -226,8 +226,9 @@ SYNC_SCRIPTS = {
 # Per-source timeout overrides (seconds)
 # Default is 30 minutes (1800). These sources need more time.
 SYNC_TIMEOUTS = {
-    "gmail": 3600,        # 60 min - fetches 365 days of emails via individual API calls
-    "vault_reindex": 3600,  # 60 min - indexes ~5000 files with vector embeddings
+    "gmail": 3600,                   # 60 min - fetches 365 days of emails via individual API calls
+    "relationship_discovery": 3600,  # 60 min - processes all interactions for relationship edges
+    "vault_reindex": 10800,          # 180 min (3 hours) - full reindex with gte-Qwen2-1.5B embeddings
 }
 
 
