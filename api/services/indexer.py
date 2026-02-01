@@ -153,17 +153,19 @@ class IndexerService:
         Uses incremental indexing by default - only indexes files that have
         changed since the last index run. Use force=True to reindex everything.
 
+        Progress is saved incrementally every 50 files, so crashes don't lose work.
+
         Args:
             force: If True, reindex all files regardless of modification time
 
         Returns:
             Number of files indexed
         """
-        # Load previous index state
-        index_state = {} if force else self._load_index_state()
-        new_state = {}
+        # Always load existing state - even in force mode, we track progress
+        # so we can resume if interrupted
+        index_state = self._load_index_state()
 
-        # Get all current markdown files
+        # Get all current markdown files with their mtimes
         all_md_files = list(self.vault_path.rglob("*.md"))
         current_files = {str(f): f.stat().st_mtime for f in all_md_files}
 
@@ -171,15 +173,25 @@ class IndexerService:
         files_to_index = []
         for file_path, mtime in current_files.items():
             prev_mtime = index_state.get(file_path)
-            if prev_mtime is None or mtime > prev_mtime:
-                files_to_index.append(file_path)
-            new_state[file_path] = mtime
+            if force:
+                # In force mode, reindex if not yet indexed in this run
+                # (allows resuming a force reindex after crash)
+                if prev_mtime is None or prev_mtime < mtime:
+                    files_to_index.append((file_path, mtime))
+            else:
+                # Normal incremental: only if file changed since last index
+                if prev_mtime is None or mtime > prev_mtime:
+                    files_to_index.append((file_path, mtime))
 
         # Determine deleted files (in old state but not in current files)
         deleted_files = set(index_state.keys()) - set(current_files.keys())
 
         if force:
-            logger.info(f"FULL REINDEX: {len(all_md_files)} files")
+            already_done = len(all_md_files) - len(files_to_index)
+            if already_done > 0:
+                logger.info(f"RESUMING FULL REINDEX: {len(files_to_index)} remaining, {already_done} already indexed")
+            else:
+                logger.info(f"FULL REINDEX: {len(all_md_files)} files")
         else:
             logger.info(f"Incremental index: {len(files_to_index)} changed, {len(deleted_files)} deleted, {len(all_md_files) - len(files_to_index)} unchanged")
 
@@ -187,29 +199,38 @@ class IndexerService:
         for file_path in deleted_files:
             try:
                 self.delete_file(file_path)
+                # Remove from state
+                index_state.pop(file_path, None)
                 logger.info(f"Removed deleted file from index: {file_path}")
             except Exception as e:
                 logger.error(f"Failed to remove {file_path} from index: {e}")
 
-        # Index changed files
+        # Index changed files, saving progress incrementally
         count = 0
         all_affected_person_ids: set[str] = set()
+        save_interval = 50  # Save state every N files
 
-        for md_file in files_to_index:
+        for file_path, mtime in files_to_index:
             try:
-                affected_ids = self.index_file(md_file, skip_stats_refresh=True)
+                affected_ids = self.index_file(file_path, skip_stats_refresh=True)
                 if affected_ids:
                     all_affected_person_ids.update(affected_ids)
+
+                # Update state for this file
+                index_state[file_path] = mtime
                 count += 1
-                if count % 100 == 0:
-                    logger.info(f"  Indexed {count}/{len(files_to_index)} files...")
+
+                # Save progress periodically
+                if count % save_interval == 0:
+                    self._save_index_state(index_state)
+                    logger.info(f"  Indexed {count}/{len(files_to_index)} files (progress saved)...")
+
             except Exception as e:
-                logger.error(f"Failed to index {md_file}: {e}")
+                logger.error(f"Failed to index {file_path}: {e}")
 
-        logger.info(f"Indexed {count} files")
-
-        # Save updated state
-        self._save_index_state(new_state)
+        # Final save
+        self._save_index_state(index_state)
+        logger.info(f"Indexed {count} files (final save)")
 
         # Batch refresh all affected person stats ONCE at the end
         if all_affected_person_ids:
