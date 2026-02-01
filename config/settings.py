@@ -38,7 +38,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
 
     # Embedding Model
-    embedding_model: str = "Alibaba-NLP/gte-Qwen2-1.5B-instruct"
+    # mxbai-embed-large-v1: Top-tier 1024-dim model, stable and well-tested
+    embedding_model: str = "mixedbread-ai/mxbai-embed-large-v1"
     embedding_cache_dir: str = "/Volumes/NVMe External Storage/huggingface_cache"
 
     # Chunking
