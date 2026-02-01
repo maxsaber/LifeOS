@@ -175,7 +175,7 @@ SYNC_ORDER = [
 
     # === Phase 4: Vector Store Indexing ===
     # Index content with fresh people data available for entity resolution
-    "vault_reindex",            # Reindex vault notes to ChromaDB + BM25
+    # "vault_reindex",            # TEMPORARILY DISABLED - manual reindex in progress
     "crm_vectorstore",          # Index CRM people for semantic search
 
     # === Phase 5: Content Sync ===
