@@ -23,6 +23,11 @@ RECENCY_WINDOW_DAYS = 200     # Days after which recency score drops to 0
 FREQUENCY_TARGET = 250        # Weighted interactions for max frequency score (higher = better spread)
 FREQUENCY_WINDOW_DAYS = 365   # Window for counting recent interactions
 
+# Weekly digest thresholds
+RECENT_INTERACTION_DAYS = 7  # Weekly window for recent interactions
+SLIPPING_DAYS = 30           # Days since last interaction to mark as slipping
+REACHOUT_DAYS = 45           # Days since last interaction to suggest a reach-out
+
 # Logarithmic frequency scaling - spreads out scores between casual and close contacts
 # With log scaling: log(1+count)/log(1+target) instead of count/target
 USE_LOG_FREQUENCY_SCALING = True
