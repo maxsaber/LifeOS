@@ -3581,6 +3581,95 @@
             stroke-dasharray: 2, 2;
         }
 
+        /* Tracked Relationships Widget */
+        .me-tracked-panel {
+            min-height: 200px;
+            flex: 1;
+        }
+
+        .tracked-current-count {
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--people);
+        }
+
+        .tracked-current-count.tracked-inverse {
+            color: var(--people);
+        }
+
+        .tracked-current-count.healthy {
+            color: #22c55e;
+        }
+
+        .tracked-current-count.warning {
+            color: #eab308;
+        }
+
+        .tracked-current-count.unhealthy {
+            color: #ef4444;
+        }
+
+        .tracked-people-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.375rem;
+            padding: 0.375rem 0.5rem;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .tracked-person-chip {
+            padding: 0.15rem 0.4rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .tracked-person-chip:hover {
+            border-color: var(--people);
+            color: var(--people);
+        }
+
+        /* Tracked chart colors (green for healthy direction) */
+        .tracked-chart-line {
+            fill: none;
+            stroke: var(--people);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .tracked-chart-line.inverse {
+            stroke: #22c55e;  /* Green - fewer is better */
+        }
+
+        .tracked-chart-area {
+            fill: var(--people);
+            opacity: 0.1;
+        }
+
+        .tracked-chart-area.inverse {
+            fill: #22c55e;
+            opacity: 0.1;
+        }
+
+        .tracked-chart-dot {
+            fill: var(--people);
+            cursor: pointer;
+            transition: r 0.1s ease-out;
+        }
+
+        .tracked-chart-dot.inverse {
+            fill: #22c55e;
+        }
+
+        .tracked-chart-dot:hover {
+            r: 6;
+            filter: brightness(1.2);
+        }
+
         /* Neglected Contacts Widget */
         .me-neglected-panel {
             min-height: 180px;
@@ -4347,6 +4436,55 @@
                                         <span class="overview-panel-title">Need Attention</span>
                                     </div>
                                     <div class="neglected-list" id="neglectedContactsList"></div>
+                                </div>
+                            </div>
+
+                            <!-- Tracked Relationships Row -->
+                            <div class="me-widgets-row">
+                                <!-- Parent Relationship (more = healthier) -->
+                                <div class="overview-panel me-tracked-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">
+                                            Parent Relationship
+                                            <span class="health-info-icon">i
+                                                <div class="health-info-tooltip">
+                                                    <strong>Parent Relationship</strong>
+                                                    Tracks interactions with your parents. More frequent contact indicates a healthier relationship.
+                                                </div>
+                                            </span>
+                                        </span>
+                                        <span class="tracked-current-count" id="parentCurrentCount">--</span>
+                                    </div>
+                                    <div class="health-period-selector tracked-period-selector" id="parentPeriodSelector">
+                                        <button class="health-period-pill" data-period="month" onclick="changeTrackedPeriod('parent', 'month')">Month</button>
+                                        <button class="health-period-pill active" data-period="quarter" onclick="changeTrackedPeriod('parent', 'quarter')">Quarter</button>
+                                        <button class="health-period-pill" data-period="year" onclick="changeTrackedPeriod('parent', 'year')">Year</button>
+                                    </div>
+                                    <div class="health-chart-container" id="parentChartContainer"></div>
+                                    <div class="tracked-people-list" id="parentPeopleList"></div>
+                                </div>
+
+                                <!-- Parallel Parenting (less = healthier) -->
+                                <div class="overview-panel me-tracked-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">
+                                            Parallel Parenting
+                                            <span class="health-info-icon">i
+                                                <div class="health-info-tooltip">
+                                                    <strong>Parallel Parenting</strong>
+                                                    Tracks interactions with co-parent. Fewer interactions indicate healthier boundaries.
+                                                </div>
+                                            </span>
+                                        </span>
+                                        <span class="tracked-current-count tracked-inverse" id="coparentCurrentCount">--</span>
+                                    </div>
+                                    <div class="health-period-selector tracked-period-selector" id="coparentPeriodSelector">
+                                        <button class="health-period-pill" data-period="month" onclick="changeTrackedPeriod('coparent', 'month')">Month</button>
+                                        <button class="health-period-pill active" data-period="quarter" onclick="changeTrackedPeriod('coparent', 'quarter')">Quarter</button>
+                                        <button class="health-period-pill" data-period="year" onclick="changeTrackedPeriod('coparent', 'year')">Year</button>
+                                    </div>
+                                    <div class="health-chart-container" id="coparentChartContainer"></div>
+                                    <div class="tracked-people-list" id="coparentPeopleList"></div>
                                 </div>
                             </div>
 
@@ -6646,6 +6784,7 @@
             renderNeglectedContacts(data);
             renderNetworkGrowth(data);
             renderMessagingByCircle(data);
+            renderTrackedRelationships(data);
 
             // Existing widgets
             renderTopContacts(data);
@@ -6981,9 +7120,14 @@
         async function changeHealthPeriod(period) {
             currentHealthPeriod = period;
 
-            // Update pill states
-            document.querySelectorAll('.health-period-pill').forEach(pill => {
-                pill.classList.toggle('active', pill.dataset.period === period);
+            // Update pill states (only the main health panel, not tracked panels)
+            document.querySelectorAll('#healthChartContainer').forEach(container => {
+                const panel = container.closest('.me-health-panel');
+                if (panel) {
+                    panel.querySelectorAll('.health-period-pill').forEach(pill => {
+                        pill.classList.toggle('active', pill.dataset.period === period);
+                    });
+                }
             });
 
             // Show loading
@@ -6998,6 +7142,237 @@
                 renderHealthScore(data);
             } catch (error) {
                 console.error('Failed to load health history:', error);
+                if (container) {
+                    container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 1rem;">Failed to load</div>';
+                }
+            }
+        }
+
+        // Tracked Relationships state
+        let currentTrackedPeriods = {
+            parent: 'quarter',
+            coparent: 'quarter'
+        };
+        let trackedRelationshipsData = [];
+
+        // Render all tracked relationships
+        function renderTrackedRelationships(data) {
+            trackedRelationshipsData = data.tracked_relationships || [];
+
+            trackedRelationshipsData.forEach(rel => {
+                if (rel.name === 'Parent Relationship') {
+                    renderTrackedChart('parent', rel);
+                } else if (rel.name === 'Parallel Parenting') {
+                    renderTrackedChart('coparent', rel);
+                }
+            });
+        }
+
+        // Render a single tracked relationship chart
+        function renderTrackedChart(type, data) {
+            const containerId = type === 'parent' ? 'parentChartContainer' : 'coparentChartContainer';
+            const countId = type === 'parent' ? 'parentCurrentCount' : 'coparentCurrentCount';
+            const peopleListId = type === 'parent' ? 'parentPeopleList' : 'coparentPeopleList';
+
+            const container = document.getElementById(containerId);
+            const countEl = document.getElementById(countId);
+            const peopleListEl = document.getElementById(peopleListId);
+
+            if (!container) return;
+
+            const history = data.history || [];
+            const isInverse = data.healthy_direction === 'less';  // fewer = healthier
+
+            // Update current count display
+            if (countEl) {
+                const currentCount = data.current_count || 0;
+                countEl.textContent = currentCount;
+
+                // Color based on trend and healthy direction
+                // For "more is healthier": up = green, down = red
+                // For "less is healthier": down = green, up = red
+                const trend = data.trend;
+                if (isInverse) {
+                    // Fewer is healthier
+                    if (trend === 'down') {
+                        countEl.className = 'tracked-current-count healthy';
+                    } else if (trend === 'up') {
+                        countEl.className = 'tracked-current-count unhealthy';
+                    } else {
+                        countEl.className = 'tracked-current-count tracked-inverse';
+                    }
+                } else {
+                    // More is healthier
+                    if (trend === 'up') {
+                        countEl.className = 'tracked-current-count healthy';
+                    } else if (trend === 'down') {
+                        countEl.className = 'tracked-current-count unhealthy';
+                    } else {
+                        countEl.className = 'tracked-current-count';
+                    }
+                }
+            }
+
+            // Render people chips
+            if (peopleListEl) {
+                const personIds = data.person_ids || [];
+                const personNames = data.person_names || [];
+                peopleListEl.innerHTML = personNames.map((name, i) => `
+                    <span class="tracked-person-chip" onclick="selectPerson('${personIds[i]}')">${escapeHtml(name)}</span>
+                `).join('');
+            }
+
+            if (history.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 1rem; text-align: center;">No interaction history</div>';
+                return;
+            }
+
+            // Find max count for Y-axis scaling
+            const maxCount = Math.max(...history.map(h => h.count), 1);
+            const yAxisMax = Math.ceil(maxCount * 1.2);  // Add 20% headroom
+
+            // SVG dimensions
+            const width = 600;
+            const height = 120;
+            const padding = { top: 10, right: 15, bottom: 20, left: 30 };
+            const chartWidth = width - padding.left - padding.right;
+            const chartHeight = height - padding.top - padding.bottom;
+
+            // Scale functions
+            const xScale = (i) => padding.left + (i / Math.max(history.length - 1, 1)) * chartWidth;
+            const yScale = (count) => padding.top + chartHeight - (count / yAxisMax) * chartHeight;
+
+            // Build line path
+            const linePath = history.map((point, i) => {
+                const x = xScale(i);
+                const y = yScale(point.count);
+                return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
+            }).join(' ');
+
+            // Build area path
+            const areaPath = linePath +
+                ` L ${xScale(history.length - 1)} ${padding.top + chartHeight}` +
+                ` L ${padding.left} ${padding.top + chartHeight} Z`;
+
+            // Build dots
+            const inverseClass = isInverse ? ' inverse' : '';
+            const dots = history.map((point, i) => {
+                const x = xScale(i);
+                const y = yScale(point.count);
+                return `<circle class="tracked-chart-dot${inverseClass}" cx="${x}" cy="${y}" r="4" data-index="${i}" data-count="${point.count}" data-date="${point.date}"/>`;
+            }).join('');
+
+            // Y-axis grid lines
+            const gridValues = [Math.round(yAxisMax * 0.25), Math.round(yAxisMax * 0.5), Math.round(yAxisMax * 0.75)];
+            const gridLines = gridValues.map(val => {
+                const y = yScale(val);
+                return `<line class="health-chart-grid-line" x1="${padding.left}" y1="${y}" x2="${width - padding.right}" y2="${y}"/>`;
+            }).join('');
+
+            // Y-axis labels
+            const yLabels = [0, Math.round(yAxisMax / 2), yAxisMax].map(val => {
+                const y = yScale(val);
+                return `<text x="${padding.left - 5}" y="${y + 3}" font-size="11" fill="var(--text-primary)" text-anchor="end">${val}</text>`;
+            }).join('');
+
+            // X-axis labels
+            const xLabels = [];
+            if (history.length > 0) {
+                const formatLabel = (dateStr) => {
+                    const d = new Date(dateStr);
+                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                };
+                xLabels.push(`<text x="${xScale(0)}" y="${height - 2}" font-size="11" fill="var(--text-primary)" text-anchor="start">${formatLabel(history[0].date)}</text>`);
+                if (history.length > 2) {
+                    const midIdx = Math.floor(history.length / 2);
+                    xLabels.push(`<text x="${xScale(midIdx)}" y="${height - 2}" font-size="11" fill="var(--text-primary)" text-anchor="middle">${formatLabel(history[midIdx].date)}</text>`);
+                }
+                xLabels.push(`<text x="${xScale(history.length - 1)}" y="${height - 2}" font-size="11" fill="var(--text-primary)" text-anchor="end">${formatLabel(history[history.length - 1].date)}</text>`);
+            }
+
+            container.innerHTML = `
+                <div class="tracked-line-chart" style="position: relative;" data-type="${type}">
+                    <svg class="health-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
+                        ${gridLines}
+                        ${yLabels}
+                        <path class="tracked-chart-area${inverseClass}" d="${areaPath}"/>
+                        <path class="tracked-chart-line${inverseClass}" d="${linePath}"/>
+                        ${dots}
+                        ${xLabels.join('')}
+                    </svg>
+                    <div class="health-chart-tooltip" id="${type}ChartTooltip"></div>
+                </div>
+            `;
+
+            // Setup tooltips
+            setupTrackedChartTooltips(type);
+        }
+
+        // Setup tooltips for tracked chart
+        function setupTrackedChartTooltips(type) {
+            const container = document.querySelector(`.tracked-line-chart[data-type="${type}"]`);
+            const tooltip = document.getElementById(`${type}ChartTooltip`);
+            const dots = container ? container.querySelectorAll('.tracked-chart-dot') : [];
+
+            if (!container || !tooltip) return;
+
+            dots.forEach(dot => {
+                dot.addEventListener('mouseenter', (e) => {
+                    const count = dot.dataset.count;
+                    const dateStr = dot.dataset.date;
+                    const d = new Date(dateStr);
+                    const formattedDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+                    tooltip.innerHTML = `
+                        <div class="health-chart-tooltip-date">${formattedDate}</div>
+                        <div class="health-chart-tooltip-score">Interactions: ${count}</div>
+                    `;
+
+                    const rect = dot.getBoundingClientRect();
+                    const containerRect = container.getBoundingClientRect();
+                    tooltip.style.left = `${rect.left - containerRect.left + rect.width / 2}px`;
+                    tooltip.style.top = `${rect.top - containerRect.top - 8}px`;
+                    tooltip.style.transform = 'translate(-50%, -100%)';
+                    tooltip.classList.add('visible');
+                });
+
+                dot.addEventListener('mouseleave', () => {
+                    tooltip.classList.remove('visible');
+                });
+            });
+        }
+
+        // Change tracked relationship period
+        async function changeTrackedPeriod(type, period) {
+            currentTrackedPeriods[type] = period;
+
+            // Update pill states for this panel only
+            const selectorId = type === 'parent' ? 'parentPeriodSelector' : 'coparentPeriodSelector';
+            const selector = document.getElementById(selectorId);
+            if (selector) {
+                selector.querySelectorAll('.health-period-pill').forEach(pill => {
+                    pill.classList.toggle('active', pill.dataset.period === period);
+                });
+            }
+
+            // Show loading
+            const containerId = type === 'parent' ? 'parentChartContainer' : 'coparentChartContainer';
+            const container = document.getElementById(containerId);
+            if (container) {
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 1rem;">Loading...</div>';
+            }
+
+            // Fetch new data
+            try {
+                const data = await api(`/me/interactions?days_back=1095&health_period=${period}`);
+                const tracked = data.tracked_relationships || [];
+                const targetName = type === 'parent' ? 'Parent Relationship' : 'Parallel Parenting';
+                const rel = tracked.find(r => r.name === targetName);
+                if (rel) {
+                    renderTrackedChart(type, rel);
+                }
+            } catch (error) {
+                console.error('Failed to load tracked relationship:', error);
                 if (container) {
                     container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem; text-align: center; padding: 1rem;">Failed to load</div>';
                 }

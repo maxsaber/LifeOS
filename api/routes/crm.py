@@ -2839,6 +2839,24 @@ class HealthScorePoint(BaseModel):
     score: int  # 0-100
 
 
+class TrackedRelationshipPoint(BaseModel):
+    """Interaction count at a point in time for tracked relationships."""
+    date: str  # "YYYY-MM-DD"
+    count: int  # Number of interactions in that period
+
+
+class TrackedRelationship(BaseModel):
+    """Tracked relationship metrics for specific people."""
+    name: str  # Display name (e.g., "Parent Relationship")
+    person_ids: list[str]  # People being tracked
+    person_names: list[str]  # Names for display
+    current_count: int  # Interactions in current period
+    previous_count: int  # Interactions in previous period
+    trend: str  # "up", "down", "stable"
+    history: list[TrackedRelationshipPoint]  # Historical data points
+    healthy_direction: str  # "more" or "less" - which direction is healthier
+
+
 class MeInteractionsResponse(BaseModel):
     """Aggregated interaction data for the owner's dashboard."""
     # Daily aggregates for heatmap (date -> {total, sources})
@@ -2859,6 +2877,7 @@ class MeInteractionsResponse(BaseModel):
     neglected_contacts: list[NeglectedContact] = []
     network_growth: list[MonthlyNetworkGrowth] = []
     messaging_by_circle: list[MonthlyMessagingVolume] = []
+    tracked_relationships: list[TrackedRelationship] = []  # Parent/Coparent tracking
 
 
 @router.get("/me/stats", response_model=MeStatsResponse)
@@ -3367,6 +3386,112 @@ async def get_me_interactions(
                 circle_percentages=percentages,
             ))
 
+    # 5. Tracked Relationships (Parent + Parallel Parenting)
+    # Define tracked relationship configurations
+    TRACKED_RELATIONSHIPS_CONFIG = [
+        {
+            "name": "Parent Relationship",
+            "person_ids": [
+                "29a732c3-2356-4f60-bf21-956b3652883a",  # Bill Ramia
+                "8205b758-a86f-456c-8c1c-ae3d3b2aa434",  # Patricia Ramia
+            ],
+            "healthy_direction": "more",  # More interactions = healthier
+        },
+        {
+            "name": "Parallel Parenting",
+            "person_ids": [
+                "04bf94f8-20b7-4285-abb4-c64131b5542f",  # Thy Nguyen
+            ],
+            "healthy_direction": "less",  # Fewer interactions = healthier
+        },
+    ]
+
+    tracked_relationships = []
+    for config in TRACKED_RELATIONSHIPS_CONFIG:
+        person_ids = config["person_ids"]
+        healthy_direction = config["healthy_direction"]
+
+        # Get person names
+        person_names = []
+        for pid in person_ids:
+            person = person_lookup.get(pid)
+            if person:
+                person_names.append(person.canonical_name)
+            else:
+                person_names.append("Unknown")
+
+        # Count interactions by period (same as health_period logic)
+        if health_period == "month":
+            period_days = 30
+            num_points = 9
+            total_days = 61
+        elif health_period == "year":
+            period_days = 365
+            num_points = 13
+            total_days = 730
+        else:  # quarter
+            period_days = 90
+            num_points = 13
+            total_days = 183
+
+        # Calculate time points
+        tracked_time_points = [now - timedelta(days=int(i * total_days / (num_points - 1))) for i in range(num_points)]
+        tracked_time_points = sorted(tracked_time_points)
+
+        # Group interactions by tracked people
+        tracked_interactions = [
+            i for i in all_interactions
+            if i.person_id in person_ids
+        ]
+
+        # Build history
+        history = []
+        for i, point_date in enumerate(tracked_time_points):
+            if i == 0:
+                prev_date = point_date - timedelta(days=period_days)
+            else:
+                prev_date = tracked_time_points[i - 1]
+
+            # Count interactions in this period
+            period_count = 0
+            for interaction in tracked_interactions:
+                if interaction.timestamp:
+                    ts = interaction.timestamp
+                    if hasattr(ts, 'tzinfo') and ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                    elif not hasattr(ts, 'tzinfo'):
+                        ts = datetime.fromisoformat(str(ts)[:10]).replace(tzinfo=timezone.utc)
+                    if prev_date < ts <= point_date:
+                        period_count += 1
+
+            history.append(TrackedRelationshipPoint(
+                date=point_date.strftime('%Y-%m-%d'),
+                count=period_count,
+            ))
+
+        # Calculate current vs previous period
+        current_count = history[-1].count if history else 0
+        previous_count = history[-2].count if len(history) > 1 else 0
+
+        # Determine trend
+        if current_count > previous_count:
+            trend = "up"
+        elif current_count < previous_count:
+            trend = "down"
+        else:
+            trend = "stable"
+
+        tracked_relationships.append(TrackedRelationship(
+            name=config["name"],
+            person_ids=person_ids,
+            person_names=person_names,
+            current_count=current_count,
+            previous_count=previous_count,
+            trend=trend,
+            history=history,
+            healthy_direction=healthy_direction,
+        ))
+
     return MeInteractionsResponse(
         daily=daily_list,
         by_source=dict(by_source),
@@ -3381,6 +3506,7 @@ async def get_me_interactions(
         neglected_contacts=neglected[:10],
         network_growth=network_growth,
         messaging_by_circle=messaging_by_circle,
+        tracked_relationships=tracked_relationships,
     )
 
 
