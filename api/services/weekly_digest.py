@@ -1,5 +1,8 @@
 """
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> 16a54d32367a6c2c8b917207fb0cac371a0ae897
 Weekly digest helpers for relationship follow-ups.
 
 Determines which people are slipping or need a reach-out based on
@@ -63,6 +66,7 @@ def get_weekly_digest_candidates() -> dict[str, list[RelationshipSummary]]:
             summaries.append(summary)
 
     return split_people_by_status(summaries)
+<<<<<<< HEAD
 =======
 Weekly digest service.
 
@@ -260,3 +264,5 @@ def _days_since(last_seen: Optional[datetime], reference: datetime) -> Optional[
     reference = _ensure_aware(reference)
     return max((reference - last_seen).days, 0)
 >>>>>>> fe61eca (Add weekly digest service)
+=======
+>>>>>>> 16a54d32367a6c2c8b917207fb0cac371a0ae897
