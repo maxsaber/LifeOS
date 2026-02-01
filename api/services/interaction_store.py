@@ -17,16 +17,9 @@ from urllib.parse import quote
 from config.settings import settings
 from config.people_config import InteractionConfig
 
+from api.utils.datetime_utils import make_aware as _make_aware
+
 logger = logging.getLogger(__name__)
-
-
-def _make_aware(dt: Optional[datetime]) -> Optional[datetime]:
-    """Ensure datetime is timezone-aware (UTC if naive)."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
 
 
 def get_interaction_db_path() -> str:

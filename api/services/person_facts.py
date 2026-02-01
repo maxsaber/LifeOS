@@ -26,6 +26,8 @@ from pathlib import Path
 from typing import Optional, Any
 
 from config.settings import settings
+from api.utils.datetime_utils import make_aware as _make_aware
+from api.utils.db_paths import get_crm_db_path
 
 logger = logging.getLogger(__name__)
 
@@ -41,22 +43,6 @@ FACT_CATEGORIES = {
     "travel": "✈️",
     "summary": "📊",  # Relationship summaries
 }
-
-
-def _make_aware(dt: Optional[datetime]) -> Optional[datetime]:
-    """Ensure datetime is timezone-aware (UTC if naive)."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
-
-
-def get_crm_db_path() -> str:
-    """Get the path to the CRM database."""
-    db_dir = Path(settings.chroma_path).parent
-    db_dir.mkdir(parents=True, exist_ok=True)
-    return str(db_dir / "crm.db")
 
 
 @dataclass

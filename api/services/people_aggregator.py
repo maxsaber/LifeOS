@@ -36,16 +36,9 @@ from api.services.source_entity import (
 )
 from api.services.google_auth import GoogleAccount
 
+from api.utils.datetime_utils import make_aware as _make_aware
+
 logger = logging.getLogger(__name__)
-
-
-def _make_aware(dt: datetime) -> datetime:
-    """Ensure datetime is timezone-aware (UTC if naive)."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
 
 
 def _is_newer(new_dt: datetime, old_dt: datetime) -> bool:

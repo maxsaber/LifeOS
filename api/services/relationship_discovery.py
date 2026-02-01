@@ -20,17 +20,9 @@ from api.services.relationship import (
     TYPE_COWORKER,
     TYPE_INFERRED,
 )
+from api.utils.datetime_utils import make_aware as _ensure_tz_aware
 
 logger = logging.getLogger(__name__)
-
-
-def _ensure_tz_aware(dt: datetime | None) -> datetime | None:
-    """Ensure datetime is timezone-aware (UTC) for safe comparison."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
 
 
 def _datetime_lt(a: datetime | None, b: datetime | None) -> bool:

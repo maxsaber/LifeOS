@@ -111,17 +111,9 @@ from config.relationship_weights import (
     FIRST_NAME_ONLY_BOOST_MULTIPLIER,
 )
 from config.settings import settings
+from api.utils.datetime_utils import make_aware as _make_aware
 
 logger = logging.getLogger(__name__)
-
-
-def _make_aware(dt: datetime) -> datetime:
-    """Ensure datetime is timezone-aware (UTC)."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
 
 
 @dataclass
