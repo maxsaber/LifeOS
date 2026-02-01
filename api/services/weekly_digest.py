@@ -4,13 +4,15 @@ Weekly digest helpers for relationship follow-ups.
 Determines which people are slipping or need a reach-out based on
 configurable thresholds.
 """
-from typing import Iterable
+from datetime import date, datetime, time, timedelta, timezone
+from typing import Iterable, Optional
 
 from config.relationship_weights import (
     RECENT_INTERACTION_DAYS,
     SLIPPING_DAYS,
     REACHOUT_DAYS,
 )
+from api.services.interaction_store import get_interaction_store
 from api.services.person_entity import get_person_entity_store
 from api.services.relationship_summary import RelationshipSummary, get_relationship_summary
 
@@ -62,3 +64,55 @@ def get_weekly_digest_candidates() -> dict[str, list[RelationshipSummary]]:
             summaries.append(summary)
 
     return split_people_by_status(summaries)
+
+
+def build_weekly_digest(
+    start: Optional[date] = None,
+    end: Optional[date] = None,
+) -> dict[str, list[dict]]:
+    """
+    Build weekly digest response for the UI.
+
+    Args:
+        start: Start date (YYYY-MM-DD). Defaults to last 7 days.
+        end: End date (YYYY-MM-DD). Defaults to today.
+
+    Returns:
+        Structured response with minimal person details.
+    """
+    if end is None:
+        end = datetime.now(timezone.utc).date()
+    if start is None:
+        start = end - timedelta(days=7)
+
+    start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
+    end_dt = datetime.combine(end, time.max, tzinfo=timezone.utc)
+
+    candidates = get_weekly_digest_candidates()
+    interaction_store = get_interaction_store()
+    digest_people: list[dict] = []
+
+    for reason, summaries in candidates.items():
+        for summary in summaries:
+            counts = interaction_store.get_interaction_counts_between(
+                summary.person_id,
+                start_dt,
+                end_dt,
+            )
+            digest_people.append(
+                {
+                    "person_id": summary.person_id,
+                    "name": summary.person_name,
+                    "last_seen": summary.last_interaction.isoformat()
+                    if summary.last_interaction
+                    else None,
+                    "counts": counts,
+                    "reason": reason,
+                }
+            )
+
+    return {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "people": digest_people,
+    }

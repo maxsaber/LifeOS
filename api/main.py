@@ -34,7 +34,7 @@ from fastapi.exceptions import RequestValidationError
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from api.routes import search, ask, calendar, gmail, drive, people, chat, briefings, admin, conversations, memories, imessage, crm, slack
+from api.routes import search, ask, calendar, gmail, drive, people, chat, briefings, admin, conversations, memories, imessage, crm, slack, digest
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -240,6 +240,7 @@ app.include_router(memories.router)
 app.include_router(imessage.router)
 app.include_router(crm.router)
 app.include_router(slack.router)
+app.include_router(digest.router)
 
 # Serve static files
 web_dir = Path(__file__).parent.parent / "web"
