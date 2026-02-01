@@ -19,7 +19,7 @@ from api.services.calendar import CalendarService
 from api.services.google_auth import GoogleAccount
 from api.services.entity_resolver import get_entity_resolver
 from api.services.person_entity import get_person_entity_store
-from api.services.interaction_store import get_interaction_db_path
+from api.services.interaction_store import ensure_interaction_db
 from api.services.source_entity import (
     get_source_entity_store,
     create_gmail_source_entity,
@@ -197,7 +197,7 @@ def sync_gmail_interactions(
     # Track affected person_ids for stats refresh
     affected_person_ids: set[str] = set()
 
-    db_path = get_interaction_db_path()
+    db_path = ensure_interaction_db()
     conn = sqlite3.connect(db_path)
     resolver = get_entity_resolver()
     source_entity_store = get_source_entity_store()
@@ -556,7 +556,7 @@ def sync_calendar_interactions(
     # Track affected person_ids for stats refresh
     affected_person_ids: set[str] = set()
 
-    db_path = get_interaction_db_path()
+    db_path = ensure_interaction_db()
     conn = sqlite3.connect(db_path)
     resolver = get_entity_resolver()
     source_entity_store = get_source_entity_store()

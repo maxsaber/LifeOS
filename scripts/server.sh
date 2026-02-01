@@ -144,7 +144,7 @@ start_server() {
 
     # Start the server using Python's uvicorn.run() - more reliable than shell command
     log_info "Launching uvicorn on $HOST:$PORT..."
-    nohup "$HOME/.venvs/lifeos/bin/python" -c "
+    nohup "$PROJECT_DIR/venv/bin/python" -c "
 import uvicorn
 uvicorn.run('api.main:app', host='$HOST', port=$PORT, log_level='info')
 " >> "$LOG_FILE" 2>&1 &

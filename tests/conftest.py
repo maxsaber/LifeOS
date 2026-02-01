@@ -65,8 +65,8 @@ def db_available():
     """
     import sqlite3
     try:
-        from api.services.interaction_store import get_interaction_db_path
-        db_path = get_interaction_db_path()
+        from api.services.interaction_store import ensure_interaction_db
+        db_path = ensure_interaction_db()
         conn = sqlite3.connect(db_path, timeout=1.0)
         # Try to execute a simple query to check for lock
         conn.execute("SELECT 1 FROM interactions LIMIT 1")

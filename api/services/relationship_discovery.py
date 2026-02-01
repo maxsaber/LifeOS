@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from api.services.person_entity import PersonEntity, get_person_entity_store
-from api.services.interaction_store import get_interaction_store, get_interaction_db_path
+from api.services.interaction_store import get_interaction_store, ensure_interaction_db
 from api.services.relationship import (
     Relationship,
     get_relationship_store,
@@ -96,7 +96,7 @@ def discover_from_calendar(
 
     # Query interactions database directly to find shared calendar events
     # source_id format is "event_id:participant" - extract participant
-    db_path = get_interaction_db_path()
+    db_path = ensure_interaction_db()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
 
@@ -232,7 +232,7 @@ def discover_from_calendar_direct(
 
     relationship_store = get_relationship_store()
 
-    db_path = get_interaction_db_path()
+    db_path = ensure_interaction_db()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
 
@@ -337,7 +337,7 @@ def discover_from_email_threads(
 
     relationship_store = get_relationship_store()
 
-    db_path = get_interaction_db_path()
+    db_path = ensure_interaction_db()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
 
@@ -529,7 +529,7 @@ def discover_from_messaging_groups(
 
     relationship_store = get_relationship_store()
 
-    db_path = get_interaction_db_path()
+    db_path = ensure_interaction_db()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
 
@@ -632,7 +632,7 @@ def discover_from_imessage_direct(
 
     relationship_store = get_relationship_store()
 
-    db_path = get_interaction_db_path()
+    db_path = ensure_interaction_db()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
 
@@ -733,7 +733,7 @@ def discover_from_whatsapp_direct(
 
     relationship_store = get_relationship_store()
 
-    db_path = get_interaction_db_path()
+    db_path = ensure_interaction_db()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
 
@@ -833,7 +833,7 @@ def discover_from_phone_calls(
 
     relationship_store = get_relationship_store()
 
-    db_path = get_interaction_db_path()
+    db_path = ensure_interaction_db()
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
 

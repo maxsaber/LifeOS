@@ -252,7 +252,7 @@ def run_sync(source: str, dry_run: bool = False) -> tuple[bool, dict]:
         logger.info(f"Starting sync for {source}...")
 
         # Build command
-        venv_python = Path(__file__).parent.parent / ".venv" / "bin" / "python"
+        venv_python = Path(__file__).parent.parent / "venv" / "bin" / "python"
         if not venv_python.exists():
             venv_python = sys.executable
 
@@ -274,8 +274,8 @@ def run_sync(source: str, dry_run: bool = False) -> tuple[bool, dict]:
             }
         )
 
-        # Parse output for stats
-        stats = _parse_sync_output(result.stdout)
+        # Parse output for stats (check both stdout and stderr since logging goes to stderr)
+        stats = _parse_sync_output(result.stdout + "\n" + result.stderr)
 
         if result.returncode != 0:
             error_msg = result.stderr or result.stdout or "Unknown error"
@@ -371,19 +371,28 @@ def _parse_sync_output(output: str) -> dict:
     import re
 
     patterns = [
+        # "Contacts read: 1468", "Messages checked: 500"
+        (r"(?:contacts?|messages?|records?|items?|entities?)\s*(?:read|checked|processed|found)[:\s]*(\d+)", "processed"),
+        # "1468 records read"
         (r"(\d+)\s*(?:records?|items?|entities?)\s*(?:read|processed|found)", "processed"),
-        (r"(?:created|new)\s*[:\s]*(\d+)", "created"),
-        (r"(?:updated)\s*[:\s]*(\d+)", "updated"),
-        (r"(?:errors?)\s*[:\s]*(\d+)", "errors"),
-        (r"source.entities.created\s*[:\s]*(\d+)", "created"),
-        (r"source.entities.updated\s*[:\s]*(\d+)", "updated"),
-        (r"interactions.created\s*[:\s]*(\d+)", "created"),
-        (r"persons?.created\s*[:\s]*(\d+)", "created"),
+        # "Source entities created: 5", "Persons created: 10"
+        (r"(?:source\s*entities?|persons?|interactions?|records?)\s*created[:\s]*(\d+)", "created"),
+        # "created: 5", "new: 10"
+        (r"(?:created|new|inserted)[:\s]+(\d+)", "created"),
+        # "Source entities updated: 700", "Persons updated: 9"
+        (r"(?:source\s*entities?|persons?|records?)\s*updated[:\s]*(\d+)", "updated"),
+        # "updated: 5"
+        (r"(?<!source\s)(?<!entities\s)updated[:\s]+(\d+)", "updated"),
+        # "Errors: 0"
+        (r"errors?[:\s]+(\d+)", "errors"),
+        # "Inserted: 236318"
+        (r"inserted[:\s]+(\d+)", "created"),
+        # "Exported 550595 messages"
+        (r"exported\s+(\d+)", "processed"),
     ]
 
     for pattern, key in patterns:
-        match = re.search(pattern, output, re.IGNORECASE)
-        if match:
+        for match in re.finditer(pattern, output, re.IGNORECASE):
             stats[key] = max(stats[key], int(match.group(1)))
 
     return stats

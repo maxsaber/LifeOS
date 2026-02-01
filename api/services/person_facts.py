@@ -114,15 +114,11 @@ class PersonFact:
     def from_row(cls, row: tuple) -> "PersonFact":
         """Create PersonFact from SQLite row.
 
-        Column order (after migration):
+        Column order (from PRAGMA table_info):
         0: id, 1: person_id, 2: category, 3: key, 4: value, 5: confidence,
-        6: source_interaction_id, 7: extracted_at, 8: confirmed_by_user,
-        9: created_at, 10: source_quote, 11: source_link
+        6: source_interaction_id, 7: source_quote, 8: source_link,
+        9: extracted_at, 10: confirmed_by_user, 11: created_at
         """
-        # Handle both old schema (10 columns) and new schema (12 columns)
-        source_quote = row[10] if len(row) > 10 else None
-        source_link = row[11] if len(row) > 11 else None
-
         return cls(
             id=row[0],
             person_id=row[1],
@@ -131,11 +127,11 @@ class PersonFact:
             value=row[4],
             confidence=row[5] or 0.5,
             source_interaction_id=row[6],
-            source_quote=source_quote,
-            source_link=source_link,
-            extracted_at=_make_aware(datetime.fromisoformat(row[7])) if row[7] else datetime.now(timezone.utc),
-            confirmed_by_user=bool(row[8]),
-            created_at=_make_aware(datetime.fromisoformat(row[9])) if row[9] else datetime.now(timezone.utc),
+            source_quote=row[7] if len(row) > 7 else None,
+            source_link=row[8] if len(row) > 8 else None,
+            extracted_at=_make_aware(datetime.fromisoformat(row[9])) if len(row) > 9 and row[9] else datetime.now(timezone.utc),
+            confirmed_by_user=bool(row[10]) if len(row) > 10 else False,
+            created_at=_make_aware(datetime.fromisoformat(row[11])) if len(row) > 11 and row[11] else datetime.now(timezone.utc),
         )
 
 

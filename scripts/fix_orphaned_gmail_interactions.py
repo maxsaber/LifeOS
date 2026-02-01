@@ -18,7 +18,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from api.services.interaction_store import get_interaction_db_path
+from api.services.interaction_store import ensure_interaction_db
 
 
 def main():
@@ -34,7 +34,7 @@ def main():
     print(f"Loaded {len(valid_ids):,} valid person IDs")
 
     # Find orphaned Gmail interactions
-    db_path = get_interaction_db_path()
+    db_path = ensure_interaction_db()
     conn = sqlite3.connect(db_path)
 
     # Get all unique person_ids from Gmail interactions

@@ -33,10 +33,10 @@ def refresh_person_stats(person_ids: Optional[list[str]] = None, save: bool = Tr
         Dict with stats: {updated: int, total_interactions: int}
     """
     from api.services.person_entity import get_person_entity_store
-    from api.services.interaction_store import get_interaction_db_path
+    from api.services.interaction_store import ensure_interaction_db
 
     store = get_person_entity_store()
-    conn = sqlite3.connect(get_interaction_db_path())
+    conn = sqlite3.connect(ensure_interaction_db())
 
     stats = {'updated': 0, 'total_interactions': 0}
 
@@ -145,10 +145,10 @@ def verify_person_stats(fix: bool = False) -> dict:
         Dict mapping person_id to discrepancy details. Empty dict if all consistent.
     """
     from api.services.person_entity import get_person_entity_store
-    from api.services.interaction_store import get_interaction_db_path
+    from api.services.interaction_store import ensure_interaction_db
 
     store = get_person_entity_store()
-    conn = sqlite3.connect(get_interaction_db_path())
+    conn = sqlite3.connect(ensure_interaction_db())
 
     discrepancies = {}
 

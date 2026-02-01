@@ -16,7 +16,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from api.services.person_entity import PersonEntity, get_person_entity_store
-from api.services.interaction_store import get_interaction_db_path
+from api.services.interaction_store import ensure_interaction_db
 
 
 class TestPeopleListSorting:
@@ -155,7 +155,7 @@ class TestStatsMatchDatabase:
     def test_top_person_stats_accurate(self):
         """Test that the person with most interactions has accurate stats."""
         # Get top person by interactions from database
-        db_path = get_interaction_db_path()
+        db_path = ensure_interaction_db()
         conn = sqlite3.connect(db_path)
         cursor = conn.execute("""
             SELECT person_id, COUNT(*) as cnt
@@ -187,7 +187,7 @@ class TestStatsMatchDatabase:
     def test_stats_by_source_type(self):
         """Test that source-specific stats are accurate for a sample person."""
         # Get a person with diverse interactions
-        db_path = get_interaction_db_path()
+        db_path = ensure_interaction_db()
         conn = sqlite3.connect(db_path)
         cursor = conn.execute("""
             SELECT person_id,

@@ -24,7 +24,7 @@ from datetime import datetime, timezone
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from api.services.person_entity import get_person_entity_store
-from api.services.interaction_store import get_interaction_db_path
+from api.services.interaction_store import ensure_interaction_db
 from api.services.source_entity import get_crm_db_path
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
@@ -269,7 +269,7 @@ def merge_people(primary_id: str, secondary_id: str, dry_run: bool = True) -> di
 
     # 2. Update interactions
     logger.info("\n2. Updating interactions...")
-    interactions_db = get_interaction_db_path()
+    interactions_db = ensure_interaction_db()
     int_conn = sqlite3.connect(interactions_db)
 
     cursor = int_conn.execute(

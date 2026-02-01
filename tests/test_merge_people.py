@@ -271,7 +271,7 @@ class TestMergePeople:
         mock_rel_store.get_for_person.return_value = []
 
         with patch('scripts.merge_people.get_person_entity_store', return_value=mock_person_store), \
-             patch('scripts.merge_people.get_interaction_db_path', return_value=":memory:"), \
+             patch('scripts.merge_people.ensure_interaction_db', return_value=":memory:"), \
              patch('scripts.merge_people.get_crm_db_path', return_value=":memory:"), \
              patch('api.services.relationship.get_relationship_store', return_value=mock_rel_store), \
              patch('scripts.merge_people.MERGED_IDS_FILE', merged_file), \
@@ -299,7 +299,7 @@ class TestMergePeople:
         merged_file.write_text('{}')
 
         with patch('scripts.merge_people.get_person_entity_store', return_value=mock_person_store), \
-             patch('scripts.merge_people.get_interaction_db_path', return_value=":memory:"), \
+             patch('scripts.merge_people.ensure_interaction_db', return_value=":memory:"), \
              patch('scripts.merge_people.get_crm_db_path', return_value=":memory:"), \
              patch('scripts.merge_people.MERGED_IDS_FILE', merged_file), \
              patch('sqlite3.connect') as mock_conn:

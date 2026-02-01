@@ -149,7 +149,7 @@ class TestDiscoverFromCalendarDirect:
         """Calendar discovery creates relationships between attendees."""
         # This test verifies the function runs without error
         # Detailed testing requires database mocking
-        with patch('api.services.relationship_discovery.get_interaction_db_path') as mock_path:
+        with patch('api.services.relationship_discovery.ensure_interaction_db') as mock_path:
             mock_path.return_value = ":memory:"
             with patch('sqlite3.connect') as mock_conn:
                 mock_cursor = MagicMock()
@@ -186,7 +186,7 @@ class TestDiscoverFromMessagingDirect:
 
     def test_imessage_discovery_handles_empty_db(self, mock_stores):
         """iMessage discovery handles empty database gracefully."""
-        with patch('api.services.relationship_discovery.get_interaction_db_path') as mock_path:
+        with patch('api.services.relationship_discovery.ensure_interaction_db') as mock_path:
             mock_path.return_value = ":memory:"
             with patch('sqlite3.connect') as mock_conn:
                 mock_cursor = MagicMock()
@@ -201,7 +201,7 @@ class TestDiscoverFromMessagingDirect:
 
     def test_whatsapp_discovery_handles_empty_db(self, mock_stores):
         """WhatsApp discovery handles empty database gracefully."""
-        with patch('api.services.relationship_discovery.get_interaction_db_path') as mock_path:
+        with patch('api.services.relationship_discovery.ensure_interaction_db') as mock_path:
             mock_path.return_value = ":memory:"
             with patch('sqlite3.connect') as mock_conn:
                 mock_cursor = MagicMock()
@@ -216,7 +216,7 @@ class TestDiscoverFromMessagingDirect:
 
     def test_phone_calls_discovery_handles_empty_db(self, mock_stores):
         """Phone call discovery handles empty database gracefully."""
-        with patch('api.services.relationship_discovery.get_interaction_db_path') as mock_path:
+        with patch('api.services.relationship_discovery.ensure_interaction_db') as mock_path:
             mock_path.return_value = ":memory:"
             with patch('sqlite3.connect') as mock_conn:
                 mock_cursor = MagicMock()

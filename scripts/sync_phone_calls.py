@@ -14,7 +14,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 from api.services.entity_resolver import get_entity_resolver
-from api.services.interaction_store import get_interaction_db_path
+from api.services.interaction_store import ensure_interaction_db
 from api.services.source_entity import (
     get_source_entity_store,
     SourceEntity,
@@ -131,7 +131,7 @@ def sync_phone_calls(
             return stats
         raise
 
-    db_path = get_interaction_db_path()
+    db_path = ensure_interaction_db()
     interaction_conn = sqlite3.connect(db_path)
     resolver = get_entity_resolver()
     source_store = get_source_entity_store()

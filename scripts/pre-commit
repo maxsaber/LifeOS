@@ -33,9 +33,9 @@ echo ""
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 cd "$PROJECT_ROOT"
 
-# Activate virtual environment (located outside Documents for faster startup)
-if [ -f "$HOME/.venvs/lifeos/bin/activate" ]; then
-    source "$HOME/.venvs/lifeos/bin/activate"
+# Activate virtual environment
+if [ -f "$PROJECT_ROOT/venv/bin/activate" ]; then
+    source "$PROJECT_ROOT/venv/bin/activate"
 fi
 
 # Run only unit tests (fast) - skip slow tests that require ChromaDB or Ollama
