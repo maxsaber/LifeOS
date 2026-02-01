@@ -1354,7 +1354,13 @@ async def split_person(request: PersonSplitRequest):
         )
         person_store.add(to_person)
         person_store.save()
-        logger.info(f"Created new person for split: {to_person.canonical_name} ({to_person.id[:8]})")
+        logger.info(f"Created new person for split: {to_person.canonical_name} ({to_person.id})")
+
+        # Verify the person was saved correctly
+        verify_person = person_store.get_by_id(to_person.id)
+        if not verify_person:
+            logger.error(f"CRITICAL: Person {to_person.id} was not saved correctly after split creation!")
+            raise HTTPException(status_code=500, detail="Failed to save new person during split")
 
     # Get source entity details for override creation
     crm_db = Path(__file__).parent.parent.parent / "data" / "crm.db"
@@ -4143,6 +4149,12 @@ async def reject_review_item(entity_id: str, request: LinkConfirmRequest):
         )
         person_store.add(new_person)
         person_store.save()
+
+        # Verify the person was saved correctly
+        verify_person = person_store.get_by_id(new_person.id)
+        if not verify_person:
+            logger.error(f"CRITICAL: Person {new_person.id} was not saved correctly after reject creation!")
+            raise HTTPException(status_code=500, detail="Failed to save new person during reject")
 
         # Link to new person
         source_store.link_to_person(
