@@ -1415,7 +1415,7 @@
         .heatmap-title {
             font-size: 0.875rem;
             font-weight: 600;
-            color: var(--text-primary);
+            color: #ffffff;
         }
 
         .heatmap-legend {
@@ -1423,7 +1423,7 @@
             align-items: center;
             gap: 0.25rem;
             font-size: 0.625rem;
-            color: var(--text-muted);
+            color: #ffffff;
         }
 
         .heatmap-years-select {
@@ -1570,6 +1570,59 @@
             border-top: 1px solid var(--border);
             font-weight: 600;
             color: var(--people);
+        }
+
+        /* Volume Chart Styles */
+        .volume-chart-container {
+            margin-top: 1.5rem;
+            padding: 0.75rem 0;
+            background: var(--bg-secondary);
+            border-radius: 0.5rem;
+        }
+
+        .volume-chart-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+            padding: 0 0.5rem;
+        }
+
+        .volume-chart-title {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #ffffff;
+        }
+
+        /* Chart Loading States */
+        .chart-loading {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            min-height: 80px;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .chart-loading-spinner {
+            width: 24px;
+            height: 24px;
+            border: 2px solid var(--border);
+            border-top-color: var(--people);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .volume-chart-canvas {
+            width: 100%;
+            height: 120px;
+            display: block;
         }
 
         .info-grid {
@@ -4252,6 +4305,13 @@
                                     </div>
                                 </div>
                             </div>
+                            <!-- Volume Line Chart -->
+                            <div class="volume-chart-container">
+                                <div class="volume-chart-header">
+                                    <div class="volume-chart-title">Interaction Volume Over Time</div>
+                                </div>
+                                <canvas id="volumeChartCanvas" class="volume-chart-canvas"></canvas>
+                            </div>
                         </div>
                         <div class="heatmap-tooltip" id="heatmapTooltip"></div>
 
@@ -4822,6 +4882,7 @@
         let dunbarCircleMap = new Map();  // Map person ID to Dunbar circle
         let dunbarCirclesInitialized = false;  // Track if global circles have been calculated
         let meInteractionsCache = null;  // Cache for "Me" page interactions
+        let meInteractionsCacheYears = null; // Track which years setting the cache was loaded for
 
         // Dunbar Circle Configuration
         // Circle sizes: 0=3 (manual), 1=5, 2=15, 3=50, 4=150, 5=500, 6=1500, 7+=rest
@@ -5604,11 +5665,30 @@
             if (yearsSelect) {
                 yearsSelect.addEventListener('change', (e) => {
                     const years = parseInt(e.target.value, 10);
+                    // Clear volume chart state so it fully reinitializes
+                    volumeChartPoints = [];
+                    volumeChartConfig = null;
+                    const canvas = document.getElementById('volumeChartCanvas');
+                    if (canvas) {
+                        canvas.dataset.hoverSetup = '';
+                        // Clear the canvas immediately
+                        const ctx = canvas.getContext('2d');
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    }
                     if (currentHeatmapPersonId) {
                         loadAndRenderHeatMap(currentHeatmapPersonId, years);
                     }
                 });
             }
+
+            // Debounced resize handler for volume chart
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    renderVolumeChart();
+                }, 150);
+            });
         });
 
         // ===============================
@@ -5621,6 +5701,10 @@
             hiddenNodeIds.clear(); // Clear hidden nodes when switching people
             closeEdgePanel(); // Close edge panel when switching people
             closeNodePanel(); // Close node panel when switching people
+
+            // Clear charts immediately to prevent stale data showing
+            clearChartsWithLoading();
+
             renderPeopleList();
 
             // Update URL immediately (unless called from popstate or initial load)
@@ -5686,6 +5770,78 @@
             document.getElementById('detailCompany').textContent = '';
             document.getElementById('detailAvatar').textContent = '...';
             document.getElementById('detailContactQuick').innerHTML = '';
+
+            // Clear and show loading state for charts
+            clearChartsWithLoading();
+
+            // Clear hero stats
+            document.getElementById('heroStatEmails').textContent = '-';
+            document.getElementById('heroStatEvents').textContent = '-';
+            document.getElementById('heroStatMessages').textContent = '-';
+
+            // Clear other dynamic content
+            const strengthRing = document.getElementById('strengthRing');
+            if (strengthRing) {
+                const ctx = strengthRing.getContext('2d');
+                ctx.clearRect(0, 0, strengthRing.width, strengthRing.height);
+            }
+        }
+
+        /**
+         * Clear charts and show loading state.
+         */
+        function clearChartsWithLoading() {
+            // Clear global chart data
+            heatmapData = {};
+            sourceTotals = {};
+            volumeChartPoints = [];
+            volumeChartConfig = null;
+
+            // Clear heatmap grid and show loading
+            const heatmapGrid = document.getElementById('heatmapGrid');
+            if (heatmapGrid) {
+                heatmapGrid.innerHTML = '<div class="chart-loading"><div class="chart-loading-spinner"></div>Loading...</div>';
+            }
+
+            // Clear month labels
+            const heatmapMonths = document.getElementById('heatmapMonths');
+            if (heatmapMonths) {
+                heatmapMonths.innerHTML = '';
+            }
+
+            // Clear volume chart canvas and show loading
+            const volumeCanvas = document.getElementById('volumeChartCanvas');
+            if (volumeCanvas) {
+                const ctx = volumeCanvas.getContext('2d');
+                const dpr = window.devicePixelRatio || 1;
+                const rect = volumeCanvas.getBoundingClientRect();
+                volumeCanvas.width = rect.width * dpr;
+                volumeCanvas.height = rect.height * dpr;
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.clearRect(0, 0, volumeCanvas.width, volumeCanvas.height);
+                ctx.scale(dpr, dpr);
+
+                // Draw loading text
+                ctx.fillStyle = '#888';
+                ctx.font = '12px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('Loading...', rect.width / 2, rect.height / 2);
+
+                // Reset hover setup
+                volumeCanvas.dataset.hoverSetup = '';
+            }
+
+            // Reset title
+            const titleEl = document.getElementById('heatmapTitle');
+            if (titleEl) {
+                titleEl.textContent = 'Interaction History';
+            }
+
+            // Reset dropdown
+            const yearsSelect = document.getElementById('heatmapYearsSelect');
+            if (yearsSelect) {
+                yearsSelect.value = '1';
+            }
         }
 
         // Hide loading skeleton
@@ -5802,12 +5958,10 @@
             // Hero stats row
             renderHeroStats(person);
 
-            // Heat map calendar - show all years back to first interaction
-            const maxYears = calculateHeatmapYearsFromFirstSeen(person.first_seen);
-            heatmapYears = maxYears;
-            const yearsSelect = document.getElementById('heatmapYearsSelect');
-            if (yearsSelect) yearsSelect.value = maxYears.toString();
-            loadAndRenderHeatMap(person.id);
+            // Heat map calendar - load with max years, then auto-select based on actual data
+            // Start with 10 years to get all data, will be adjusted after loading
+            heatmapYears = 10;
+            loadAndRenderHeatMap(person.id, null, true); // true = auto-select years from data
 
             // Skip individual-specific rendering for Me page
             if (isMePage) {
@@ -6001,14 +6155,17 @@
         }
 
         // Load all interactions for "Me" page (for client-side processing)
-        async function loadMeInteractions() {
-            if (meInteractionsCache) {
+        async function loadMeInteractions(forceRefresh = false) {
+            // Use cache only if it matches current heatmapYears setting
+            if (meInteractionsCache && meInteractionsCacheYears === heatmapYears && !forceRefresh) {
                 return meInteractionsCache;
             }
             try {
-                // Use quarter as default trend period, fetch 2 years for chart navigation
-                const data = await api(`/me/interactions?days_back=1095&trend_period=${currentTrendPeriod}`);
+                // Fetch data for the selected number of years
+                const daysBack = (heatmapYears * 365) + 7;
+                const data = await api(`/me/interactions?days_back=${daysBack}&trend_period=${currentTrendPeriod}`);
                 meInteractionsCache = data; // Store the whole aggregated response
+                meInteractionsCacheYears = heatmapYears; // Remember which setting this was for
                 return meInteractionsCache;
             } catch (error) {
                 console.error('Failed to load Me interactions:', error);
@@ -6342,24 +6499,26 @@
         };
 
         // Load and render heat map
-        async function loadAndRenderHeatMap(personId, years = null) {
+        async function loadAndRenderHeatMap(personId, years = null, autoSelectYears = false) {
             const grid = document.getElementById('heatmapGrid');
             const monthsContainer = document.getElementById('heatmapMonths');
+
+            // Track if this is a new person (for logging/debugging)
+            const isNewPerson = currentHeatmapPersonId !== personId;
+            if (isNewPerson) {
+                // Data already cleared by clearChartsWithLoading() in selectPerson
+                // Just reset hover setup
+                const canvas = document.getElementById('volumeChartCanvas');
+                if (canvas) {
+                    canvas.dataset.hoverSetup = '';
+                }
+            }
 
             // Use provided years or current setting
             if (years !== null) {
                 heatmapYears = years;
             }
             currentHeatmapPersonId = personId;
-
-            // Update title based on years
-            const titleEl = document.getElementById('heatmapTitle');
-            if (titleEl) {
-                const days = heatmapYears * 365;
-                titleEl.textContent = heatmapYears === 1
-                    ? '365-Day Interaction History'
-                    : `${heatmapYears}-Year Interaction History`;
-            }
 
             try {
                 // For "Me" page, aggregate interactions across all people
@@ -6388,6 +6547,22 @@
                         sourceTotals[sourceType] = (sourceTotals[sourceType] || 0) + group.count;
                     });
                 });
+
+                // Auto-select years based on actual interaction data
+                if (autoSelectYears) {
+                    const yearsFromData = calculateYearsFromHeatmapData();
+                    heatmapYears = yearsFromData;
+                    const yearsSelect = document.getElementById('heatmapYearsSelect');
+                    if (yearsSelect) yearsSelect.value = yearsFromData.toString();
+                }
+
+                // Update title based on years
+                const titleEl = document.getElementById('heatmapTitle');
+                if (titleEl) {
+                    titleEl.textContent = heatmapYears === 1
+                        ? '365-Day Interaction History'
+                        : `${heatmapYears}-Year Interaction History`;
+                }
 
                 renderHeatMap();
                 // Don't overwrite hero stats - they show lifetime totals from PersonEntity,
@@ -6419,6 +6594,20 @@
                     heatmapData[day.date] = { total: day.total, sources: day.sources };
                 });
 
+                // For /me page, calculate years from actual interaction data
+                const yearsFromData = calculateYearsFromHeatmapData();
+                heatmapYears = yearsFromData;
+                const yearsSelect = document.getElementById('heatmapYearsSelect');
+                if (yearsSelect) yearsSelect.value = yearsFromData.toString();
+
+                // Update title based on calculated years
+                const titleEl = document.getElementById('heatmapTitle');
+                if (titleEl) {
+                    titleEl.textContent = heatmapYears === 1
+                        ? '365-Day Interaction History'
+                        : `${heatmapYears}-Year Interaction History`;
+                }
+
                 renderHeatMap();
                 // Don't call updateHeroStatsFromSources for Me page - we already set aggregate stats
             } catch (error) {
@@ -6427,6 +6616,21 @@
                 sourceTotals = {};
                 renderHeatMap();
             }
+        }
+
+        /**
+         * Calculate years needed from actual heatmapData dates.
+         */
+        function calculateYearsFromHeatmapData() {
+            const dates = Object.keys(heatmapData).sort();
+            if (dates.length === 0) return 1;
+
+            const earliestDate = new Date(dates[0] + 'T12:00:00');
+            const now = new Date();
+            const daysSince = Math.floor((now - earliestDate) / (1000 * 60 * 60 * 24));
+            const yearsNeeded = Math.ceil(daysSince / 365);
+
+            return Math.max(1, Math.min(10, yearsNeeded));
         }
 
         // Render Me dashboard widgets
@@ -7486,6 +7690,323 @@
 
             // Setup tooltip and click handlers
             setupHeatmapInteractions();
+
+            // Render volume chart with same time period
+            renderVolumeChart();
+        }
+
+        // Store volume chart data for hover interactions
+        let volumeChartPoints = [];
+        let volumeChartConfig = null;
+
+        /**
+         * Render a smoothed line chart showing interaction volume over time.
+         * Uses the same time period as the heatmap (heatmapYears).
+         */
+        function renderVolumeChart(highlightIndex = -1) {
+            const canvas = document.getElementById('volumeChartCanvas');
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+            const dpr = window.devicePixelRatio || 1;
+
+            // Set canvas size with device pixel ratio for sharpness
+            const rect = canvas.getBoundingClientRect();
+
+            // Skip if canvas not visible (zero dimensions)
+            if (rect.width === 0 || rect.height === 0) {
+                // Retry after layout completes
+                requestAnimationFrame(() => renderVolumeChart(highlightIndex));
+                return;
+            }
+
+            canvas.width = rect.width * dpr;
+            canvas.height = rect.height * dpr;
+            ctx.scale(dpr, dpr);
+
+            const width = rect.width;
+            const height = rect.height;
+            // Minimal padding - balanced for Y-axis labels on left, minimal on right
+            const padding = { top: 15, right: 10, bottom: 20, left: 30 };
+            const chartWidth = width - padding.left - padding.right;
+            const chartHeight = height - padding.top - padding.bottom;
+
+            // Store config for hover detection
+            volumeChartConfig = { width, height, padding, chartWidth, chartHeight };
+
+            // Clear canvas completely
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.scale(dpr, dpr);
+
+            // Aggregate data by week or month depending on time range
+            const daysBack = heatmapYears * 365;
+            const useMonthly = heatmapYears >= 3;
+            const aggregated = aggregateVolumeData(heatmapData, daysBack, useMonthly);
+
+            if (aggregated.length === 0) {
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '12px system-ui, sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('No interaction data', width / 2, height / 2);
+                volumeChartPoints = [];
+                return;
+            }
+
+            // Find max value for scaling
+            const maxValue = Math.max(...aggregated.map(d => d.value), 1);
+
+            // Calculate points and store globally for hover
+            volumeChartPoints = aggregated.map((d, i) => ({
+                x: padding.left + (i / (aggregated.length - 1 || 1)) * chartWidth,
+                y: padding.top + chartHeight - (d.value / maxValue) * chartHeight,
+                value: d.value,
+                label: d.label,
+                fullLabel: d.fullLabel || d.label
+            }));
+
+            // Draw grid lines
+            ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#333';
+            ctx.lineWidth = 0.5;
+            const gridLines = 4;
+            for (let i = 0; i <= gridLines; i++) {
+                const y = padding.top + (i / gridLines) * chartHeight;
+                ctx.beginPath();
+                ctx.moveTo(padding.left, y);
+                ctx.lineTo(width - padding.right, y);
+                ctx.stroke();
+            }
+
+            // Draw Y-axis labels (white text)
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '10px system-ui, sans-serif';
+            ctx.textAlign = 'right';
+            for (let i = 0; i <= gridLines; i++) {
+                const value = Math.round(maxValue * (1 - i / gridLines));
+                const y = padding.top + (i / gridLines) * chartHeight;
+                ctx.fillText(value.toString(), padding.left - 5, y + 3);
+            }
+
+            // Draw smoothed line using cardinal spline
+            if (volumeChartPoints.length > 1) {
+                ctx.beginPath();
+                ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--people').trim() || '#00bcd4';
+                ctx.lineWidth = 2;
+                ctx.lineJoin = 'round';
+                ctx.lineCap = 'round';
+
+                // Draw smooth curve through points
+                drawSmoothLine(ctx, volumeChartPoints);
+                ctx.stroke();
+
+                // Fill area under curve
+                ctx.lineTo(volumeChartPoints[volumeChartPoints.length - 1].x, padding.top + chartHeight);
+                ctx.lineTo(volumeChartPoints[0].x, padding.top + chartHeight);
+                ctx.closePath();
+                ctx.fillStyle = 'rgba(0, 188, 212, 0.15)';
+                ctx.fill();
+            }
+
+            // Draw X-axis labels (show a few evenly spaced, white text)
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '10px system-ui, sans-serif';
+            ctx.textAlign = 'center';
+            const labelCount = Math.min(6, aggregated.length);
+            const step = Math.floor(aggregated.length / labelCount) || 1;
+            for (let i = 0; i < aggregated.length; i += step) {
+                const x = padding.left + (i / (aggregated.length - 1 || 1)) * chartWidth;
+                ctx.fillText(aggregated[i].label, x, height - 5);
+            }
+
+            // Draw highlight circle if hovering
+            if (highlightIndex >= 0 && highlightIndex < volumeChartPoints.length) {
+                const point = volumeChartPoints[highlightIndex];
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
+                ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--people').trim() || '#00bcd4';
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+            }
+
+            // Setup hover interactions (only once)
+            if (!canvas.dataset.hoverSetup) {
+                setupVolumeChartHover(canvas);
+                canvas.dataset.hoverSetup = 'true';
+            }
+        }
+
+        /**
+         * Setup hover interactions for the volume chart.
+         */
+        function setupVolumeChartHover(canvas) {
+            const tooltip = document.getElementById('heatmapTooltip');
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (!volumeChartPoints.length || !volumeChartConfig) return;
+
+                const rect = canvas.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+
+                // Find nearest point
+                let nearestIndex = -1;
+                let nearestDist = Infinity;
+
+                volumeChartPoints.forEach((point, i) => {
+                    const dist = Math.abs(point.x - x);
+                    if (dist < nearestDist && dist < 30) {
+                        nearestDist = dist;
+                        nearestIndex = i;
+                    }
+                });
+
+                if (nearestIndex >= 0) {
+                    const point = volumeChartPoints[nearestIndex];
+                    canvas.style.cursor = 'pointer';
+
+                    // Re-render with highlight
+                    renderVolumeChart(nearestIndex);
+
+                    // Show tooltip
+                    const useMonthly = heatmapYears >= 3;
+                    const periodLabel = useMonthly ? 'Month' : 'Week';
+                    tooltip.innerHTML = `
+                        <div class="heatmap-tooltip-date">${point.fullLabel}</div>
+                        <div class="heatmap-tooltip-item">${point.value} interaction${point.value !== 1 ? 's' : ''}</div>
+                        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px;">${periodLabel} total</div>
+                    `;
+                    tooltip.classList.add('visible');
+
+                    // Position tooltip near cursor
+                    const tooltipRect = tooltip.getBoundingClientRect();
+                    let tooltipX = e.clientX + 15;
+                    let tooltipY = e.clientY - 10;
+
+                    // Keep tooltip in viewport
+                    if (tooltipX + tooltipRect.width > window.innerWidth) {
+                        tooltipX = e.clientX - tooltipRect.width - 15;
+                    }
+                    if (tooltipY + tooltipRect.height > window.innerHeight) {
+                        tooltipY = e.clientY - tooltipRect.height - 10;
+                    }
+
+                    tooltip.style.left = tooltipX + 'px';
+                    tooltip.style.top = tooltipY + 'px';
+                } else {
+                    canvas.style.cursor = 'default';
+                    tooltip.classList.remove('visible');
+                    // Re-render without highlight
+                    renderVolumeChart(-1);
+                }
+            });
+
+            canvas.addEventListener('mouseleave', () => {
+                tooltip.classList.remove('visible');
+                canvas.style.cursor = 'default';
+                renderVolumeChart(-1);
+            });
+        }
+
+        /**
+         * Aggregate heatmap data into weekly or monthly buckets for the volume chart.
+         * Creates buckets for the ENTIRE date range, including periods with no data.
+         */
+        function aggregateVolumeData(data, daysBack, useMonthly) {
+            const buckets = {};
+            const now = new Date();
+            now.setHours(12, 0, 0, 0);
+            const startDate = new Date(now);
+            startDate.setDate(startDate.getDate() - daysBack);
+
+            // First, create all buckets for the entire date range (including empty ones)
+            if (useMonthly) {
+                // Create monthly buckets from startDate to now
+                const current = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+                const endMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+                while (current <= endMonth) {
+                    const bucketKey = `${current.getFullYear()}-${String(current.getMonth() + 1).padStart(2, '0')}`;
+                    buckets[bucketKey] = { value: 0, date: new Date(current) };
+                    current.setMonth(current.getMonth() + 1);
+                }
+            } else {
+                // Create weekly buckets from startDate to now
+                const current = new Date(startDate);
+                current.setDate(current.getDate() - current.getDay()); // Start of week (Sunday)
+                while (current <= now) {
+                    const bucketKey = current.toISOString().slice(0, 10);
+                    buckets[bucketKey] = { value: 0, date: new Date(current) };
+                    current.setDate(current.getDate() + 7);
+                }
+            }
+
+            // Now populate buckets with actual data
+            for (const [dateKey, dayData] of Object.entries(data)) {
+                const date = new Date(dateKey + 'T12:00:00');
+                if (date < startDate) continue;
+
+                let bucketKey;
+                if (useMonthly) {
+                    bucketKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                } else {
+                    // Weekly: use ISO week start (Sunday)
+                    const weekStart = new Date(date);
+                    weekStart.setDate(date.getDate() - date.getDay());
+                    bucketKey = weekStart.toISOString().slice(0, 10);
+                }
+
+                if (buckets[bucketKey]) {
+                    buckets[bucketKey].value += dayData.total || 0;
+                }
+            }
+
+            // Sort by date and format labels as MM/YY
+            const sorted = Object.entries(buckets)
+                .sort(([a], [b]) => a.localeCompare(b))
+                .map(([key, bucketData]) => {
+                    let label, fullLabel;
+                    if (useMonthly) {
+                        const [year, month] = key.split('-');
+                        const date = new Date(year, parseInt(month) - 1, 1);
+                        label = `${month}/${year.slice(-2)}`;
+                        fullLabel = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                    } else {
+                        const date = new Date(key + 'T12:00:00');
+                        const mm = String(date.getMonth() + 1).padStart(2, '0');
+                        const yy = String(date.getFullYear()).slice(-2);
+                        label = `${mm}/${yy}`;
+                        fullLabel = `Week of ${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+                    }
+                    return { label, fullLabel, value: bucketData.value };
+                });
+
+            return sorted;
+        }
+
+        /**
+         * Draw a smooth curve through points using cardinal spline interpolation.
+         */
+        function drawSmoothLine(ctx, points) {
+            if (points.length < 2) return;
+
+            const tension = 0.3;
+
+            ctx.moveTo(points[0].x, points[0].y);
+
+            for (let i = 0; i < points.length - 1; i++) {
+                const p0 = points[i - 1] || points[0];
+                const p1 = points[i];
+                const p2 = points[i + 1];
+                const p3 = points[i + 2] || p2;
+
+                const cp1x = p1.x + (p2.x - p0.x) * tension;
+                const cp1y = p1.y + (p2.y - p0.y) * tension;
+                const cp2x = p2.x - (p3.x - p1.x) * tension;
+                const cp2y = p2.y - (p3.y - p1.y) * tension;
+
+                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+            }
         }
 
         // Setup tooltip and click interactions for heatmap
