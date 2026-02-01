@@ -1406,3 +1406,230 @@ API: `POST /api/crm/people/{id}/facts/extract?model=haiku|sonnet`
 3. **Confidence calibration**: Single mentions don't exceed 0.5 confidence
 4. **Entity attribution**: <5% of facts incorrectly attributed
 5. **Cost**: 70% reduction in Claude API calls via Ollama
+
+---
+
+## Phase 15: Family Dashboard
+
+### Overview
+
+The Family Dashboard provides an aggregated view of interactions with multiple selected family members, displaying combined statistics and unified visualizations across all selected people.
+
+**Primary Use Cases:**
+- Track engagement with family as a group
+- Quickly see combined interaction history across family members
+- Identify which family member you've been out of touch with
+
+### P15.1: Family Dashboard View
+
+**URL:** `/crm#family`
+
+**UI Layout:**
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  Family Dashboard                          [Select family members... ▼] │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  Hero Stats (Lifetime Totals)                                            │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐                 │
+│  │ 📧 1.2K  │  │ 💬 5.6K  │  │ 📞 234   │  │ 📅 156   │                 │
+│  │ emails   │  │ messages │  │ calls    │  │ meetings │                 │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘                 │
+│                                                                          │
+│  [Overview] [Timeline]                                                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                          │
+│  365-Day Interaction History                              [Years: 10 ▼] │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │  █ █ █   █ █ █ █   █   █ █   █ █ █ █   (heatmap)              │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  Interaction Volume Over Time                                           │
+│  ┌─────────────────────────────────────────────────────────────────┐   │
+│  │  ▄█▄ ▄█▄ ▄█▄ ▄█▄ ▄█▄ (volume chart)                           │   │
+│  └─────────────────────────────────────────────────────────────────┘   │
+│                                                                          │
+│  Family Contact Health            Relationship Trends                   │
+│  ┌────────────────────────────┐  ┌────────────────────────────────┐   │
+│  │ Bill Ramia      ██████░░░ │  │ Trends chart                    │   │
+│  │ Patricia Ramia  ████░░░░░ │  │                                  │   │
+│  │ Anna Ramia      ███░░░░░░ │  └────────────────────────────────┘   │
+│  └────────────────────────────┘                                         │
+│                                                                          │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Behaviors:**
+- Hero stats show **lifetime totals** from PersonEntity (not time-bounded)
+- Hero stat pills are clickable → navigate to Timeline filtered by source type
+- Year dropdown controls heatmap/volume chart but NOT hero stats
+- Heatmap supports up to 10 years of history
+- Clicking heatmap square navigates to Timeline filtered to that date
+- Default family members: configurable, stored in localStorage
+
+### P15.2: Family Stats API
+
+**Endpoint:** `GET /api/crm/family/stats`
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| person_ids | string | Comma-separated list of person UUIDs |
+
+**Response Schema:**
+```json
+{
+  "total_emails": 1247,
+  "total_meetings": 156,
+  "total_messages": 5623
+}
+```
+
+**Implementation Notes:**
+- Returns lifetime totals by summing `PersonEntity.email_count`, `meeting_count`, `message_count`
+- Independent of any date range - these are all-time totals
+- Fast response (reads from PersonEntity, not interaction queries)
+
+### P15.3: Family Interactions API
+
+**Endpoint:** `GET /api/crm/family/interactions`
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| person_ids | string | Comma-separated list of person UUIDs |
+| days_back | int | Lookback period in days (default: 365) |
+
+**Response Schema:**
+```json
+{
+  "daily": [
+    {"date": "2026-01-15", "total": 5, "sources": {"gmail": 2, "imessage": 3}},
+    ...
+  ],
+  "by_source": {
+    "gmail": 450,
+    "imessage": 2300,
+    "calendar": 156,
+    ...
+  },
+  "total_interactions": 4500,
+  "date_range": {
+    "start": "2025-01-15",
+    "end": "2026-01-15"
+  }
+}
+```
+
+**Implementation Notes:**
+- Aggregates interactions across all selected family members
+- Used for heatmap rendering and volume chart
+- Supports multi-year lookback via `days_back` parameter
+
+### P15.4: Family Timeline API
+
+**Endpoint:** `GET /api/crm/family/timeline`
+
+**Query Parameters:**
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| person_ids | string | Comma-separated list of person UUIDs |
+| source_type | string | Filter by source type (optional) |
+| date | string | Filter to specific date YYYY-MM-DD (optional) |
+| limit | int | Max results (default: 100) |
+
+**Response Schema:**
+```json
+{
+  "items": [
+    {
+      "id": "interaction-uuid",
+      "person_id": "person-uuid",
+      "person_name": "Bill Ramia",
+      "timestamp": "2026-01-15T10:30:00Z",
+      "source_type": "imessage",
+      "title": "Text conversation",
+      "snippet": "Happy birthday!",
+      "source_link": "imessage://+15551234567"
+    },
+    ...
+  ],
+  "count": 50,
+  "has_more": true
+}
+```
+
+**Implementation Notes:**
+- Returns interactions for ANY of the selected family members
+- Includes `person_name` field to identify which family member
+- Supports filtering by source type and date
+- Used by Timeline tab and heatmap click navigation
+
+### P15.5: Family Member Selector
+
+**UI Component:**
+```
+┌─────────────────────────────────────────┐
+│ Select family members...            ▼   │
+├─────────────────────────────────────────┤
+│ [Select All] [Clear All]                │
+├─────────────────────────────────────────┤
+│ ☑ Bill Ramia                            │
+│ ☑ Patricia Ramia                        │
+│ ☑ Anna Ramia                            │
+│ ☑ Malea Ramia                           │
+└─────────────────────────────────────────┘
+```
+
+**Behaviors:**
+- Multi-select dropdown with checkboxes
+- Select All / Clear All buttons
+- Right-aligned in header (uses `header-indicators` area)
+- Selection persisted to localStorage as `familySelectedIds`
+- Adding/removing people updates all visualizations
+- Label shows "N family members" when collapsed
+
+### P15.6: Clickable Hero Stats
+
+**Behavior:**
+- Clicking a hero stat pill navigates to Timeline tab
+- Timeline is filtered to the corresponding source type:
+  - 📧 Emails → `source_type=gmail`
+  - 💬 Messages → `source_type` in `[imessage, whatsapp, signal, slack]`
+  - 📞 Calls → `source_type=phone`
+  - 📅 Meetings → `source_type=calendar`
+
+**Implementation:**
+```javascript
+function navigateToTimelineFiltered(sourceType) {
+    timelineFilter = sourceType;
+    switchTab('timeline');
+}
+```
+
+### Acceptance Criteria
+
+```
+[ ] Family dashboard loads at /crm#family
+[ ] Family member selector shows in header (right-aligned)
+[ ] Hero stats show lifetime totals (not time-bounded)
+[ ] Hero stats update when family selection changes
+[ ] Hero stat pills clickable → filter timeline
+[ ] Year dropdown controls heatmap range (default: 10 years)
+[ ] Year dropdown does NOT affect hero stats
+[ ] Heatmap aggregates interactions across all selected family members
+[ ] Clicking heatmap square → Timeline filtered to that date
+[ ] Timeline shows interactions from all selected family members
+[ ] Timeline source filter works (all, gmail, messages, etc.)
+[ ] Volume chart shows aggregated data over time
+[ ] Family Contact Health shows per-person breakdown
+[ ] Selection persisted to localStorage
+[ ] Adding/removing family member updates all views
+```
+
+### Implementation Files
+
+| File | Purpose |
+|------|---------|
+| `api/routes/crm.py` | `/family/stats`, `/family/interactions`, `/family/timeline` endpoints |
+| `web/crm.html` | Family dashboard UI, selector, hero stats, visualizations |

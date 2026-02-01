@@ -3363,7 +3363,7 @@
         .family-dropdown {
             position: absolute;
             top: 100%;
-            right: 0;
+            left: 0;
             margin-top: 0.25rem;
             background: var(--bg-secondary);
             border: 1px solid var(--border-color);
@@ -3973,7 +3973,8 @@
             padding-bottom: 0.5rem;
         }
 
-        .me-compact-panel #meTopContacts {
+        .me-compact-panel #meTopContacts,
+        .me-compact-panel #familyTopContacts {
             flex: 1;
             overflow-y: auto;
             max-height: 170px;
@@ -4640,6 +4641,30 @@
                             </div>
                         </div>
 
+                        <!-- Family Hero Stats (shown only for /family route, positioned before heatmap) -->
+                        <div class="hero-stats" id="familyHeroStats" style="display: none;">
+                            <div class="hero-stat hero-stat-clickable" onclick="navigateToTimelineFiltered('gmail')">
+                                <span class="hero-stat-icon">📧</span>
+                                <span class="hero-stat-value" id="familyStatEmails">0</span>
+                                <span class="hero-stat-label">emails</span>
+                            </div>
+                            <div class="hero-stat hero-stat-clickable" onclick="navigateToTimelineFiltered('messages')">
+                                <span class="hero-stat-icon">💬</span>
+                                <span class="hero-stat-value" id="familyStatMessages">0</span>
+                                <span class="hero-stat-label">messages</span>
+                            </div>
+                            <div class="hero-stat hero-stat-clickable" onclick="navigateToTimelineFiltered('phone')">
+                                <span class="hero-stat-icon">📞</span>
+                                <span class="hero-stat-value" id="familyStatPhone">0</span>
+                                <span class="hero-stat-label">calls</span>
+                            </div>
+                            <div class="hero-stat hero-stat-clickable" onclick="navigateToTimelineFiltered('calendar')">
+                                <span class="hero-stat-icon">📅</span>
+                                <span class="hero-stat-value" id="familyStatCalendar">0</span>
+                                <span class="hero-stat-label">events</span>
+                            </div>
+                        </div>
+
                         <!-- Heat map calendar -->
                         <div class="heatmap-container">
                             <div class="heatmap-header">
@@ -4835,25 +4860,6 @@
 
                         <!-- Family Dashboard (shown only for /family route) -->
                         <div class="family-dashboard" id="familyDashboard" style="display: none;">
-                            <!-- Family Member Selector (header is set via JS in main detail-header) -->
-                            <div class="family-member-selector-row">
-                                <div class="family-member-selector">
-                                    <button class="family-selector-btn" onclick="toggleFamilyDropdown()">
-                                        <span id="familySelectorLabel">Select family members...</span>
-                                        <span class="family-selector-arrow">▼</span>
-                                    </button>
-                                    <div class="family-dropdown" id="familyDropdown" style="display: none;">
-                                        <div class="family-dropdown-actions">
-                                            <button class="family-action-btn" onclick="selectAllFamily()">Select All</button>
-                                            <button class="family-action-btn" onclick="clearAllFamily()">Clear All</button>
-                                        </div>
-                                        <div class="family-dropdown-list" id="familyDropdownList">
-                                            <!-- Family members populated by JS -->
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
                             <!-- Family Stats Row -->
                             <div class="me-widgets-row">
                                 <!-- Family Health Score -->
@@ -4889,14 +4895,6 @@
 
                             <!-- Family Trends Row -->
                             <div class="me-widgets-row">
-                                <!-- Interaction Breakdown by Source -->
-                                <div class="overview-panel">
-                                    <div class="overview-panel-header">
-                                        <span class="overview-panel-title">By Source</span>
-                                    </div>
-                                    <div class="chart-bar-container" id="familyBySourceChart"></div>
-                                </div>
-
                                 <!-- Relationship Trends -->
                                 <div class="overview-panel">
                                     <div class="overview-panel-header">
@@ -6253,7 +6251,13 @@
                         const ctx = canvas.getContext('2d');
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
                     }
-                    if (currentHeatmapPersonId) {
+                    // Check if we're on family view
+                    const { isFamily } = parseUrl();
+                    if (isFamily) {
+                        // For family view, re-fetch with new year range
+                        heatmapYears = years;
+                        loadFamilyInteractions();
+                    } else if (currentHeatmapPersonId) {
                         loadAndRenderHeatMap(currentHeatmapPersonId, years);
                     }
                 });
@@ -6492,10 +6496,25 @@
             // Restore elements that family dashboard hides
             // (headerIndicators already declared above)
             const detailTabs = document.querySelector('.detail-tabs');
+            // Restore original header indicators content (strength ring, dunbar circle)
+            if (headerIndicators && originalHeaderIndicatorsHtml !== null) {
+                headerIndicators.innerHTML = originalHeaderIndicatorsHtml;
+            }
             if (headerIndicators) headerIndicators.style.display = '';
-            if (detailTabs) detailTabs.style.display = '';
+            if (detailTabs) {
+                detailTabs.style.display = '';
+                // Restore Graph tab that family view hides
+                const graphTab = detailTabs.querySelector('[data-tab="graph"]');
+                if (graphTab) graphTab.style.display = '';
+            }
             const heatmapSectionEl = document.getElementById('heatmapSection');
             if (heatmapSectionEl) heatmapSectionEl.style.display = '';
+            // Restore hero stats that family dashboard hides
+            const heroStats = document.getElementById('heroStats');
+            if (heroStats) heroStats.style.display = '';
+            // Hide family hero stats when viewing a person
+            const familyHeroStats = document.getElementById('familyHeroStats');
+            if (familyHeroStats) familyHeroStats.style.display = 'none';
 
             if (isMePage) {
                 meDashboard.style.display = 'grid';
@@ -7261,6 +7280,7 @@
 
         // Family dashboard state
         let familyMembers = [];
+        let originalHeaderIndicatorsHtml = null;  // Save original header content for restore
         // Default family members: Bill, Patricia, Malea, Anna Ramia
         const DEFAULT_FAMILY_IDS = [
             '29a732c3-2356-4f60-bf21-956b3652883a',  // Bill Ramia
@@ -7295,14 +7315,22 @@
             document.getElementById('meDashboard').classList.remove('visible');
             document.getElementById('personContentGrid').style.display = 'none';
 
+            // Hide the person-level hero stats (they're in tabOverview which stays visible)
+            const personHeroStats = document.getElementById('heroStats');
+            if (personHeroStats) personHeroStats.style.display = 'none';
+
+            // Show family hero stats (positioned above heatmap)
+            const familyHeroStats = document.getElementById('familyHeroStats');
+            if (familyHeroStats) familyHeroStats.style.display = '';
+
             // Show family dashboard
             const familyDashboard = document.getElementById('familyDashboard');
             familyDashboard.style.display = 'block';
             familyDashboard.classList.add('visible');
 
-            // Hide heatmap for family view
-            const heatmapSection = document.getElementById('heatmapSection');
-            if (heatmapSection) heatmapSection.style.display = 'none';
+            // Show heatmap for family view (it will be populated with family data)
+            const heatmapContainer = document.querySelector('.heatmap-container');
+            if (heatmapContainer) heatmapContainer.style.display = '';
 
             // Hide source entities footer
             const sourceEntitiesFooter = document.getElementById('sourceEntitiesFooter');
@@ -7316,24 +7344,48 @@
             const detailTagsChips = document.getElementById('detailTagsChips');
             if (detailAvatar) detailAvatar.textContent = '👨‍👩‍👧';
             if (detailName) detailName.textContent = 'Family Dashboard';
-            if (detailCompany) detailCompany.textContent = 'Aggregated Family Metrics';
+            if (detailCompany) detailCompany.textContent = '';
             if (detailContactQuick) detailContactQuick.innerHTML = '';
             if (detailTagsChips) detailTagsChips.innerHTML = '';
 
-            // Hide strength ring and dunbar circle for family view
+            // Put the family selector in the header-indicators area (right side)
             const headerIndicators = document.querySelector('.header-indicators');
-            if (headerIndicators) headerIndicators.style.display = 'none';
+            if (headerIndicators) {
+                // Save original content if not already saved
+                if (originalHeaderIndicatorsHtml === null) {
+                    originalHeaderIndicatorsHtml = headerIndicators.innerHTML;
+                }
+                headerIndicators.style.display = 'flex';
+                headerIndicators.innerHTML = `
+                    <div class="family-member-selector">
+                        <button class="family-selector-btn" onclick="toggleFamilyDropdown()">
+                            <span id="familySelectorLabel">Select family members...</span>
+                            <span class="family-selector-arrow">▼</span>
+                        </button>
+                        <div class="family-dropdown" id="familyDropdown" style="display: none;">
+                            <div class="family-dropdown-actions">
+                                <button class="family-action-btn" onclick="selectAllFamily()">Select All</button>
+                                <button class="family-action-btn" onclick="clearAllFamily()">Clear All</button>
+                            </div>
+                            <div class="family-dropdown-list" id="familyDropdownList"></div>
+                        </div>
+                    </div>
+                `;
+            }
 
-            // Hide tabs for family view (we only have overview)
+            // Show tabs but hide Graph tab (family only has Overview and Timeline)
             const detailTabs = document.querySelector('.detail-tabs');
-            if (detailTabs) detailTabs.style.display = 'none';
+            if (detailTabs) {
+                detailTabs.style.display = '';
+                // Hide the Graph tab for family view
+                const graphTab = detailTabs.querySelector('[data-tab="graph"]');
+                if (graphTab) graphTab.style.display = 'none';
+            }
 
             // Load family members if not already loaded
             if (familyMembers.length === 0) {
                 await loadFamilyMembers();
             }
-
-            renderFamilyDropdown();
 
             // If no family members selected, use defaults (Bill, Patricia, Malea, Anna)
             if (selectedFamilyIds.length === 0 && familyMembers.length > 0) {
@@ -7347,7 +7399,22 @@
                 }
             }
 
+            // Render dropdown AFTER defaults are set so checkboxes reflect selection
+            renderFamilyDropdown();
             updateFamilySelectorLabel();
+
+            // Fetch up to 10 years of data initially (like person/me pages)
+            // The actual years will be auto-calculated from the data
+            heatmapYears = 10;
+
+            // Set years dropdown to 10 years on initial load
+            const yearsSelect = document.getElementById('heatmapYearsSelect');
+            if (yearsSelect) yearsSelect.value = '10';
+
+            // Load lifetime stats (hero stats) - these are independent of year selection
+            await loadFamilyStats();
+
+            // Load time-bounded interaction data for heatmap/charts
             await loadFamilyInteractions();
         }
 
@@ -7400,6 +7467,8 @@
                 selectedFamilyIds.push(memberId);
             }
             updateFamilySelectorLabel();
+            // Load both stats and interactions when family selection changes
+            await loadFamilyStats();
             await loadFamilyInteractions();
         }
 
@@ -7408,6 +7477,7 @@
             selectedFamilyIds = familyMembers.map(m => m.id);
             renderFamilyDropdown();
             updateFamilySelectorLabel();
+            await loadFamilyStats();
             await loadFamilyInteractions();
         }
 
@@ -7416,6 +7486,7 @@
             selectedFamilyIds = [];
             renderFamilyDropdown();
             updateFamilySelectorLabel();
+            await loadFamilyStats();  // Reset stats to 0
             renderEmptyFamilyDashboard();
         }
 
@@ -7433,6 +7504,30 @@
             }
         }
 
+        // Load family lifetime stats (hero stats - independent of year selection)
+        async function loadFamilyStats() {
+            if (selectedFamilyIds.length === 0) {
+                document.getElementById('familyStatEmails').textContent = '0';
+                document.getElementById('familyStatMessages').textContent = '0';
+                document.getElementById('familyStatPhone').textContent = '0';
+                document.getElementById('familyStatCalendar').textContent = '0';
+                return;
+            }
+
+            try {
+                const idsParam = selectedFamilyIds.join(',');
+                const stats = await api(`/family/stats?person_ids=${encodeURIComponent(idsParam)}`);
+                document.getElementById('familyStatEmails').textContent = formatCompactNumber(stats.total_emails || 0);
+                document.getElementById('familyStatMessages').textContent = formatCompactNumber(stats.total_messages || 0);
+                // Note: phone and calendar aren't in PersonEntity lifetime counts yet
+                // For now, use 0 or we could add them to the endpoint later
+                document.getElementById('familyStatPhone').textContent = '0';
+                document.getElementById('familyStatCalendar').textContent = formatCompactNumber(stats.total_meetings || 0);
+            } catch (error) {
+                console.error('Failed to load family stats:', error);
+            }
+        }
+
         // Load family interactions from API
         async function loadFamilyInteractions() {
             if (selectedFamilyIds.length === 0) {
@@ -7442,7 +7537,9 @@
 
             try {
                 const idsParam = selectedFamilyIds.join(',');
-                familyData = await api(`/family/interactions?person_ids=${encodeURIComponent(idsParam)}&health_period=${familyHealthPeriod}&trend_period=${familyTrendPeriod}`);
+                // Fetch up to 10 years of data (like person/me pages do)
+                const daysBack = (heatmapYears * 365) + 7;
+                familyData = await api(`/family/interactions?person_ids=${encodeURIComponent(idsParam)}&days_back=${daysBack}&health_period=${familyHealthPeriod}&trend_period=${familyTrendPeriod}`);
                 renderFamilyDashboard(familyData);
             } catch (error) {
                 console.error('Failed to load family interactions:', error);
@@ -7455,9 +7552,13 @@
             document.getElementById('familyHealthCurrentScore').textContent = '--';
             document.getElementById('familyHealthChartContainer').innerHTML = '<div style="padding: 2rem; text-align: center; color: var(--text-muted);">Select family members to see data</div>';
             document.getElementById('familyTopContacts').innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No data</div>';
-            document.getElementById('familyBySourceChart').innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No data</div>';
             document.getElementById('familyTrendsWarmingList').innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No data</div>';
             document.getElementById('familyTrendsCoolingList').innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No data</div>';
+            // Reset hero stats
+            document.getElementById('familyStatEmails').textContent = '0';
+            document.getElementById('familyStatMessages').textContent = '0';
+            document.getElementById('familyStatPhone').textContent = '0';
+            document.getElementById('familyStatCalendar').textContent = '0';
         }
 
         // Render family dashboard with data
@@ -7467,17 +7568,48 @@
                 return;
             }
 
+            // Note: Hero stats are loaded separately via loadFamilyStats()
+            // They use lifetime totals from PersonEntity, not time-bounded data
+
+            // Render heatmap and volume chart with family data
+            loadFamilyHeatMap(data);
+
             // Render health score chart
             renderFamilyHealthScore(data);
 
             // Render top contacts
             renderFamilyTopContacts(data);
 
-            // Render by source chart
-            renderBarChart('familyBySourceChart', data.by_source || {}, 'source');
-
             // Render trends
             renderFamilyTrends(data);
+        }
+
+        // Load and render heatmap for family view (aggregate across selected family members)
+        function loadFamilyHeatMap(data) {
+            if (!data || !data.daily) {
+                heatmapData = {};
+                sourceTotals = {};
+                renderHeatMap();
+                return;
+            }
+
+            // Use pre-aggregated daily data from family API
+            heatmapData = {};
+            sourceTotals = data.by_source || {};
+
+            (data.daily || []).forEach(day => {
+                heatmapData[day.date] = { total: day.total, sources: day.sources };
+            });
+
+            // Update title based on current heatmapYears
+            const titleEl = document.getElementById('heatmapTitle');
+            if (titleEl) {
+                titleEl.textContent = heatmapYears === 1
+                    ? '365-Day Interaction History'
+                    : `${heatmapYears}-Year Interaction History`;
+            }
+
+            renderHeatMap();
         }
 
         // Render family health score chart
@@ -7485,7 +7617,9 @@
             const container = document.getElementById('familyHealthChartContainer');
             const scoreEl = document.getElementById('familyHealthCurrentScore');
 
-            if (!container || !scoreEl) return;
+            if (!container || !scoreEl) {
+                return;
+            }
 
             const history = data.health_score_history || [];
             const currentScore = data.relationship_health_score || 0;
@@ -7550,7 +7684,7 @@
                 xLabels.push(`<text x="${xScale(idx)}" y="${height - 5}" text-anchor="middle" fill="var(--text-muted)" font-size="10">${label}</text>`);
             }
 
-            container.innerHTML = `
+            const svgHtml = `
                 <svg class="health-chart-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">
                     <!-- Grid lines -->
                     <line x1="${padding.left}" y1="${yScale(100)}" x2="${width - padding.right}" y2="${yScale(100)}" stroke="var(--border-color)" stroke-dasharray="2,2"/>
@@ -7576,7 +7710,7 @@
                 </svg>
                 <div class="health-chart-tooltip" id="familyHealthTooltip"></div>
             `;
-
+            container.innerHTML = svgHtml;
             setupFamilyHealthChartTooltips();
         }
 
@@ -7601,16 +7735,17 @@
                         <div style="font-size: 0.6rem; color: var(--text-muted);">Interactions: ${count}</div>
                         <div style="font-size: 0.6rem; color: var(--text-muted);">Avg. for Period: ${avg}</div>
                     `;
-                    tooltip.style.display = 'block';
 
                     const rect = container.getBoundingClientRect();
                     const dotRect = dot.getBoundingClientRect();
                     tooltip.style.left = (dotRect.left - rect.left + dotRect.width / 2) + 'px';
-                    tooltip.style.top = (dotRect.top - rect.top - 10) + 'px';
+                    tooltip.style.top = (dotRect.top - rect.top - 8) + 'px';
+                    tooltip.style.transform = 'translate(-50%, -100%)';
+                    tooltip.classList.add('visible');
                 });
 
                 dot.addEventListener('mouseleave', () => {
-                    tooltip.style.display = 'none';
+                    tooltip.classList.remove('visible');
                 });
             });
         }
@@ -7651,29 +7786,30 @@
             const warming = data.warming || [];
             const cooling = data.cooling || [];
 
-            if (warming.length === 0) {
-                warmingList.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No warming trends</div>';
-            } else {
-                warmingList.innerHTML = warming.slice(0, 5).map(person => `
-                    <div class="trend-item" onclick="selectPerson('${person.person_id}')">
-                        <span class="trend-indicator warming">↑</span>
-                        <span class="trend-name">${escapeHtml(person.person_name)}</span>
-                        <span class="trend-counts">${person.previous_count} → ${person.recent_count}</span>
+            // Render trend item (matching Me page style)
+            const renderTrend = (item, isWarming) => {
+                const pctChange = item.previous_count > 0
+                    ? Math.round(((item.recent_count - item.previous_count) / item.previous_count) * 100)
+                    : (item.recent_count > 0 ? 100 : 0);
+                const pctDisplay = pctChange >= 0 ? `+${pctChange}%` : `${pctChange}%`;
+                const pctClass = isWarming ? 'trend-pct-warming' : 'trend-pct-cooling';
+                return `
+                    <div class="trend-item ${isWarming ? 'trend-warming' : 'trend-cooling'}" onclick="selectPerson('${item.person_id}')">
+                        <span class="trend-indicator">${isWarming ? '↑' : '↓'}</span>
+                        <span class="trend-pct ${pctClass}">${pctDisplay}</span>
+                        <span class="trend-name">${escapeHtml(item.person_name)}</span>
+                        <span class="trend-change">${item.previous_count}→${item.recent_count}</span>
                     </div>
-                `).join('');
-            }
+                `;
+            };
 
-            if (cooling.length === 0) {
-                coolingList.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem;">No cooling trends</div>';
-            } else {
-                coolingList.innerHTML = cooling.slice(0, 5).map(person => `
-                    <div class="trend-item" onclick="selectPerson('${person.person_id}')">
-                        <span class="trend-indicator cooling">↓</span>
-                        <span class="trend-name">${escapeHtml(person.person_name)}</span>
-                        <span class="trend-counts">${person.previous_count} → ${person.recent_count}</span>
-                    </div>
-                `).join('');
-            }
+            warmingList.innerHTML = warming.length > 0
+                ? warming.slice(0, 5).map(w => renderTrend(w, true)).join('')
+                : '<div style="color: var(--text-muted); font-size: 0.75rem; padding: 0.25rem;">No warming trends</div>';
+
+            coolingList.innerHTML = cooling.length > 0
+                ? cooling.slice(0, 5).map(c => renderTrend(c, false)).join('')
+                : '<div style="color: var(--text-muted); font-size: 0.75rem; padding: 0.25rem;">No cooling trends</div>';
         }
 
         // Change family health period
@@ -7698,6 +7834,50 @@
             });
 
             await loadFamilyInteractions();
+        }
+
+        // Load family timeline (interactions with selected family members)
+        async function loadFamilyTimeline() {
+            const container = document.getElementById('timelineContainer');
+            if (!container) return;
+
+            if (selectedFamilyIds.length === 0) {
+                container.innerHTML = '<div class="loading">Select family members to see timeline</div>';
+                return;
+            }
+
+            container.innerHTML = '<div class="loading">Loading timeline...</div>';
+
+            try {
+                const idsParam = selectedFamilyIds.join(',');
+                const params = new URLSearchParams();
+                params.set('person_ids', idsParam);
+
+                // Apply source type filter if set
+                const mappedSourceType = mapFilterToSourceType(timelineFilter);
+                if (mappedSourceType) {
+                    params.set('source_type', mappedSourceType);
+                }
+
+                // Apply date filter if set
+                const fromDate = document.getElementById('timelineDateFrom')?.value;
+                const toDate = document.getElementById('timelineDateTo')?.value;
+                if (fromDate && toDate && fromDate === toDate) {
+                    params.set('date', fromDate);
+                }
+
+                params.set('limit', TIMELINE_LIMIT.toString());
+
+                const data = await api(`/family/timeline?${params.toString()}`);
+                timelineData = data.items || [];
+                renderTimeline();
+
+                // Update filter visibility based on data
+                updateTimelineFilterVisibility();
+            } catch (error) {
+                console.error('Failed to load family timeline:', error);
+                container.innerHTML = '<div class="loading">Failed to load timeline</div>';
+            }
         }
 
         // Update hero stats for Me page with phone/slack counts
@@ -9391,6 +9571,11 @@
             timelineDateRangeFrom = new Date(dateKey + 'T00:00:00');
             timelineDateRangeTo = new Date(dateKey + 'T23:59:59');
 
+            // Reset source filter to 'all' so we see all interactions for this date
+            timelineFilter = 'all';
+            document.querySelectorAll('.timeline-filter-chip').forEach(c => c.classList.remove('active'));
+            document.querySelector('[data-source="all"]')?.classList.add('active');
+
             // Switch to timeline tab - loadTimeline will use the date range for filtering
             await switchTab('timeline');
         }
@@ -9619,8 +9804,10 @@
             document.querySelector(`[data-source="${source}"]`).classList.add('active');
 
             // Re-fetch from API with the new filter applied server-side
-            // This is the key change from the old client-side filtering approach
-            if (selectedPersonId) {
+            const { isFamily } = parseUrl();
+            if (isFamily) {
+                await loadFamilyTimeline();
+            } else if (selectedPersonId) {
                 await loadTimeline(selectedPersonId);
             }
         }
@@ -9660,7 +9847,10 @@
             document.querySelector('[data-source="all"]')?.classList.add('active');
 
             // Reload from API with the new date filter
-            if (selectedPersonId) {
+            const { isFamily } = parseUrl();
+            if (isFamily) {
+                await loadFamilyTimeline();
+            } else if (selectedPersonId) {
                 await loadTimeline(selectedPersonId);
             }
         }
@@ -9686,7 +9876,10 @@
             document.querySelector('[data-source="all"]')?.classList.add('active');
 
             // Reload from API to get unfiltered data
-            if (selectedPersonId) {
+            const { isFamily } = parseUrl();
+            if (isFamily) {
+                await loadFamilyTimeline();
+            } else if (selectedPersonId) {
                 await loadTimeline(selectedPersonId);
             }
 
@@ -12028,7 +12221,14 @@
             }
 
             // Load data if needed
-            if (selectedPersonId) {
+            const { isFamily } = parseUrl();
+            if (isFamily) {
+                // Family view - load family-specific data
+                if (tabName === 'timeline') {
+                    await loadFamilyTimeline();
+                }
+                // Graph not supported for family view
+            } else if (selectedPersonId) {
                 if (tabName === 'timeline') {
                     await loadTimeline(selectedPersonId);
                 } else if (tabName === 'graph') {

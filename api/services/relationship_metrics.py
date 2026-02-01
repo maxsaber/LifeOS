@@ -429,9 +429,10 @@ def compute_all_dunbar_circles(store=None) -> dict:
     """
     Compute Dunbar circles for all non-peripheral contacts.
 
-    Circles are assigned based on relationship_strength ranking:
-    - Circle 0: Top 3 people (closest)
-    - Circle 1: Next 5 (close friends)
+    Circle 0 is RESERVED for manual overrides only (spouse, children, self).
+    Other circles are assigned based on relationship_strength ranking:
+    - Circle 0: Manual overrides only (CIRCLE_OVERRIDES_BY_ID)
+    - Circle 1: Top 5 people (close friends/family)
     - Circle 2: Next 15 (good friends)
     - Circle 3: Next 50 (friends)
     - Circle 4: Next 150 (meaningful acquaintances)
@@ -456,8 +457,10 @@ def compute_all_dunbar_circles(store=None) -> dict:
     non_peripheral = [p for p in all_people if not p.is_peripheral_contact]
     non_peripheral.sort(key=_get_effective_strength, reverse=True)
 
-    # Dunbar circle thresholds (cumulative sizes)
-    circle_thresholds = [3, 8, 23, 73, 223, 723, 2223]  # 3, 5, 15, 50, 150, 500, 1500
+    # Dunbar circle thresholds (cumulative sizes) - starts at circle 1
+    # Circle 0 is RESERVED for manual overrides only (e.g., spouse, children)
+    # Circle 1: top 5, Circle 2: next 15, Circle 3: next 50, etc.
+    circle_thresholds = [5, 20, 70, 220, 720, 2220]  # 5, 15, 50, 150, 500, 1500
 
     assigned = 0
     for i, person in enumerate(non_peripheral):
@@ -466,10 +469,11 @@ def compute_all_dunbar_circles(store=None) -> dict:
             circle = CIRCLE_OVERRIDES_BY_ID[person.id]
         else:
             # Find which circle this person belongs to based on ranking
+            # Circle 0 is reserved for overrides, so ranking starts at circle 1
             circle = 6  # Default to circle 6 if beyond all thresholds
             for c, threshold in enumerate(circle_thresholds):
                 if i < threshold:
-                    circle = c
+                    circle = c + 1  # +1 because circle 0 is reserved
                     break
 
         if person.dunbar_circle != circle:

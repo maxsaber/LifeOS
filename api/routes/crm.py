@@ -2903,6 +2903,13 @@ class FamilyMembersResponse(BaseModel):
     members: list[FamilyMember]
 
 
+class FamilyStatsResponse(BaseModel):
+    """Lifetime totals for selected family members (not time-bounded)."""
+    total_emails: int
+    total_meetings: int
+    total_messages: int
+
+
 class FamilyInteractionsResponse(BaseModel):
     """Aggregated interaction data for selected family members."""
     # Selected people info
@@ -3618,6 +3625,127 @@ async def get_family_members():
     family_members.sort(key=lambda m: m.relationship_strength, reverse=True)
 
     return FamilyMembersResponse(members=family_members)
+
+
+@router.get("/family/stats", response_model=FamilyStatsResponse)
+async def get_family_stats(
+    person_ids: str = Query(
+        ...,
+        description="Comma-separated list of person IDs to get lifetime stats for"
+    ),
+):
+    """
+    Get lifetime totals for selected family members.
+
+    Returns summed email_count, meeting_count, message_count from PersonEntity records.
+    These are lifetime totals independent of any time range.
+    """
+    person_store = get_person_entity_store()
+
+    # Parse person IDs
+    ids = [pid.strip() for pid in person_ids.split(",") if pid.strip()]
+    if not ids:
+        return FamilyStatsResponse(total_emails=0, total_meetings=0, total_messages=0)
+
+    # Sum lifetime counts from each person's PersonEntity
+    total_emails = 0
+    total_meetings = 0
+    total_messages = 0
+
+    for person_id in ids:
+        person = person_store.get_by_id(person_id)
+        if person:
+            total_emails += person.email_count
+            total_meetings += person.meeting_count
+            total_messages += person.message_count
+
+    return FamilyStatsResponse(
+        total_emails=total_emails,
+        total_meetings=total_meetings,
+        total_messages=total_messages,
+    )
+
+
+@router.get("/family/timeline", response_model=TimelineResponse)
+async def get_family_timeline(
+    person_ids: str = Query(
+        ...,
+        description="Comma-separated list of person IDs to include in timeline"
+    ),
+    source_type: Optional[str] = Query(
+        default=None,
+        description="Filter by source type. Supports comma-separated values."
+    ),
+    days_back: int = Query(
+        default=InteractionConfig.DEFAULT_WINDOW_DAYS,
+        ge=1,
+        le=InteractionConfig.MAX_WINDOW_DAYS,
+        description="Days to look back (default 365, max 3650)"
+    ),
+    date: Optional[str] = Query(default=None, description="Filter to specific date (YYYY-MM-DD)"),
+    offset: int = Query(default=0, ge=0, description="Offset for pagination"),
+    limit: int = Query(default=50, ge=1, le=2000, description="Max results"),
+):
+    """
+    Get chronological interaction history for selected family members.
+
+    Returns interactions with the selected people in timeline format.
+    """
+    from datetime import timedelta
+    start_time = time.time()
+
+    # Parse person IDs
+    selected_ids = [pid.strip() for pid in person_ids.split(",") if pid.strip()]
+    if not selected_ids:
+        return TimelineResponse(items=[], count=0, has_more=False)
+
+    interaction_store = get_interaction_store()
+    person_store = get_person_entity_store()
+
+    # Calculate date range
+    end_date = datetime.now(timezone.utc)
+    start_date = end_date - timedelta(days=days_back)
+
+    # Get interactions - don't apply limit yet since we need to filter by person IDs
+    # Note: This is less efficient than a direct DB filter, but works for family view
+    selected_ids_set = set(selected_ids)
+    all_interactions = interaction_store.get_all_in_range(
+        start_date=start_date,
+        end_date=end_date,
+        exclude_person_ids=[MY_PERSON_ID],
+        source_type=source_type,
+        specific_date=date,
+    )
+
+    # Filter to only interactions with selected people
+    interactions = [i for i in all_interactions if i.person_id in selected_ids_set]
+
+    # Apply pagination after filtering
+    has_more = len(interactions) > offset + limit
+    interactions = interactions[offset:offset + limit]
+
+    # Build person lookup for names
+    person_lookup = {p.id: p for p in person_store.get_all()}
+
+    elapsed = (time.time() - start_time) * 1000
+    logger.info(f"family_timeline took {elapsed:.1f}ms ({len(interactions)} interactions)")
+
+    return TimelineResponse(
+        items=[
+            TimelineItem(
+                id=str(i.id) if i.id else f"{i.source_type}:{i.source_id}",
+                timestamp=i.timestamp.isoformat() if hasattr(i.timestamp, 'isoformat') else str(i.timestamp),
+                source_type=i.source_type,
+                title=f"{person_lookup.get(i.person_id, {}).canonical_name if person_lookup.get(i.person_id) else 'Unknown'}: {i.title or i.snippet or i.source_type}",
+                snippet=i.snippet[:200] if i.snippet else None,
+                source_link=i.source_link or "",
+                source_badge=SOURCE_BADGES.get(i.source_type, "📄"),
+            )
+            for i in interactions
+        ],
+        count=len(interactions),
+        has_more=has_more,
+    )
 
 
 @router.get("/family/interactions", response_model=FamilyInteractionsResponse)
