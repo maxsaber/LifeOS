@@ -89,6 +89,7 @@ FAMILY_EXACT_NAMES = {
 STRENGTH_OVERRIDES = {
     "taylor walker": 100.0,
     "nathan ramia": 100.0,
+    "thy nguyen": 90.0,
 }
 
 
