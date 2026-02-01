@@ -2837,12 +2837,14 @@ class HealthScorePoint(BaseModel):
     """Health score at a point in time."""
     date: str  # "YYYY-MM-DD"
     score: int  # 0-100
+    count: int = 0  # Raw interaction count for this period
 
 
 class TrackedRelationshipPoint(BaseModel):
     """Score at a point in time for tracked relationships."""
     date: str  # "YYYY-MM-DD"
     score: int  # 0-100 normalized score
+    count: int = 0  # Raw interaction count for this period
 
 
 class TrackedRelationship(BaseModel):
@@ -2854,6 +2856,7 @@ class TrackedRelationship(BaseModel):
     trend: str  # "up", "down", "stable"
     history: list[TrackedRelationshipPoint]  # Historical score data points
     healthy_direction: str  # "more" or "less" - which direction is healthier
+    average: float = 0.0  # Average interaction count for the period
 
 
 class MeInteractionsResponse(BaseModel):
@@ -2873,6 +2876,7 @@ class MeInteractionsResponse(BaseModel):
     # New widgets
     relationship_health_score: int = 0  # 0-100
     health_score_history: list[HealthScorePoint] = []  # Longitudinal health scores
+    health_score_average: float = 0.0  # Average interaction count for the period
     neglected_contacts: list[NeglectedContact] = []
     network_growth: list[MonthlyNetworkGrowth] = []
     messaging_by_circle: list[MonthlyMessagingVolume] = []
@@ -3300,6 +3304,7 @@ async def get_me_interactions(
         health_score_history.append(HealthScorePoint(
             date=point_date.strftime('%Y-%m-%d'),
             score=score,
+            count=count,
         ))
 
     # Set current health score to the most recent value
@@ -3494,6 +3499,7 @@ async def get_me_interactions(
             history.append(TrackedRelationshipPoint(
                 date=point_date.strftime('%Y-%m-%d'),
                 score=score,
+                count=count,
             ))
 
         # Calculate current vs previous score for trend
@@ -3516,6 +3522,7 @@ async def get_me_interactions(
             trend=trend,
             history=history,
             healthy_direction=healthy_direction,
+            average=round(avg_count, 1),
         ))
 
     return MeInteractionsResponse(
@@ -3529,6 +3536,7 @@ async def get_me_interactions(
         total_count=total_count,
         relationship_health_score=health_score,
         health_score_history=health_score_history,
+        health_score_average=round(health_avg, 1),
         neglected_contacts=neglected[:10],
         network_growth=network_growth,
         messaging_by_circle=messaging_by_circle,

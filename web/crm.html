@@ -3554,12 +3554,23 @@
         }
 
         .health-chart-dot {
-            fill: var(--people);
             cursor: pointer;
             transition: r 0.1s ease-out;
+            /* fill set via inline style based on score */
         }
 
         .health-chart-dot:hover {
+            r: 6;
+            filter: brightness(1.2);
+        }
+
+        .tracked-chart-dot {
+            cursor: pointer;
+            transition: r 0.1s ease-out;
+            /* fill set via inline style based on score */
+        }
+
+        .tracked-chart-dot:hover {
             r: 6;
             filter: brightness(1.2);
         }
@@ -4416,7 +4427,7 @@
                                             <span class="health-info-icon">i
                                                 <div class="health-info-tooltip">
                                                     <strong>How Relationship Health is calculated</strong>
-                                                    Measures how actively you're maintaining your relationships. Based on contact frequency with your inner circles (0-2), weighted by Dunbar number. Higher scores mean you're keeping up with close contacts. A score of 80+ is excellent.
+                                                    Tracks interaction frequency with your top 25 family/personal contacts. Score is relative to your average: 50 = average, 100 = 2× average. Includes messages, calls, meetings, and emails with close contacts.
                                                 </div>
                                             </span>
                                         </span>
@@ -7039,11 +7050,13 @@
             }
 
             // Build dots with data attributes for tooltips, colored by score
+            const avgCount = data.health_score_average || 0;
             const dots = history.map((point, i) => {
                 const x = xScale(i);
                 const y = yScale(point.score);
                 const color = getDotColor(point.score);
-                return `<circle class="health-chart-dot" cx="${x}" cy="${y}" r="4" data-index="${i}" data-score="${point.score}" data-date="${point.date}" fill="${color}"/>`;
+                const count = point.count || 0;
+                return `<circle class="health-chart-dot" cx="${x}" cy="${y}" r="4" data-index="${i}" data-score="${point.score}" data-count="${count}" data-avg="${avgCount}" data-date="${point.date}" style="fill: ${color};"/>`;
             }).join('');
 
             // Y-axis grid lines (at 25, 50, 75)
@@ -7102,6 +7115,8 @@
             dots.forEach(dot => {
                 dot.addEventListener('mouseenter', (e) => {
                     const score = dot.dataset.score;
+                    const count = dot.dataset.count || 0;
+                    const avg = dot.dataset.avg || 0;
                     const dateStr = dot.dataset.date;
                     const d = new Date(dateStr);
                     const formattedDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -7109,6 +7124,8 @@
                     tooltip.innerHTML = `
                         <div class="health-chart-tooltip-date">${formattedDate}</div>
                         <div class="health-chart-tooltip-score">Score: ${score}</div>
+                        <div style="font-size: 0.6rem; color: var(--text-muted);">Interactions: ${count}</div>
+                        <div style="font-size: 0.6rem; color: var(--text-muted);">Avg. for Period: ${avg}</div>
                     `;
 
                     // Position tooltip near the dot
@@ -7257,11 +7274,13 @@
             }
 
             // Build dots with colors based on score
+            const avgCount = data.average || 0;
             const dots = history.map((point, i) => {
                 const x = xScale(i);
                 const y = yScale(point.score);
                 const color = getDotColor(point.score);
-                return `<circle class="tracked-chart-dot" cx="${x}" cy="${y}" r="4" data-index="${i}" data-score="${point.score}" data-date="${point.date}" fill="${color}"/>`;
+                const count = point.count || 0;
+                return `<circle class="tracked-chart-dot" cx="${x}" cy="${y}" r="4" data-index="${i}" data-score="${point.score}" data-count="${count}" data-avg="${avgCount}" data-date="${point.date}" style="fill: ${color};"/>`;
             }).join('');
 
             // Y-axis grid lines (at 25, 50, 75 like health score)
@@ -7320,6 +7339,8 @@
             dots.forEach(dot => {
                 dot.addEventListener('mouseenter', (e) => {
                     const score = dot.dataset.score;
+                    const count = dot.dataset.count || 0;
+                    const avg = dot.dataset.avg || 0;
                     const dateStr = dot.dataset.date;
                     const d = new Date(dateStr);
                     const formattedDate = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -7327,6 +7348,8 @@
                     tooltip.innerHTML = `
                         <div class="health-chart-tooltip-date">${formattedDate}</div>
                         <div class="health-chart-tooltip-score">Score: ${score}</div>
+                        <div style="font-size: 0.6rem; color: var(--text-muted);">Interactions: ${count}</div>
+                        <div style="font-size: 0.6rem; color: var(--text-muted);">Avg. for Period: ${avg}</div>
                     `;
 
                     const rect = dot.getBoundingClientRect();
