@@ -12,7 +12,7 @@ from config.relationship_weights import (
     REACHOUT_DAYS,
 )
 from api.services.interaction_store import get_interaction_store
-from api.services.person_entity import get_person_entity_store
+from api.services.person_entity import PersonEntity, get_person_entity_store
 from api.services.relationship_summary import RelationshipSummary, get_relationship_summary
 
 # Classification thresholds

@@ -775,6 +775,140 @@
             cursor: not-allowed;
         }
 
+        .contact-edit-modal,
+        .contact-edit-backdrop {
+            position: fixed;
+            inset: 0;
+        }
+
+        .contact-edit-modal {
+            background: rgba(0, 0, 0, 0.55);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1400;
+            padding: 1.5rem;
+        }
+
+        .contact-edit-modal.visible {
+            display: flex;
+        }
+
+        .contact-edit-content {
+            width: min(640px, 95vw);
+            max-height: 90vh;
+            background: var(--bg-primary);
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            box-shadow: 0 25px 80px rgba(0,0,0,0.35);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .contact-edit-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+
+        .contact-edit-title {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 600;
+        }
+
+        .contact-edit-subtitle {
+            margin: 0.2rem 0 0;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .contact-edit-close {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .contact-edit-body {
+            padding: 1.5rem;
+            overflow-y: auto;
+        }
+
+        .contact-edit-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1rem 1.25rem;
+        }
+
+        .contact-edit-field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .contact-edit-label {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+
+        .contact-edit-input,
+        .contact-edit-textarea {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 0.65rem 0.75rem;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-size: 0.95rem;
+        }
+
+        .contact-edit-textarea {
+            resize: vertical;
+            min-height: 90px;
+        }
+
+        .contact-edit-footer {
+            padding: 1rem 1.5rem 1.5rem;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 0.75rem;
+        }
+
+        .contact-edit-cancel,
+        .contact-edit-save {
+            border-radius: 999px;
+            padding: 0.5rem 1.5rem;
+            font-weight: 600;
+            border: 1px solid transparent;
+            cursor: pointer;
+        }
+
+        .contact-edit-cancel {
+            background: var(--bg-secondary);
+            border-color: var(--border);
+            color: var(--text-secondary);
+        }
+
+        .contact-edit-save {
+            background: var(--people);
+            color: white;
+            border-color: var(--people);
+        }
+
+        .contact-edit-save:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
         .split-btn {
             padding: 0.25rem 0.5rem;
             background: transparent;
@@ -1282,6 +1416,121 @@
             color: var(--people);
         }
 
+        .detail-category-control {
+            display: none;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 0.35rem;
+            margin-top: 0.35rem;
+            position: relative;
+        }
+
+        .detail-category-control.visible {
+            display: flex;
+        }
+
+        .detail-category-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+        }
+
+        .detail-category-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.45rem;
+            padding: 0.35rem 0.75rem;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: background 0.15s, border 0.15s, box-shadow 0.15s;
+        }
+
+        .detail-category-pill:hover {
+            background: var(--bg-secondary);
+            border-color: var(--text-secondary);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .detail-category-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .detail-category-caret {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .detail-category-menu {
+            position: absolute;
+            top: calc(100% + 0.35rem);
+            left: 0;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 0.5rem;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.25);
+            min-width: 240px;
+            z-index: 1200;
+            display: none;
+        }
+
+        .detail-category-menu.show {
+            display: block;
+        }
+
+        .category-menu-option {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.35rem 0.25rem;
+            border: none;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-primary);
+            text-align: left;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .category-menu-option:hover {
+            background: var(--bg-tertiary);
+        }
+
+        .category-menu-option.active {
+            background: var(--bg-secondary);
+        }
+
+        .category-menu-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .category-menu-copy {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .category-menu-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .category-menu-desc {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
         .detail-hide-btn {
             padding: 0.25rem 0.5rem;
             background: transparent;
@@ -1301,6 +1550,23 @@
         .detail-actions {
             display: flex;
             gap: 0.5rem;
+        }
+
+        .detail-edit-btn {
+            padding: 0.35rem 0.9rem;
+            border-radius: 999px;
+            border: 1px solid var(--people);
+            background: rgba(79, 70, 229, 0.12);
+            color: var(--people);
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.15s, border 0.15s;
+        }
+
+        .detail-edit-btn:hover {
+            background: var(--people);
+            color: white;
         }
 
         .detail-strength-container {
@@ -5600,6 +5866,10 @@
                         <div class="detail-company" id="detailCompany">Acme Corp · Software Engineer</div>
                         <div class="detail-contact-quick" id="detailContactQuick"></div>
                         <div class="detail-tags" id="detailTagsChips"></div>
+                        <div class="detail-category-control" id="detailCategoryControl"></div>
+                        <div class="detail-actions" id="detailActions">
+                            <button class="detail-edit-btn" type="button" onclick="openContactEditModal()">Edit Contact</button>
+                        </div>
                     </div>
                     <div class="header-indicators">
                         <div class="header-strength">
@@ -6528,6 +6798,58 @@
         </div>
     </div>
 
+    <div class="contact-edit-modal" id="contactEditModal">
+        <div class="contact-edit-content">
+            <div class="contact-edit-header">
+                <div>
+                    <h2 class="contact-edit-title">Edit Contact</h2>
+                    <p class="contact-edit-subtitle" id="contactEditSubtitle">Update profile details.</p>
+                </div>
+                <button type="button" class="contact-edit-close" onclick="closeContactEditModal()">&times;</button>
+            </div>
+            <form id="contactEditForm" onsubmit="saveContactEdit(event)">
+                <div class="contact-edit-body">
+                    <div class="contact-edit-grid">
+                        <label class="contact-edit-field">
+                            <span class="contact-edit-label">Name</span>
+                            <input type="text" id="contactEditName" class="contact-edit-input" placeholder="Full name" required>
+                        </label>
+                        <label class="contact-edit-field">
+                            <span class="contact-edit-label">Display name</span>
+                            <input type="text" id="contactEditDisplayName" class="contact-edit-input" placeholder="Shown in UI (optional)">
+                        </label>
+                        <label class="contact-edit-field">
+                            <span class="contact-edit-label">Company</span>
+                            <input type="text" id="contactEditCompany" class="contact-edit-input" placeholder="Company or org">
+                        </label>
+                        <label class="contact-edit-field">
+                            <span class="contact-edit-label">Role</span>
+                            <input type="text" id="contactEditPosition" class="contact-edit-input" placeholder="Title or relationship">
+                        </label>
+                        <label class="contact-edit-field">
+                            <span class="contact-edit-label">LinkedIn</span>
+                            <input type="text" id="contactEditLinkedIn" class="contact-edit-input" placeholder="https://linkedin.com/in/...">
+                        </label>
+                    </div>
+                    <div class="contact-edit-grid" style="margin-top: 1.25rem;">
+                        <label class="contact-edit-field">
+                            <span class="contact-edit-label">Emails (one per line)</span>
+                            <textarea id="contactEditEmails" class="contact-edit-textarea" placeholder="name@example.com"></textarea>
+                        </label>
+                        <label class="contact-edit-field">
+                            <span class="contact-edit-label">Phone numbers (one per line)</span>
+                            <textarea id="contactEditPhones" class="contact-edit-textarea" placeholder="+15551231234"></textarea>
+                        </label>
+                    </div>
+                </div>
+                <div class="contact-edit-footer">
+                    <button type="button" class="contact-edit-cancel" onclick="closeContactEditModal()">Cancel</button>
+                    <button type="submit" class="contact-edit-save" id="contactEditSaveBtn">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script>
         // State
@@ -6554,6 +6876,28 @@
             // Cumulative thresholds (excluding circle 0 manual entries and self)
             thresholds: [0, 5, 20, 70, 220, 720, 2220]  // Circle 1-6 boundaries
         };
+
+        const PERSON_CATEGORY_OPTIONS = [
+            {
+                value: 'family',
+                label: 'Family',
+                description: 'Relatives, partners, or household contacts',
+                color: '#daa520'
+            },
+            {
+                value: 'work',
+                label: 'Work',
+                description: 'Colleagues, investors, and professional contacts',
+                color: '#4f46e5'
+            },
+            {
+                value: 'personal',
+                label: 'Personal',
+                description: 'Friends and general life contacts',
+                color: '#00bcd4'
+            }
+        ];
+        const DEFAULT_CATEGORY_COLOR = '#6b7280';
 
         // Initialize Dunbar circles globally (called once on page load with ALL people)
         async function initializeDunbarCircles() {
@@ -7709,6 +8053,11 @@
             } else {
                 document.getElementById('detailTagsChips').innerHTML = '';
             }
+            const detailActions = document.getElementById('detailActions');
+            if (detailActions) {
+                detailActions.style.display = isMePage ? 'none' : 'flex';
+            }
+            renderCategoryControl(person);
 
             // Load Quick Facts, Sentiment, and Commitments (skip for Me page - has its own dashboard)
             if (!isMePage) {
@@ -7806,6 +8155,191 @@
             html += `<span class="detail-tag-add" onclick="addTag()">+ Add tag</span>`;
             html += `<span class="detail-hide-btn" onclick="hideCurrentPerson()" title="Hide this person">Hide</span>`;
             container.innerHTML = html;
+        }
+
+        function renderCategoryControl(person) {
+            const container = document.getElementById('detailCategoryControl');
+            if (!container) return;
+
+            const isEditableTarget = person && !isMyPage(person.id) && (person.category || '').toLowerCase() !== 'self';
+            if (!isEditableTarget) {
+                container.classList.remove('visible');
+                container.innerHTML = '';
+                return;
+            }
+
+            const normalized = (person.category || '').toLowerCase();
+            const option = PERSON_CATEGORY_OPTIONS.find(opt => opt.value === normalized);
+            const activeValue = option ? option.value : normalized;
+            const displayLabel = option ? option.label : (person.category || 'Unknown');
+            const displayColor = option ? option.color : DEFAULT_CATEGORY_COLOR;
+
+            container.classList.add('visible');
+            container.innerHTML = `
+                <div class="detail-category-label">Category</div>
+                <button class="detail-category-pill" type="button" onclick="toggleCategoryMenu(event)">
+                    <span class="detail-category-dot" style="background:${displayColor};"></span>
+                    <span class="detail-category-text">${escapeHtml(displayLabel)}</span>
+                    <span class="detail-category-caret">▾</span>
+                </button>
+                <div class="detail-category-menu" id="categoryMenu">
+                    ${PERSON_CATEGORY_OPTIONS.map(opt => `
+                        <button type="button"
+                                class="category-menu-option ${opt.value === activeValue ? 'active' : ''}"
+                                onclick="setPersonCategory('${opt.value}')">
+                            <span class="category-menu-dot" style="background:${opt.color};"></span>
+                            <div class="category-menu-copy">
+                                <div class="category-menu-label">${escapeHtml(opt.label)}</div>
+                                <div class="category-menu-desc">${escapeHtml(opt.description)}</div>
+                            </div>
+                        </button>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function toggleCategoryMenu(event) {
+            event.stopPropagation();
+            const menu = document.getElementById('categoryMenu');
+            if (!menu) return;
+            menu.classList.toggle('show');
+        }
+
+        function closeCategoryMenu() {
+            const menu = document.getElementById('categoryMenu');
+            if (menu) {
+                menu.classList.remove('show');
+            }
+        }
+
+        async function setPersonCategory(category) {
+            if (!selectedPersonId) return;
+            if (!PERSON_CATEGORY_OPTIONS.some(opt => opt.value === category)) return;
+
+            try {
+                await api(`/people/${selectedPersonId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ category })
+                });
+
+                if (currentPersonData) {
+                    currentPersonData.category = category;
+                }
+
+                // Update people list (graph + filters)
+                const listMatch = people.find(p => p.id === selectedPersonId);
+                if (listMatch) {
+                    listMatch.category = category;
+                }
+                if (typeof allPeople !== 'undefined' && Array.isArray(allPeople)) {
+                    const globalMatch = allPeople.find(p => p.id === selectedPersonId);
+                    if (globalMatch) {
+                        globalMatch.category = category;
+                    }
+                }
+
+                renderCategoryControl(currentPersonData);
+                renderCompactContactInfo(currentPersonData);
+                renderPeopleList();
+                closeCategoryMenu();
+            } catch (error) {
+                console.error('Failed to update category:', error);
+                alert('Failed to update category');
+            }
+        }
+
+        document.addEventListener('click', (event) => {
+            const menu = document.getElementById('categoryMenu');
+            if (!menu || !menu.classList.contains('show')) return;
+            if (!event.target.closest('.detail-category-control')) {
+                menu.classList.remove('show');
+            }
+        });
+
+        function openContactEditModal() {
+            if (!currentPersonData || isMyPage(currentPersonData.id)) return;
+
+            document.getElementById('contactEditName').value = currentPersonData.canonical_name || '';
+            document.getElementById('contactEditDisplayName').value = currentPersonData.display_name || '';
+            document.getElementById('contactEditCompany').value = currentPersonData.company || '';
+            document.getElementById('contactEditPosition').value = currentPersonData.position || '';
+            document.getElementById('contactEditLinkedIn').value = currentPersonData.linkedin_url || '';
+            document.getElementById('contactEditEmails').value = (currentPersonData.emails || []).join('\n');
+            document.getElementById('contactEditPhones').value = (currentPersonData.phone_numbers || []).join('\n');
+
+            const subtitle = document.getElementById('contactEditSubtitle');
+            if (subtitle) {
+                subtitle.textContent = `Editing ${currentPersonData.canonical_name || 'contact'}`;
+            }
+
+            document.getElementById('contactEditModal').classList.add('visible');
+        }
+
+        function closeContactEditModal() {
+            document.getElementById('contactEditModal').classList.remove('visible');
+        }
+
+        function parseContactList(value) {
+            if (!value) return [];
+            return value
+                .split(/\n|,/)
+                .map(item => item.trim())
+                .filter(Boolean);
+        }
+
+        async function saveContactEdit(event) {
+            event.preventDefault();
+            if (!selectedPersonId || !currentPersonData) return;
+
+            const saveBtn = document.getElementById('contactEditSaveBtn');
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+
+            const canonicalName = document.getElementById('contactEditName').value.trim();
+            if (!canonicalName) {
+                alert('Name is required.');
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Changes';
+                return;
+            }
+
+            const payload = {
+                canonical_name: canonicalName,
+                display_name: document.getElementById('contactEditDisplayName').value.trim(),
+                company: document.getElementById('contactEditCompany').value.trim(),
+                position: document.getElementById('contactEditPosition').value.trim(),
+                linkedin_url: document.getElementById('contactEditLinkedIn').value.trim(),
+                emails: parseContactList(document.getElementById('contactEditEmails').value),
+                phone_numbers: parseContactList(document.getElementById('contactEditPhones').value),
+            };
+
+            try {
+                await api(`/people/${selectedPersonId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(payload)
+                });
+
+                Object.assign(currentPersonData, payload);
+                const listMatch = people.find(p => p.id === selectedPersonId);
+                if (listMatch) {
+                    listMatch.canonical_name = payload.canonical_name;
+                    listMatch.display_name = payload.display_name;
+                    listMatch.company = payload.company;
+                    listMatch.position = payload.position;
+                    listMatch.emails = payload.emails;
+                    listMatch.phone_numbers = payload.phone_numbers;
+                    listMatch.linkedin_url = payload.linkedin_url;
+                }
+                renderPersonDetail(currentPersonData);
+                renderPeopleList();
+                closeContactEditModal();
+            } catch (error) {
+                console.error('Failed to save contact edits:', error);
+                alert('Failed to save contact. Please try again.');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Save Changes';
+            }
         }
 
         // Hide the currently selected person

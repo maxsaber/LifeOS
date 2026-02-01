@@ -560,6 +560,13 @@ class PersonUpdateRequest(BaseModel):
     tags: Optional[list[str]] = None
     category: Optional[str] = None
     manual_dunbar_circle: Optional[int] = None  # 0-7 to override, or explicit None to clear
+    canonical_name: Optional[str] = None
+    display_name: Optional[str] = None
+    company: Optional[str] = None
+    position: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    emails: Optional[list[str]] = None
+    phone_numbers: Optional[list[str]] = None
 
 
 class PersonMergeRequest(BaseModel):
@@ -853,6 +860,36 @@ async def update_person(person_id: str, request: PersonUpdateRequest):
 
     if request.category is not None:
         person.category = request.category
+
+    if request.canonical_name is not None:
+        person.canonical_name = request.canonical_name.strip()
+        if not person.display_name:
+            person.display_name = person.canonical_name
+
+    if request.display_name is not None:
+        person.display_name = request.display_name.strip()
+
+    if request.company is not None:
+        person.company = request.company.strip() or None
+
+    if request.position is not None:
+        person.position = request.position.strip() or None
+
+    if request.linkedin_url is not None:
+        person.linkedin_url = request.linkedin_url.strip() or None
+
+    if request.emails is not None:
+        cleaned_emails = [email.strip().lower() for email in request.emails if email and email.strip()]
+        person.emails = cleaned_emails
+
+    if request.phone_numbers is not None:
+        cleaned_numbers = [phone.strip() for phone in request.phone_numbers if phone and phone.strip()]
+        person.phone_numbers = cleaned_numbers
+        if cleaned_numbers:
+            if person.phone_primary not in cleaned_numbers:
+                person.phone_primary = cleaned_numbers[0]
+        else:
+            person.phone_primary = None
 
     # Handle manual_dunbar_circle: -1 means clear/reset to auto, 0-7 sets the circle
     if request.manual_dunbar_circle is not None:
