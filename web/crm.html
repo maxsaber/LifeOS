@@ -15941,12 +15941,28 @@
 
         /**
          * Copy text to clipboard and show visual feedback on the button.
+         * Uses navigator.clipboard when available, falls back to execCommand for HTTP contexts.
          * @param {string} text - Text to copy
          * @param {string} buttonSelector - CSS selector for the button to animate
          */
         async function copyToClipboardWithFeedback(text, buttonSelector) {
             try {
-                await navigator.clipboard.writeText(text);
+                // Try modern clipboard API first (requires HTTPS or localhost)
+                if (navigator.clipboard && window.isSecureContext) {
+                    await navigator.clipboard.writeText(text);
+                } else {
+                    // Fallback for HTTP contexts (e.g., Tailscale)
+                    const textArea = document.createElement('textarea');
+                    textArea.value = text;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-9999px';
+                    textArea.style.top = '-9999px';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                }
                 const btn = document.querySelector(buttonSelector);
                 if (btn) {
                     btn.classList.add('copied');
