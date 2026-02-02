@@ -782,12 +782,29 @@ async def ask_stream(request: AskStreamRequest):
                             else:
                                 print(f"  Querying messages: dates={start_date} to {end_date}, search={search_term}")
 
+                            # v3: Adaptive fetch depth based on relationship strength
+                            # Closer relationships (higher strength) get more context
+                            rel_strength = relationship_summary.relationship_strength if relationship_summary else 0
+                            if start_date or search_term:
+                                # Explicit queries get full context
+                                message_limit = 200
+                            elif rel_strength >= 70:
+                                # Close relationship - deep context
+                                message_limit = 150
+                            elif rel_strength >= 40:
+                                # Moderate relationship
+                                message_limit = 100
+                            else:
+                                # Distant contact - less context needed
+                                message_limit = 50
+                            print(f"  Adaptive fetch: strength={rel_strength:.0f} -> limit={message_limit}")
+
                             msg_result = query_person_messages(
                                 entity_id=entity_id,
                                 search_term=search_term,
                                 start_date=effective_start,
                                 end_date=effective_end,
-                                limit=150 if (start_date or search_term) else 50,  # Fewer for auto-queries
+                                limit=message_limit,
                             )
 
                             if msg_result["count"] > 0:
@@ -899,6 +916,48 @@ async def ask_stream(request: AskStreamRequest):
             # Use conversation_history we already retrieved earlier for follow-up expansion
             if conversation_history:
                 print(f"Including {len(conversation_history)} messages of conversation history for synthesis")
+
+            # v3: Build confidence metadata for synthesis
+            confidence_metadata = None
+            if "people" in routing_result.sources:
+                # Extract relationship context if available
+                rel_context = None
+                for ctx in extra_context:
+                    if ctx.get("source") == "relationship_context":
+                        rel_context = ctx
+                        break
+
+                # Calculate data quality metrics
+                vault_chunk_count = len([c for c in chunks if c.get("metadata", {}).get("source") != "relationship_context"])
+                message_count = sum(ctx.get("count", 0) for ctx in extra_context if ctx.get("source") == "imessage")
+
+                confidence_metadata = {
+                    "routing_confidence": routing_result.confidence,
+                    "sources_queried": routing_result.sources,
+                    "vault_chunks": vault_chunk_count,
+                    "message_count": message_count,
+                }
+                if rel_context:
+                    # Parse relationship strength from context if available
+                    confidence_metadata["relationship_context_available"] = True
+
+                print(f"  Confidence metadata: {confidence_metadata}")
+
+                # Add confidence context to first chunk for Claude's awareness
+                confidence_block = f"""## Query Confidence
+- Routing confidence: {routing_result.confidence:.0%}
+- Sources queried: {', '.join(routing_result.sources)}
+- Vault chunks found: {vault_chunk_count}
+- Messages found: {message_count}
+
+Note: If data is sparse, acknowledge limitations. If relationship context is rich, synthesize deeply.
+"""
+                chunks.insert(0, {
+                    "content": confidence_block,
+                    "file_name": "[SYSTEM_CONTEXT]",
+                    "file_path": "_system",
+                    "metadata": {"source": "_system"}
+                })
 
             prompt = construct_prompt(request.question, chunks, conversation_history=conversation_history)
 

@@ -180,6 +180,24 @@ class PersonFactStore:
             except sqlite3.OperationalError:
                 pass  # Column already exists
 
+            # v3: Junction table for dual-association of relationship facts
+            # Allows a fact to be associated with multiple people (e.g., "Taylor is Nathan's wife"
+            # can appear on both Nathan's and Taylor's profile)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS person_fact_associations (
+                    fact_id TEXT NOT NULL,
+                    person_id TEXT NOT NULL,
+                    is_primary BOOLEAN DEFAULT 0,
+                    PRIMARY KEY (fact_id, person_id)
+                )
+            """)
+
+            # Index for efficient lookups by person
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_fact_associations_person
+                ON person_fact_associations(person_id)
+            """)
+
             conn.commit()
             logger.info(f"Initialized person_facts table in {self.db_path}")
         finally:
@@ -306,15 +324,34 @@ class PersonFactStore:
         finally:
             conn.close()
 
-    def get_for_person(self, person_id: str) -> list[PersonFact]:
-        """Get all facts for a person, grouped by category."""
+    def get_for_person(self, person_id: str, include_shared: bool = True) -> list[PersonFact]:
+        """
+        Get all facts for a person, including shared relationship facts.
+
+        Args:
+            person_id: The person's ID
+            include_shared: If True, include facts associated via person_fact_associations
+
+        Returns:
+            List of PersonFact objects, sorted by category and key
+        """
         conn = self._get_connection()
         try:
-            cursor = conn.execute("""
-                SELECT * FROM person_facts
-                WHERE person_id = ?
-                ORDER BY category, key
-            """, (person_id,))
+            if include_shared:
+                # Include facts owned by this person OR associated via junction table
+                cursor = conn.execute("""
+                    SELECT DISTINCT f.* FROM person_facts f
+                    LEFT JOIN person_fact_associations a ON f.id = a.fact_id
+                    WHERE f.person_id = ? OR a.person_id = ?
+                    ORDER BY f.category, f.key
+                """, (person_id, person_id))
+            else:
+                # Only facts directly owned by this person
+                cursor = conn.execute("""
+                    SELECT * FROM person_facts
+                    WHERE person_id = ?
+                    ORDER BY category, key
+                """, (person_id,))
             return [PersonFact.from_row(row) for row in cursor.fetchall()]
         finally:
             conn.close()
@@ -377,6 +414,65 @@ class PersonFactStore:
             )
             conn.commit()
             return cursor.rowcount
+        finally:
+            conn.close()
+
+    def add_association(self, fact_id: str, person_id: str, is_primary: bool = False) -> bool:
+        """
+        Associate a fact with an additional person.
+
+        This enables relationship facts to appear on both people's profiles.
+        For example, "Taylor is Nathan's wife" can be associated with both
+        Taylor's profile (where it's the primary fact) and Nathan's profile.
+
+        Args:
+            fact_id: The fact to associate
+            person_id: The person to associate it with
+            is_primary: Whether this person is the primary subject of the fact
+
+        Returns:
+            True if association was created, False if it already existed
+        """
+        conn = self._get_connection()
+        try:
+            conn.execute("""
+                INSERT OR REPLACE INTO person_fact_associations
+                (fact_id, person_id, is_primary)
+                VALUES (?, ?, ?)
+            """, (fact_id, person_id, 1 if is_primary else 0))
+            conn.commit()
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to add fact association: {e}")
+            return False
+        finally:
+            conn.close()
+
+    def get_associations(self, fact_id: str) -> list[dict]:
+        """Get all person associations for a fact."""
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute("""
+                SELECT person_id, is_primary FROM person_fact_associations
+                WHERE fact_id = ?
+            """, (fact_id,))
+            return [
+                {"person_id": row[0], "is_primary": bool(row[1])}
+                for row in cursor.fetchall()
+            ]
+        finally:
+            conn.close()
+
+    def remove_association(self, fact_id: str, person_id: str) -> bool:
+        """Remove an association between a fact and a person."""
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute("""
+                DELETE FROM person_fact_associations
+                WHERE fact_id = ? AND person_id = ?
+            """, (fact_id, person_id))
+            conn.commit()
+            return cursor.rowcount > 0
         finally:
             conn.close()
 

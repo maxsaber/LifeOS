@@ -50,6 +50,10 @@ class RoutingResult:
     recommended_model: str = "sonnet"  # "haiku", "sonnet", or "opus"
     complexity_score: float = 0.5  # 0.0-1.0
     extracted_person_name: Optional[str] = None
+    # v3: Orchestration intelligence
+    fetch_depth: str = "normal"  # "shallow", "normal", "deep"
+    min_results_threshold: int = 3  # Minimum chunks needed
+    relationship_context: Optional[dict] = None  # CRM signals
 
 
 class QueryRouter:
