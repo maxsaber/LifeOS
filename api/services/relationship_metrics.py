@@ -390,6 +390,10 @@ def update_all_strengths() -> dict:
     for person in people:
         try:
             strength = compute_strength_for_person(person)
+            # Apply manual override if defined
+            override = STRENGTH_OVERRIDES_BY_ID.get(person.id)
+            if override is not None:
+                strength = override
             person.relationship_strength = strength
             person.is_peripheral_contact = strength < PERIPHERAL_THRESHOLD
             if person.is_peripheral_contact:

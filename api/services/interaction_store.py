@@ -462,6 +462,61 @@ class InteractionStore:
         finally:
             conn.close()
 
+    def get_for_people_batch(
+        self,
+        person_ids: set[str],
+        days_back: int = 365,
+        limit_per_person: int = 1000,
+    ) -> dict[str, list[Interaction]]:
+        """
+        Batch fetch interactions for multiple people in one query.
+
+        This is significantly more efficient than calling get_for_person() in a loop.
+        Used by the family dashboard to avoid N+1 queries.
+
+        Args:
+            person_ids: Set of PersonEntity IDs
+            days_back: Only return interactions from last N days (default 365)
+            limit_per_person: Maximum interactions per person (default 1000)
+
+        Returns:
+            Dict mapping person_id to list of interactions, most recent first
+        """
+        if not person_ids:
+            return {}
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
+        now = datetime.now(timezone.utc)
+        person_ids_list = list(person_ids)
+        placeholders = ",".join("?" * len(person_ids_list))
+
+        conn = self._get_connection()
+        try:
+            # Fetch all interactions for the given people in one query
+            # Order by person_id, timestamp DESC so we can process in order
+            cursor = conn.execute(
+                f"""
+                SELECT * FROM interactions
+                WHERE person_id IN ({placeholders})
+                  AND timestamp >= ?
+                  AND timestamp <= ?
+                ORDER BY person_id, timestamp DESC
+            """,
+                person_ids_list + [cutoff.isoformat(), now.isoformat()],
+            )
+
+            # Build result dict, respecting per-person limit
+            result: dict[str, list[Interaction]] = {pid: [] for pid in person_ids}
+            for row in cursor.fetchall():
+                interaction = Interaction.from_row(row)
+                person_list = result[interaction.person_id]
+                if len(person_list) < limit_per_person:
+                    person_list.append(interaction)
+
+            return result
+        finally:
+            conn.close()
+
     def get_last_interaction(self, person_id: str) -> Optional[Interaction]:
         """Get the most recent interaction with a person (excludes future dates)."""
         conn = self._get_connection()

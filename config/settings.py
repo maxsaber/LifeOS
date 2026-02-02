@@ -51,8 +51,9 @@ class Settings(BaseSettings):
 
     # Local LLM Router (Ollama)
     ollama_host: str = Field(default="http://localhost:11434", alias="OLLAMA_HOST")
-    ollama_model: str = Field(default="llama3.2:3b", alias="OLLAMA_MODEL")
-    ollama_timeout: int = Field(default=10, alias="OLLAMA_TIMEOUT")
+    ollama_model: str = Field(default="qwen2.5:7b-instruct", alias="OLLAMA_MODEL")
+    ollama_timeout: int = Field(default=45, alias="OLLAMA_TIMEOUT")  # 7B model needs more time
+    ollama_retry_timeout: int = Field(default=60, alias="OLLAMA_RETRY_TIMEOUT")  # Longer timeout for retries
 
     # Cross-encoder re-ranking (P9.2)
     # Query-aware reranking: protects BM25 exact matches for factual queries

@@ -43,7 +43,7 @@ def clear_vector_store():
     logger.info("Vector store cleared")
 
 
-def sync_vault_reindex(dry_run: bool = True, force: bool = False) -> dict:
+def sync_vault_reindex(dry_run: bool = True, force: bool = False, skip_summaries: bool = False) -> dict:
     """
     Reindex the Obsidian vault.
 
@@ -86,7 +86,7 @@ def sync_vault_reindex(dry_run: bool = True, force: bool = False) -> dict:
     start_time = time.time()
 
     indexer = IndexerService(vault_path=vault_path)
-    files_indexed = indexer.index_all(force=force)
+    files_indexed = indexer.index_all(force=force, skip_summaries=skip_summaries)
 
     elapsed = time.time() - start_time
 
@@ -106,9 +106,10 @@ if __name__ == '__main__':
     parser.add_argument('--execute', action='store_true', help='Actually perform reindex')
     parser.add_argument('--force', action='store_true', help='Force full reindex (not incremental)')
     parser.add_argument('--clear-vectors', action='store_true', help='Clear vector store before indexing (use when changing embedding model)')
+    parser.add_argument('--skip-summaries', action='store_true', help='Skip LLM summary generation for faster indexing')
     args = parser.parse_args()
 
     if args.clear_vectors and args.execute:
         clear_vector_store()
 
-    sync_vault_reindex(dry_run=not args.execute, force=args.force)
+    sync_vault_reindex(dry_run=not args.execute, force=args.force, skip_summaries=args.skip_summaries)

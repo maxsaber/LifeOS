@@ -175,7 +175,7 @@ class TestNetworkGraph:
 
     def test_get_network_graph(self, client, sample_person_id):
         """GET /network returns graph data."""
-        response = client.get(f"/api/crm/network?center_person_id={sample_person_id}")
+        response = client.get(f"/api/crm/network?center_on={sample_person_id}")
         assert response.status_code == 200
         data = response.json()
         assert "nodes" in data
@@ -184,11 +184,21 @@ class TestNetworkGraph:
     def test_get_network_with_depth(self, client, sample_person_id):
         """GET /network with depth parameter works."""
         response = client.get(
-            f"/api/crm/network?center_person_id={sample_person_id}&depth=2"
+            f"/api/crm/network?center_on={sample_person_id}&depth=2"
         )
         assert response.status_code == 200
         data = response.json()
         assert "nodes" in data
+
+    def test_network_requires_center_on_or_flag(self, client):
+        """GET /network without center_on returns 400 unless allow_full_graph is set."""
+        response = client.get("/api/crm/network")
+        assert response.status_code == 400
+        assert "center_on" in response.json()["detail"]
+
+        # With allow_full_graph=true, it should work
+        response = client.get("/api/crm/network?allow_full_graph=true")
+        assert response.status_code == 200
 
 
 class TestRelationshipDetail:
