@@ -2376,6 +2376,13 @@
             margin-bottom: 1rem;
         }
 
+        .timeline-metrics {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
         .timeline-count {
             font-size: 0.8rem;
             font-weight: 600;
@@ -2390,6 +2397,27 @@
         .timeline-count.has-more::after {
             content: '+';
             color: var(--text-muted);
+        }
+
+        .timeline-add-event-btn {
+            padding: 0.35rem 0.85rem;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .timeline-add-event-btn:hover {
+            border-color: var(--people);
+            color: var(--people);
+        }
+
+        .timeline-add-event-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         .timeline-date-range {
@@ -3847,6 +3875,11 @@
             margin-bottom: 1rem;
         }
 
+        .commitments-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
         .commitments-title {
             font-size: 0.875rem;
             font-weight: 600;
@@ -3873,6 +3906,22 @@
         .commitments-extract-btn:disabled {
             opacity: 0.5;
             cursor: not-allowed;
+        }
+
+        .commitments-toggle-btn {
+            padding: 0.375rem 0.75rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .commitments-toggle-btn:hover {
+            border-color: var(--people);
+            color: var(--people);
         }
 
         .commitments-content {
@@ -6339,9 +6388,12 @@
                             <div class="commitments-section overview-panel" id="commitmentsSection">
                                 <div class="commitments-header">
                                     <span class="commitments-title">Commitments</span>
-                                    <button class="commitments-extract-btn" id="extractCommitmentsBtn" onclick="extractCommitments()">
-                                        <span>Extract</span>
-                                    </button>
+                                    <div class="commitments-actions">
+                                        <button class="commitments-toggle-btn" id="commitmentsToggleBtn" type="button" onclick="toggleCompletedCommitments()">Show completed</button>
+                                        <button class="commitments-extract-btn" id="extractCommitmentsBtn" onclick="extractCommitments()">
+                                            <span>Extract</span>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="commitments-content" id="commitmentsContent">
                                     <div class="commitments-empty">No commitments tracked yet. Click "Extract" to find promises in conversations.</div>
@@ -6403,7 +6455,12 @@
 
                     <div id="tabTimeline" class="tab-content" style="display:none">
                         <div class="timeline-filters" id="timelineFilters">
-                            <span class="timeline-count" id="timelineCount" title="Interactions matching current filters">0</span>
+                            <div class="timeline-metrics">
+                                <span class="timeline-count" id="timelineCount" title="Interactions matching current filters">0</span>
+                                <button class="timeline-add-event-btn" id="timelineAddEventBtn" type="button" style="display: none;">
+                                    + Log in-person event
+                                </button>
+                            </div>
                             <div class="timeline-filter-chip active" data-source="all" onclick="filterTimeline('all')">All</div>
                             <div class="timeline-filter-chip" data-source="gmail" id="filterGmail" onclick="filterTimeline('gmail')">📧 Emails</div>
                             <div class="timeline-filter-chip" data-source="calendar" id="filterCalendar" onclick="filterTimeline('calendar')">📅 Events</div>
@@ -7392,9 +7449,51 @@
                         <div class="merge-person-name">${escapeHtml(person.canonical_name)}</div>
                         <div class="merge-person-meta">
                             ${person.email_count || 0} emails, ${person.meeting_count || 0} meetings, ${person.message_count || 0} messages
-                        </div>
-                    </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="contact-edit-modal" id="manualEventModal">
+        <div class="contact-edit-content">
+            <div class="contact-edit-header">
+                <div>
+                    <h2 class="contact-edit-title">Log In-Person Event</h2>
+                    <p class="contact-edit-subtitle">Track meetings that happen off-calendar.</p>
                 </div>
+                <button type="button" class="contact-edit-close" onclick="closeManualEventModal()">&times;</button>
+            </div>
+            <form class="contact-edit-body" id="manualEventForm" onsubmit="saveManualEvent(event)">
+                <div class="contact-edit-grid">
+                    <label class="contact-edit-field">
+                        <span class="contact-edit-label">Title</span>
+                        <input type="text" id="manualEventTitle" class="contact-edit-input" placeholder="Lunch with Alex" required>
+                    </label>
+                    <label class="contact-edit-field">
+                        <span class="contact-edit-label">Date & Time</span>
+                        <input type="datetime-local" id="manualEventDatetime" class="contact-edit-input" required>
+                    </label>
+                </div>
+                <div class="contact-edit-grid" style="margin-top: 1rem;">
+                    <label class="contact-edit-field">
+                        <span class="contact-edit-label">Location</span>
+                        <input type="text" id="manualEventLocation" class="contact-edit-input" placeholder="Cafe name or city">
+                    </label>
+                    <label class="contact-edit-field">
+                        <span class="contact-edit-label">Duration (minutes)</span>
+                        <input type="number" id="manualEventDuration" class="contact-edit-input" min="0" max="1440" placeholder="60">
+                    </label>
+                </div>
+                <label class="contact-edit-field" style="margin-top: 1rem;">
+                    <span class="contact-edit-label">Notes</span>
+                    <textarea id="manualEventNotes" class="contact-edit-textarea" placeholder="What did you talk about?"></textarea>
+                </label>
+            </form>
+            <div class="contact-edit-footer">
+                <button type="button" class="contact-edit-cancel" onclick="closeManualEventModal()">Cancel</button>
+                <button type="submit" form="manualEventForm" class="contact-edit-save" id="manualEventSaveBtn">Add Event</button>
+            </div>
+        </div>
+    </div>
             `).join('');
 
             updateMergeSecondaryList();
@@ -7725,6 +7824,13 @@
             if (newNameInput) {
                 newNameInput.addEventListener('input', updateSplitButton);
             }
+            const manualEventBtn = document.getElementById('timelineAddEventBtn');
+            if (manualEventBtn) {
+                manualEventBtn.addEventListener('click', (event) => {
+                    event.preventDefault();
+                    openManualEventModal();
+                });
+            }
             // Initialize layout tuning sliders from localStorage
             initLayoutTuningSliders();
 
@@ -7844,6 +7950,7 @@
             document.getElementById('detailCompany').textContent = '';
             document.getElementById('detailAvatar').textContent = '...';
             document.getElementById('detailContactQuick').innerHTML = '';
+            toggleTimelineAddEventButton(false);
 
             // Clear and show loading state for charts
             clearChartsWithLoading();
@@ -7963,6 +8070,7 @@
             currentPersonData = person;
 
             const isMePage = isMyPage(person.id);
+            toggleTimelineAddEventButton(!isMePage);
 
             // Toggle Me Dashboard vs Person Content Grid visibility
             const meDashboard = document.getElementById('meDashboard');
@@ -8063,6 +8171,13 @@
             if (!isMePage) {
                 loadFacts(person.id);
                 loadSentiment(person.id);
+                showCompletedCommitments = false;
+                latestCommitmentsData = null;
+                const toggleBtn = document.getElementById('commitmentsToggleBtn');
+                if (toggleBtn) {
+                    toggleBtn.textContent = 'Show completed';
+                    toggleBtn.setAttribute('aria-pressed', 'false');
+                }
                 loadCommitments(person.id);
             } else {
                 // Render Me dashboard widgets
@@ -8342,6 +8457,137 @@
             }
         }
 
+        function openManualEventModal() {
+            const personId = selectedPersonId || currentPersonData?.id;
+            if (!personId || isMyPage(personId)) {
+                alert('Select a specific contact to log an in-person event.');
+                return;
+            }
+            const form = document.getElementById('manualEventForm');
+            if (form) form.reset();
+
+            const modal = document.getElementById('manualEventModal');
+            const titleInput = document.getElementById('manualEventTitle');
+            const datetimeInput = document.getElementById('manualEventDatetime');
+
+            if (currentPersonData && titleInput) {
+                const name = currentPersonData.display_name || currentPersonData.canonical_name || 'this contact';
+                titleInput.value = `In-person with ${name}`;
+            }
+
+            if (datetimeInput) {
+                datetimeInput.value = formatDateTimeLocalInput(new Date());
+            }
+
+            if (modal) {
+                modal.classList.add('visible');
+            }
+
+            setTimeout(() => {
+                titleInput?.focus();
+            }, 50);
+        }
+
+        function closeManualEventModal() {
+            const modal = document.getElementById('manualEventModal');
+            if (modal) {
+                modal.classList.remove('visible');
+            }
+            const saveBtn = document.getElementById('manualEventSaveBtn');
+            if (saveBtn) {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Add Event';
+            }
+        }
+
+        async function saveManualEvent(event) {
+            event.preventDefault();
+            const personId = selectedPersonId || currentPersonData?.id;
+            if (!personId || isMyPage(personId)) {
+                alert('Select a specific contact to log an in-person event.');
+                return;
+            }
+
+            const saveBtn = document.getElementById('manualEventSaveBtn');
+            const titleInput = document.getElementById('manualEventTitle');
+            const datetimeInput = document.getElementById('manualEventDatetime');
+            const locationInput = document.getElementById('manualEventLocation');
+            const durationInput = document.getElementById('manualEventDuration');
+            const notesInput = document.getElementById('manualEventNotes');
+
+            const datetimeValue = datetimeInput?.value;
+            if (!datetimeValue) {
+                alert('Date and time are required.');
+                return;
+            }
+
+            const occurredAt = new Date(datetimeValue);
+            if (Number.isNaN(occurredAt.getTime())) {
+                alert('Please provide a valid date and time.');
+                return;
+            }
+
+            let durationMinutes = null;
+            if (durationInput?.value) {
+                durationMinutes = parseInt(durationInput.value, 10);
+                if (Number.isNaN(durationMinutes)) {
+                    alert('Duration must be a number of minutes.');
+                    return;
+                }
+            }
+
+            const payload = {
+                title: (titleInput?.value || '').trim() || `In-person with ${currentPersonData?.display_name || currentPersonData?.canonical_name || 'contact'}`,
+                occurred_at: occurredAt.toISOString(),
+                location: locationInput?.value.trim() || null,
+                notes: notesInput?.value.trim() || null,
+                duration_minutes: durationMinutes,
+            };
+
+            if (payload.location === '') payload.location = null;
+            if (payload.notes === '') payload.notes = null;
+
+            saveBtn.disabled = true;
+            saveBtn.textContent = 'Saving...';
+
+            try {
+                await api(`/people/${personId}/events/manual`, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                });
+
+                closeManualEventModal();
+
+                sourceTotals['in_person'] = (sourceTotals['in_person'] || 0) + 1;
+                updateTimelineFilterVisibility();
+                const eventDateKey = payload.occurred_at.slice(0, 10);
+                if (eventDateKey) {
+                    const dayEntry = heatmapData[eventDateKey] || { total: 0, sources: {} };
+                    dayEntry.total += 1;
+                    dayEntry.sources['in_person'] = (dayEntry.sources['in_person'] || 0) + 1;
+                    heatmapData[eventDateKey] = dayEntry;
+                    renderHeatMap();
+                }
+
+                await loadTimeline(personId);
+
+                if (currentPersonData) {
+                    currentPersonData.meeting_count = (currentPersonData.meeting_count || 0) + 1;
+                    if (!currentPersonData.last_seen || new Date(currentPersonData.last_seen) < occurredAt) {
+                        currentPersonData.last_seen = occurredAt.toISOString();
+                    }
+                    renderHeroStats(currentPersonData);
+                    renderCompactContactInfo(currentPersonData);
+                }
+            } catch (error) {
+                console.error('Failed to save manual event:', error);
+                alert('Failed to save event. Please try again.');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = 'Add Event';
+            }
+        }
+
         // Hide the currently selected person
         async function hideCurrentPerson() {
             console.log('hideCurrentPerson called, selectedPersonId:', selectedPersonId);
@@ -8387,6 +8633,28 @@
             if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
             if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
             return num.toString();
+        }
+
+        function toggleTimelineAddEventButton(show) {
+            const addEventBtn = document.getElementById('timelineAddEventBtn');
+            if (!addEventBtn) return;
+            if (show) {
+                addEventBtn.style.display = '';
+                addEventBtn.disabled = false;
+            } else {
+                addEventBtn.style.display = 'none';
+            }
+        }
+
+        function formatDateTimeLocalInput(date) {
+            if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+            const pad = (value) => String(value).padStart(2, '0');
+            const year = date.getFullYear();
+            const month = pad(date.getMonth() + 1);
+            const day = pad(date.getDate());
+            const hours = pad(date.getHours());
+            const minutes = pad(date.getMinutes());
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
         }
 
         // Render hero stats row
@@ -8476,7 +8744,7 @@
         function updateHeroStatsFromSources() {
             // Combined counts from source totals
             const emailCount = (sourceTotals['gmail'] || 0);
-            const eventCount = (sourceTotals['calendar'] || 0);
+            const eventCount = (sourceTotals['calendar'] || 0) + (sourceTotals['in_person'] || 0);
             const messageCount = (sourceTotals['imessage'] || 0) + (sourceTotals['whatsapp'] || 0);
             const phoneCount = (sourceTotals['phone'] || 0);
             const slackCount = (sourceTotals['slack'] || 0);
@@ -8544,7 +8812,7 @@
                     counts[sourceType] = (counts[sourceType] || 0) + 1;
                 }
                 emailCount = counts['gmail'] || 0;
-                eventCount = counts['calendar'] || 0;
+                eventCount = (counts['calendar'] || 0) + (counts['in_person'] || 0);
                 messageCount = (counts['imessage'] || 0) + (counts['whatsapp'] || 0);
                 phoneCount = counts['phone'] || 0;
                 slackCount = counts['slack'] || 0;
@@ -8552,7 +8820,7 @@
             } else {
                 // No date filter - use global sourceTotals
                 emailCount = (sourceTotals['gmail'] || 0);
-                eventCount = (sourceTotals['calendar'] || 0);
+                eventCount = (sourceTotals['calendar'] || 0) + (sourceTotals['in_person'] || 0);
                 messageCount = (sourceTotals['imessage'] || 0) + (sourceTotals['whatsapp'] || 0);
                 phoneCount = (sourceTotals['phone'] || 0);
                 slackCount = (sourceTotals['slack'] || 0);
@@ -11881,12 +12149,33 @@
          * @param {string} filter - UI filter name (e.g., 'gmail', 'messages', 'notes')
          * @returns {string|null} - API source_type value(s) or null for 'all'
          */
+        const SOURCE_LABELS = {
+            gmail: 'Email',
+            calendar: 'Calendar Event',
+            in_person: 'In-Person Event',
+            imessage: 'iMessage',
+            whatsapp: 'WhatsApp',
+            phone: 'Phone Call',
+            phone_call: 'Phone Call',
+            slack: 'Slack',
+            vault: 'Vault Note',
+            granola: 'Note',
+            contacts: 'Contact',
+        };
+
+        function getSourceLabel(sourceType) {
+            if (!sourceType) return 'Unknown';
+            const key = sourceType.toLowerCase();
+            return SOURCE_LABELS[key] || sourceType.charAt(0).toUpperCase() + sourceType.slice(1);
+        }
+
         function mapFilterToSourceType(filter) {
             if (filter === 'all') return null;
 
             // Compound filters that map to multiple source types
             const compoundFilters = {
                 'messages': 'imessage,whatsapp',  // Both messaging platforms
+                'calendar': 'calendar,in_person', // Calendar + manual events
                 'notes': 'vault,granola',          // Both note types
             };
 
@@ -12040,6 +12329,7 @@
                     snippet.includes(title)
                 );
 
+                const sourceLabel = getSourceLabel(item.source_type);
                 return `
                 <div class="timeline-item">
                     <div class="timeline-badge">${item.source_badge || '📄'}</div>
@@ -12050,7 +12340,7 @@
                         ${snippet && !isDuplicate ? `<div class="timeline-snippet">${escapeHtml(snippet)}</div>` : ''}
                         <div class="timeline-meta">
                             ${formatDate(item.timestamp)}
-                            <span class="timeline-source-badge">${escapeHtml(item.source_type || 'Unknown')}</span>
+                            <span class="timeline-source-badge">${escapeHtml(sourceLabel)}</span>
                         </div>
                     </div>
                 </div>
@@ -12638,9 +12928,13 @@
         // ===========================
 
         // Load commitments for a person
+        let showCompletedCommitments = false;
+        let latestCommitmentsData = null;
+
         async function loadCommitments(personId) {
             try {
                 const data = await api(`/people/${personId}/commitments`);
+                latestCommitmentsData = data;
                 renderCommitments(data);
             } catch (error) {
                 console.error('Failed to load commitments:', error);
@@ -12651,10 +12945,30 @@
 
         // Render commitments display
         function renderCommitments(data) {
+            const sourceData = data || latestCommitmentsData;
             const container = document.getElementById('commitmentsContent');
 
-            if (!data || data.count === 0) {
+            if (!sourceData || sourceData.count === 0) {
                 container.innerHTML = '<div class="commitments-empty">No commitments tracked yet. Click "Extract" to find promises in conversations.</div>';
+                return;
+            }
+
+            const toggleBtn = document.getElementById('commitmentsToggleBtn');
+            if (toggleBtn) {
+                toggleBtn.textContent = showCompletedCommitments ? 'Hide completed' : 'Show completed';
+                toggleBtn.setAttribute('aria-pressed', showCompletedCommitments ? 'true' : 'false');
+            }
+
+            const visibleCommitments = showCompletedCommitments
+                ? sourceData.commitments
+                : sourceData.commitments.filter(c => c.status !== 'completed');
+
+            if (visibleCommitments.length === 0) {
+                if (sourceData.commitments.some(c => c.status === 'completed')) {
+                    container.innerHTML = '<div class="commitments-empty">All commitments are completed. Click "Show completed" to review archived items.</div>';
+                } else {
+                    container.innerHTML = '<div class="commitments-empty">No active commitments.</div>';
+                }
                 return;
             }
 
@@ -12662,17 +12976,17 @@
             let html = `
                 <div class="commitments-summary">
                     <div class="commitments-summary-item">
-                        <span class="commitments-summary-count">${data.open_count}</span> open
+                        <span class="commitments-summary-count">${sourceData.open_count}</span> open
                     </div>
                     <div class="commitments-summary-item">
-                        <span class="commitments-summary-count">${data.overdue_count}</span> overdue
+                        <span class="commitments-summary-count">${sourceData.overdue_count}</span> overdue
                     </div>
                 </div>
             `;
 
             // Group by direction
-            const madeByMe = data.commitments.filter(c => c.direction === 'made_by_me');
-            const madeToMe = data.commitments.filter(c => c.direction === 'made_to_me');
+            const madeByMe = visibleCommitments.filter(c => c.direction === 'made_by_me');
+            const madeToMe = visibleCommitments.filter(c => c.direction === 'made_to_me');
 
             if (madeByMe.length > 0) {
                 html += `
@@ -12756,6 +13070,11 @@
                     ${actionsHtml}
                 </div>
             `;
+        }
+
+        function toggleCompletedCommitments() {
+            showCompletedCommitments = !showCompletedCommitments;
+            renderCommitments();
         }
 
         // Extract commitments for a person

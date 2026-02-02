@@ -154,6 +154,7 @@ class Interaction:
         badges = {
             "gmail": "📧",
             "calendar": "📅",
+            "in_person": "🤝",
             "vault": "📝",
             "granola": "📝",
             "imessage": "💬",
@@ -1009,8 +1010,9 @@ class InteractionStore:
         count_parts = []
         if counts.get("gmail", 0):
             count_parts.append(f"📧 {counts['gmail']} emails")
-        if counts.get("calendar", 0):
-            count_parts.append(f"📅 {counts['calendar']} meetings")
+        meetings = counts.get("calendar", 0) + counts.get("in_person", 0)
+        if meetings:
+            count_parts.append(f"📅 {meetings} meetings")
         if counts.get("vault", 0) or counts.get("granola", 0):
             notes = counts.get("vault", 0) + counts.get("granola", 0)
             count_parts.append(f"📝 {notes} notes")
