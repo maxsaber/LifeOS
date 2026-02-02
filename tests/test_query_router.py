@@ -21,8 +21,8 @@ class TestOllamaClient:
 
         client = OllamaClient()
         assert client.host == "http://localhost:11434"
-        assert client.model == "llama3.2:3b"
-        assert client.timeout == 10
+        assert client.model == "qwen2.5:7b-instruct"
+        assert client.timeout == 45
 
     def test_client_custom_settings(self):
         """Client should accept custom settings."""
@@ -371,6 +371,7 @@ class TestRouterIntegration:
         client = OllamaClient()
         return client.is_available()
 
+    @pytest.mark.slow
     @pytest.mark.asyncio
     async def test_real_ollama_routing(self, ollama_available):
         """Test routing with real Ollama if available."""
@@ -387,9 +388,10 @@ class TestRouterIntegration:
         # Calendar should be one of the sources for this query
         assert "calendar" in result.sources
 
+    @pytest.mark.slow
     @pytest.mark.asyncio
     async def test_real_ollama_latency(self, ollama_available):
-        """Routing latency should be under 500ms."""
+        """Routing latency should be reasonable for 7B model."""
         if not ollama_available:
             pytest.skip("Ollama not available")
 
@@ -398,8 +400,8 @@ class TestRouterIntegration:
         router = QueryRouter()
         result = await router.route("What's on my calendar?")
 
-        # First call may be slow (model loading), but should still be reasonable
-        assert result.latency_ms < 5000, f"Latency too high: {result.latency_ms}ms"
+        # 7B model is slower than 3B, allow up to 15s for first call (model loading)
+        assert result.latency_ms < 15000, f"Latency too high: {result.latency_ms}ms"
 
 
 class TestPeopleRouting:
