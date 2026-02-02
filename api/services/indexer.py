@@ -4,6 +4,7 @@ Indexer service for LifeOS.
 Watches the Obsidian vault for file changes and indexes content to ChromaDB.
 Supports incremental indexing based on file modification times.
 """
+import gc
 import os
 import re
 import time
@@ -221,9 +222,10 @@ class IndexerService:
                 index_state[file_path] = mtime
                 count += 1
 
-                # Save progress periodically
+                # Save progress and clean up memory periodically
                 if count % save_interval == 0:
                     self._save_index_state(index_state)
+                    gc.collect()  # Prevent memory bloat during long indexing runs
                     logger.info(f"  Indexed {count}/{len(files_to_index)} files (progress saved)...")
 
             except Exception as e:
@@ -238,6 +240,7 @@ class IndexerService:
             retry_count = self._retry_failed_summaries()
             if retry_count > 0:
                 logger.info(f"Retried {retry_count} failed summaries")
+            gc.collect()  # Clean up after retry phase
 
         # Batch refresh all affected person stats ONCE at the end
         if all_affected_person_ids:
