@@ -819,6 +819,19 @@ class EntityResolver:
 
         # If we have email but no name match, create entity from email
         if email and create_if_missing:
+            # SAFETY: Double-check email index before creating to avoid race conditions
+            # If the email index was stale (e.g., after concurrent operations), this prevents
+            # creating a duplicate entity with a new ID
+            existing = self._store.get_by_email(email.lower())
+            if existing:
+                logger.warning(f"Race condition avoided: email {email} already exists")
+                return ResolutionResult(
+                    entity=existing,
+                    is_new=False,
+                    confidence=1.0,
+                    match_type="email_exact_late",
+                )
+
             name_from_email = self._extract_name_from_email(email)
             domain = normalize_domain(email)
             vault_contexts = get_vault_contexts_for_domain(domain) if domain else []
