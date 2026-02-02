@@ -38,6 +38,7 @@ SOURCE_TYPES = {
     "granola",
     "phone_call",
     "phone",
+    "photos",
 }
 
 # Link status values
@@ -149,6 +150,7 @@ class SourceEntity:
             "vault": "📝",
             "granola": "📝",
             "phone_call": "📞",
+            "photos": "📷",
         }
         return badges.get(self.source_type, "📄")
 

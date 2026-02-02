@@ -231,6 +231,83 @@ class AppleContactsReader:
                 })
         return results
 
+    def get_contact_by_identifier(self, identifier: str) -> Optional[AppleContact]:
+        """
+        Fetch a single contact by its identifier (UUID).
+
+        Args:
+            identifier: Contact UUID (from CNContact.identifier)
+
+        Returns:
+            AppleContact if found, None otherwise
+        """
+        if not self._available:
+            logger.warning("Apple Contacts not available")
+            return None
+
+        import Contacts
+
+        store = self._get_store()
+
+        # Keys to fetch
+        keys_to_fetch = [
+            Contacts.CNContactIdentifierKey,
+            Contacts.CNContactGivenNameKey,
+            Contacts.CNContactFamilyNameKey,
+            Contacts.CNContactNicknameKey,
+            Contacts.CNContactOrganizationNameKey,
+            Contacts.CNContactJobTitleKey,
+            Contacts.CNContactDepartmentNameKey,
+            Contacts.CNContactEmailAddressesKey,
+            Contacts.CNContactPhoneNumbersKey,
+            Contacts.CNContactPostalAddressesKey,
+            Contacts.CNContactSocialProfilesKey,
+            Contacts.CNContactNoteKey,
+            Contacts.CNContactImageDataAvailableKey,
+            Contacts.CNContactBirthdayKey,
+        ]
+
+        try:
+            contact = store.unifiedContactWithIdentifier_keysToFetch_error_(
+                identifier, keys_to_fetch, None
+            )
+            if contact is None:
+                return None
+
+            # Extract birthday
+            birthday = None
+            if contact.birthday():
+                bd = contact.birthday()
+                try:
+                    birthday = datetime(
+                        year=bd.year() if bd.year() else 1900,
+                        month=bd.month(),
+                        day=bd.day(),
+                        tzinfo=timezone.utc,
+                    )
+                except (ValueError, AttributeError):
+                    pass
+
+            return AppleContact(
+                identifier=str(contact.identifier()),
+                given_name=str(contact.givenName()) if contact.givenName() else "",
+                family_name=str(contact.familyName()) if contact.familyName() else "",
+                nickname=str(contact.nickname()) if contact.nickname() else "",
+                organization=str(contact.organizationName()) if contact.organizationName() else "",
+                job_title=str(contact.jobTitle()) if contact.jobTitle() else "",
+                department=str(contact.departmentName()) if contact.departmentName() else "",
+                emails=self._extract_labeled_values(contact.emailAddresses()),
+                phones=self._extract_labeled_values(contact.phoneNumbers()),
+                addresses=self._extract_addresses(contact.postalAddresses()),
+                social_profiles=self._extract_social_profiles(contact.socialProfiles()),
+                note=str(contact.note()) if contact.note() else "",
+                image_available=bool(contact.imageDataAvailable()),
+                birthday=birthday,
+            )
+        except Exception as e:
+            logger.debug(f"Contact not found or error: {identifier}: {e}")
+            return None
+
     def get_all_contacts(self) -> list[AppleContact]:
         """
         Fetch all contacts from Apple Contacts.

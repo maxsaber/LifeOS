@@ -28,6 +28,7 @@ How LifeOS ingests, stores, and resolves data from multiple sources.
 | Gmail | Google API | From/To/CC, subjects, timestamps, threads |
 | Calendar | Google API | Attendees, organizer, titles, times |
 | Apple Contacts | CSV Export | Names, emails, phone numbers, companies |
+| Apple Photos | Photos.sqlite | Face recognition, co-appearances, timestamps |
 | Phone Calls | macOS CallHistoryDB | Numbers, names, duration, direction |
 | WhatsApp | wacli CLI | JIDs, names, phone numbers |
 | iMessage | macOS chat.db | Phone/email, message content, timestamps |

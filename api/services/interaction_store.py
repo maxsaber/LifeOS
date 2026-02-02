@@ -104,6 +104,7 @@ class Interaction:
             "whatsapp": "💬",
             "contacts": "📇",
             "phone": "📞",
+            "photos": "📷",
         }
         return badges.get(self.source_type, "📄")
 

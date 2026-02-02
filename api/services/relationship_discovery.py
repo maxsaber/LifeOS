@@ -1176,6 +1176,118 @@ def discover_linkedin_connections() -> list[Relationship]:
     return relationships
 
 
+def discover_from_shared_photos(
+    days_back: int = DISCOVERY_WINDOW_DAYS,
+    min_shared_photos: int = 3,
+) -> list[Relationship]:
+    """
+    Discover relationships from photo co-appearances.
+
+    People who appear together in photos have a real-world connection.
+
+    Args:
+        days_back: Days to look back
+        min_shared_photos: Minimum shared photos to create/update relationship
+
+    Returns:
+        List of discovered/updated relationships
+    """
+    from collections import defaultdict
+    from config.settings import settings
+
+    if not settings.photos_enabled:
+        logger.info("Photos not enabled, skipping photo relationship discovery")
+        return []
+
+    relationship_store = get_relationship_store()
+    interaction_store = get_interaction_store()
+
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days_back)
+
+    # Get all photo interactions grouped by source_id (asset UUID)
+    # to find photos with multiple people
+    photo_people: dict[str, list[tuple[str, datetime]]] = defaultdict(list)
+
+    # Query all photos interactions
+    from api.services.person_entity import get_person_entity_store
+    person_store = get_person_entity_store()
+
+    for person in person_store.get_all():
+        interactions = interaction_store.get_for_person(
+            person.id,
+            source_type="photos",
+        )
+        for interaction in interactions:
+            if interaction.source_id and interaction.timestamp:
+                if _ensure_tz_aware(interaction.timestamp) >= cutoff:
+                    photo_people[interaction.source_id].append(
+                        (person.id, interaction.timestamp)
+                    )
+
+    # Find photos with 2+ people
+    multi_person_photos = {
+        photo_id: people
+        for photo_id, people in photo_people.items()
+        if len(people) >= 2
+    }
+
+    logger.info(f"Found {len(multi_person_photos)} photos with 2+ people")
+
+    # Count shared photos for each pair
+    pair_photos: dict[tuple[str, str], list[datetime]] = defaultdict(list)
+
+    for photo_id, people in multi_person_photos.items():
+        person_ids = [p[0] for p in people]
+        timestamp = people[0][1]  # All people in same photo have same timestamp
+
+        # Create pairs from people in this photo
+        for i, person_a in enumerate(person_ids):
+            for person_b in person_ids[i + 1:]:
+                # Normalize pair order
+                pair = (min(person_a, person_b), max(person_a, person_b))
+                pair_photos[pair].append(timestamp)
+
+    # Update relationships for pairs with enough shared photos
+    relationships = []
+    for (person_a_id, person_b_id), timestamps in pair_photos.items():
+        if len(timestamps) < min_shared_photos:
+            continue
+
+        first_seen = min(timestamps)
+        last_seen = max(timestamps)
+
+        existing = relationship_store.get_between(person_a_id, person_b_id)
+
+        if existing:
+            # Update existing relationship
+            existing.shared_photos_count = len(timestamps)
+            # Extend date range if needed
+            if not existing.first_seen_together or _datetime_lt(first_seen, existing.first_seen_together):
+                existing.first_seen_together = first_seen
+            if not existing.last_seen_together or _datetime_gt(last_seen, existing.last_seen_together):
+                existing.last_seen_together = last_seen
+            if "photos" not in existing.shared_contexts:
+                existing.shared_contexts.append("photos")
+            relationship_store.update(existing)
+            relationships.append(existing)
+        else:
+            # Create new relationship
+            rel = Relationship(
+                person_a_id=person_a_id,
+                person_b_id=person_b_id,
+                relationship_type=TYPE_INFERRED,
+                shared_photos_count=len(timestamps),
+                first_seen_together=first_seen,
+                last_seen_together=last_seen,
+                shared_contexts=["photos"],
+            )
+            relationship_store.add(rel)
+            relationships.append(rel)
+
+    logger.info(f"Discovered {len(relationships)} relationships from photos")
+    return relationships
+
+
 def run_full_discovery(days_back: int = DISCOVERY_WINDOW_DAYS) -> dict:
     """
     Run all discovery methods and return statistics.
@@ -1197,6 +1309,7 @@ def run_full_discovery(days_back: int = DISCOVERY_WINDOW_DAYS) -> dict:
         "phone_calls": len(discover_from_phone_calls(days_back)),
         "slack_direct": len(discover_from_slack_direct(days_back)),
         "linkedin": len(discover_linkedin_connections()),
+        "photos": len(discover_from_shared_photos(days_back)),
     }
 
     total = sum(results.values())

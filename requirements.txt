@@ -41,3 +41,7 @@ httpx>=0.26.0
 python-dotenv>=1.0.0
 rapidfuzz>=3.6.0  # Fast fuzzy string matching for entity resolution
 python-multipart
+psutil
+
+# macOS Integrations (optional)
+pyobjc-framework-Contacts>=10.0; sys_platform == "darwin"  # Apple Contacts integration

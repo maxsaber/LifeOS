@@ -87,5 +87,23 @@ class Settings(BaseSettings):
         description="Your PersonEntity ID for relationship tracking"
     )
 
+    # Apple Photos Integration
+    photos_library_path: str = Field(
+        default="/Volumes/NVMe External Storage/Photos Library.photoslibrary",
+        alias="LIFEOS_PHOTOS_PATH",
+        description="Path to Photos Library"
+    )
+
+    @property
+    def photos_db_path(self) -> str:
+        """Get path to Photos.sqlite database."""
+        return f"{self.photos_library_path}/database/Photos.sqlite"
+
+    @property
+    def photos_enabled(self) -> bool:
+        """Check if Photos database is available."""
+        from pathlib import Path
+        return Path(self.photos_db_path).exists()
+
 
 settings = Settings()

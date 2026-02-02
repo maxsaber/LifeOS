@@ -229,6 +229,57 @@ PARAMETERS:
 Use for understanding relationship dynamics and patterns.""",
         "method": "GET"
     },
+    "/api/photos/person/{person_id}": {
+        "name": "lifeos_photos_person",
+        "description": """Get photos containing a specific person from Apple Photos face recognition.
+
+RETURNS:
+- person_id: The requested person's entity ID
+- photos: List of photos with uuid, timestamp, source_link
+- count: Total number of photos
+
+PARAMETERS:
+- person_id (required): entity_id from lifeos_people_search
+- limit: Max photos to return (default: 50)
+
+REQUIRES: entity_id from lifeos_people_search.
+
+Use for 'show me photos of X' or 'find pictures with Y'.""",
+        "method": "GET"
+    },
+    "/api/photos/shared/{person_a_id}/{person_b_id}": {
+        "name": "lifeos_photos_shared",
+        "description": """Get photos where two people appear together (co-appearances).
+
+RETURNS:
+- person_a_id, person_b_id: The two people
+- shared_photo_count: Total photos together
+- photos: List of photos with uuid, timestamp, source_link
+
+PARAMETERS:
+- person_a_id (required): First person's entity_id
+- person_b_id (required): Second person's entity_id
+- limit: Max photos to return (default: 20)
+
+Use for 'photos of me with X' or 'pictures of X and Y together'.
+
+WORKFLOW: lifeos_people_search for both people → get entity_ids → lifeos_photos_shared""",
+        "method": "GET"
+    },
+    "/api/photos/stats": {
+        "name": "lifeos_photos_stats",
+        "description": """Get statistics about Apple Photos library face recognition data.
+
+RETURNS:
+- total_named_people: People recognized in Photos
+- people_with_contacts: People linked to Apple Contacts
+- total_face_detections: Total face appearances
+- multi_person_photos: Photos with 2+ named people
+- photos_enabled: Whether Photos integration is available
+
+Use to check Photos integration status or get overview of photo data.""",
+        "method": "GET"
+    },
 }
 
 

@@ -675,6 +675,30 @@ Search people by name or email.
 
 ---
 
+## Photos Endpoints
+
+### GET /api/photos/stats
+
+Get Apple Photos library statistics (named people, face detections, multi-person photos).
+
+### GET /api/photos/people
+
+List people recognized in Photos with match status to PersonEntity.
+
+### GET /api/photos/person/{person_id}
+
+Get photos containing a specific person.
+
+### GET /api/photos/shared/{person_a_id}/{person_b_id}
+
+Get photos where two people appear together.
+
+### POST /api/photos/sync
+
+Trigger Photos sync (matches faces to PersonEntity, creates interactions).
+
+---
+
 ## Admin Endpoints
 
 ### GET /api/admin/health
@@ -758,6 +782,9 @@ claude mcp add lifeos -s user -- python /path/to/LifeOS/mcp_server.py
 | `lifeos_person_connections` | GET /api/crm/people/{id}/connections | Who someone works with |
 | `lifeos_relationship_insights` | GET /api/crm/relationship/insights | Relationship patterns |
 | `lifeos_communication_gaps` | GET /api/crm/family/communication-gaps | Find neglected relationships |
+| `lifeos_photos_person` | GET /api/photos/person/{id} | Photos of a person |
+| `lifeos_photos_shared` | GET /api/photos/shared/{a}/{b} | Photos of two people together |
+| `lifeos_photos_stats` | GET /api/photos/stats | Photos library statistics |
 | `lifeos_memories_create` | POST /api/memories | Save memory |
 | `lifeos_memories_search` | GET /api/memories/search | Search memories |
 | `lifeos_conversations_list` | GET /api/conversations | List chats |

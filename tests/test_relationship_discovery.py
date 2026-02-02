@@ -317,7 +317,8 @@ class TestRunFullDiscovery:
              patch('api.services.relationship_discovery.discover_from_whatsapp_direct') as mock_wa, \
              patch('api.services.relationship_discovery.discover_from_phone_calls') as mock_phone, \
              patch('api.services.relationship_discovery.discover_from_slack_direct') as mock_slack, \
-             patch('api.services.relationship_discovery.discover_linkedin_connections') as mock_li:
+             patch('api.services.relationship_discovery.discover_linkedin_connections') as mock_li, \
+             patch('api.services.relationship_discovery.discover_from_shared_photos') as mock_photos:
 
             # Create mock relationships
             mock_rel = MagicMock(spec=Relationship)
@@ -332,6 +333,7 @@ class TestRunFullDiscovery:
             mock_phone.return_value = []  # 0
             mock_slack.return_value = [mock_rel]  # 1
             mock_li.return_value = []  # 0
+            mock_photos.return_value = []  # 0
 
             result = run_full_discovery()
 
@@ -342,6 +344,7 @@ class TestRunFullDiscovery:
             assert by_source['imessage_direct'] == 2
             assert by_source['whatsapp_direct'] == 1
             assert by_source['slack_direct'] == 1
+            assert by_source['photos'] == 0
             assert result['total'] == 10
 
 

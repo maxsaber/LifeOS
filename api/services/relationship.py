@@ -55,6 +55,7 @@ class Relationship:
     shared_whatsapp_count: int = 0  # WhatsApp direct threads
     shared_slack_count: int = 0  # Slack DM message count
     shared_phone_calls_count: int = 0  # Phone calls (high value - synchronous)
+    shared_photos_count: int = 0  # Photos together (strong relationship signal)
     is_linkedin_connection: bool = False  # LinkedIn connection flag
 
     # Timestamps
@@ -112,6 +113,7 @@ class Relationship:
         shared_slack_count = row[13] if len(row) > 13 else 0
         is_linkedin_connection = bool(row[14]) if len(row) > 14 else False
         shared_phone_calls_count = row[15] if len(row) > 15 else 0
+        shared_photos_count = row[16] if len(row) > 16 else 0
 
         return cls(
             id=row[0],
@@ -130,6 +132,7 @@ class Relationship:
             shared_slack_count=shared_slack_count or 0,
             is_linkedin_connection=is_linkedin_connection,
             shared_phone_calls_count=shared_phone_calls_count or 0,
+            shared_photos_count=shared_photos_count or 0,
         )
 
     @property
@@ -141,7 +144,8 @@ class Relationship:
             self.shared_messages_count +
             self.shared_whatsapp_count +
             self.shared_slack_count +
-            self.shared_phone_calls_count
+            self.shared_phone_calls_count +
+            self.shared_photos_count
         )
 
     @property
@@ -154,6 +158,7 @@ class Relationship:
             self.shared_whatsapp_count * 2 +     # WhatsApp threads
             self.shared_slack_count * 1 +        # Slack DMs (weaker per-message signal)
             self.shared_phone_calls_count * 4 +  # Phone calls (highest - synchronous voice)
+            self.shared_photos_count * 3 +       # Photos together (high signal - in-person)
             (10 if self.is_linkedin_connection else 0)  # LinkedIn connection bonus
         )
 
@@ -342,6 +347,7 @@ class RelationshipStore:
                 ("shared_slack_count", "INTEGER DEFAULT 0"),
                 ("is_linkedin_connection", "INTEGER DEFAULT 0"),
                 ("shared_phone_calls_count", "INTEGER DEFAULT 0"),
+                ("shared_photos_count", "INTEGER DEFAULT 0"),
             ]
             for col_name, col_type in new_columns:
                 try:
@@ -401,8 +407,8 @@ class RelationshipStore:
                  shared_events_count, shared_threads_count, first_seen_together,
                  last_seen_together, created_at, updated_at,
                  shared_messages_count, shared_whatsapp_count, shared_slack_count,
-                 is_linkedin_connection, shared_phone_calls_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 is_linkedin_connection, shared_phone_calls_count, shared_photos_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 relationship.id,
                 relationship.person_a_id,
@@ -420,6 +426,7 @@ class RelationshipStore:
                 relationship.shared_slack_count,
                 1 if relationship.is_linkedin_connection else 0,
                 relationship.shared_phone_calls_count,
+                relationship.shared_photos_count,
             ))
             conn.commit()
             return relationship
@@ -483,7 +490,8 @@ class RelationshipStore:
                     shared_whatsapp_count = ?,
                     shared_slack_count = ?,
                     is_linkedin_connection = ?,
-                    shared_phone_calls_count = ?
+                    shared_phone_calls_count = ?,
+                    shared_photos_count = ?
                 WHERE id = ?
             """, (
                 relationship.relationship_type,
@@ -498,6 +506,7 @@ class RelationshipStore:
                 relationship.shared_slack_count,
                 1 if relationship.is_linkedin_connection else 0,
                 relationship.shared_phone_calls_count,
+                relationship.shared_photos_count,
                 relationship.id,
             ))
             conn.commit()
