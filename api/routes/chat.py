@@ -34,8 +34,107 @@ from api.services.chat_helpers import (
     format_raw_qa_section as _format_raw_qa_section,
 )
 from config.settings import settings
+from api.services.google_auth import GoogleAccount
 
 logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Parallel Source Fetching Helpers
+# =============================================================================
+
+async def _fetch_calendar_account(
+    account_type: GoogleAccount,
+    date_ref: str | None,
+) -> tuple[str, list]:
+    """Fetch calendar events from one account."""
+    try:
+        calendar = CalendarService(account_type)
+        if date_ref:
+            from datetime import datetime
+            target_date = datetime.strptime(date_ref, "%Y-%m-%d")
+            events = calendar.get_events_in_range(
+                target_date,
+                target_date + timedelta(days=1)
+            )
+        else:
+            events = calendar.get_upcoming_events(max_results=10)
+        return (account_type.value, events)
+    except Exception as e:
+        logger.warning(f"{account_type.value} calendar error: {e}")
+        return (account_type.value, [])
+
+
+async def _fetch_gmail_account(
+    account_type: GoogleAccount,
+    person_email: str | None,
+    is_sent_to: bool,
+    search_term: str | None,
+) -> tuple[str, list]:
+    """Fetch emails from one account."""
+    try:
+        gmail = GmailService(account_type)
+        if person_email:
+            if is_sent_to:
+                messages = gmail.search(to_email=person_email, max_results=5, include_body=True)
+            else:
+                messages = gmail.search(from_email=person_email, max_results=5, include_body=True)
+        elif search_term:
+            messages = gmail.search(keywords=search_term, max_results=5)
+        else:
+            messages = gmail.search(max_results=5)
+        return (account_type.value, messages)
+    except Exception as e:
+        logger.warning(f"{account_type.value} gmail error: {e}")
+        return (account_type.value, [])
+
+
+async def _fetch_drive_account(
+    account_type: GoogleAccount,
+    search_term: str | None,
+) -> tuple[str, list, list]:
+    """Fetch drive files from one account. Returns (account, name_matches, content_matches)."""
+    if not search_term:
+        return (account_type.value, [], [])
+    try:
+        drive = DriveService(account_type)
+        name_files = drive.search(name=search_term, max_results=5)
+        content_files = drive.search(full_text=search_term, max_results=5)
+        return (account_type.value, name_files, content_files)
+    except Exception as e:
+        logger.warning(f"{account_type.value} drive error: {e}")
+        return (account_type.value, [], [])
+
+
+async def _fetch_slack(query: str, top_k: int = 10) -> list:
+    """Fetch Slack messages."""
+    try:
+        from api.services.slack_indexer import get_slack_indexer
+        from api.services.slack_integration import is_slack_enabled
+
+        if is_slack_enabled():
+            slack_indexer = get_slack_indexer()
+            return slack_indexer.search(query=query, top_k=top_k)
+    except Exception as e:
+        logger.warning(f"Slack search error: {e}")
+    return []
+
+
+async def _fetch_vault(query: str, top_k: int, date_filter: str | None = None) -> list:
+    """Fetch vault chunks using hybrid search."""
+    try:
+        hybrid_search = HybridSearch()
+        if date_filter:
+            vector_store = VectorStore()
+            chunks = vector_store.search(query=query, top_k=top_k, filters={"modified_date": date_filter})
+            if not chunks:
+                chunks = hybrid_search.search(query=query, top_k=top_k)
+        else:
+            chunks = hybrid_search.search(query=query, top_k=top_k)
+        return chunks
+    except Exception as e:
+        logger.warning(f"Vault search error: {e}")
+        return []
 
 
 async def extract_draft_params(query: str, conversation_history: list = None) -> Optional[dict]:
@@ -247,8 +346,6 @@ async def ask_stream(request: AskStreamRequest):
                 draft_params = await extract_draft_params(request.question, conversation_history)
                 if draft_params:
                     try:
-                        from api.services.google_auth import GoogleAccount
-
                         # Determine account
                         account_str = draft_params.get("account", "personal").lower()
                         account_type = GoogleAccount.WORK if account_str == "work" else GoogleAccount.PERSONAL
@@ -344,6 +441,53 @@ async def ask_stream(request: AskStreamRequest):
                 f"confidence: {routing_result.confidence})"
             )
 
+            # Check for name resolution failures (disambiguation or fuzzy suggestions)
+            if routing_result.relationship_context and routing_result.relationship_context.get("resolution_failed"):
+                failure_type = routing_result.relationship_context.get("failure_type")
+                query_name = routing_result.relationship_context.get("query_name", "")
+
+                if failure_type == "ambiguous":
+                    # Multiple people with same name - ask user to clarify
+                    candidates = routing_result.relationship_context.get("candidates", [])
+                    yield f"data: {json.dumps({'type': 'routing', 'sources': ['people'], 'reasoning': 'Name disambiguation needed', 'latency_ms': routing_result.latency_ms})}\n\n"
+                    response_text = f"I found multiple people named \"{query_name}\". Which one did you mean?\n\n"
+                    for i, c in enumerate(candidates, 1):
+                        context = c.get("context", "")
+                        strength = c.get("strength", 0)
+                        response_text += f"{i}. **{c['name']}** ({context}) - strength: {strength:.0f}/100\n"
+                    response_text += "\nPlease specify which person you're asking about.\n"
+
+                    # Stream the response
+                    for chunk in response_text:
+                        yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
+                        await asyncio.sleep(0.005)
+
+                    # Save assistant response
+                    store.add_message(conversation_id, "assistant", response_text)
+                    yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                    return
+
+                elif failure_type == "no_match":
+                    # No match - show fuzzy suggestions
+                    suggestions = routing_result.relationship_context.get("suggestions", [])
+                    yield f"data: {json.dumps({'type': 'routing', 'sources': ['people'], 'reasoning': 'Name not found, suggesting alternatives', 'latency_ms': routing_result.latency_ms})}\n\n"
+
+                    if suggestions:
+                        suggestion_text = ", ".join(f'"{s}"' for s in suggestions)
+                        response_text = f"I couldn't find anyone named \"{query_name}\" in your contacts. Did you mean: {suggestion_text}?\n\n"
+                    else:
+                        response_text = f"I couldn't find anyone named \"{query_name}\" in your contacts.\n\n"
+
+                    # Stream the response
+                    for chunk in response_text:
+                        yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
+                        await asyncio.sleep(0.005)
+
+                    # Save assistant response
+                    store.add_message(conversation_id, "assistant", response_text)
+                    yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                    return
+
             # Add "attachment" to sources if attachments are present
             effective_sources = list(routing_result.sources)
             if request.attachments:
@@ -386,8 +530,7 @@ async def ask_stream(request: AskStreamRequest):
 
             # Handle calendar queries - ALWAYS query both personal and work calendars
             if "calendar" in routing_result.sources:
-                print("FETCHING CALENDAR DATA (both personal and work)...")
-                from api.services.google_auth import GoogleAccount
+                print("FETCHING CALENDAR DATA (both personal and work, parallel)...")
                 all_events = []
 
                 # v3: Check if we should filter by person (for meeting prep queries)
@@ -409,26 +552,20 @@ async def ask_stream(request: AskStreamRequest):
                         except Exception as e:
                             print(f"  Could not resolve person for calendar filter: {e}")
 
-                for account_type in [GoogleAccount.PERSONAL, GoogleAccount.WORK]:
-                    try:
-                        calendar = CalendarService(account_type)
-                        # Parse date from query
-                        date_ref = extract_date_context(request.question)
-                        if date_ref:
-                            from datetime import datetime
-                            target_date = datetime.strptime(date_ref, "%Y-%m-%d")
-                            events = calendar.get_events_in_range(
-                                target_date,
-                                target_date + timedelta(days=1)
-                            )
-                        else:
-                            # Default to upcoming events
-                            events = calendar.get_upcoming_events(max_results=10)
-
+                # Parallel fetch from both accounts
+                date_ref = extract_date_context(request.question)
+                calendar_results = await asyncio.gather(
+                    _fetch_calendar_account(GoogleAccount.PERSONAL, date_ref),
+                    _fetch_calendar_account(GoogleAccount.WORK, date_ref),
+                    return_exceptions=True
+                )
+                for result in calendar_results:
+                    if isinstance(result, Exception):
+                        print(f"  Calendar fetch error: {result}")
+                    else:
+                        account, events = result
                         all_events.extend(events)
-                        print(f"  Found {len(events)} events from {account_type.value} calendar")
-                    except Exception as e:
-                        print(f"  {account_type.value} calendar error: {e}")
+                        print(f"  Found {len(events)} events from {account} calendar")
 
                 # v3: Filter events by person if specified
                 if person_filter_email or person_filter_name:
@@ -481,8 +618,7 @@ async def ask_stream(request: AskStreamRequest):
 
             # Handle drive queries - query both personal and work accounts
             if "drive" in routing_result.sources:
-                print("FETCHING DRIVE DATA (both personal and work)...")
-                from api.services.google_auth import GoogleAccount
+                print("FETCHING DRIVE DATA (both personal and work, parallel)...")
 
                 # Extract keywords for search
                 keywords = extract_search_keywords(request.question)
@@ -493,31 +629,28 @@ async def ask_stream(request: AskStreamRequest):
                 content_matched_files = []  # Files matching by content
                 seen_file_ids = set()
 
-                for account_type in [GoogleAccount.PERSONAL, GoogleAccount.WORK]:
-                    try:
-                        drive = DriveService(account_type)
-                        if search_term:
-                            # Search by BOTH name and full_text to catch more results
-                            # Name search finds "Nathan/Kevin 1:1 notes" when searching "Kevin"
-                            name_files = drive.search(name=search_term, max_results=5)
-                            content_files = drive.search(full_text=search_term, max_results=5)
-
-                            # Track name matches separately (higher priority for reading content)
-                            for f in name_files:
-                                if f.file_id not in seen_file_ids:
-                                    seen_file_ids.add(f.file_id)
-                                    name_matched_files.append(f)
-
-                            for f in content_files:
-                                if f.file_id not in seen_file_ids:
-                                    seen_file_ids.add(f.file_id)
-                                    content_matched_files.append(f)
-
-                            print(f"  Found {len(name_files)} by name, {len(content_files)} by content from {account_type.value} drive")
-                        else:
-                            pass
-                    except Exception as e:
-                        print(f"  {account_type.value} drive error: {e}")
+                # Parallel fetch from both accounts
+                drive_results = await asyncio.gather(
+                    _fetch_drive_account(GoogleAccount.PERSONAL, search_term),
+                    _fetch_drive_account(GoogleAccount.WORK, search_term),
+                    return_exceptions=True
+                )
+                for result in drive_results:
+                    if isinstance(result, Exception):
+                        print(f"  Drive fetch error: {result}")
+                    else:
+                        account, name_files, content_files = result
+                        # Track name matches separately (higher priority for reading content)
+                        for f in name_files:
+                            if f.file_id not in seen_file_ids:
+                                seen_file_ids.add(f.file_id)
+                                name_matched_files.append(f)
+                        for f in content_files:
+                            if f.file_id not in seen_file_ids:
+                                seen_file_ids.add(f.file_id)
+                                content_matched_files.append(f)
+                        if name_files or content_files:
+                            print(f"  Found {len(name_files)} by name, {len(content_files)} by content from {account} drive")
 
                 # Prioritize name matches first, then content matches
                 all_files = name_matched_files + content_matched_files
@@ -583,8 +716,7 @@ async def ask_stream(request: AskStreamRequest):
 
             # Handle gmail queries - query both personal and work accounts
             if "gmail" in routing_result.sources and "gmail" not in skipped_sources:
-                print("FETCHING GMAIL DATA (both personal and work)...")
-                from api.services.google_auth import GoogleAccount
+                print("FETCHING GMAIL DATA (both personal and work, parallel)...")
                 from api.services.entity_resolver import get_entity_resolver
 
                 # Extract keywords for search
@@ -622,34 +754,20 @@ async def ask_stream(request: AskStreamRequest):
                         is_sent_to = True
                         print(f"  Query is about emails SENT TO {person_name}")
 
+                # Parallel fetch from both accounts
+                gmail_results = await asyncio.gather(
+                    _fetch_gmail_account(GoogleAccount.PERSONAL, person_email, is_sent_to, search_term),
+                    _fetch_gmail_account(GoogleAccount.WORK, person_email, is_sent_to, search_term),
+                    return_exceptions=True
+                )
                 all_messages = []
-                for account_type in [GoogleAccount.PERSONAL, GoogleAccount.WORK]:
-                    try:
-                        gmail = GmailService(account_type)
-                        # Use person email for targeted search
-                        # When we have a resolved email, fetch full body (fewer results since bodies are large)
-                        if person_email:
-                            if is_sent_to:
-                                messages = gmail.search(
-                                    to_email=person_email,
-                                    max_results=5,
-                                    include_body=True
-                                )
-                            else:
-                                messages = gmail.search(
-                                    from_email=person_email,
-                                    max_results=5,
-                                    include_body=True
-                                )
-                            print(f"  Searching {'to' if is_sent_to else 'from'}: {person_email} (with body)")
-                        elif search_term:
-                            messages = gmail.search(keywords=search_term, max_results=5)
-                        else:
-                            messages = gmail.search(max_results=5)  # Recent emails
+                for result in gmail_results:
+                    if isinstance(result, Exception):
+                        print(f"  Gmail fetch error: {result}")
+                    else:
+                        account, messages = result
                         all_messages.extend(messages)
-                        print(f"  Found {len(messages)} emails from {account_type.value} gmail")
-                    except Exception as e:
-                        print(f"  {account_type.value} gmail error: {e}")
+                        print(f"  Found {len(messages)} emails from {account} gmail")
 
                 if all_messages:
                     from zoneinfo import ZoneInfo
@@ -691,51 +809,34 @@ async def ask_stream(request: AskStreamRequest):
 
             # Handle slack queries - search Slack DMs and channels
             if "slack" in routing_result.sources:
-                print("SEARCHING SLACK...")
-                try:
-                    from api.services.slack_indexer import get_slack_indexer
-                    from api.services.slack_integration import is_slack_enabled
+                print("SEARCHING SLACK (async)...")
+                slack_results = await _fetch_slack(request.question, top_k=10)
 
-                    if is_slack_enabled():
-                        slack_indexer = get_slack_indexer()
-                        slack_results = slack_indexer.search(
-                            query=request.question,
-                            top_k=10,
-                        )
+                if slack_results:
+                    slack_text = "\n\n### Slack Messages\n\n"
+                    for msg in slack_results:
+                        channel_name = msg.get("channel_name", "Unknown")
+                        user_name = msg.get("user_name", "Unknown")
+                        timestamp = msg.get("timestamp", "")
+                        content = msg.get("content", "")
 
-                        if slack_results:
-                            slack_text = "\n\n### Slack Messages\n\n"
-                            for msg in slack_results:
-                                channel_name = msg.get("channel_name", "Unknown")
-                                user_name = msg.get("user_name", "Unknown")
-                                timestamp = msg.get("timestamp", "")
-                                content = msg.get("content", "")
+                        # Parse timestamp for display
+                        try:
+                            dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                            date_str = dt.strftime("%Y-%m-%d %H:%M")
+                        except:
+                            date_str = timestamp[:10] if timestamp else ""
 
-                                # Parse timestamp for display
-                                try:
-                                    dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                                    date_str = dt.strftime("%Y-%m-%d %H:%M")
-                                except:
-                                    date_str = timestamp[:10] if timestamp else ""
+                        slack_text += f"**{channel_name}** - {user_name} ({date_str}):\n"
+                        slack_text += f"  {content[:500]}{'...' if len(content) > 500 else ''}\n\n"
 
-                                slack_text += f"**{channel_name}** - {user_name} ({date_str}):\n"
-                                slack_text += f"  {content[:500]}{'...' if len(content) > 500 else ''}\n\n"
-
-                            extra_context.append({"source": "slack", "content": slack_text})
-                            print(f"  Found {len(slack_results)} Slack messages")
-                        else:
-                            print("  No Slack messages found")
-                    else:
-                        print("  Slack not enabled")
-                except Exception as e:
-                    print(f"  Slack search error: {e}")
-                    logger.error(f"Slack search failed: {e}")
+                    extra_context.append({"source": "slack", "content": slack_text})
+                    print(f"  Found {len(slack_results)} Slack messages")
+                else:
+                    print("  No Slack messages found")
 
             # Handle vault queries (always include as fallback)
             if "vault" in routing_result.sources or not routing_result.sources or not extra_context:
-                # Use hybrid search (vector + BM25 keyword) for better keyword matching
-                hybrid_search = HybridSearch()
-
                 # v3: Use adaptive chunk limit based on fetch_depth
                 effective_vault_limit = vault_chunk_limit
 
@@ -743,19 +844,9 @@ async def ask_stream(request: AskStreamRequest):
                 date_filter = extract_date_context(request.question)
                 if date_filter:
                     print(f"DATE CONTEXT DETECTED: {date_filter}")
-                    # For date-filtered queries, use vector store directly
-                    vector_store = VectorStore()
-                    chunks = vector_store.search(
-                        query=request.question,
-                        top_k=effective_vault_limit,
-                        filters={"modified_date": date_filter}
-                    )
-                    # If no results with date filter, fall back to hybrid search
-                    if not chunks:
-                        print("  No results with date filter, falling back to hybrid search")
-                        chunks = hybrid_search.search(query=request.question, top_k=effective_vault_limit)
-                else:
-                    chunks = hybrid_search.search(query=request.question, top_k=effective_vault_limit)
+
+                # Use async vault fetch
+                chunks = await _fetch_vault(request.question, effective_vault_limit, date_filter)
 
                 # Log search results
                 print(f"\nVAULT SEARCH RESULTS (top {len(chunks)}):")
@@ -781,8 +872,6 @@ async def ask_stream(request: AskStreamRequest):
                     print(f"  Extracted person name: {person_name}")
 
                     # Search calendar for person's email (7 days back and forward)
-                    from api.services.google_auth import GoogleAccount
-
                     for account_type in [GoogleAccount.PERSONAL, GoogleAccount.WORK]:
                         try:
                             calendar = CalendarService(account_type)

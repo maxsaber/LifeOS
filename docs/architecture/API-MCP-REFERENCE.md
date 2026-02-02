@@ -265,6 +265,64 @@ Chronological interaction history.
 
 Related people with overlap scores.
 
+**Query Parameters:**
+- `relationship_type` (string): Filter by type (e.g., "coworker")
+- `limit` (int): Max connections to return (default: 50)
+
+**Response:**
+```json
+{
+  "connections": [
+    {
+      "person_id": "uuid",
+      "name": "Alex Johnson",
+      "company": "Acme Corp",
+      "relationship_type": "coworker",
+      "shared_events_count": 42,
+      "shared_threads_count": 5,
+      "shared_messages_count": 0,
+      "shared_whatsapp_count": 0,
+      "shared_slack_count": 0,
+      "relationship_strength": 91.5,
+      "last_seen_together": "2026-02-26T14:00:00"
+    }
+  ],
+  "count": 15
+}
+```
+
+### GET /api/crm/relationship/insights
+
+Get relationship insights and patterns extracted from therapy notes and conversations.
+
+**Query Parameters:**
+- `person_id` (string): Optional, focus on specific person (defaults to primary relationship)
+
+**Response:**
+```json
+{
+  "insights": [
+    {
+      "id": "uuid",
+      "person_id": "uuid",
+      "category": "focus_areas",
+      "text": "Lead with feelings before facts in conflicts",
+      "source_title": "Couples therapy 20260120",
+      "source_link": "obsidian://...",
+      "source_date": "2026-01-20T00:00:00",
+      "confirmed": true,
+      "created_at": "2026-02-01T19:54:45",
+      "category_icon": "📝"
+    }
+  ],
+  "last_generated": "2026-02-01T23:56:20",
+  "confirmed_count": 7,
+  "unconfirmed_count": 33
+}
+```
+
+**Categories:** focus_areas, recurring_themes, relationship_strengths, growth_patterns, for_me, for_taylor, ai_suggestions
+
 ### GET /api/crm/people/{id}/strength-breakdown
 
 Detailed relationship strength components.
@@ -697,6 +755,8 @@ claude mcp add lifeos -s user -- python /path/to/LifeOS/mcp_server.py
 | `lifeos_person_profile` | GET /api/crm/people/{id} | Full CRM profile |
 | `lifeos_person_facts` | GET /api/crm/people/{id}/facts | Extracted facts |
 | `lifeos_person_timeline` | GET /api/crm/people/{id}/timeline | Interaction history |
+| `lifeos_person_connections` | GET /api/crm/people/{id}/connections | Who someone works with |
+| `lifeos_relationship_insights` | GET /api/crm/relationship/insights | Relationship patterns |
 | `lifeos_communication_gaps` | GET /api/crm/family/communication-gaps | Find neglected relationships |
 | `lifeos_memories_create` | POST /api/memories | Save memory |
 | `lifeos_memories_search` | GET /api/memories/search | Search memories |

@@ -72,6 +72,8 @@ Claude Code  ←→  MCP Protocol  ←→  mcp_server.py  ←→  LifeOS API
 | `lifeos_person_profile` | Get full CRM profile for a person |
 | `lifeos_person_facts` | Get extracted facts about a person |
 | `lifeos_person_timeline` | Get chronological interaction history |
+| `lifeos_person_connections` | Get who someone works with/knows |
+| `lifeos_relationship_insights` | Get relationship patterns and observations |
 | `lifeos_communication_gaps` | Find neglected relationships |
 
 ### Memory & Admin Tools
@@ -325,6 +327,30 @@ Identify people you haven't contacted recently. Requires person_ids from lifeos_
 | min_gap_days | integer | No | Minimum gap to report (default: 14) |
 
 **Returns:** Communication gaps with duration, plus per-person summaries showing days_since_contact and average_gap_days.
+
+### lifeos_person_connections
+
+Get people connected to a person through shared meetings, emails, messages, and LinkedIn.
+
+**Parameters:**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| person_id | string | Yes | Entity ID from lifeos_people_search |
+| relationship_type | string | No | Filter by type (e.g., "coworker") |
+| limit | integer | No | Max results (default: 50) |
+
+**Returns:** List of connected people with shared_events_count, shared_threads_count, shared_messages_count, relationship_strength, and last_seen_together.
+
+### lifeos_relationship_insights
+
+Get relationship insights and patterns extracted from therapy notes and conversations.
+
+**Parameters:**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| person_id | string | No | Focus on specific person (defaults to primary relationship) |
+
+**Returns:** Insights grouped by category (focus_areas, recurring_themes, relationship_strengths, growth_patterns, ai_suggestions) with text, source_title, source_link, and confirmed status.
 
 ---
 

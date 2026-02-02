@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 # Valid data sources
 VALID_SOURCES = {"vault", "calendar", "gmail", "drive", "people", "actions", "slack"}
 
+# Minimum relationship strength to be considered "strong" for disambiguation
+DISAMBIGUATION_STRENGTH_THRESHOLD = 0.3
+
 # Fetch depth limits for context retrieval
 # Maps fetch_depth -> (email_char_limit, vault_chunks, message_limit)
 FETCH_DEPTH_LIMITS = {
@@ -162,24 +165,68 @@ class QueryRouter:
         - message_count: Total messages
         - primary_channel: Most used channel
 
-        Returns None if person not found.
+        If resolution fails, may return dict with resolution_failed=True
+        containing disambiguation candidates or fuzzy suggestions.
+
+        Returns None only on errors.
         """
         try:
             from api.services.entity_resolver import get_entity_resolver
             from api.services.relationship_summary import get_relationship_summary
+            from api.services.person_entity_store import get_person_entity_store
 
             resolver = get_entity_resolver()
             result = resolver.resolve(name=person_name)
+
             if not result or not result.entity:
+                # No match - try to get suggestions
+                suggestions = self._get_fuzzy_suggestions(person_name)
+                if suggestions:
+                    return {
+                        "resolution_failed": True,
+                        "failure_type": "no_match",
+                        "query_name": person_name,
+                        "suggestions": suggestions,
+                    }
                 logger.debug(f"Could not resolve person: {person_name}")
                 return None
 
             entity = result.entity
+
+            # Check for ambiguous matches (multiple strong candidates with similar names)
+            if result.confidence and result.confidence < 0.9:
+                # Look for other potential matches
+                store = get_person_entity_store()
+                candidates = store.search(name=person_name, limit=10)
+                strong_matches = [
+                    p for p in candidates
+                    if p.relationship_strength >= DISAMBIGUATION_STRENGTH_THRESHOLD * 100
+                    and self._names_match(person_name, p.canonical_name)
+                ]
+
+                if len(strong_matches) > 1:
+                    # Multiple strong matches - return disambiguation options
+                    return {
+                        "resolution_failed": True,
+                        "failure_type": "ambiguous",
+                        "query_name": person_name,
+                        "candidates": [
+                            {
+                                "id": p.id,
+                                "name": p.canonical_name,
+                                "strength": p.relationship_strength,
+                                "context": self._get_disambiguation_context(p),
+                            }
+                            for p in strong_matches[:5]  # Max 5 options
+                        ],
+                    }
+
             summary = get_relationship_summary(entity.id)
             if not summary:
                 # Return basic context even without relationship summary
                 return {
                     "entity_id": entity.id,
+                    "person_name": entity.canonical_name,
                     "relationship_strength": entity.relationship_strength,
                     "active_channels": [],
                     "email_count": entity.email_count,
@@ -189,6 +236,7 @@ class QueryRouter:
 
             return {
                 "entity_id": entity.id,
+                "person_name": entity.canonical_name,
                 "relationship_strength": summary.relationship_strength,
                 "active_channels": summary.active_channels,
                 "email_count": entity.email_count,
@@ -201,6 +249,56 @@ class QueryRouter:
         except Exception as e:
             logger.warning(f"Failed to fetch CRM context for {person_name}: {e}")
             return None
+
+    def _names_match(self, query: str, candidate: str) -> bool:
+        """Check if names are similar enough to be the same person."""
+        from rapidfuzz import fuzz
+        q_lower = query.lower()
+        c_lower = candidate.lower()
+        # Exact match, starts with query, or high fuzzy match
+        return (
+            c_lower == q_lower
+            or c_lower.startswith(q_lower)
+            or q_lower in c_lower.split()
+            or fuzz.ratio(q_lower, c_lower) >= 85
+        )
+
+    def _get_disambiguation_context(self, person) -> str:
+        """Get contextual info to help distinguish this person."""
+        parts = []
+        if person.company:
+            parts.append(person.company)
+        if person.category:
+            parts.append(person.category)
+        if person.emails:
+            # Show domain of first email
+            email = person.emails[0]
+            domain = email.split("@")[-1] if "@" in email else None
+            if domain and domain not in ["gmail.com", "yahoo.com", "hotmail.com", "icloud.com"]:
+                parts.append(domain)
+        return " · ".join(parts) if parts else "No additional context"
+
+    def _get_fuzzy_suggestions(self, name: str, threshold: int = 70) -> list[str]:
+        """Get fuzzy name suggestions from CRM."""
+        try:
+            from api.services.person_entity_store import get_person_entity_store
+            from rapidfuzz import fuzz
+
+            store = get_person_entity_store()
+            # Get top people by interaction count for suggestions
+            people = store.list_all(limit=200)
+
+            matches = []
+            for person in people:
+                score = fuzz.ratio(name.lower(), person.canonical_name.lower())
+                if score >= threshold:
+                    matches.append((person.canonical_name, score))
+
+            matches.sort(key=lambda x: x[1], reverse=True)
+            return [m[0] for m in matches[:3]]
+        except Exception as e:
+            logger.warning(f"Failed to get fuzzy suggestions: {e}")
+            return []
 
     def _determine_fetch_depth(
         self,
