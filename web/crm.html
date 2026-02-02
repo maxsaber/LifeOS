@@ -8409,10 +8409,11 @@
             // (headerIndicators already declared above)
             const detailTabs = document.querySelector('.detail-tabs');
             // Restore original header indicators content (strength ring, dunbar circle)
+            // But keep them hidden for /me page
             if (headerIndicators && originalHeaderIndicatorsHtml !== null) {
                 headerIndicators.innerHTML = originalHeaderIndicatorsHtml;
             }
-            if (headerIndicators) headerIndicators.style.display = '';
+            if (headerIndicators) headerIndicators.style.display = isMePage ? 'none' : '';
             if (detailTabs) {
                 detailTabs.style.display = '';
                 // Restore Graph tab that family view hides
