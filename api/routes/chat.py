@@ -301,11 +301,28 @@ async def ask_stream(request: AskStreamRequest):
                     print("Could not extract draft params, falling through to normal flow")
 
             # Expand follow-up queries with conversation context
+            # v3: Use enhanced conversation context for better follow-up handling
+            from api.services.conversation_context import (
+                extract_context_from_history,
+                expand_followup_with_context,
+            )
             query_for_routing = request.question
+            conv_context = None
             if conversation_history:
+                # First try the legacy expansion
                 query_for_routing = expand_followup_query(request.question, conversation_history)
                 if query_for_routing != request.question:
-                    print(f"Expanded query: '{request.question}' -> '{query_for_routing}'")
+                    print(f"Expanded query (legacy): '{request.question}' -> '{query_for_routing}'")
+                else:
+                    # Try enhanced context-based expansion
+                    conv_context = extract_context_from_history(conversation_history)
+                    if conv_context.has_person_context():
+                        query_for_routing = expand_followup_with_context(
+                            request.question,
+                            conv_context
+                        )
+                        if query_for_routing != request.question:
+                            print(f"Expanded query (context): '{request.question}' -> '{query_for_routing}'")
 
             # Route query to determine sources
             query_router = QueryRouter()
@@ -342,12 +359,55 @@ async def ask_stream(request: AskStreamRequest):
             # Get relevant data based on routing
             chunks = []
             extra_context = []  # For calendar/drive/gmail results
+            skipped_sources = []  # Track sources skipped due to sparse data
+
+            # v3: Determine adaptive limits based on fetch_depth
+            from api.services.query_router import FETCH_DEPTH_LIMITS
+            depth_limits = FETCH_DEPTH_LIMITS.get(routing_result.fetch_depth, FETCH_DEPTH_LIMITS["normal"])
+            email_char_limit = depth_limits["email_char_limit"]
+            vault_chunk_limit = depth_limits["vault_chunks"]
+            message_limit = depth_limits["message_limit"]
+            print(f"  Fetch depth: {routing_result.fetch_depth} -> limits: email={email_char_limit}, vault={vault_chunk_limit}, msgs={message_limit}")
+
+            # v3: Smart source skipping based on relationship context
+            rel_ctx = routing_result.relationship_context
+            if rel_ctx:
+                active_channels = rel_ctx.get("active_channels", [])
+                email_count = rel_ctx.get("email_count", 0)
+                message_count = rel_ctx.get("message_count", 0)
+
+                # Skip gmail if no email history with this person
+                if "gmail" in routing_result.sources and email_count < 3:
+                    if "gmail" not in active_channels:
+                        skipped_sources.append("gmail")
+                        print(f"  Skipping gmail (only {email_count} emails, not active)")
+
+                # Note: Don't skip slack here - it's not in relationship_context channels yet
 
             # Handle calendar queries - ALWAYS query both personal and work calendars
             if "calendar" in routing_result.sources:
                 print("FETCHING CALENDAR DATA (both personal and work)...")
                 from api.services.google_auth import GoogleAccount
                 all_events = []
+
+                # v3: Check if we should filter by person (for meeting prep queries)
+                person_filter_email = None
+                person_filter_name = routing_result.extracted_person_name
+                if person_filter_name and routing_result.relationship_context:
+                    # Check if query is about meeting prep with specific person
+                    query_lower = request.question.lower()
+                    prep_patterns = ["prep", "meeting with", "1:1 with", "call with"]
+                    if any(p in query_lower for p in prep_patterns):
+                        # Try to get email from CRM context for filtering
+                        try:
+                            from api.services.entity_resolver import get_entity_resolver
+                            resolver = get_entity_resolver()
+                            result = resolver.resolve(name=person_filter_name)
+                            if result and result.entity and result.entity.emails:
+                                person_filter_email = result.entity.emails[0]
+                                print(f"  Person filter: {person_filter_name} ({person_filter_email})")
+                        except Exception as e:
+                            print(f"  Could not resolve person for calendar filter: {e}")
 
                 for account_type in [GoogleAccount.PERSONAL, GoogleAccount.WORK]:
                     try:
@@ -369,6 +429,28 @@ async def ask_stream(request: AskStreamRequest):
                         print(f"  Found {len(events)} events from {account_type.value} calendar")
                     except Exception as e:
                         print(f"  {account_type.value} calendar error: {e}")
+
+                # v3: Filter events by person if specified
+                if person_filter_email or person_filter_name:
+                    filtered_events = []
+                    for event in all_events:
+                        # Check if person is an attendee
+                        attendee_match = False
+                        for attendee in event.attendees:
+                            if person_filter_email and person_filter_email.lower() in attendee.lower():
+                                attendee_match = True
+                                break
+                            if person_filter_name and person_filter_name.lower() in attendee.lower():
+                                attendee_match = True
+                                break
+                        # Also check title
+                        if person_filter_name and person_filter_name.lower() in event.title.lower():
+                            attendee_match = True
+                        if attendee_match:
+                            filtered_events.append(event)
+                    if filtered_events:
+                        print(f"  Filtered to {len(filtered_events)} events with {person_filter_name}")
+                        all_events = filtered_events
 
                 # Sort all events by start time
                 all_events.sort(key=lambda e: e.start_time)
@@ -500,7 +582,7 @@ async def ask_stream(request: AskStreamRequest):
                     print(f"  Total: {len(all_files)} drive files, {files_with_content} with initial content")
 
             # Handle gmail queries - query both personal and work accounts
-            if "gmail" in routing_result.sources:
+            if "gmail" in routing_result.sources and "gmail" not in skipped_sources:
                 print("FETCHING GMAIL DATA (both personal and work)...")
                 from api.services.google_auth import GoogleAccount
                 from api.services.entity_resolver import get_entity_resolver
@@ -598,9 +680,9 @@ async def ask_stream(request: AskStreamRequest):
                         if date_str:
                             email_text += f"  Date: {date_str}\n"
                         # Show full body if available, otherwise snippet
+                        # v3: Use adaptive limit based on fetch_depth
                         if body:
-                            # Limit body to prevent context overflow
-                            body_preview = body[:2000] + "..." if len(body) > 2000 else body
+                            body_preview = body[:email_char_limit] + "..." if len(body) > email_char_limit else body
                             email_text += f"  Body:\n{body_preview}\n"
                         elif snippet:
                             email_text += f"  Preview: {snippet[:200]}...\n"
@@ -654,6 +736,9 @@ async def ask_stream(request: AskStreamRequest):
                 # Use hybrid search (vector + BM25 keyword) for better keyword matching
                 hybrid_search = HybridSearch()
 
+                # v3: Use adaptive chunk limit based on fetch_depth
+                effective_vault_limit = vault_chunk_limit
+
                 # Check for date context in query
                 date_filter = extract_date_context(request.question)
                 if date_filter:
@@ -662,15 +747,15 @@ async def ask_stream(request: AskStreamRequest):
                     vector_store = VectorStore()
                     chunks = vector_store.search(
                         query=request.question,
-                        top_k=10,
+                        top_k=effective_vault_limit,
                         filters={"modified_date": date_filter}
                     )
                     # If no results with date filter, fall back to hybrid search
                     if not chunks:
                         print("  No results with date filter, falling back to hybrid search")
-                        chunks = hybrid_search.search(query=request.question, top_k=10)
+                        chunks = hybrid_search.search(query=request.question, top_k=effective_vault_limit)
                 else:
-                    chunks = hybrid_search.search(query=request.question, top_k=10)
+                    chunks = hybrid_search.search(query=request.question, top_k=effective_vault_limit)
 
                 # Log search results
                 print(f"\nVAULT SEARCH RESULTS (top {len(chunks)}):")
@@ -782,29 +867,19 @@ async def ask_stream(request: AskStreamRequest):
                             else:
                                 print(f"  Querying messages: dates={start_date} to {end_date}, search={search_term}")
 
-                            # v3: Adaptive fetch depth based on relationship strength
-                            # Closer relationships (higher strength) get more context
-                            rel_strength = relationship_summary.relationship_strength if relationship_summary else 0
+                            # v3: Use message_limit from fetch_depth (set at top of function)
+                            # Explicit queries override with full context
+                            effective_message_limit = message_limit
                             if start_date or search_term:
-                                # Explicit queries get full context
-                                message_limit = 200
-                            elif rel_strength >= 70:
-                                # Close relationship - deep context
-                                message_limit = 150
-                            elif rel_strength >= 40:
-                                # Moderate relationship
-                                message_limit = 100
-                            else:
-                                # Distant contact - less context needed
-                                message_limit = 50
-                            print(f"  Adaptive fetch: strength={rel_strength:.0f} -> limit={message_limit}")
+                                effective_message_limit = 200  # Explicit queries get full context
+                            print(f"  Message limit: {effective_message_limit} (depth={routing_result.fetch_depth})")
 
                             msg_result = query_person_messages(
                                 entity_id=entity_id,
                                 search_term=search_term,
                                 start_date=effective_start,
                                 end_date=effective_end,
-                                limit=message_limit,
+                                limit=effective_message_limit,
                             )
 
                             if msg_result["count"] > 0:
@@ -1068,16 +1143,23 @@ Please continue your response, incorporating this additional information. Do NOT
                             yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
                         await asyncio.sleep(0)
 
-            # Save assistant response
+            # Save assistant response with enhanced routing metadata
+            routing_metadata = {
+                "sources": effective_sources,
+                "reasoning": routing_result.reasoning,
+                "fetch_depth": routing_result.fetch_depth,
+            }
+            if skipped_sources:
+                routing_metadata["skipped_sources"] = skipped_sources
+            if routing_result.extracted_person_name:
+                routing_metadata["person"] = routing_result.extracted_person_name
+
             store.add_message(
                 conversation_id,
                 "assistant",
                 full_response,
                 sources=sources,
-                routing={
-                    "sources": effective_sources,
-                    "reasoning": routing_result.reasoning
-                }
+                routing=routing_metadata
             )
             print(f"Saved assistant response ({len(full_response)} chars)")
 

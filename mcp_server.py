@@ -197,6 +197,100 @@ USE INSTEAD OF lifeos_people_search when you need:
 - Full relationship context""",
         "method": "GET"
     },
+    "/api/crm/people/{person_id}/timeline": {
+        "name": "lifeos_person_timeline",
+        "description": """Get chronological interaction timeline for a person.
+
+WHEN TO USE:
+- "Catch me up on Kevin" → See recent interactions in chronological order
+- "What's been happening with Sarah?" → Timeline of all touchpoints
+- "When did I last talk to Mike?" → Find last interaction
+
+WHAT IT RETURNS:
+- items: Chronological list of interactions (newest first)
+- Each item includes:
+  - source_type: "gmail", "imessage", "calendar", "slack", "vault", etc.
+  - timestamp: When it happened
+  - summary: Brief description of the interaction
+  - metadata: Source-specific details (subject, attendees, etc.)
+
+PARAMETERS:
+- person_id (required): entity_id from lifeos_people_search
+- days_back (optional): How far back to look (default: 365, max: 3650)
+- source_type (optional): Filter by source (e.g., "imessage", "gmail,slack")
+- limit (optional): Max results (default: 50)
+
+EXAMPLE WORKFLOW:
+1. lifeos_people_search("Kevin") → get entity_id
+2. lifeos_person_timeline(entity_id, days_back=30) → recent interactions
+3. Summarize what's been happening""",
+        "method": "GET"
+    },
+    "/api/calendar/meeting-prep": {
+        "name": "lifeos_meeting_prep",
+        "description": """Get intelligent meeting preparation context for a date.
+
+WHEN TO USE:
+- "Prep me for my meetings today" → Get context for all meetings
+- "What do I need to know for my 1:1 with Sarah?" → Context for specific meeting
+- "What meetings do I have tomorrow and what should I prepare?" → Planning ahead
+
+WHAT IT RETURNS for each meeting:
+- Meeting details: title, time, attendees, location, description
+- related_notes: Relevant vault notes including:
+  - People notes for attendees
+  - Past meeting notes from similar recurring meetings
+  - Topic-related notes mentioning attendees or subjects
+- attachments: Any files attached to the calendar event
+- agenda_summary: Brief description if available
+
+PARAMETERS:
+- date (optional): Date in YYYY-MM-DD format (defaults to today)
+- include_all_day (optional): Include all-day events (default: false)
+- max_related_notes (optional): Max notes per meeting (default: 4)
+
+RETURNS:
+- date: The date queried
+- meetings: List of meetings with prep context
+- count: Number of meetings
+
+USE THIS when preparing for meetings instead of separate calendar + vault searches.""",
+        "method": "GET"
+    },
+    "/api/crm/family/communication-gaps": {
+        "name": "lifeos_communication_gaps",
+        "description": """Identify people you haven't contacted recently.
+
+WHEN TO USE:
+- "Who should I reach out to?" → Find neglected relationships
+- "Who haven't I talked to in a while?" → Communication gaps
+- "Which family members need a call?" → Family check-in suggestions
+
+WHAT IT RETURNS:
+- gaps: List of significant communication gaps with:
+  - person_id, person_name
+  - gap_start, gap_end: The period of no contact
+  - gap_days: How long the gap was
+- person_summaries: For each person:
+  - days_since_last_contact
+  - average_gap_days: Their typical communication frequency
+  - longest_gap_days: Their longest ever gap
+  - current_gap_days: Current time since contact
+
+PARAMETERS:
+- person_ids (required): Comma-separated person IDs to analyze
+- days_back (optional): History to analyze (default: 365)
+- min_gap_days (optional): Minimum gap to report (default: 14)
+
+WORKFLOW:
+1. Get family member IDs from lifeos_people_search
+2. Call this with those IDs to find who needs attention
+3. Suggest reaching out to those with unusually long gaps
+
+NOTE: This tool requires person_ids parameter. First use lifeos_people_search
+to find people, then pass their entity_ids here.""",
+        "method": "GET"
+    },
 }
 
 
@@ -436,6 +530,33 @@ class LifeOSMCPServer:
                     "person_id": {"type": "string", "description": "The person's entity_id from lifeos_people_search"}
                 },
                 "required": ["person_id"]
+            },
+            "lifeos_person_timeline": {
+                "type": "object",
+                "properties": {
+                    "person_id": {"type": "string", "description": "The person's entity_id from lifeos_people_search"},
+                    "days_back": {"type": "integer", "description": "Days of history to include (default: 365)", "default": 365},
+                    "source_type": {"type": "string", "description": "Filter by source type (e.g., 'imessage', 'gmail,slack')"},
+                    "limit": {"type": "integer", "description": "Max results (default: 50)", "default": 50}
+                },
+                "required": ["person_id"]
+            },
+            "lifeos_meeting_prep": {
+                "type": "object",
+                "properties": {
+                    "date": {"type": "string", "description": "Date in YYYY-MM-DD format (defaults to today)"},
+                    "include_all_day": {"type": "boolean", "description": "Include all-day events", "default": False},
+                    "max_related_notes": {"type": "integer", "description": "Max related notes per meeting (1-10)", "default": 4}
+                }
+            },
+            "lifeos_communication_gaps": {
+                "type": "object",
+                "properties": {
+                    "person_ids": {"type": "string", "description": "Comma-separated person IDs to analyze"},
+                    "days_back": {"type": "integer", "description": "Days of history to analyze (default: 365)", "default": 365},
+                    "min_gap_days": {"type": "integer", "description": "Minimum gap to report in days (default: 14)", "default": 14}
+                },
+                "required": ["person_ids"]
             }
         }
 
@@ -712,6 +833,103 @@ class LifeOSMCPServer:
             mention_count = data.get("mention_count", 0)
             if meeting_count or email_count or mention_count:
                 text += f"\n**Interactions:** {meeting_count} meetings, {email_count} emails, {mention_count} mentions\n"
+            return text
+
+        elif tool_name == "lifeos_person_timeline":
+            items = data.get("items", [])
+            total = data.get("total_count", len(items))
+            if not items:
+                return "No interactions found for this person."
+            text = f"Found {total} interactions:\n\n"
+            for item in items[:30]:  # Limit display
+                source = item.get("source_type", "unknown")
+                timestamp = item.get("timestamp", "")[:16].replace("T", " ")
+                summary = item.get("summary", "")[:200]
+                # Use emoji for source type
+                emoji = {
+                    "gmail": "📧",
+                    "imessage": "💬",
+                    "whatsapp": "💬",
+                    "calendar": "📅",
+                    "slack": "💼",
+                    "vault": "📝",
+                    "granola": "📝",
+                }.get(source, "•")
+                text += f"{emoji} **{timestamp}** [{source}]\n"
+                text += f"   {summary}\n\n"
+            if total > 30:
+                text += f"\n_... and {total - 30} more interactions_\n"
+            return text
+
+        elif tool_name == "lifeos_meeting_prep":
+            meetings = data.get("meetings", [])
+            date = data.get("date", "")
+            if not meetings:
+                return f"No meetings found for {date}."
+            text = f"**Meeting Prep for {date}** ({len(meetings)} meetings)\n\n"
+            for m in meetings:
+                text += f"### {m.get('title', 'Untitled')}\n"
+                text += f"**Time:** {m.get('start_time', '')} - {m.get('end_time', '')}\n"
+                if attendees := m.get("attendees"):
+                    text += f"**With:** {', '.join(attendees[:5])}"
+                    if len(attendees) > 5:
+                        text += f" (+{len(attendees) - 5} more)"
+                    text += "\n"
+                if location := m.get("location"):
+                    text += f"**Location:** {location}\n"
+                if description := m.get("description"):
+                    text += f"**Description:** {description}\n"
+                # Related notes
+                if related := m.get("related_notes"):
+                    text += "\n**Related Notes:**\n"
+                    for note in related:
+                        relevance = note.get("relevance", "")
+                        title = note.get("title", "")
+                        relevance_emoji = {
+                            "attendee": "👤",
+                            "past_meeting": "📅",
+                            "topic": "📄",
+                        }.get(relevance, "•")
+                        text += f"  {relevance_emoji} {title}"
+                        if note.get("date"):
+                            text += f" ({note['date']})"
+                        text += "\n"
+                # Attachments
+                if attachments := m.get("attachments"):
+                    text += "\n**Attachments:**\n"
+                    for att in attachments:
+                        text += f"  📎 [{att.get('title', 'File')}]({att.get('url', '')})\n"
+                text += "\n---\n\n"
+            return text
+
+        elif tool_name == "lifeos_communication_gaps":
+            gaps = data.get("gaps", [])
+            summaries = data.get("person_summaries", [])
+            if not summaries:
+                return "No communication data found for these people."
+            text = "## Communication Gap Analysis\n\n"
+            # Show person summaries first
+            text += "### Overview\n"
+            for s in summaries:
+                name = s.get("person_name", "Unknown")
+                days = s.get("days_since_last_contact", 999)
+                avg = s.get("average_gap_days", 0)
+                current = s.get("current_gap_days", 0)
+                # Flag if current gap is significantly longer than average
+                alert = "⚠️ " if current > avg * 1.5 and current > 14 else ""
+                text += f"- **{name}**: {alert}{days} days since contact"
+                if avg:
+                    text += f" (avg gap: {avg:.0f} days)"
+                text += "\n"
+            # Show significant gaps
+            if gaps:
+                text += "\n### Significant Gaps\n"
+                for g in gaps[:10]:
+                    name = g.get("person_name", "Unknown")
+                    gap_days = g.get("gap_days", 0)
+                    start = g.get("gap_start", "")[:10]
+                    end = g.get("gap_end", "")[:10]
+                    text += f"- **{name}**: {gap_days} days ({start} to {end})\n"
             return text
 
         # Default: return formatted JSON

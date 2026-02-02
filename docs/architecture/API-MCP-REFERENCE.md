@@ -88,6 +88,46 @@ Search calendar events.
 - `q` (string): Search query
 - `attendee` (string): Filter by attendee
 
+### GET /api/calendar/meeting-prep
+
+Get intelligent meeting preparation context for a date.
+
+**Query Parameters:**
+- `date` (string): Date in YYYY-MM-DD format (defaults to today)
+- `include_all_day` (bool): Include all-day events (default: false)
+- `max_related_notes` (int): Max notes per meeting (1-10, default: 4)
+
+**Response:**
+```json
+{
+  "date": "2026-02-03",
+  "count": 5,
+  "meetings": [
+    {
+      "event_id": "...",
+      "title": "1:1 with Kevin",
+      "start_time": "10:00 AM",
+      "end_time": "10:30 AM",
+      "attendees": ["kevin@example.com"],
+      "related_notes": [
+        {
+          "title": "Kevin",
+          "path": "/path/to/People/Kevin.md",
+          "relevance": "attendee"
+        },
+        {
+          "title": "1:1 with Kevin 20260127",
+          "path": "/path/to/Meetings/...",
+          "relevance": "past_meeting",
+          "date": "2026-01-27"
+        }
+      ],
+      "attachments": []
+    }
+  ]
+}
+```
+
 ### GET /api/gmail/search
 
 Search emails.
@@ -647,12 +687,17 @@ claude mcp add lifeos -s user -- python /path/to/LifeOS/mcp_server.py
 | `lifeos_search` | POST /api/search | Raw search results |
 | `lifeos_calendar_upcoming` | GET /api/calendar/upcoming | Upcoming events |
 | `lifeos_calendar_search` | GET /api/calendar/search | Search events |
+| `lifeos_meeting_prep` | GET /api/calendar/meeting-prep | Meeting prep context |
 | `lifeos_gmail_search` | GET /api/gmail/search | Search emails |
 | `lifeos_gmail_draft` | POST /api/gmail/drafts | Create draft |
 | `lifeos_drive_search` | GET /api/drive/search | Search Drive |
 | `lifeos_imessage_search` | GET /api/imessage/search | Search messages |
 | `lifeos_slack_search` | POST /api/slack/search | Search Slack |
-| `lifeos_people_search` | GET /api/people/search | Search people |
+| `lifeos_people_search` | GET /api/crm/people | Search people |
+| `lifeos_person_profile` | GET /api/crm/people/{id} | Full CRM profile |
+| `lifeos_person_facts` | GET /api/crm/people/{id}/facts | Extracted facts |
+| `lifeos_person_timeline` | GET /api/crm/people/{id}/timeline | Interaction history |
+| `lifeos_communication_gaps` | GET /api/crm/family/communication-gaps | Find neglected relationships |
 | `lifeos_memories_create` | POST /api/memories | Save memory |
 | `lifeos_memories_search` | GET /api/memories/search | Search memories |
 | `lifeos_conversations_list` | GET /api/conversations | List chats |

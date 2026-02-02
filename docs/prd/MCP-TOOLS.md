@@ -43,18 +43,40 @@ Claude Code  ←→  MCP Protocol  ←→  mcp_server.py  ←→  LifeOS API
 
 ## Available Tools
 
+### Core Tools
 | Tool | Description |
 |------|-------------|
 | `lifeos_ask` | Query knowledge base with synthesized answer |
 | `lifeos_search` | Search vault without synthesis (raw results) |
+
+### Calendar & Meeting Tools
+| Tool | Description |
+|------|-------------|
 | `lifeos_calendar_upcoming` | Get upcoming calendar events |
 | `lifeos_calendar_search` | Search calendar events |
+| `lifeos_meeting_prep` | Get meeting prep context with related notes |
+
+### Communication Tools
+| Tool | Description |
+|------|-------------|
 | `lifeos_gmail_search` | Search emails (includes body for top 5) |
 | `lifeos_gmail_draft` | Create Gmail draft |
 | `lifeos_drive_search` | Search Google Drive files |
 | `lifeos_imessage_search` | Search iMessage/SMS history |
 | `lifeos_slack_search` | Semantic search Slack messages |
+
+### People & CRM Tools
+| Tool | Description |
+|------|-------------|
 | `lifeos_people_search` | Search people in network |
+| `lifeos_person_profile` | Get full CRM profile for a person |
+| `lifeos_person_facts` | Get extracted facts about a person |
+| `lifeos_person_timeline` | Get chronological interaction history |
+| `lifeos_communication_gaps` | Find neglected relationships |
+
+### Memory & Admin Tools
+| Tool | Description |
+|------|-------------|
 | `lifeos_memories_create` | Save a memory |
 | `lifeos_memories_search` | Search saved memories |
 | `lifeos_conversations_list` | List chat conversations |
@@ -241,6 +263,68 @@ List recent chat conversations.
 Check if all LifeOS services are healthy.
 
 **Parameters:** None
+
+### lifeos_person_profile
+
+Get comprehensive CRM profile for a person including all contact info, relationship metrics, and user annotations.
+
+**Parameters:**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| person_id | string | Yes | Entity ID from lifeos_people_search |
+
+**Returns:** Full profile with emails, phones, company, relationship_strength, tags, notes, and interaction counts.
+
+### lifeos_person_facts
+
+Get extracted facts about a person (auto-extracted from interactions).
+
+**Parameters:**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| person_id | string | Yes | Entity ID from lifeos_people_search |
+
+**Returns:** Facts organized by category (work, personal, preferences, etc.) with confidence scores.
+
+### lifeos_person_timeline
+
+Get chronological interaction history for a person. Use for "catch me up on [person]" queries.
+
+**Parameters:**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| person_id | string | Yes | Entity ID from lifeos_people_search |
+| days_back | integer | No | Days of history (default: 365) |
+| source_type | string | No | Filter by source (e.g., "imessage", "gmail,slack") |
+| limit | integer | No | Max results (default: 50) |
+
+**Returns:** Chronological list of interactions with source type, timestamp, and summary.
+
+### lifeos_meeting_prep
+
+Get intelligent meeting preparation context for a date.
+
+**Parameters:**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| date | string | No | Date in YYYY-MM-DD format (default: today) |
+| include_all_day | boolean | No | Include all-day events (default: false) |
+| max_related_notes | integer | No | Max notes per meeting (1-10, default: 4) |
+
+**Returns:** For each meeting: title, time, attendees, related_notes (people notes, past meetings, topic notes), and attachments.
+
+### lifeos_communication_gaps
+
+Identify people you haven't contacted recently. Requires person_ids from lifeos_people_search.
+
+**Parameters:**
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| person_ids | string | Yes | Comma-separated person IDs |
+| days_back | integer | No | Days of history to analyze (default: 365) |
+| min_gap_days | integer | No | Minimum gap to report (default: 14) |
+
+**Returns:** Communication gaps with duration, plus per-person summaries showing days_since_contact and average_gap_days.
 
 ---
 
