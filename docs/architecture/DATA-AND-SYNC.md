@@ -34,6 +34,7 @@ How LifeOS ingests, stores, and resolves data from multiple sources.
 | Slack | Slack API (OAuth) | User profiles, DMs, channels |
 | Vault Notes | Obsidian markdown | Name mentions, context paths |
 | LinkedIn | CSV Import | Connections, companies, titles |
+| LinkedIn Profiles | Browser Scraping | Full profile data (experience, education, skills) |
 | Granola | Folder watcher | Meeting transcripts, attendees |
 
 ### Current Data Volume
@@ -325,7 +326,7 @@ Where:
 - diversity = source_types_with_interactions / 6
 ```
 
-### Manual Overrides (Strength & Circle)
+### Manual Overrides (Strength, Circle & Tags)
 
 Some relationships require manual overrides that persist through sync cycles. These are configured by **person ID** (not name) for durability.
 
@@ -335,16 +336,17 @@ Some relationships require manual overrides that persist through sync cycles. Th
 # Strength overrides - force specific relationship_strength values
 STRENGTH_OVERRIDES_BY_ID = {
     "cb93e7bd-036c-4ef5-adb9-34a9147c4984": 100.0,  # Taylor Walker
-    "23b9aca8-8817-494a-a13e-7d7799f9b282": 100.0,  # Malea Ramia
-    "3f41e143-719f-4dc9-a9f1-389b2db5b166": 100.0,  # Nathan Ramia (self)
-    "04bf94f8-20b7-4285-abb4-c64131b5542f": 90.0,   # Thy Nguyen
 }
 
 # Circle overrides - force specific Dunbar circle assignments
 CIRCLE_OVERRIDES_BY_ID = {
     "cb93e7bd-036c-4ef5-adb9-34a9147c4984": 0,  # Taylor Walker
-    "23b9aca8-8817-494a-a13e-7d7799f9b282": 0,  # Malea Ramia
-    "3f41e143-719f-4dc9-a9f1-389b2db5b166": 0,  # Nathan Ramia (self)
+}
+
+# Tag overrides - apply tags from LinkedIn data extraction
+# Format: industry:X, seniority:X, state:XX, city:X
+TAG_OVERRIDES_BY_ID = {
+    "cb93e7bd-036c-4ef5-adb9-34a9147c4984": ["city:oakland", "state:ca", "industry:tech", "seniority:executive"],
 }
 ```
 
@@ -355,13 +357,15 @@ CIRCLE_OVERRIDES_BY_ID = {
 | `STRENGTH_OVERRIDES_BY_ID` | `api/services/relationship_metrics.py` | Dunbar circle computation (sorting) |
 | `STRENGTH_OVERRIDES_BY_ID` | `api/routes/crm.py` | API responses (display strength) |
 | `CIRCLE_OVERRIDES_BY_ID` | `api/services/relationship_metrics.py` | `compute_all_dunbar_circles()` |
+| `TAG_OVERRIDES_BY_ID` | `api/services/relationship_metrics.py` | `apply_tag_overrides()` |
 
 **How It Works:**
 
 1. **Strength overrides** affect both the displayed `relationship_strength` in API responses AND the sorting order when computing Dunbar circles
 2. **Circle overrides** force specific people into specific circles regardless of their ranking
-3. Both use **person IDs** (UUIDs) as keys, not names, so renames don't break overrides
-4. Overrides are respected during nightly sync when `sync_strengths.py` runs
+3. **Tag overrides** apply tags (industry, seniority, location) extracted from LinkedIn profiles
+4. All use **person IDs** (UUIDs) as keys, not names, so renames don't break overrides
+5. Overrides are applied during nightly sync via `update_all_strengths()`
 
 **Important:** To find a person's ID, use the API: `GET /api/crm/people?search=name`
 
@@ -538,3 +542,125 @@ The unified sync runner (`run_all_syncs.py`) executes in this order:
 - Service: `com.lifeos.crm-sync`
 - Schedule: Daily at 3:00 AM
 - Script: `scripts/run_all_syncs.py`
+
+---
+
+## Utilities
+
+**Memory Monitor** (`api/utils/memory_monitor.py`): For long-running scripts, use `MemoryMonitor` or `check_memory()` to gracefully stop before OOM crashes.
+
+---
+
+## LinkedIn Profile Scraping
+
+### Overview
+
+In addition to the daily LinkedIn CSV sync, there is a **profile scraping system** for extracting detailed profile data (experience, education, skills, about sections) from LinkedIn profiles using browser automation.
+
+**Scripts:**
+- `scripts/scrape_linkedin_profiles.py` - Phase 1: Browser automation to save HTML
+- `scripts/extract_linkedin_data.py` - Phase 2: Parse saved HTML to extract structured data
+- `scripts/enrich_linkedin_jobs.py` - Post-processing: Classify jobs by industry/seniority
+
+**Data Files:**
+- `data/linkedin_extracted.json` - Final structured profile data (238 profiles as of Feb 2026)
+- `data/linkedin_scrape_state.json` - Progress tracking (completed/pending profiles)
+- `data/linkedin_profiles/` - Raw HTML files (if saved)
+- `data/linkedin_photos/` - Profile photos (if downloaded)
+
+### Data Schema
+
+The extracted data follows this schema:
+
+```json
+{
+  "metadata": {
+    "extracted_at": "ISO timestamp",
+    "total_profiles": 238,
+    "source": "LinkedIn profile scraping via Claude in Chrome",
+    "schema_version": "1.7",
+    "notes": "Scraped Feb 2026. 264 profiles attempted, 238 successfully extracted."
+  },
+  "profiles": [
+    {
+      "person_id": "UUID from PersonEntity",
+      "linkedin_url": "https://linkedin.com/in/username",
+      "scraped_at": "ISO timestamp",
+      "name": "Full Name",
+      "headline": "Current title",
+      "location": "Oakland, California",
+      "city": "Oakland",
+      "state": "CA",
+      "pronouns": "they/them",
+      "about": "About section text",
+      "experience": [{
+        "company": "Company Name",
+        "title": "Job Title",
+        "start_month": 1,
+        "start_year": 2022,
+        "end_month": null,
+        "end_year": null,
+        "duration_months": 25,
+        "location": "San Francisco, California",
+        "city": "San Francisco",
+        "state": "CA",
+        "description": "Job description",
+        "industry": "Tech",
+        "seniority": "Senior"
+      }],
+      "education": [{
+        "institution": "University Name",
+        "degree": "Bachelor of Science",
+        "field": "Computer Science",
+        "graduation_year": "2018",
+        "activities": "Student government",
+        "description": "Additional notes"
+      }],
+      "skills": ["Python", "Leadership"],
+      "certifications": [],
+      "languages": [],
+      "volunteering": [],
+      "honors": [],
+      "publications": [],
+      "organizations": [],
+      "causes": []
+    }
+  ]
+}
+```
+
+### Data Normalization Rules
+
+**Location fields:**
+- `location`: Original location string with ", United States" removed
+- `city`: Simplified city name (e.g., "San Francisco Bay Area" → "San Francisco")
+- `state`: 2-letter US state abbreviation (e.g., "CA", "NY", "DC")
+- Washington D.C. is always normalized to: city=`"Washington, D.C."`, state=`"DC"`
+
+**Date/duration fields:**
+- `start_month`: Integer 1-12, or null if only year known
+- `start_year`: Integer (e.g., 2022)
+- `end_month`: Integer 1-12, or null for current positions
+- `end_year`: Integer, or null for current positions (null end_month + null end_year = "Present")
+- `duration_months`: Integer number of months (e.g., 25 for 2 years 1 month)
+
+### Industry & Seniority Classification
+
+Jobs are classified with:
+- **Industry** (18 values): Consulting, Education, Energy, Entertainment, Finance, Government, Healthcare, Legal, Logistics, Media, Military, Non-profit, Other, Politics, Real Estate, Religious, Retail, Tech
+- **Seniority** (4 values): Executive, Senior, Mid-level, Entry
+
+Classification is done by Claude during scraping based on job titles and company names.
+
+### Running the Scraper
+
+The scraping system uses Claude in Chrome MCP for browser automation. It requires:
+1. An authenticated LinkedIn session in Chrome
+2. Claude in Chrome extension installed and running
+
+**Warning:** LinkedIn may restrict accounts that scrape too quickly. The system includes random delays (8-15 seconds) between profiles, but extended scraping sessions may still trigger rate limiting.
+
+**To resume scraping (if needed):**
+1. Check `data/linkedin_scrape_state.json` for pending profiles
+2. Use Claude in Chrome to navigate to profiles and extract data
+3. Follow the schema above for consistency
