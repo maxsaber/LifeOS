@@ -598,6 +598,22 @@ def _person_to_detail_response(
 # Endpoints
 
 
+@router.get("/birthdays/today")
+async def get_todays_birthdays():
+    """Get all people with birthdays today."""
+    person_store = get_person_entity_store()
+    people = person_store.get_all()
+
+    today_mm_dd = datetime.now().strftime("%m-%d")
+    birthday_people = [
+        _person_to_detail_response(p, include_related=False)
+        for p in people
+        if p.birthday == today_mm_dd
+    ]
+
+    return {"birthdays": birthday_people, "count": len(birthday_people)}
+
+
 @router.get("/people", response_model=PersonListResponse)
 async def list_people(
     q: Optional[str] = Query(default=None, description="Search query"),

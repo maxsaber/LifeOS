@@ -202,6 +202,8 @@ API endpoints to get full person detail and interaction timeline.
 }
 ```
 
+> **Birthday Notifications:** When contacts have birthdays matching today's date, a dismissible toast banner appears on CRM page load. The toast shows once per day (tracked via localStorage). See `GET /api/crm/birthdays/today` endpoint in `api/routes/crm.py` and toast UI in `web/crm.html`.
+
 **Endpoint:** `GET /api/crm/people/{id}/timeline`
 
 **Query Parameters:**

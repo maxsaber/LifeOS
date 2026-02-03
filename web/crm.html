@@ -2211,6 +2211,46 @@
             margin-left: 0.5rem;
         }
 
+        /* Photo groups in timeline */
+        .photo-group-header {
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .photo-group-toggle {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            transition: transform 0.2s;
+        }
+        .photo-group-details {
+            margin-top: 0.75rem;
+            padding-left: 1rem;
+            border-left: 2px solid var(--border);
+        }
+        .photo-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .photo-card:last-child {
+            border-bottom: none;
+        }
+        .photo-time {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+        }
+        .photo-open-btn {
+            color: var(--people);
+            text-decoration: none;
+            font-size: 0.8rem;
+        }
+        .photo-open-btn:hover {
+            text-decoration: underline;
+        }
+
         /* Graph visualization */
         .graph-controls {
             display: flex;
@@ -5848,6 +5888,66 @@
             padding: 1rem;
             margin: 0.5rem 0;
         }
+
+        /* Birthday Toast Notification */
+        .birthday-toast {
+            position: fixed;
+            top: calc(var(--safe-top) + var(--header-height));
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+            border-bottom: 1px solid var(--people);
+            padding: 0.75rem 1rem;
+            z-index: 999;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-100%); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .birthday-toast-content {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .birthday-toast-icon {
+            font-size: 1.25rem;
+        }
+
+        .birthday-toast-message {
+            font-size: 0.875rem;
+            color: var(--text-primary);
+        }
+
+        .birthday-toast-message a {
+            color: var(--people);
+            text-decoration: none;
+        }
+
+        .birthday-toast-message a:hover {
+            text-decoration: underline;
+        }
+
+        .birthday-toast-dismiss {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.25rem;
+            cursor: pointer;
+            padding: 0.25rem;
+            line-height: 1;
+        }
+
+        .birthday-toast-dismiss:hover {
+            color: var(--text-primary);
+        }
     </style>
 </head>
 <body>
@@ -5871,6 +5971,15 @@
             </div>
         </div>
     </header>
+
+    <!-- Birthday Toast Notification -->
+    <div class="birthday-toast" id="birthdayToast" style="display: none;">
+        <div class="birthday-toast-content">
+            <span class="birthday-toast-icon">🎂</span>
+            <span class="birthday-toast-message" id="birthdayToastMessage"></span>
+        </div>
+        <button class="birthday-toast-dismiss" onclick="dismissBirthdayToast()" title="Dismiss">×</button>
+    </div>
 
     <div class="main-container">
         <div class="people-list-panel">
@@ -7465,6 +7574,9 @@
                 return;
             }
 
+            // Check for birthdays today (non-blocking)
+            checkAndShowBirthdayToast();
+
             // Check URL early to show special dashboards immediately (don't wait for loadPeople)
             const { personId, tab, isFamily, isRelationship } = parseUrl();
 
@@ -8863,6 +8975,56 @@
             updateFilter('filterSlack', slackCount);
             updateFilter('filterNotes', notesCount);
             updateFilter('filterPhotos', photosCount);
+        }
+
+        // Birthday toast - check and show once per day
+        async function checkAndShowBirthdayToast() {
+            // Check if already dismissed today
+            const today = new Date().toISOString().split('T')[0];
+            if (localStorage.getItem(`birthdayToastDismissed_${today}`)) {
+                return;
+            }
+
+            try {
+                const data = await api('/birthdays/today');
+                if (data.birthdays && data.birthdays.length > 0) {
+                    showBirthdayToast(data.birthdays);
+                }
+            } catch (error) {
+                console.warn('Failed to check birthdays:', error);
+            }
+        }
+
+        function showBirthdayToast(birthdays) {
+            const toast = document.getElementById('birthdayToast');
+            const message = document.getElementById('birthdayToastMessage');
+
+            // Build message with clickable names
+            const names = birthdays.map(p =>
+                `<a href="/crm?person=${p.id}">${escapeHtml(p.canonical_name)}</a>`
+            );
+
+            let text;
+            if (names.length === 1) {
+                text = `Happy birthday to ${names[0]}!`;
+            } else if (names.length === 2) {
+                text = `Happy birthday to ${names[0]} and ${names[1]}!`;
+            } else {
+                const last = names.pop();
+                text = `Happy birthday to ${names.join(', ')}, and ${last}!`;
+            }
+
+            message.innerHTML = text;
+            toast.style.display = 'flex';
+        }
+
+        function dismissBirthdayToast() {
+            const toast = document.getElementById('birthdayToast');
+            toast.style.display = 'none';
+
+            // Mark as dismissed for today
+            const today = new Date().toISOString().split('T')[0];
+            localStorage.setItem(`birthdayToastDismissed_${today}`, 'true');
         }
 
         // Render strength ring (circular progress indicator in header)
@@ -13290,6 +13452,106 @@
         let timelineDateRangeTo = null;
 
         /**
+         * Group consecutive photos by date for collapsed display.
+         * Non-photo items pass through unchanged.
+         */
+        function groupPhotosInTimeline(items) {
+            const result = [];
+            let photoGroup = null;
+
+            for (const item of items) {
+                if (item.source_type === 'photos') {
+                    const date = item.timestamp.split('T')[0];
+                    if (photoGroup && photoGroup.date === date) {
+                        photoGroup.items.push(item);
+                    } else {
+                        if (photoGroup) result.push(photoGroup);
+                        photoGroup = { type: 'photo_group', date, items: [item] };
+                    }
+                } else {
+                    if (photoGroup) {
+                        result.push(photoGroup);
+                        photoGroup = null;
+                    }
+                    result.push(item);
+                }
+            }
+            if (photoGroup) result.push(photoGroup);
+            return result;
+        }
+
+        /**
+         * Render a photo group (collapsed by default).
+         */
+        function renderPhotoGroup(group) {
+            const count = group.items.length;
+            const id = `photo-group-${group.date}`;
+            return `
+                <div class="timeline-item timeline-photo-group" id="${id}">
+                    <div class="timeline-badge">📷</div>
+                    <div class="timeline-content">
+                        <div class="timeline-title photo-group-header" onclick="togglePhotoGroup('${id}', '${group.date}')">
+                            ${count} photo${count > 1 ? 's' : ''}
+                            <span class="photo-group-toggle">▸</span>
+                        </div>
+                        <div class="timeline-meta">${formatDate(group.items[0].timestamp)}</div>
+                        <div class="photo-group-details" style="display: none;"></div>
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * Toggle expand/collapse of a photo group.
+         * Loads photo details from API on first expand.
+         */
+        async function togglePhotoGroup(groupId, date) {
+            const group = document.getElementById(groupId);
+            if (!group) return;
+
+            const details = group.querySelector('.photo-group-details');
+            const toggle = group.querySelector('.photo-group-toggle');
+
+            if (details.style.display === 'none') {
+                // Expand - load photo details if not already loaded
+                if (!details.dataset.loaded) {
+                    details.innerHTML = '<div class="photo-card">Loading...</div>';
+                    try {
+                        // Use fetch directly since photos API is at /api/photos, not /api/crm
+                        const response = await fetch(`/api/photos/person/${selectedPersonId}?date=${date}`);
+                        if (!response.ok) throw new Error(`API error: ${response.status}`);
+                        const data = await response.json();
+                        details.innerHTML = data.photos.map(p => `
+                            <div class="photo-card">
+                                <span class="photo-time">${formatTime(p.timestamp)}</span>
+                                <a href="${p.source_link}" target="_blank" class="photo-open-btn">Open in Photos</a>
+                            </div>
+                        `).join('') || '<div class="photo-card">No photos found</div>';
+                        details.dataset.loaded = 'true';
+                    } catch (err) {
+                        console.error('Failed to load photos:', err);
+                        details.innerHTML = '<div class="photo-card">Failed to load photos</div>';
+                    }
+                }
+                details.style.display = 'block';
+                toggle.textContent = '▾';
+            } else {
+                // Collapse
+                details.style.display = 'none';
+                toggle.textContent = '▸';
+            }
+        }
+
+        /**
+         * Format time from ISO timestamp (e.g., "2:30 PM").
+         */
+        function formatTime(timestamp) {
+            if (!timestamp) return '';
+            const date = new Date(timestamp);
+            return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+        }
+
+        /**
          * Render the timeline items to the DOM.
          *
          * NOTE: Source type filtering is handled by the API in loadTimeline().
@@ -13329,8 +13591,16 @@
                 return;
             }
 
-            container.innerHTML = items.map(item => {
-                // Check if snippet is duplicate of title (common for iMessage, WhatsApp)
+            // Group photos by date for collapsed display
+            const groupedItems = groupPhotosInTimeline(items);
+
+            container.innerHTML = groupedItems.map(item => {
+                // Photo groups render differently
+                if (item.type === 'photo_group') {
+                    return renderPhotoGroup(item);
+                }
+
+                // Regular timeline items
                 const title = item.title || '';
                 const snippet = item.snippet || '';
                 const isDuplicate = snippet && (
