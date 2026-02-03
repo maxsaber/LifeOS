@@ -120,6 +120,13 @@ SYNC_SOURCES = {
         "phase": 3,
         "depends_on": ["person_stats"],
     },
+    "push_birthdays": {
+        "description": "Push LifeOS birthdays to Apple Contacts",
+        "script": "scripts/push_birthdays_to_contacts.py",
+        "frequency": "daily",
+        "phase": 3,
+        "depends_on": ["contacts"],  # Run after contacts are synced
+    },
 
     # === Phase 4: Vector Store Indexing ===
     "vault_reindex": {
