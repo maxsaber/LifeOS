@@ -35,6 +35,7 @@ class PersonResponse(BaseModel):
     linkedin_url: Optional[str] = None
     display_name: Optional[str] = None
     aliases: Optional[list[str]] = None
+    birthday: Optional[str] = None  # ISO format date string
     # Relationship context fields (for smart routing)
     relationship_strength: float = 0.0  # 0-100 scale
     active_channels: list[str] = []  # Channels with activity in last 7 days
@@ -116,6 +117,7 @@ def _entity_to_response(entity, include_channels: bool = True) -> PersonResponse
         linkedin_url=entity.linkedin_url,
         display_name=entity.display_name,
         aliases=entity.aliases,
+        birthday=entity.birthday.isoformat() if entity.birthday else None,
         # Relationship context - strength comes from entity directly
         relationship_strength=entity.relationship_strength,
     )

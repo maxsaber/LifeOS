@@ -81,6 +81,7 @@ class PersonEntity:
     tags: list[str] = field(default_factory=list)  # User-defined tags
     notes: str = ""  # User notes about the person
     source_entity_count: int = 0  # Count of linked SourceEntity records
+    birthday: Optional[datetime] = None  # Birthday (month/day, year may be placeholder)
 
     # Hidden person (soft delete)
     # When hidden=True, person is excluded from search/list results and their
@@ -266,6 +267,9 @@ class PersonEntity:
         # Source entity count: sum
         source_entity_count = self.source_entity_count + other.source_entity_count
 
+        # Birthday: prefer self, then other
+        birthday = self.birthday or other.birthday
+
         return PersonEntity(
             id=self.id,  # Keep original ID
             canonical_name=self.canonical_name,
@@ -291,6 +295,7 @@ class PersonEntity:
             tags=tags,
             notes=notes,
             source_entity_count=source_entity_count,
+            birthday=birthday,
         )
 
     def to_dict(self) -> dict:
@@ -303,6 +308,8 @@ class PersonEntity:
             data["last_seen"] = self.last_seen.isoformat()
         if self.hidden_at:
             data["hidden_at"] = self.hidden_at.isoformat()
+        if self.birthday:
+            data["birthday"] = self.birthday.isoformat()
         # Remove private fields (they start with _)
         data.pop("_relationship_strength", None)
         # Add computed relationship_strength if available
@@ -323,6 +330,9 @@ class PersonEntity:
         if data.get("hidden_at") and isinstance(data["hidden_at"], str):
             dt = datetime.fromisoformat(data["hidden_at"])
             data["hidden_at"] = _make_aware(dt)
+        if data.get("birthday") and isinstance(data["birthday"], str):
+            dt = datetime.fromisoformat(data["birthday"])
+            data["birthday"] = _make_aware(dt)
         # Handle relationship_strength -> _relationship_strength
         if "relationship_strength" in data:
             data["_relationship_strength"] = data.pop("relationship_strength")
@@ -338,6 +348,8 @@ class PersonEntity:
         # Handle peripheral contact fields (default to not peripheral, no circle)
         data.setdefault("is_peripheral_contact", False)
         data.setdefault("dunbar_circle", None)
+        # Handle birthday field (default to None)
+        data.setdefault("birthday", None)
         return cls(**data)
 
     @classmethod

@@ -60,6 +60,7 @@ def sync_apple_contacts(dry_run: bool = True) -> dict:
         'persons_linked': 0,
         'persons_created': 0,
         'persons_updated': 0,
+        'birthdays_synced': 0,
         'skipped': 0,
         'errors': 0,
     }
@@ -188,6 +189,12 @@ def sync_apple_contacts(dry_run: bool = True) -> dict:
                     person.sources.append('contacts')
                     person_updated = True
 
+                # Update birthday if contact has one and person doesn't
+                if contact.birthday and not person.birthday:
+                    person.birthday = contact.birthday
+                    person_updated = True
+                    stats['birthdays_synced'] += 1
+
                 # Update source_entity_count
                 new_count = source_store.count_for_person(person.id)
                 if person.source_entity_count != new_count:
@@ -218,6 +225,7 @@ def sync_apple_contacts(dry_run: bool = True) -> dict:
     logger.info(f"Persons linked: {stats['persons_linked']}")
     logger.info(f"Persons created: {stats['persons_created']}")
     logger.info(f"Persons updated: {stats['persons_updated']}")
+    logger.info(f"Birthdays synced: {stats['birthdays_synced']}")
     logger.info(f"Skipped: {stats['skipped']}")
     logger.info(f"Errors: {stats['errors']}")
 
