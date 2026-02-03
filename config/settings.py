@@ -112,12 +112,19 @@ class Settings(BaseSettings):
         description="Path to Photos Library"
     )
 
-    # ML Colleagues for Granola meeting note processing
-    ml_colleagues: list[str] = Field(
-        default=[],
-        alias="LIFEOS_ML_COLLEAGUES",
-        description="Colleague first names for meeting note extraction (comma-separated in env)"
+    # Current colleagues for Granola meeting note processing (comma-separated)
+    current_colleagues_raw: str = Field(
+        default="",
+        alias="LIFEOS_CURRENT_COLLEAGUES",
+        description="Colleague first names for 1-1 meeting detection (comma-separated)"
     )
+
+    @property
+    def current_colleagues(self) -> list[str]:
+        """Parse comma-separated colleagues into list."""
+        if not self.current_colleagues_raw:
+            return []
+        return [x.strip() for x in self.current_colleagues_raw.split(",") if x.strip()]
 
     # Personal relationship patterns for Granola meeting routing
     # Regex patterns (pipe-separated) to match meeting titles for routing to Personal/Relationship

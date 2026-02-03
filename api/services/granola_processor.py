@@ -126,18 +126,18 @@ def _build_classification_rules() -> list[dict]:
     return rules
 
 
-# Known ML people for 1-1 detection
+# Known colleagues for 1-1 detection
 # Load from settings if configured, otherwise use empty list
-def _get_ml_people() -> list[str]:
-    """Get ML colleagues from settings."""
+def _get_current_colleagues() -> list[str]:
+    """Get current colleagues from settings."""
     try:
         from config.settings import settings
-        return settings.ml_colleagues if settings.ml_colleagues else []
+        return settings.current_colleagues if settings.current_colleagues else []
     except Exception:
         return []
 
 
-ML_PEOPLE = _get_ml_people()
+CURRENT_COLLEAGUES = _get_current_colleagues()
 EFFECTIVE_CLASSIFICATION_RULES = _build_classification_rules()
 
 
@@ -238,7 +238,7 @@ class GranolaProcessor:
                     return rule["destination"], rule["tags"], rationale
 
         # 2. Check for 1-1 meetings with ML people (based on filename)
-        for person in ML_PEOPLE:
+        for person in CURRENT_COLLEAGUES:
             person_lower = person.lower()
             patterns = [
                 rf"{person_lower}.*nathan",
@@ -274,7 +274,7 @@ class GranolaProcessor:
     def extract_people(self, content: str) -> list[str]:
         """Extract people mentions from content."""
         people_found = []
-        for person in ML_PEOPLE:
+        for person in CURRENT_COLLEAGUES:
             if re.search(rf"\b{person}\b", content, re.IGNORECASE):
                 people_found.append(person)
         return list(set(people_found))
