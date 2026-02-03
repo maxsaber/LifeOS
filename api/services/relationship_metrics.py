@@ -505,8 +505,8 @@ def apply_tag_overrides(store=None) -> dict:
     Apply tag overrides from TAG_OVERRIDES_BY_ID to all matching people.
 
     This ensures tags defined in config/relationship_weights.py are applied
-    and persist across syncs. Tags are replaced (not merged) to ensure the
-    override is authoritative.
+    and persist across syncs. Override tags are ADDED to existing tags (merged),
+    preserving any user-added tags.
 
     Args:
         store: PersonEntityStore instance (optional, will get if not provided)
@@ -520,11 +520,16 @@ def apply_tag_overrides(store=None) -> dict:
     applied = 0
     not_found = 0
 
-    for person_id, tags in TAG_OVERRIDES_BY_ID.items():
+    for person_id, override_tags in TAG_OVERRIDES_BY_ID.items():
         person = store.get_by_id(person_id)
         if person:
-            if person.tags != tags:
-                person.tags = tags
+            # Merge: existing tags + any missing override tags
+            existing_set = set(person.tags)
+            override_set = set(override_tags)
+            if not override_set.issubset(existing_set):
+                # Add missing override tags while preserving existing ones
+                merged_tags = list(existing_set | override_set)
+                person.tags = merged_tags
                 store.update(person)
                 applied += 1
         else:
