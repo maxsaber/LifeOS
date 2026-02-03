@@ -92,7 +92,7 @@ class TestSearchEndpoint:
         """Should filter by people."""
         response = client.post("/api/search", json={
             "query": "meeting",
-            "filters": {"people": ["Yoni"]}
+            "filters": {"people": ["Alex"]}
         })
         assert response.status_code == 200
 

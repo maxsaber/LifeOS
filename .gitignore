@@ -41,10 +41,14 @@ token-*.json
 
 # Personal configuration
 config/people_dictionary.json
-config/launchd/com.lifeos.api.plist
 config/relationship_overrides.json
 config/family_members.json
 config/linkedin_tags.json
+config/crm_mappings.yaml
+
+# Launchd plist files (use .plist.template to create)
+config/launchd/*.plist
+!config/launchd/*.plist.template
 
 # Logs
 *.log
@@ -69,8 +73,22 @@ vault/
 # Playwright MCP
 .playwright-mcp/
 
-# Data exports in archive
-docs/archive/*.csv
+# Archive folders (personal migration scripts and old docs)
+scripts/archive/
+tests/archive/
+docs/archive/
+docs/plans/archive/
 
 # Temp test files
 tests/test_p91_*.py
+
+# Test result files with personal data
+tests/qualitative_tests.md
+tests/qualitative_tests_v2.md
+
+# Test production fixtures (use examples in tests/fixtures/*.example)
+tests/fixtures/production_test_data.py
+
+# Date-prefixed documentation (personal development notes)
+docs/2026-*.md
+docs/plans/2026-*.md

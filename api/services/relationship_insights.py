@@ -94,7 +94,7 @@ class RelationshipInsight:
     in the relationship dashboard. Each insight can be confirmed to persist.
     """
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
-    person_id: str = ""  # Taylor Walker's ID
+    person_id: str = ""  # Partner's ID (from config/family_members.json)
     category: str = ""  # focus_areas, growth_patterns, recurring_themes, action_items, relationship_strengths
     text: str = ""  # The insight text
     source_title: str = ""  # Note title for attribution
@@ -325,7 +325,7 @@ class RelationshipInsightGenerator:
         Parse date from note title in yyyymmdd format.
 
         Examples:
-        - "Couples Therapy Erica Turner 20260115" -> 2026-01-15
+        - "Couples Therapy Erica Turner 20230115" -> 2023-01-15
         - "Amy Morgan therapy 20251230" -> 2025-12-30
         """
         # Look for 8-digit date at start of title
@@ -650,7 +650,7 @@ Return ONLY valid JSON (no markdown, no explanation):
     {{
       "category": "{category}",
       "text": "Specific insight text here",
-      "source_title": {"\"20260115 Couples Therapy with Erica\"" if category != "ai_suggestions" else "null"}
+      "source_title": {"\"20230115 Couples Therapy with Erica\"" if category != "ai_suggestions" else "null"}
     }}
   ]
 }}
@@ -700,12 +700,12 @@ Return ONLY valid JSON (no markdown, no explanation):
     {{
       "category": "for_me",
       "text": "Taylor asked for more proactive communication about plans - let her know schedule changes before they happen",
-      "source_title": "20260115 Couples Therapy with Erica"
+      "source_title": "20230115 Couples Therapy with Erica"
     }},
     {{
       "category": "for_taylor",
       "text": "Nathan asked for space to decompress after work before diving into heavy topics",
-      "source_title": "20260115 Couples Therapy with Erica"
+      "source_title": "20230115 Couples Therapy with Erica"
     }},
     {{
       "category": "ai_suggestions",

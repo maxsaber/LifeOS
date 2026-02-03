@@ -424,6 +424,17 @@ def _parse_sync_output(output: str) -> dict:
     return stats
 
 
+def backup_interactions():
+    """Create interactions backup before sync operations."""
+    from api.services.interaction_store import InteractionStore
+    logger.info("Creating pre-sync interactions backup...")
+    store = InteractionStore()
+    backup_path = store.create_backup()
+    if backup_path:
+        logger.info(f"Interactions backup: {backup_path}")
+    return backup_path
+
+
 def run_all_syncs(
     sources: list[str] = None,
     dry_run: bool = False,
@@ -441,6 +452,11 @@ def run_all_syncs(
 
     logger.info(f"Starting sync run for {len(sources)} sources...")
     logger.info(f"Log file: {log_file}")
+
+    # Create interactions backup before any syncs
+    # (person entities backup happens automatically on save)
+    if not dry_run:
+        backup_interactions()
 
     for source in sources:
         if source not in SYNC_SOURCES:

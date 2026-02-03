@@ -92,22 +92,53 @@ CLASSIFICATION_RULES = [
         "destination": "Work/ML/People/Union",
         "tags": ["meeting", "work", "ml"]
     },
-    {
-        "name": "personal_relationship",
-        "patterns": [
-            r"\bTaylor\b", r"\bMalea\b", r"\bMalia\b"
-        ],
-        "destination": "Personal/Relationship",
-        "tags": ["meeting", "personal", "relationship"]
-    }
 ]
 
+
+def _get_personal_relationship_rule() -> Optional[dict]:
+    """Build personal relationship rule from settings if configured."""
+    try:
+        from config.settings import settings
+        if settings.personal_relationship_patterns:
+            patterns = [
+                rf"\b{p}\b" for p in settings.personal_relationship_patterns.split("|")
+            ]
+            return {
+                "name": "personal_relationship",
+                "patterns": patterns,
+                "destination": "Personal/Relationship",
+                "tags": ["meeting", "personal", "relationship"]
+            }
+    except Exception:
+        pass
+    return None
+
+
+def _build_classification_rules() -> list[dict]:
+    """Build classification rules, including config-based patterns."""
+    rules = list(CLASSIFICATION_RULES)  # Copy static rules
+
+    # Add personal relationship rule if configured
+    personal_rule = _get_personal_relationship_rule()
+    if personal_rule:
+        rules.append(personal_rule)
+
+    return rules
+
+
 # Known ML people for 1-1 detection
-ML_PEOPLE = [
-    "Yoni", "Madi", "Madeline", "Maddie", "Haley", "Hayley", "Kevin", "Brandon", "Tamara",
-    "Peter", "Zoe", "Zoë", "Kellie", "Kelly", "Kelli", "Jay", "Josh", "Mike", "Tonya",
-    "James", "Oscar", "Dayne", "Dane"
-]
+# Load from settings if configured, otherwise use empty list
+def _get_ml_people() -> list[str]:
+    """Get ML colleagues from settings."""
+    try:
+        from config.settings import settings
+        return settings.ml_colleagues if settings.ml_colleagues else []
+    except Exception:
+        return []
+
+
+ML_PEOPLE = _get_ml_people()
+EFFECTIVE_CLASSIFICATION_RULES = _build_classification_rules()
 
 
 class GranolaProcessor:
@@ -227,7 +258,7 @@ class GranolaProcessor:
                     )
 
         # 3. Check content-based classification rules
-        for rule in CLASSIFICATION_RULES:
+        for rule in EFFECTIVE_CLASSIFICATION_RULES:
             for pattern in rule["patterns"]:
                 if re.search(pattern, content_lower, re.IGNORECASE):
                     rationale = f"Content matched '{pattern}' for category '{rule['name']}'"

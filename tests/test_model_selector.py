@@ -18,7 +18,7 @@ class TestComplexityClassification:
 
         simple_queries = [
             "What time is my next meeting?",
-            "When is my 1-1 with Yoni?",
+            "When is my 1-1 with Alex?",
             "Who is Kevin?",
             "Where is the budget file?",
             "List my action items",
@@ -40,7 +40,7 @@ class TestComplexityClassification:
             "Explain what happened in the team meeting",
             "What did we discuss about the product roadmap?",
             "Tell me about the ML infrastructure plans",
-            "Describe the recent conversation with Yoni",
+            "Describe the recent conversation with Alex",
         ]
 
         for query in standard_queries:

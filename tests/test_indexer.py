@@ -46,7 +46,7 @@ This is a test note about budget planning.
             (vault_path / "test2.md").write_text("""---
 tags: [meeting]
 type: meeting
-people: [Yoni]
+people: [Alex]
 ---
 
 # Meeting Notes
@@ -111,7 +111,7 @@ type: meeting
 
 ## Attendees
 - Nathan
-- Yoni
+- Alex
 
 ## Updates
 Everyone shared their progress.

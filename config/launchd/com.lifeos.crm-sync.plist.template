@@ -1,5 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LifeOS CRM Sync launchd configuration template.
+
+  To use:
+  1. Copy this file to com.lifeos.crm-sync.plist
+  2. Replace __HOME__ with your home directory path
+  3. Replace __LIFEOS_PATH__ with your LifeOS project path
+  4. Copy to ~/Library/LaunchAgents/
+  5. Run: launchctl load ~/Library/LaunchAgents/com.lifeos.crm-sync.plist
+-->
 <plist version="1.0">
 <dict>
     <key>Label</key>
@@ -7,22 +17,22 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/nathanramia/Documents/Code/LifeOS/.venv/bin/python</string>
-        <string>/Users/nathanramia/Documents/Code/LifeOS/scripts/run_all_syncs.py</string>
+        <string>__LIFEOS_PATH__/.venv/bin/python</string>
+        <string>__LIFEOS_PATH__/scripts/run_all_syncs.py</string>
         <string>--force</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/nathanramia/Documents/Code/LifeOS</string>
+    <string>__LIFEOS_PATH__</string>
 
     <key>EnvironmentVariables</key>
     <dict>
         <key>HOME</key>
-        <string>/Users/nathanramia</string>
+        <string>__HOME__</string>
         <key>PATH</key>
-        <string>/Users/nathanramia/Documents/Code/LifeOS/.venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>__LIFEOS_PATH__/.venv/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
         <key>PYTHONPATH</key>
-        <string>/Users/nathanramia/Documents/Code/LifeOS</string>
+        <string>__LIFEOS_PATH__</string>
     </dict>
 
     <!-- Run in Aqua session for better permissions (iMessage, Contacts access) -->
@@ -44,9 +54,9 @@
 
     <!-- Log files -->
     <key>StandardOutPath</key>
-    <string>/Users/nathanramia/Documents/Code/LifeOS/logs/crm-sync.log</string>
+    <string>__LIFEOS_PATH__/logs/crm-sync.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/nathanramia/Documents/Code/LifeOS/logs/crm-sync-error.log</string>
+    <string>__LIFEOS_PATH__/logs/crm-sync-error.log</string>
 
     <!-- Don't restart on failure (will retry next day) -->
     <key>KeepAlive</key>

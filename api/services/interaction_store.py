@@ -805,6 +805,44 @@ class InteractionStore:
         finally:
             conn.close()
 
+    def create_backup(self) -> Optional[Path]:
+        """
+        Create a backup of interactions.db.
+
+        Uses LIFEOS_BACKUP_PATH from settings.
+        Keeps only 2 most recent backups.
+
+        Returns:
+            Path to backup file if created, None if no db to backup
+        """
+        import shutil
+
+        db_path = Path(self.db_path)
+        if not db_path.exists():
+            logger.warning("No interactions.db to backup")
+            return None
+
+        backup_dir = Path(settings.backup_path)
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = backup_dir / f"interactions.db.{timestamp}.backup"
+
+        try:
+            shutil.copy2(db_path, backup_path)
+            logger.info(f"Created interactions backup: {backup_path}")
+
+            # Keep only 2 most recent backups
+            backups = sorted(backup_dir.glob("interactions.db.*.backup"))
+            for old_backup in backups[:-2]:
+                old_backup.unlink()
+                logger.debug(f"Removed old backup: {old_backup}")
+
+            return backup_path
+        except Exception as e:
+            logger.error(f"Failed to create backup: {e}")
+            return None
+
     def get_statistics(self) -> dict:
         """Get aggregate statistics about stored interactions."""
         conn = self._get_connection()
@@ -876,7 +914,7 @@ class InteractionStore:
         conn = self._get_connection()
         try:
             # Handle specific date filter (overrides start/end range)
-            # Note: Timestamps in DB are ISO format (e.g., 2026-02-24T16:00:00-05:00)
+            # Note: Timestamps in DB are ISO format (e.g., 2023-02-24T16:00:00-05:00)
             # Use simple date comparison which works with ISO strings
             if specific_date:
                 # For single date: timestamp >= 'YYYY-MM-DD' AND timestamp < next day

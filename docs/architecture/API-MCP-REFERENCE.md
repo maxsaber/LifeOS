@@ -58,8 +58,8 @@ Vector similarity search across indexed content.
   "filters": {
     "note_type": ["meeting"],
     "people": ["John"],
-    "date_from": "2026-01-01",
-    "date_to": "2026-01-31"
+    "date_from": "2023-01-01",
+    "date_to": "2023-01-31"
   },
   "top_k": 20
 }
@@ -100,7 +100,7 @@ Get intelligent meeting preparation context for a date.
 **Response:**
 ```json
 {
-  "date": "2026-02-03",
+  "date": "2023-02-03",
   "count": 5,
   "meetings": [
     {
@@ -116,10 +116,10 @@ Get intelligent meeting preparation context for a date.
           "relevance": "attendee"
         },
         {
-          "title": "1:1 with Kevin 20260127",
+          "title": "1:1 with Kevin 20230127",
           "path": "/path/to/Meetings/...",
           "relevance": "past_meeting",
-          "date": "2026-01-27"
+          "date": "2023-01-27"
         }
       ],
       "attachments": []
@@ -284,7 +284,7 @@ Related people with overlap scores.
       "shared_whatsapp_count": 0,
       "shared_slack_count": 0,
       "relationship_strength": 91.5,
-      "last_seen_together": "2026-02-26T14:00:00"
+      "last_seen_together": "2023-02-26T14:00:00"
     }
   ],
   "count": 15
@@ -307,15 +307,15 @@ Get relationship insights and patterns extracted from therapy notes and conversa
       "person_id": "uuid",
       "category": "focus_areas",
       "text": "Lead with feelings before facts in conflicts",
-      "source_title": "Couples therapy 20260120",
+      "source_title": "Couples therapy 20230120",
       "source_link": "obsidian://...",
-      "source_date": "2026-01-20T00:00:00",
+      "source_date": "2023-01-20T00:00:00",
       "confirmed": true,
-      "created_at": "2026-02-01T19:54:45",
+      "created_at": "2023-02-01T19:54:45",
       "category_icon": "📝"
     }
   ],
-  "last_generated": "2026-02-01T23:56:20",
+  "last_generated": "2023-02-01T23:56:20",
   "confirmed_count": 7,
   "unconfirmed_count": 33
 }
@@ -395,7 +395,7 @@ Contact sources are the meaningful units for entity splitting - each represents 
       "source_entity_ids": ["uuid1", "uuid2", "..."],
       "observed_names": ["Alex Johnson", "Alex"],
       "first_seen": "2024-01-15T...",
-      "last_seen": "2026-01-29T..."
+      "last_seen": "2023-01-29T..."
     },
     {
       "identifier": "+15551234567",
@@ -405,7 +405,7 @@ Contact sources are the meaningful units for entity splitting - each represents 
       "source_entity_ids": ["uuid3", "uuid4"],
       "observed_names": ["Alex"],
       "first_seen": "2024-06-01T...",
-      "last_seen": "2026-01-28T..."
+      "last_seen": "2023-01-28T..."
     }
   ]
 }
@@ -555,7 +555,7 @@ Get extracted facts about a person (auto-extracted from interactions).
       "content": "Works at Acme Corp as VP Engineering",
       "confidence": 0.9,
       "source": "calendar:meeting-uuid",
-      "created_at": "2026-01-15T...",
+      "created_at": "2023-01-15T...",
       "confirmed": false
     }
   ]

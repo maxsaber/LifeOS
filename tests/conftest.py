@@ -160,3 +160,30 @@ def pytest_collection_modifyitems(config, items):
         # Integration tests (those that hit real servers)
         if "integration" in item.name or "real_" in item.name:
             item.add_marker(pytest.mark.integration)
+
+
+@pytest.fixture
+def production_test_data():
+    """
+    Load production test data if available, else return None.
+
+    This fixture allows tests to optionally use real production data
+    (gitignored) while still passing with generic data in open-source.
+    """
+    try:
+        from tests.fixtures.production_test_data import (
+            WORK_DOMAIN,
+            TEST_WORK_CONTACT,
+            COLLEAGUE_NAMES,
+            TEST_PERSONAL_CONTACT,
+            TEST_FAMILY_CONTACT,
+        )
+        return {
+            "work_domain": WORK_DOMAIN,
+            "test_work_contact": TEST_WORK_CONTACT,
+            "colleagues": COLLEAGUE_NAMES,
+            "test_personal_contact": TEST_PERSONAL_CONTACT,
+            "test_family_contact": TEST_FAMILY_CONTACT,
+        }
+    except ImportError:
+        return None

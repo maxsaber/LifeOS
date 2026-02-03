@@ -55,7 +55,7 @@ type: meeting
 
 ## Attendees
 - Nathan
-- Yoni
+- Alex
 - Madi
 
 ## Updates
@@ -63,7 +63,7 @@ Everyone shared their progress on Q1 goals.
 
 ## Action Items
 - [ ] Nathan: Send budget proposal by Friday
-- [ ] Yoni: Review hiring pipeline
+- [ ] Alex: Review hiring pipeline
 """)
 
             # 3. Work note

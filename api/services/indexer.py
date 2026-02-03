@@ -567,7 +567,7 @@ class IndexerService:
         for person_name in people:
             try:
                 # Resolve person with context path for domain boosting
-                # e.g., file in Work/ML/ will boost @movementlabs.xyz matches
+                # e.g., file in Work/ folders will boost work domain (LIFEOS_WORK_DOMAIN) matches
                 result = resolver.resolve(
                     name=person_name,
                     context_path=file_path_str,

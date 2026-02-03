@@ -208,7 +208,7 @@ Configured in `config/people_config.py`:
 
 | Email Domain | Vault Context | Category |
 |--------------|---------------|----------|
-| movementlabs.xyz | Work/ML/ | work |
+| yourcompany.com | Work/YourCompany/ | work |
 | gmail.com | Personal/ | personal |
 
 ---

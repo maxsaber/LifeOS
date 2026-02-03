@@ -87,6 +87,13 @@ class Settings(BaseSettings):
         description="Your work email domain (e.g., yourcompany.com) for categorizing work contacts"
     )
 
+    # User name for fact extraction prompts
+    user_name: str = Field(
+        default="User",
+        alias="LIFEOS_USER_NAME",
+        description="Your name for fact extraction prompts"
+    )
+
     # CRM Owner (the user's person ID for relationship tracking)
     # WARNING: This ID is from people_entities.json and must remain stable.
     # If you rebuild people_entities.json from scratch, this ID will become
@@ -103,6 +110,29 @@ class Settings(BaseSettings):
         default="~/Pictures/Photos Library.photoslibrary",
         alias="LIFEOS_PHOTOS_PATH",
         description="Path to Photos Library"
+    )
+
+    # ML Colleagues for Granola meeting note processing
+    ml_colleagues: list[str] = Field(
+        default=[],
+        alias="LIFEOS_ML_COLLEAGUES",
+        description="Colleague first names for meeting note extraction (comma-separated in env)"
+    )
+
+    # Personal relationship patterns for Granola meeting routing
+    # Regex patterns (pipe-separated) to match meeting titles for routing to Personal/Relationship
+    # Example: "Partner|Spouse|Wife|Husband" or specific names
+    personal_relationship_patterns: str = Field(
+        default="",
+        alias="LIFEOS_PERSONAL_RELATIONSHIP_PATTERNS",
+        description="Pipe-separated regex patterns for personal relationship meeting routing"
+    )
+
+    # Backup directory
+    backup_path: str = Field(
+        default="./data/backups",
+        alias="LIFEOS_BACKUP_PATH",
+        description="Directory for database backups (use fast storage like NVMe)"
     )
 
     @property

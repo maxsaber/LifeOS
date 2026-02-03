@@ -50,7 +50,7 @@ def parse_name(name: str) -> ParsedName:
         "John Smith" -> {first="John", middles=[], last="Smith"}
         "Dr. Mary Katherine Palmer MD" -> {first="Mary", middles=["Katherine"], last="Palmer"}
         "Taylor" -> {first="Taylor", middles=[], last=None}
-        "Anne Taylor Walker" -> {first="Anne", middles=["Taylor"], last="Walker"}
+        "Jane Mary Smith" -> {first="Jane", middles=["Mary"], last="Smith"}
         "Sarah Long, CLC, CSC" -> {first="Sarah", middles=[], last="Long"}
 
     Args:
@@ -501,7 +501,7 @@ class EntityResolver:
                     match_type = f"{match_type}_relationship"
 
             # For full names (both have first and last), require first name similarity
-            # This prevents "John Walker" from matching "Taylor Walker"
+            # This prevents "John Smith" from matching "Jane Smith"
             if not is_first_name_only and query_last_lower and entity_last_lower:
                 if not first_matched:
                     # Both have last names, but no first name match - skip

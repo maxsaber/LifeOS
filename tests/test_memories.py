@@ -206,7 +206,7 @@ class TestMemoryStore:
         store = MemoryStore(file_path=temp_json)
         store.create_memory("Kevin likes coffee")  # people
         store.create_memory("I prefer morning meetings")  # preferences
-        store.create_memory("Yoni is the CEO")  # people
+        store.create_memory("Alex is the CEO")  # people
 
         people_memories = store.list_memories(category="people")
         assert len(people_memories) == 2
@@ -242,7 +242,7 @@ class TestMemoryStore:
 
         store = MemoryStore(file_path=temp_json)
         store.create_memory("Kevin prefers async")
-        store.create_memory("Yoni likes meetings")
+        store.create_memory("Alex likes meetings")
         store.create_memory("Budget is $500k")
 
         results = store.search_memories("Kevin")
@@ -281,7 +281,7 @@ class TestMemoryRetrieval:
 
         store = MemoryStore(file_path=temp_json)
         store.create_memory("Kevin prefers async communication")
-        store.create_memory("Yoni likes stand-up meetings")
+        store.create_memory("Alex likes stand-up meetings")
         store.create_memory("The budget is $500k")
 
         relevant = store.get_relevant_memories("meeting with Kevin")

@@ -112,7 +112,7 @@ def compute_person_category(person: PersonEntity, source_entities: list = None) 
     Rules (in order):
     1. Is the CRM owner (my_person_id) → self
     2. Has family last name or exact name match → family
-    3. Has Slack or @movementlabs.com email → work
+    3. Has Slack or work domain email (LIFEOS_WORK_DOMAIN) → work
     4. Otherwise → personal
     """
     # 1. Check if this is "me" (the CRM owner)
@@ -315,7 +315,7 @@ class AggregatedTimelineItem(BaseModel):
 class AggregatedDayGroup(BaseModel):
     """A day's worth of aggregated interactions."""
     date: str  # ISO date (YYYY-MM-DD)
-    date_display: str  # Human-readable date (e.g., "Jan 28, 2026")
+    date_display: str  # Human-readable date (e.g., "Jan 28, 2023")
     total_count: int
     groups: list[AggregatedTimelineItem]
 
@@ -1775,8 +1775,8 @@ async def get_person_timeline_aggregated(
     {
       "days": [
         {
-          "date": "2026-01-28",
-          "date_display": "Jan 28, 2026",
+          "date": "2023-01-28",
+          "date_display": "Jan 28, 2023",
           "total_count": 15,
           "groups": [
             {
@@ -1798,7 +1798,7 @@ async def get_person_timeline_aggregated(
       ],
       "total_interactions": 150,
       "date_range_start": "2025-10-30",
-      "date_range_end": "2026-01-28"
+      "date_range_end": "2023-01-28"
     }
     ```
     """
@@ -5003,9 +5003,10 @@ class ToneAnalysisDetailedResponse(BaseModel):
 @router.get("/relationship/insights", response_model=RelationshipInsightsResponse)
 async def get_relationship_insights(person_id: Optional[str] = None):
     """
-    Get all relationship insights for Taylor Walker.
+    Get all relationship insights for the configured partner.
 
     Returns both confirmed and unconfirmed insights, sorted with confirmed first.
+    Uses PARTNER_PERSON_ID from config/family_members.json by default.
     """
     from api.services.relationship_insights import get_relationship_insight_store
 

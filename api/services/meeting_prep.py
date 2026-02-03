@@ -90,9 +90,9 @@ def _normalize_title_for_search(title: str) -> str:
 
     Removes date patterns, common prefixes, and extracts key identifiers.
     Examples:
-        "1:1 with Yoni - 2026-01-28" -> "1:1 with Yoni"
+        "1:1 with Alex - 2023-01-28" -> "1:1 with Alex"
         "Weekly Team Standup" -> "Team Standup"
-        "Nathan-Brandon" -> "Nathan Brandon"
+        "Nathan-Sam" -> "Nathan Sam"
     """
     # Remove date patterns
     title = re.sub(r"\s*[-–]\s*\d{4}[-/]\d{2}[-/]\d{2}", "", title)
@@ -128,7 +128,7 @@ def _extract_person_names(attendees: list[str], title: str) -> list[str]:
         else:
             names.append(attendee)
 
-    # From title (e.g., "1:1 with Yoni" -> "Yoni")
+    # From title (e.g., "1:1 with Alex" -> "Alex")
     with_match = re.search(r"\bwith\s+(\w+(?:\s+\w+)?)", title, re.IGNORECASE)
     if with_match:
         names.append(with_match.group(1))

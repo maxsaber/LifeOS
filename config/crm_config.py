@@ -74,7 +74,7 @@ def get_domain_mapping(domain: str) -> Optional[dict]:
     Get mapping info for an email domain.
 
     Args:
-        domain: Email domain (e.g., "movementlabs.xyz")
+        domain: Email domain (e.g., "work.example.com")
 
     Returns:
         Dict with company, vault_contexts, category; or None if not found
@@ -89,7 +89,7 @@ def get_vault_contexts_for_domain(domain: str) -> list[str]:
     Get vault contexts associated with an email domain.
 
     Args:
-        domain: Email domain (e.g., "movementlabs.xyz")
+        domain: Email domain (e.g., "work.example.com")
 
     Returns:
         List of vault context paths, or empty list if domain unknown

@@ -20,14 +20,14 @@ class TestPersonEntity:
     def test_create_basic_entity(self):
         """Test creating a basic PersonEntity."""
         entity = PersonEntity(
-            canonical_name="Yoni Landau",
-            emails=["yoni@movementlabs.xyz"],
+            canonical_name="Alex Johnson",
+            emails=["alex@work.example.com"],
             category="work",
         )
 
-        assert entity.canonical_name == "Yoni Landau"
-        assert entity.display_name == "Yoni Landau"  # Auto-set from canonical
-        assert entity.emails == ["yoni@movementlabs.xyz"]
+        assert entity.canonical_name == "Alex Johnson"
+        assert entity.display_name == "Alex Johnson"  # Auto-set from canonical
+        assert entity.emails == ["alex@work.example.com"]
         assert entity.category == "work"
         assert entity.id  # UUID should be auto-generated
         assert entity.confidence_score == 1.0
@@ -107,8 +107,8 @@ class TestPersonEntity:
         """Test merging two PersonEntity objects."""
         entity1 = PersonEntity(
             canonical_name="Sarah Chen",
-            emails=["sarah@movementlabs.xyz"],
-            company="Movement Labs",
+            emails=["sarah@work.example.com"],
+            company="Example Corp",
             sources=["linkedin"],
             first_seen=datetime(2024, 1, 1),
             last_seen=datetime(2024, 6, 1),
@@ -142,7 +142,7 @@ class TestPersonEntity:
 
         # Should combine emails
         assert len(merged.emails) == 2
-        assert "sarah@movementlabs.xyz" in merged.emails
+        assert "sarah@work.example.com" in merged.emails
         assert "sarah.chen@example.com" in merged.emails
 
         # Should combine sources
@@ -171,7 +171,7 @@ class TestPersonEntity:
         assert merged.phone_primary == "+19012295017"
 
         # Should take first non-None values
-        assert merged.company == "Movement Labs"
+        assert merged.company == "Example Corp"
         assert merged.position == "Engineer"
 
         # Confidence should be reduced
@@ -241,29 +241,29 @@ class TestPersonEntity:
         from api.services.people_aggregator import PersonRecord
 
         record = PersonRecord(
-            canonical_name="Yoni",
-            email="yoni@movementlabs.xyz",
+            canonical_name="Alex",
+            email="alex@work.example.com",
             sources=["linkedin", "gmail"],
             first_seen=datetime(2024, 1, 1),
             last_seen=datetime(2024, 12, 1),
-            company="Movement Labs",
+            company="Example Corp",
             position="CEO",
-            linkedin_url="https://linkedin.com/in/yoni",
+            linkedin_url="https://linkedin.com/in/alex",
             meeting_count=20,
             email_count=50,
             mention_count=100,
             related_notes=["meeting1.md"],
-            aliases=["Yoni Landau"],
+            aliases=["Alex Johnson"],
             category="work",
         )
 
         entity = PersonEntity.from_person_record(record)
 
         # Verify migration
-        assert entity.canonical_name == "Yoni"
-        assert entity.emails == ["yoni@movementlabs.xyz"]
+        assert entity.canonical_name == "Alex"
+        assert entity.emails == ["alex@work.example.com"]
         assert entity.sources == ["linkedin", "gmail"]
-        assert entity.company == "Movement Labs"
+        assert entity.company == "Example Corp"
         assert entity.position == "CEO"
         assert entity.meeting_count == 20
         assert entity.email_count == 50

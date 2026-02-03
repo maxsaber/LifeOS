@@ -546,7 +546,7 @@ def main():
     if not args.primary or not args.secondary:
         parser.print_help()
         print("\nExamples:")
-        print("  python scripts/merge_people.py --search 'Yoni'")
+        print("  python scripts/merge_people.py --search 'Alex'")
         print("  python scripts/merge_people.py --list-duplicates")
         print("  python scripts/merge_people.py --primary abc123 --secondary def456")
         print("  python scripts/merge_people.py --primary abc123 --secondary def456 --execute")

@@ -8873,7 +8873,7 @@
                 };
             }
 
-            // Handle /relationship route (Taylor Walker's dedicated page)
+            // Handle /relationship route (partner's dedicated page)
             if (path === '/relationship' || path === '/relationship/') {
                 return {
                     personId: null,
@@ -11397,7 +11397,7 @@
         let relationshipTimelineCache = null;
         let relationshipToneCache = null;
 
-        // Show relationship dashboard for Taylor Walker
+        // Show relationship dashboard for configured partner
         async function showRelationshipDashboard() {
             // Hide birthdays page and show main container
             document.getElementById('birthdaysPage').style.display = 'none';
@@ -11434,7 +11434,7 @@
             const sourceEntitiesFooter = document.getElementById('sourceEntitiesFooter');
             if (sourceEntitiesFooter) sourceEntitiesFooter.style.display = 'none';
 
-            // Customize header for Taylor
+            // Customize header for relationship view
             const detailAvatar = document.getElementById('detailAvatar');
             const detailName = document.getElementById('detailName');
             const detailCompany = document.getElementById('detailCompany');
@@ -11442,7 +11442,7 @@
             const detailTagsChips = document.getElementById('detailTagsChips');
             if (detailAvatar) detailAvatar.textContent = '💕';
             if (detailName) detailName.textContent = 'Relationship Dashboard';
-            if (detailCompany) detailCompany.textContent = 'Taylor Walker';
+            if (detailCompany) detailCompany.textContent = 'Partner';
             if (detailContactQuick) detailContactQuick.innerHTML = '';
             if (detailTagsChips) detailTagsChips.innerHTML = '';
 

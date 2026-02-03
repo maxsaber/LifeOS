@@ -104,7 +104,7 @@ class TestMeInteractionsEndpoint:
             ),
             MagicMock(
                 id=MY_PERSON_ID,
-                canonical_name="Nathan Ramia",
+                canonical_name="Test User",
                 relationship_strength=100.0,
                 last_seen=now,
                 first_seen=now - timedelta(days=730),

@@ -1,14 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
+  LifeOS ChromaDB Server launchd configuration template.
+
   NOTE: This launchd configuration does NOT work reliably with ChromaDB.
   ChromaDB exits with code 78 when run via launchd for unknown reasons.
 
   Instead, use the cron-based watchdog:
-  */5 * * * * /Users/nathanramia/Documents/Code/LifeOS/scripts/chromadb-watchdog.sh
+  */5 * * * * __LIFEOS_PATH__/scripts/chromadb-watchdog.sh
 
   Or manage ChromaDB manually with:
   ./scripts/chromadb.sh start|stop|restart|status
+
+  To use this template (not recommended):
+  1. Copy this file to com.lifeos.chromadb.plist
+  2. Replace __HOME__ with your home directory path
+  3. Replace __LIFEOS_PATH__ with your LifeOS project path
+  4. Copy to ~/Library/LaunchAgents/
+  5. Run: launchctl load ~/Library/LaunchAgents/com.lifeos.chromadb.plist
 -->
 <plist version="1.0">
 <dict>
@@ -17,18 +26,18 @@
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/nathanramia/.venvs/lifeos/bin/chroma</string>
+        <string>__HOME__/.venvs/lifeos/bin/chroma</string>
         <string>run</string>
         <string>--host</string>
         <string>localhost</string>
         <string>--port</string>
         <string>8001</string>
         <string>--path</string>
-        <string>/Users/nathanramia/Documents/Code/LifeOS/data/chromadb</string>
+        <string>__LIFEOS_PATH__/data/chromadb</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/nathanramia/Documents/Code/LifeOS</string>
+    <string>__LIFEOS_PATH__</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -37,9 +46,9 @@
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/nathanramia/Documents/Code/LifeOS/logs/chromadb.log</string>
+    <string>__LIFEOS_PATH__/logs/chromadb.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/nathanramia/Documents/Code/LifeOS/logs/chromadb-error.log</string>
+    <string>__LIFEOS_PATH__/logs/chromadb-error.log</string>
 </dict>
 </plist>

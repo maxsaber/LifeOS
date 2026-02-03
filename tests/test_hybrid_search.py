@@ -326,7 +326,7 @@ class TestHybridBenchmark:
         # Exact match queries (should improve with BM25)
         ("Q4 budget", "exact term match"),
         ("ML infrastructure", "folder/topic match"),
-        ("Yoni", "exact name match"),
+        ("Alex", "exact name match"),
 
         # Semantic queries (should stay good with vector)
         ("what are my priorities", "conceptual query"),
@@ -366,13 +366,13 @@ class TestHybridBenchmark:
 
         bm25 = BM25Index(db_path=temp_db)
 
-        bm25.add_document("doc1", "Meeting with leadership team", "Meeting.md", people=["Yoni", "Sarah"])
+        bm25.add_document("doc1", "Meeting with leadership team", "Meeting.md", people=["Alex", "Sarah"])
         bm25.add_document("doc2", "1:1 discussion about roadmap", "1on1.md", people=["Kevin"])
-        bm25.add_document("doc3", "Yoni mentioned the new strategy", "Notes.md")
+        bm25.add_document("doc3", "Alex mentioned the new strategy", "Notes.md")
 
-        results = bm25.search("Yoni")
+        results = bm25.search("Alex")
 
-        # Should find both docs mentioning Yoni
+        # Should find both docs mentioning Alex
         assert len(results) >= 2
         doc_ids = [r["doc_id"] for r in results]
         assert "doc1" in doc_ids

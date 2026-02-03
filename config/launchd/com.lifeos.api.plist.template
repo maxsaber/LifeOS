@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LifeOS API Server launchd configuration template.
+
+  To use:
+  1. Copy this file to com.lifeos.api.plist
+  2. Replace __HOME__ with your home directory path
+  3. Replace __LIFEOS_PATH__ with your LifeOS project path
+  4. Replace __VAULT_PATH__ with your Obsidian vault path
+  5. Copy to ~/Library/LaunchAgents/
+  6. Run: launchctl load ~/Library/LaunchAgents/com.lifeos.api.plist
+-->
 <plist version="1.0">
 <dict>
     <key>Label</key>
@@ -8,7 +19,7 @@
     <!-- venv is located at ~/.venvs/lifeos to avoid macOS TCC security scanning delays -->
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/nathanramia/.venvs/lifeos/bin/uvicorn</string>
+        <string>__HOME__/.venvs/lifeos/bin/uvicorn</string>
         <string>api.main:app</string>
         <string>--host</string>
         <string>0.0.0.0</string>
@@ -17,14 +28,14 @@
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/nathanramia/Documents/Code/LifeOS</string>
+    <string>__LIFEOS_PATH__</string>
 
     <key>EnvironmentVariables</key>
     <dict>
         <key>PATH</key>
-        <string>/Users/nathanramia/.venvs/lifeos/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <string>__HOME__/.venvs/lifeos/bin:/usr/local/bin:/usr/bin:/bin</string>
         <key>LIFEOS_VAULT_PATH</key>
-        <string>/Users/nathanramia/Notes 2025</string>
+        <string>__VAULT_PATH__</string>
         <!-- ANTHROPIC_API_KEY should be set in ~/.zshrc or launchctl setenv -->
     </dict>
 
@@ -45,8 +56,8 @@
 
     <!-- Log files -->
     <key>StandardOutPath</key>
-    <string>/Users/nathanramia/Documents/Code/LifeOS/logs/lifeos-api.log</string>
+    <string>__LIFEOS_PATH__/logs/lifeos-api.log</string>
     <key>StandardErrorPath</key>
-    <string>/Users/nathanramia/Documents/Code/LifeOS/logs/lifeos-api-error.log</string>
+    <string>__LIFEOS_PATH__/logs/lifeos-api-error.log</string>
 </dict>
 </plist>
