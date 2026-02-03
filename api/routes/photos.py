@@ -374,25 +374,110 @@ async def get_photo_thumbnail(uuid: str):
     )
 
 
+@router.get("/profile/{person_id}")
+async def get_profile_photo(person_id: str):
+    """
+    Get a profile photo thumbnail for a person.
+
+    Returns the most recent photo of the person that has a thumbnail available.
+    Use this for avatars/profile pictures in the UI.
+    """
+    _check_photos_enabled()
+
+    from api.services.interaction_store import get_interaction_store
+
+    interaction_store = get_interaction_store()
+
+    # Get photo interactions for this person, most recent first
+    interactions = interaction_store.get_for_person(
+        person_id,
+        source_type="photos",
+    )
+
+    # Find the first one with an available thumbnail
+    for interaction in interactions[:50]:  # Check up to 50 most recent
+        if interaction.source_id:
+            thumb_path = _get_thumbnail_path(interaction.source_id)
+            if thumb_path and thumb_path.exists():
+                suffix = thumb_path.suffix.lower()
+                media_type = "image/jpeg"
+                if suffix == ".png":
+                    media_type = "image/png"
+
+                return FileResponse(
+                    thumb_path,
+                    media_type=media_type,
+                    headers={"Cache-Control": "public, max-age=3600"}  # Cache for 1 hour
+                )
+
+    # No photo available
+    raise HTTPException(
+        status_code=404,
+        detail=f"No profile photo available for person {person_id}"
+    )
+
+
+def _get_photo_file_path(uuid: str) -> Path | None:
+    """
+    Get the original file path for a photo by UUID.
+
+    Checks both originals folder and queries the database for filename.
+    """
+    if not uuid:
+        return None
+
+    library_path = Path(settings.photos_library_path)
+    originals_base = library_path / "originals"
+
+    if not originals_base.exists():
+        return None
+
+    # First character determines subdirectory
+    first_char = uuid[0].upper()
+    originals_dir = originals_base / first_char
+
+    if not originals_dir.exists():
+        return None
+
+    # Try common extensions
+    for ext in [".jpeg", ".jpg", ".heic", ".png", ".mov", ".mp4"]:
+        file_path = originals_dir / f"{uuid}{ext}"
+        if file_path.exists():
+            return file_path
+
+    return None
+
+
 @router.get("/open/{uuid}")
 async def open_photo_in_app(uuid: str):
     """
-    Open a specific photo in the Photos app.
+    Open a specific photo in the Photos app or Preview.
 
-    Uses AppleScript to activate Photos and navigate to the photo.
-    Returns immediately - Photos opens asynchronously.
+    First tries to open the original file directly in Preview (allows viewing the actual photo).
+    Falls back to opening Photos app if the original isn't available locally.
     """
     _check_photos_enabled()
 
     import subprocess
 
-    # AppleScript to open Photos and search for the UUID
-    # This is the most reliable way to navigate to a specific photo
-    script = f'''
+    # Try to find and open the original file
+    file_path = _get_photo_file_path(uuid)
+    if file_path and file_path.exists():
+        try:
+            # Open the file with the default app (Preview for images)
+            subprocess.run(
+                ["open", str(file_path)],
+                capture_output=True,
+                timeout=5,
+            )
+            return {"success": True, "message": f"Opened {file_path.name}"}
+        except Exception:
+            pass  # Fall through to Photos app
+
+    # Fall back to opening Photos app
+    script = '''
     tell application "Photos"
         activate
-        -- Search for the photo by filename/UUID in the search bar
-        -- Note: Direct asset navigation is limited in Photos automation
     end tell
     '''
 
@@ -402,7 +487,7 @@ async def open_photo_in_app(uuid: str):
             capture_output=True,
             timeout=5,
         )
-        return {"success": True, "message": "Photos app activated"}
+        return {"success": True, "message": "Photos app opened (photo may be in iCloud)"}
     except subprocess.TimeoutExpired:
         return {"success": True, "message": "Photos app launched"}
     except Exception as e:

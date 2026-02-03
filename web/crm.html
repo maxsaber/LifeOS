@@ -385,6 +385,11 @@
             font-weight: 600;
             color: white;
             flex-shrink: 0;
+            background-size: cover;
+            background-position: center;
+        }
+        .person-avatar.has-photo {
+            color: transparent;
         }
 
         .person-info {
@@ -1079,6 +1084,11 @@
             font-weight: 600;
             color: white;
             flex-shrink: 0;
+            background-size: cover;
+            background-position: center;
+        }
+        .detail-avatar.has-photo {
+            color: transparent;
         }
 
         .detail-title {
@@ -2230,39 +2240,40 @@
         }
         .photo-card {
             display: flex;
-            gap: 0.75rem;
-            align-items: center;
-            padding: 0.5rem 0;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 0.75rem 0;
             border-bottom: 1px solid var(--border);
         }
         .photo-card:last-child {
             border-bottom: none;
         }
         .photo-thumbnail {
-            width: 60px;
-            height: 60px;
-            object-fit: cover;
-            border-radius: 4px;
+            width: 100%;
+            max-height: 300px;
+            object-fit: contain;
+            border-radius: 6px;
             background: var(--bg-secondary);
-            flex-shrink: 0;
+            cursor: pointer;
+        }
+        .photo-thumbnail:hover {
+            opacity: 0.9;
         }
         .photo-thumbnail-placeholder {
-            width: 60px;
-            height: 60px;
-            border-radius: 4px;
+            width: 100%;
+            height: 150px;
+            border-radius: 6px;
             background: var(--bg-secondary);
             display: flex;
             align-items: center;
             justify-content: center;
             color: var(--text-muted);
-            font-size: 1.5rem;
-            flex-shrink: 0;
+            font-size: 3rem;
         }
         .photo-info {
-            flex: 1;
             display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
+            justify-content: space-between;
+            align-items: center;
         }
         .photo-time {
             color: var(--text-muted);
@@ -7772,7 +7783,7 @@
                      onclick="selectPerson('${person.id}')">
                     <div class="person-checkbox ${selectedForMerge.has(person.id) ? 'checked' : ''}"
                          onclick="event.stopPropagation(); toggleMergeSelection('${person.id}')"></div>
-                    <div class="person-avatar" style="${getAvatarStyle(person.category)}">${getInitials(person.canonical_name)}</div>
+                    <div class="person-avatar" data-person-id="${person.id}" style="${getAvatarStyle(person.category)}">${getInitials(person.canonical_name)}</div>
                     <div class="person-info">
                         <div class="person-name">${escapeHtml(person.canonical_name)}</div>
                         <div class="person-company">${escapeHtml(person.company || '')}</div>
@@ -7785,6 +7796,7 @@
             `).join('');
 
             updateMergeToolbar();
+            loadProfilePhotos();
         }
 
         // Toggle merge selection for a person
@@ -8623,12 +8635,16 @@
             // For "Me" page, customize the display
             if (isMePage) {
                 document.getElementById('detailAvatar').textContent = '👤';
+                document.getElementById('detailAvatar').style.backgroundImage = '';
+                document.getElementById('detailAvatar').classList.remove('has-photo');
                 document.getElementById('detailName').textContent = 'My Dashboard';
                 document.getElementById('detailCompany').textContent = 'Personal CRM Overview';
             } else {
                 document.getElementById('detailAvatar').textContent = getInitials(person.canonical_name);
                 document.getElementById('detailName').textContent = person.canonical_name;
                 document.getElementById('detailCompany').textContent = [person.company, person.position].filter(Boolean).join(' · ');
+                // Load profile photo for detail avatar
+                loadDetailProfilePhoto(person.id);
             }
 
             // Quick contact links in header (skip for Me page)
@@ -11043,6 +11059,89 @@
         // Get initials from name
         function getInitials(name) {
             return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        }
+
+        // Cache for profile photo availability
+        const profilePhotoCache = new Map();
+
+        // Load profile photos for visible avatars
+        async function loadProfilePhotos() {
+            const avatars = document.querySelectorAll('.person-avatar[data-person-id]');
+            for (const avatar of avatars) {
+                const personId = avatar.dataset.personId;
+                if (!personId) continue;
+
+                // Skip if already processed
+                if (avatar.classList.contains('has-photo') || avatar.classList.contains('no-photo')) continue;
+
+                // Check cache first
+                if (profilePhotoCache.has(personId)) {
+                    const hasPhoto = profilePhotoCache.get(personId);
+                    if (hasPhoto) {
+                        avatar.style.backgroundImage = `url(/api/photos/profile/${personId})`;
+                        avatar.classList.add('has-photo');
+                    } else {
+                        avatar.classList.add('no-photo');
+                    }
+                    continue;
+                }
+
+                // Try to load the photo
+                try {
+                    const response = await fetch(`/api/photos/profile/${personId}`, { method: 'HEAD' });
+                    if (response.ok) {
+                        avatar.style.backgroundImage = `url(/api/photos/profile/${personId})`;
+                        avatar.classList.add('has-photo');
+                        profilePhotoCache.set(personId, true);
+                    } else {
+                        avatar.classList.add('no-photo');
+                        profilePhotoCache.set(personId, false);
+                    }
+                } catch {
+                    avatar.classList.add('no-photo');
+                    profilePhotoCache.set(personId, false);
+                }
+            }
+        }
+
+        // Load profile photo for detail avatar
+        async function loadDetailProfilePhoto(personId) {
+            const avatar = document.getElementById('detailAvatar');
+            if (!avatar || !personId) return;
+
+            // Reset classes
+            avatar.classList.remove('has-photo', 'no-photo');
+
+            // Check cache first
+            if (profilePhotoCache.has(personId)) {
+                const hasPhoto = profilePhotoCache.get(personId);
+                if (hasPhoto) {
+                    avatar.style.backgroundImage = `url(/api/photos/profile/${personId})`;
+                    avatar.classList.add('has-photo');
+                } else {
+                    avatar.style.backgroundImage = '';
+                    avatar.classList.add('no-photo');
+                }
+                return;
+            }
+
+            // Try to load the photo
+            try {
+                const response = await fetch(`/api/photos/profile/${personId}`, { method: 'HEAD' });
+                if (response.ok) {
+                    avatar.style.backgroundImage = `url(/api/photos/profile/${personId})`;
+                    avatar.classList.add('has-photo');
+                    profilePhotoCache.set(personId, true);
+                } else {
+                    avatar.style.backgroundImage = '';
+                    avatar.classList.add('no-photo');
+                    profilePhotoCache.set(personId, false);
+                }
+            } catch {
+                avatar.style.backgroundImage = '';
+                avatar.classList.add('no-photo');
+                profilePhotoCache.set(personId, false);
+            }
         }
 
         // Render Days Since Contact visualization
@@ -13528,6 +13627,18 @@
         }
 
         /**
+         * Open a photo in the Photos app.
+         * Uses the API endpoint which runs AppleScript to open Photos.
+         */
+        async function openPhotoInApp(uuid) {
+            try {
+                await fetch(`/api/photos/open/${uuid}`);
+            } catch (err) {
+                console.error('Failed to open photo:', err);
+            }
+        }
+
+        /**
          * Toggle expand/collapse of a photo group.
          * Loads photo details from API on first expand.
          */
@@ -13553,10 +13664,11 @@
                                      src="/api/photos/thumbnail/${p.uuid}"
                                      onerror="this.outerHTML='<div class=\\'photo-thumbnail-placeholder\\'>📷</div>'"
                                      loading="lazy"
-                                     alt="Photo">
+                                     alt="Photo"
+                                     onclick="openPhotoInApp('${p.uuid}')">
                                 <div class="photo-info">
                                     <span class="photo-time">${formatTime(p.timestamp)}</span>
-                                    <a href="/api/photos/open/${p.uuid}" class="photo-open-btn" onclick="event.preventDefault(); fetch(this.href); return false;">Open in Photos</a>
+                                    <a href="#" class="photo-open-btn" onclick="event.preventDefault(); openPhotoInApp('${p.uuid}');">Open in Photos</a>
                                 </div>
                             </div>
                         `).join('') || '<div class="photo-card">No photos found</div>';
