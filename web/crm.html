@@ -2289,6 +2289,15 @@
             color: var(--text-muted);
             font-size: 3rem;
         }
+        .photo-thumbnail-placeholder.icloud-photo {
+            cursor: pointer;
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(59, 130, 246, 0.1) 100%);
+            border: 1px dashed rgba(59, 130, 246, 0.3);
+        }
+        .photo-thumbnail-placeholder.icloud-photo:hover {
+            background: linear-gradient(135deg, var(--bg-secondary) 0%, rgba(59, 130, 246, 0.2) 100%);
+            border-color: rgba(59, 130, 246, 0.5);
+        }
         .photo-info {
             display: flex;
             justify-content: space-between;
@@ -4210,18 +4219,19 @@
             position: relative;
         }
 
-        .birthday-heatmap-day[data-level="1"] { background: color-mix(in srgb, var(--people) 25%, var(--bg-tertiary)); }
-        .birthday-heatmap-day[data-level="2"] { background: color-mix(in srgb, var(--people) 50%, var(--bg-tertiary)); }
-        .birthday-heatmap-day[data-level="3"] { background: color-mix(in srgb, var(--people) 75%, var(--bg-tertiary)); }
-        .birthday-heatmap-day[data-level="4"] { background: var(--people); }
-
-        .birthday-heatmap-day[data-count]:not([data-count="0"]) {
+        .birthday-heatmap-day.has-birthday {
+            background: var(--people);
             cursor: pointer;
         }
 
-        .birthday-heatmap-day[data-count]:not([data-count="0"]):hover {
+        .birthday-heatmap-day.has-birthday:hover {
             outline: 2px solid var(--text-primary);
             outline-offset: 1px;
+        }
+
+        .birthday-heatmap-day.today {
+            outline: 2px solid #f472b6;
+            outline-offset: -1px;
         }
 
         /* Birthday heatmap tooltip */
@@ -4264,10 +4274,8 @@
             background: var(--bg-tertiary);
         }
 
-        .birthday-heatmap-legend .legend-box[data-level="1"] { background: color-mix(in srgb, var(--people) 25%, var(--bg-tertiary)); }
-        .birthday-heatmap-legend .legend-box[data-level="2"] { background: color-mix(in srgb, var(--people) 50%, var(--bg-tertiary)); }
-        .birthday-heatmap-legend .legend-box[data-level="3"] { background: color-mix(in srgb, var(--people) 75%, var(--bg-tertiary)); }
-        .birthday-heatmap-legend .legend-box[data-level="4"] { background: var(--people); }
+        .birthday-heatmap-legend .legend-box.has-birthday { background: var(--people); }
+        .birthday-heatmap-legend .legend-box.today { outline: 2px solid #f472b6; outline-offset: -1px; }
 
         /* Birthday Timeline */
         .birthday-timeline-filter {
@@ -7165,13 +7173,12 @@
                 </div>
             </div>
             <div class="birthday-heatmap-legend">
-                <span class="legend-label">Fewer</span>
-                <div class="legend-box" data-level="0"></div>
-                <div class="legend-box" data-level="1"></div>
-                <div class="legend-box" data-level="2"></div>
-                <div class="legend-box" data-level="3"></div>
-                <div class="legend-box" data-level="4"></div>
-                <span class="legend-label">More</span>
+                <div class="legend-box"></div>
+                <span class="legend-label">No birthday</span>
+                <div class="legend-box has-birthday"></div>
+                <span class="legend-label">Birthday</span>
+                <div class="legend-box today"></div>
+                <span class="legend-label">Today</span>
             </div>
         </div>
 
@@ -11168,11 +11175,9 @@
                             'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
             const daysInMonth = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
-            // Find max birthdays on any single day for scaling
-            let maxCount = 0;
-            for (const date in birthdaysData.birthdays) {
-                maxCount = Math.max(maxCount, birthdaysData.birthdays[date].length);
-            }
+            // Get today's MM-DD for highlighting
+            const now = new Date();
+            const todayMmdd = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
 
             months.forEach((monthName, monthIndex) => {
                 const monthDiv = document.createElement('div');
@@ -11194,18 +11199,16 @@
                     const dayDiv = document.createElement('div');
                     dayDiv.className = 'birthday-heatmap-day';
                     dayDiv.dataset.date = mmdd;
-                    dayDiv.dataset.count = count;
 
-                    // Calculate level (0-4 based on count)
-                    let level = 0;
-                    if (count > 0) {
-                        if (maxCount <= 4) {
-                            level = count;
-                        } else {
-                            level = Math.min(4, Math.ceil((count / maxCount) * 4));
-                        }
+                    // Mark today
+                    if (mmdd === todayMmdd) {
+                        dayDiv.classList.add('today');
                     }
-                    dayDiv.dataset.level = level;
+
+                    // Mark days with birthdays
+                    if (count > 0) {
+                        dayDiv.classList.add('has-birthday');
+                    }
 
                     if (count > 0) {
                         dayDiv.addEventListener('mouseenter', showBirthdayHeatmapTooltip);
@@ -15393,8 +15396,8 @@
          */
         async function handlePhotoError(img, uuid) {
             try {
-                // Check thumbnail status
-                const response = await fetch(`/api/photos/thumbnail/${uuid}`, { method: 'HEAD' });
+                // Re-fetch to check actual status (the img onerror doesn't give us status code)
+                const response = await fetch(`/api/photos/thumbnail/${uuid}`);
                 if (response.status === 410) {
                     // iCloud only - show cloud icon with click to download
                     img.outerHTML = `<div class="photo-thumbnail-placeholder icloud-photo" onclick="openPhotoInApp('${uuid}')" title="Photo in iCloud - Click to open in Photos">☁️</div>`;
