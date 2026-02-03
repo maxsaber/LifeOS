@@ -210,7 +210,7 @@ class IndexerService:
         # Index changed files, saving progress incrementally
         count = 0
         all_affected_person_ids: set[str] = set()
-        save_interval = 50  # Save state every N files
+        save_interval = 10  # Save state every N files (small to survive timeouts)
 
         for file_path, mtime in files_to_index:
             try:
