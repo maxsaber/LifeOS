@@ -279,14 +279,22 @@ class AppleContactsReader:
             if contact.birthday():
                 bd = contact.birthday()
                 try:
+                    # NSDateComponentUndefined is a very large number; treat as "no year"
+                    year = bd.year() if bd.year() and bd.year() < 9999 else 1900
                     birthday = datetime(
-                        year=bd.year() if bd.year() else 1900,
+                        year=year,
                         month=bd.month(),
                         day=bd.day(),
                         tzinfo=timezone.utc,
                     )
-                except (ValueError, AttributeError):
+                except (ValueError, AttributeError, OverflowError):
                     pass
+
+            # Note access may fail due to macOS permissions
+            try:
+                note = str(contact.note()) if contact.note() else ""
+            except Exception:
+                note = ""
 
             return AppleContact(
                 identifier=str(contact.identifier()),
@@ -300,7 +308,7 @@ class AppleContactsReader:
                 phones=self._extract_labeled_values(contact.phoneNumbers()),
                 addresses=self._extract_addresses(contact.postalAddresses()),
                 social_profiles=self._extract_social_profiles(contact.socialProfiles()),
-                note=str(contact.note()) if contact.note() else "",
+                note=note,
                 image_available=bool(contact.imageDataAvailable()),
                 birthday=birthday,
             )
@@ -355,14 +363,22 @@ class AppleContactsReader:
                 if contact.birthday():
                     bd = contact.birthday()
                     try:
+                        # NSDateComponentUndefined is a very large number; treat as "no year"
+                        year = bd.year() if bd.year() and bd.year() < 9999 else 1900
                         birthday = datetime(
-                            year=bd.year() if bd.year() else 1900,
+                            year=year,
                             month=bd.month(),
                             day=bd.day(),
                             tzinfo=timezone.utc,
                         )
-                    except (ValueError, AttributeError):
+                    except (ValueError, AttributeError, OverflowError):
                         pass
+
+                # Note access may fail due to macOS permissions
+                try:
+                    note = str(contact.note()) if contact.note() else ""
+                except Exception:
+                    note = ""
 
                 apple_contact = AppleContact(
                     identifier=str(contact.identifier()),
@@ -376,7 +392,7 @@ class AppleContactsReader:
                     phones=self._extract_labeled_values(contact.phoneNumbers()),
                     addresses=self._extract_addresses(contact.postalAddresses()),
                     social_profiles=self._extract_social_profiles(contact.socialProfiles()),
-                    note=str(contact.note()) if contact.note() else "",
+                    note=note,
                     image_available=bool(contact.imageDataAvailable()),
                     birthday=birthday,
                 )
