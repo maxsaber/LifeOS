@@ -27,12 +27,16 @@
             --header-height: 56px;
             --safe-top: env(safe-area-inset-top, 0px);
             --safe-bottom: env(safe-area-inset-bottom, 0px);
+            --safe-left: env(safe-area-inset-left, 0px);
+            --safe-right: env(safe-area-inset-right, 0px);
+            --mobile-panel-transition: transform 0.3s ease;
         }
 
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
+            touch-action: manipulation;
         }
 
         html, body {
@@ -1033,18 +1037,21 @@
             letter-spacing: 0.5px;
         }
 
-        /* Hide header indicators in graph mode */
-        .graph-mode .header-indicators {
+        /* Hide header indicators in graph/timeline mode */
+        .graph-mode .header-indicators,
+        .timeline-mode .header-indicators {
             display: none;
         }
 
-        /* Compact header for graph mode */
-        .graph-mode .detail-header {
+        /* Compact header for graph/timeline mode */
+        .graph-mode .detail-header,
+        .timeline-mode .detail-header {
             padding: 0.75rem 1.5rem;
             align-items: center;
         }
 
-        .graph-mode .detail-avatar {
+        .graph-mode .detail-avatar,
+        .timeline-mode .detail-avatar {
             width: 40px;
             height: 40px;
             font-size: 1rem;
@@ -1053,16 +1060,22 @@
         .graph-mode .detail-company,
         .graph-mode .detail-contact-quick,
         .graph-mode .detail-tags,
-        .graph-mode .detail-actions {
+        .graph-mode .detail-actions,
+        .timeline-mode .detail-company,
+        .timeline-mode .detail-contact-quick,
+        .timeline-mode .detail-tags,
+        .timeline-mode .detail-actions {
             display: none;
         }
 
-        .graph-mode .detail-name {
+        .graph-mode .detail-name,
+        .timeline-mode .detail-name {
             font-size: 1.1rem;
             margin-bottom: 0;
         }
 
-        .graph-mode .detail-content {
+        .graph-mode .detail-content,
+        .timeline-mode .detail-content {
             padding: 0.5rem;
         }
 
@@ -1070,6 +1083,11 @@
             display: flex;
             flex-direction: column;
             height: 100%;
+        }
+
+        /* Mobile details drawer - hidden on desktop */
+        .mobile-details-drawer {
+            display: none;
         }
 
         .detail-avatar {
@@ -2249,8 +2267,9 @@
             border-bottom: none;
         }
         .photo-thumbnail {
-            width: 100%;
-            max-height: 300px;
+            width: 50%;
+            max-width: 400px;
+            max-height: 400px;
             object-fit: contain;
             border-radius: 6px;
             background: var(--bg-secondary);
@@ -5875,19 +5894,835 @@
             font-size: 0.75rem;
         }
 
-        /* Responsive */
+        /* ===============================
+           Mobile Menu Button (hidden on desktop)
+           =============================== */
+        .mobile-menu-btn {
+            display: none;
+            width: 44px;
+            height: 44px;
+            padding: 0;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            transition: background 0.2s;
+        }
+
+        .mobile-menu-btn:hover,
+        .mobile-menu-btn:active {
+            background: var(--bg-tertiary);
+        }
+
+        .mobile-menu-btn .hamburger-icon {
+            display: block;
+            width: 20px;
+            height: 2px;
+            background: var(--text-primary);
+            position: relative;
+            transition: background 0.2s;
+        }
+
+        .mobile-menu-btn .hamburger-icon::before,
+        .mobile-menu-btn .hamburger-icon::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 2px;
+            background: var(--text-primary);
+            left: 0;
+            transition: transform 0.3s, top 0.3s;
+        }
+
+        .mobile-menu-btn .hamburger-icon::before { top: -6px; }
+        .mobile-menu-btn .hamburger-icon::after { top: 6px; }
+
+        .mobile-menu-btn.active .hamburger-icon {
+            background: transparent;
+        }
+
+        .mobile-menu-btn.active .hamburger-icon::before {
+            top: 0;
+            transform: rotate(45deg);
+        }
+
+        .mobile-menu-btn.active .hamburger-icon::after {
+            top: 0;
+            transform: rotate(-45deg);
+        }
+
+        /* Sidebar overlay */
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: var(--header-height);
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 998;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .sidebar-overlay.visible {
+            opacity: 1;
+        }
+
+        /* ===============================
+           Mobile Responsive Styles (768px)
+           =============================== */
         @media (max-width: 768px) {
+            /* Show mobile menu button */
+            .mobile-menu-btn {
+                display: flex;
+            }
+
+            /* Show overlay on mobile */
+            .sidebar-overlay {
+                display: block;
+                pointer-events: none;
+            }
+
+            .sidebar-overlay.visible {
+                pointer-events: auto;
+            }
+
+            /* Header adjustments */
+            .header {
+                padding: 0 0.75rem;
+                padding-left: calc(0.75rem + var(--safe-left));
+                padding-right: calc(0.75rem + var(--safe-right));
+            }
+
+            .header-left {
+                gap: 0.5rem;
+            }
+
+            .header-brand {
+                padding: 0.25rem;
+                font-size: 0.9rem;
+            }
+
+            .header-nav {
+                margin-left: 0.25rem;
+                padding-left: 0.5rem;
+                gap: 0.125rem;
+            }
+
+            .nav-link {
+                padding: 0.5rem 0.625rem;
+                font-size: 0.8rem;
+                min-height: 44px;
+                display: flex;
+                align-items: center;
+            }
+
+            .header-right {
+                gap: 0.5rem;
+            }
+
+            .header-right .nav-link.me-link {
+                display: none;
+            }
+
+            .stats-display {
+                display: none;
+            }
+
+            /* Main layout - people panel as slide-out drawer */
             .main-container {
-                flex-direction: column;
+                flex-direction: row;
+                position: relative;
             }
 
             .people-list-panel {
-                width: 100%;
-                height: 50%;
+                position: fixed;
+                top: var(--header-height);
+                left: 0;
+                bottom: 0;
+                width: 85%;
+                max-width: 320px;
+                height: auto;
+                z-index: 999;
+                transform: translateX(-100%);
+                transition: var(--mobile-panel-transition);
+                box-shadow: 4px 0 20px rgba(0, 0, 0, 0.3);
+                padding-left: var(--safe-left);
+                padding-bottom: var(--safe-bottom);
             }
 
+            .people-list-panel.visible {
+                transform: translateX(0);
+            }
+
+            /* Detail panel takes full width */
             .detail-panel {
-                height: 50%;
+                width: 100%;
+                height: calc(100vh - var(--header-height));
+                padding-bottom: var(--safe-bottom);
+            }
+
+            /* Search input - prevent iOS zoom */
+            .search-input {
+                font-size: 16px;
+                min-height: 48px;
+                padding: 0.875rem 1rem;
+            }
+
+            .search-bar {
+                padding: 0.75rem;
+            }
+
+            /* Filter chips */
+            .filters {
+                padding: 0.5rem 0.75rem;
+                gap: 0.5rem;
+            }
+
+            .filter-chip {
+                padding: 0.625rem 0.875rem;
+                min-height: 44px;
+                font-size: 0.8rem;
+            }
+
+            .filter-chip:active {
+                background: var(--people);
+                color: white;
+            }
+
+            /* Filter dropdowns as bottom sheet */
+            .people-filter-options {
+                position: fixed;
+                top: auto;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                max-height: 60vh;
+                border-radius: 16px 16px 0 0;
+                padding-bottom: calc(1rem + var(--safe-bottom));
+                box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.3);
+            }
+
+            .people-filter-option {
+                min-height: 48px;
+                padding: 0.75rem 1rem;
+            }
+
+            /* Person cards */
+            .person-card {
+                min-height: 64px;
+                padding: 0.875rem;
+            }
+
+            .person-card:active {
+                background: var(--bg-tertiary);
+            }
+
+            .person-avatar {
+                width: 48px;
+                height: 48px;
+                font-size: 1.25rem;
+            }
+
+            .dunbar-badge {
+                width: 24px;
+                height: 24px;
+                font-size: 0.65rem;
+            }
+
+            .person-checkbox {
+                width: 24px;
+                height: 24px;
+                opacity: 1;
+            }
+
+            /* Detail header - compact on mobile */
+            .detail-header {
+                flex-wrap: nowrap;
+                padding: 0.75rem;
+                gap: 0.625rem;
+                align-items: center;
+            }
+
+            .detail-avatar {
+                width: 48px;
+                height: 48px;
+                font-size: 1.25rem;
+                flex-shrink: 0;
+            }
+
+            .detail-title {
+                flex: 1;
+                min-width: 0;
+            }
+
+            .detail-name {
+                font-size: 1.1rem;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .detail-company {
+                font-size: 0.7rem;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .detail-contact-quick {
+                display: none;
+            }
+
+            .detail-tags {
+                display: none;
+            }
+
+            .header-indicators {
+                flex-shrink: 0;
+                display: flex;
+                gap: 0.5rem;
+            }
+
+            .header-strength,
+            .header-dunbar {
+                transform: scale(0.8);
+                transform-origin: center;
+            }
+
+            .header-indicator-label {
+                display: none;
+            }
+
+            .detail-contact-link {
+                min-height: 44px;
+                padding: 0.5rem 0.75rem;
+            }
+
+            /* Mobile details drawer */
+            .mobile-details-drawer {
+                display: block;
+                background: var(--bg-secondary);
+                border-bottom: 1px solid var(--border);
+            }
+
+            .mobile-details-toggle {
+                width: 100%;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 0.5rem 0.75rem;
+                background: none;
+                border: none;
+                color: var(--text-secondary);
+                font-size: 0.75rem;
+                cursor: pointer;
+                min-height: 36px;
+            }
+
+            .mobile-details-toggle:active {
+                background: var(--bg-tertiary);
+            }
+
+            .mobile-details-chevron {
+                font-size: 0.625rem;
+                transition: transform 0.2s;
+            }
+
+            .mobile-details-drawer.expanded .mobile-details-chevron {
+                transform: rotate(180deg);
+            }
+
+            .mobile-details-content {
+                display: none;
+                padding: 0 0.75rem 0.75rem;
+            }
+
+            .mobile-details-drawer.expanded .mobile-details-content {
+                display: block;
+            }
+
+            .mobile-details-row {
+                padding: 0.375rem 0;
+                font-size: 0.8rem;
+                color: var(--text-primary);
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                align-items: center;
+            }
+
+            .mobile-details-row:empty {
+                display: none;
+            }
+
+            .mobile-details-row a {
+                color: var(--people);
+                text-decoration: none;
+                padding: 0.25rem 0.5rem;
+                background: var(--bg-tertiary);
+                border-radius: 4px;
+                min-height: 32px;
+                display: inline-flex;
+                align-items: center;
+            }
+
+            .mobile-details-row .tag-chip {
+                font-size: 0.7rem;
+                padding: 0.25rem 0.5rem;
+                min-height: 28px;
+            }
+
+            /* Hide on timeline/graph modes */
+            .timeline-mode .mobile-details-drawer,
+            .graph-mode .mobile-details-drawer {
+                display: none;
+            }
+
+            /* Tabs - horizontal scroll */
+            .tabs {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+                padding: 0 0.5rem;
+            }
+
+            .tabs::-webkit-scrollbar {
+                display: none;
+            }
+
+            .tab {
+                padding: 1rem 1.25rem;
+                min-height: 48px;
+                white-space: nowrap;
+                flex-shrink: 0;
+            }
+
+            .tab:active {
+                color: var(--people);
+            }
+
+            /* Tab content */
+            .tab-content {
+                padding: 0.75rem;
+            }
+
+            /* Hero stats - horizontal scroll */
+            .hero-stats {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                flex-wrap: nowrap;
+                padding-bottom: 0.5rem;
+                scrollbar-width: none;
+                gap: 0.5rem;
+            }
+
+            .hero-stats::-webkit-scrollbar {
+                display: none;
+            }
+
+            .hero-stat {
+                flex-shrink: 0;
+                min-height: 44px;
+                min-width: 100px;
+                padding: 0.75rem;
+            }
+
+            /* Overview grids */
+            .overview-content-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .strength-components {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            /* Heatmap */
+            .heatmap-container {
+                margin-left: -0.75rem;
+                margin-right: -0.75rem;
+                padding: 0.75rem;
+                border-radius: 0;
+            }
+
+            .heatmap-scroll-wrapper {
+                -webkit-overflow-scrolling: touch;
+                scrollbar-width: none;
+            }
+
+            .heatmap-scroll-wrapper::-webkit-scrollbar {
+                display: none;
+            }
+
+            .heatmap-day {
+                width: 14px;
+                height: 14px;
+                min-width: 14px;
+                min-height: 14px;
+            }
+
+            .heatmap-weekday {
+                font-size: 0.625rem;
+            }
+
+            .heatmap-month-label {
+                font-size: 0.625rem;
+            }
+
+            .heatmap-tooltip {
+                position: fixed;
+                left: 50% !important;
+                transform: translateX(-50%);
+                bottom: calc(20px + var(--safe-bottom));
+                top: auto !important;
+                max-width: 90vw;
+            }
+
+            .heatmap-years-select {
+                min-height: 44px;
+                font-size: 16px;
+            }
+
+            /* Timeline filters */
+            .timeline-filters {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                padding: 0.75rem;
+            }
+
+            .timeline-filter-chip {
+                padding: 0.625rem 1rem;
+                min-height: 44px;
+                font-size: 0.875rem;
+                display: inline-flex;
+                align-items: center;
+            }
+
+            .timeline-filter-chip:active {
+                background: var(--people);
+                color: white;
+            }
+
+            /* Timeline date range */
+            .timeline-date-range {
+                width: 100%;
+                flex-wrap: wrap;
+                margin-left: 0;
+                margin-top: 0.75rem;
+                gap: 0.5rem;
+            }
+
+            .timeline-date-range input[type="date"] {
+                flex: 1;
+                min-width: 140px;
+                min-height: 44px;
+                padding: 0.5rem;
+                font-size: 16px;
+            }
+
+            .timeline-date-range button {
+                min-height: 44px;
+                padding: 0.5rem 1rem;
+            }
+
+            .timeline-date-range label {
+                min-height: 44px;
+                display: flex;
+                align-items: center;
+            }
+
+            /* Timeline items */
+            .timeline {
+                -webkit-overflow-scrolling: touch;
+            }
+
+            .timeline-item {
+                padding: 1rem;
+            }
+
+            .timeline-title {
+                line-height: 1.4;
+            }
+
+            .timeline-title a {
+                min-height: 44px;
+                display: inline-flex;
+                align-items: center;
+                padding: 0.25rem 0;
+            }
+
+            .photo-group-header {
+                min-height: 44px;
+                display: flex;
+                align-items: center;
+                cursor: pointer;
+            }
+
+            .photo-group-header:active {
+                color: var(--people);
+            }
+
+            .photo-thumbnail {
+                min-width: 60px;
+                min-height: 60px;
+            }
+
+            .timeline-item-actions {
+                opacity: 1;
+                position: static;
+                margin-top: 0.75rem;
+                display: flex;
+                gap: 0.5rem;
+            }
+
+            .timeline-item-actions button {
+                min-height: 40px;
+                padding: 0.5rem 0.75rem;
+            }
+
+            /* Graph controls */
+            .graph-controls {
+                flex-direction: column;
+                padding: 0.5rem;
+                gap: 0.5rem;
+            }
+
+            .graph-controls-primary {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+
+            .graph-btn {
+                min-height: 44px;
+                padding: 0.5rem 0.75rem;
+                flex: 1;
+                min-width: 80px;
+            }
+
+            .graph-slider-container {
+                width: 100%;
+                min-height: 44px;
+            }
+
+            .graph-slider-container input[type="range"] {
+                min-height: 44px;
+            }
+
+            .graph-degree-toggle {
+                width: 100%;
+            }
+
+            .graph-degree-toggle select {
+                min-height: 44px;
+                font-size: 16px;
+            }
+
+            .graph-container {
+                touch-action: none;
+            }
+
+            .graph-container svg {
+                touch-action: none;
+            }
+
+            /* Graph fullscreen toggle (mobile only) */
+            .graph-fullscreen-toggle {
+                display: flex !important;
+            }
+
+            /* Source filter dropdown */
+            .source-filter-options {
+                position: fixed;
+                top: auto;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                max-height: 70vh;
+                border-radius: 16px 16px 0 0;
+                padding-bottom: calc(1rem + var(--safe-bottom));
+            }
+
+            .source-option {
+                min-height: 48px;
+                padding: 0.75rem 1rem;
+            }
+
+            /* Me widgets */
+            .me-widgets-row {
+                grid-template-columns: 1fr;
+            }
+
+            .insights-grid-3col {
+                grid-template-columns: 1fr;
+            }
+
+            /* Overview panels */
+            .overview-panel {
+                padding: 0.75rem;
+            }
+
+            .quick-facts-section {
+                padding: 0.75rem;
+            }
+
+            /* Notes area */
+            .notes-area {
+                min-height: 100px;
+                font-size: 16px;
+            }
+
+            /* Contact grid */
+            .contact-grid-compact {
+                gap: 0.5rem;
+            }
+
+            .contact-item-compact {
+                min-height: 44px;
+                padding: 0.5rem;
+            }
+
+            /* Relationship viz */
+            .relationship-viz-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .relationship-viz-card {
+                padding: 0.75rem;
+            }
+
+            /* Birthday toast */
+            .birthday-toast {
+                padding-left: calc(0.75rem + var(--safe-left));
+                padding-right: calc(0.75rem + var(--safe-right));
+            }
+
+            /* Modals as bottom sheets */
+            .merge-modal,
+            .split-modal {
+                align-items: flex-end;
+            }
+
+            .merge-modal-content,
+            .split-modal-content {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                max-width: 100%;
+                width: 100%;
+                max-height: 90vh;
+                border-radius: 16px 16px 0 0;
+                padding: 1.25rem;
+                padding-bottom: calc(1.5rem + var(--safe-bottom));
+                animation: slideUp 0.3s ease-out;
+            }
+
+            @keyframes slideUp {
+                from { transform: translateY(100%); }
+                to { transform: translateY(0); }
+            }
+
+            .merge-modal-header,
+            .split-modal-header {
+                font-size: 1.1rem;
+                text-align: center;
+                padding-bottom: 0.75rem;
+                border-bottom: 1px solid var(--border);
+                margin-bottom: 1rem;
+            }
+
+            .merge-modal-actions,
+            .split-modal-actions {
+                flex-direction: column;
+                gap: 0.75rem;
+                margin-top: 1rem;
+            }
+
+            .merge-modal-actions button,
+            .split-modal-actions button {
+                width: 100%;
+                min-height: 48px;
+                font-size: 1rem;
+            }
+
+            .merge-person-option,
+            .split-source-item {
+                min-height: 56px;
+                padding: 0.75rem;
+            }
+
+            .merge-person-option:active,
+            .split-source-item:active {
+                background: var(--bg-tertiary);
+            }
+        }
+
+        /* Graph fullscreen mode */
+        .graph-fullscreen-toggle {
+            display: none;
+        }
+
+        #tabGraph.graph-fullscreen {
+            position: fixed !important;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 1000;
+            background: var(--bg-primary);
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #tabGraph.graph-fullscreen .graph-container {
+            flex: 1;
+            height: calc(100vh - 120px);
+            border-radius: 0;
+        }
+
+        #tabGraph.graph-fullscreen .graph-controls {
+            position: relative;
+            background: var(--bg-secondary);
+            z-index: 10;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* Small phone adjustments */
+        @media (max-width: 480px) {
+            .header-brand {
+                font-size: 0.85rem;
+            }
+
+            .nav-link {
+                padding: 0.5rem;
+                font-size: 0.75rem;
+            }
+
+            .detail-name {
+                font-size: 1.1rem;
+            }
+
+            .tab {
+                padding: 0.875rem 1rem;
+                font-size: 0.85rem;
+            }
+
+            .hero-stat {
+                min-width: 90px;
+                padding: 0.625rem;
+            }
+
+            .hero-stat-value {
+                font-size: 1.25rem;
+            }
+
+            .hero-stat-label {
+                font-size: 0.65rem;
             }
         }
 
@@ -5990,6 +6825,9 @@
 <body>
     <header class="header">
         <div class="header-left">
+            <button class="mobile-menu-btn" id="crmMenuBtn" onclick="togglePeoplePanel()" aria-label="Toggle people list">
+                <span class="hamburger-icon"></span>
+            </button>
             <a href="/" class="header-brand">LifeOS</a>
             <nav class="header-nav">
                 <a href="/chat" class="nav-link">💬 Chat</a>
@@ -6008,6 +6846,9 @@
             </div>
         </div>
     </header>
+
+    <!-- Mobile sidebar overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlayCrm" onclick="closePeoplePanel()"></div>
 
     <!-- Birthday Toast Notification -->
     <div class="birthday-toast" id="birthdayToast" style="display: none;">
@@ -6141,6 +6982,19 @@
                             <div class="header-dunbar-circle" id="headerDunbarCircle" title="Dunbar Circle">0</div>
                             <span class="header-indicator-label" id="headerDunbarLabel">Intimate</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Mobile-only collapsible details (tags, birthday, contact) -->
+                <div class="mobile-details-drawer" id="mobileDetailsDrawer">
+                    <button class="mobile-details-toggle" id="mobileDetailsToggle" onclick="toggleMobileDetails()">
+                        <span class="mobile-details-summary" id="mobileDetailsSummary">Details</span>
+                        <span class="mobile-details-chevron" id="mobileDetailsChevron">▼</span>
+                    </button>
+                    <div class="mobile-details-content" id="mobileDetailsContent">
+                        <div class="mobile-details-row" id="mobileDetailsBirthday"></div>
+                        <div class="mobile-details-row" id="mobileDetailsContact"></div>
+                        <div class="mobile-details-row" id="mobileDetailsTags"></div>
                     </div>
                 </div>
 
@@ -6860,6 +7714,9 @@
                                 <button class="graph-refresh-btn" onclick="refreshGraphLayout()" title="Refresh layout">
                                     ↻
                                 </button>
+                                <button class="graph-btn graph-fullscreen-toggle" onclick="toggleGraphFullscreen()" title="Fullscreen">
+                                    <span class="fullscreen-icon">⛶</span>
+                                </button>
                                 <button class="graph-expand-btn" onclick="toggleGraphFiltersExpansion(event)">
                                     More <span class="expand-arrow">▼</span>
                                 </button>
@@ -7232,6 +8089,156 @@
         let dunbarCirclesInitialized = false;  // Track if global circles have been calculated
         let meInteractionsCache = null;  // Cache for "Me" page interactions
         let meInteractionsCacheYears = null; // Track which years setting the cache was loaded for
+
+        // ===============================
+        // Mobile Navigation
+        // ===============================
+
+        function isMobileView() {
+            return window.innerWidth <= 768;
+        }
+
+        function togglePeoplePanel() {
+            const panel = document.querySelector('.people-list-panel');
+            const overlay = document.getElementById('sidebarOverlayCrm');
+            const menuBtn = document.getElementById('crmMenuBtn');
+
+            if (panel && overlay) {
+                const isVisible = panel.classList.toggle('visible');
+                overlay.classList.toggle('visible', isVisible);
+                if (menuBtn) menuBtn.classList.toggle('active', isVisible);
+            }
+        }
+
+        function closePeoplePanel() {
+            const panel = document.querySelector('.people-list-panel');
+            const overlay = document.getElementById('sidebarOverlayCrm');
+            const menuBtn = document.getElementById('crmMenuBtn');
+
+            if (panel) panel.classList.remove('visible');
+            if (overlay) overlay.classList.remove('visible');
+            if (menuBtn) menuBtn.classList.remove('active');
+        }
+
+        // Handle window resize - close mobile panel when resizing to desktop
+        window.addEventListener('resize', () => {
+            if (!isMobileView()) {
+                closePeoplePanel();
+            }
+        });
+
+        // Swipe gesture handling for sidebar (swipe left to close only)
+        // Note: Swipe from left edge to open is not used because it conflicts
+        // with iOS Safari's native back navigation gesture
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let isSwiping = false;
+        const SWIPE_THRESHOLD = 50;
+
+        function initSwipeGestures() {
+            const panel = document.querySelector('.people-list-panel');
+            const overlay = document.getElementById('sidebarOverlayCrm');
+
+            // Only track swipes that start on the panel or overlay (to close)
+            const swipeTargets = [panel, overlay].filter(Boolean);
+
+            swipeTargets.forEach(target => {
+                target.addEventListener('touchstart', (e) => {
+                    if (!isMobileView()) return;
+                    if (!panel?.classList.contains('visible')) return;
+
+                    touchStartX = e.touches[0].clientX;
+                    touchStartY = e.touches[0].clientY;
+                    isSwiping = true;
+                }, { passive: true });
+
+                target.addEventListener('touchend', (e) => {
+                    if (!isSwiping || !isMobileView()) {
+                        isSwiping = false;
+                        return;
+                    }
+
+                    const touchEndX = e.changedTouches[0].clientX;
+                    const touchEndY = e.changedTouches[0].clientY;
+                    const deltaX = touchEndX - touchStartX;
+                    const deltaY = Math.abs(touchEndY - touchStartY);
+
+                    // Swipe left to close (horizontal swipe must be dominant)
+                    if (deltaX < -SWIPE_THRESHOLD && Math.abs(deltaX) > deltaY) {
+                        closePeoplePanel();
+                    }
+
+                    isSwiping = false;
+                }, { passive: true });
+            });
+        }
+
+        // Initialize swipe gestures when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initSwipeGestures);
+        } else {
+            initSwipeGestures();
+        }
+
+        // Mobile details drawer toggle
+        function toggleMobileDetails() {
+            const drawer = document.getElementById('mobileDetailsDrawer');
+            if (drawer) {
+                drawer.classList.toggle('expanded');
+            }
+        }
+
+        // Update mobile details content when person is loaded
+        function updateMobileDetails(person) {
+            const birthdayRow = document.getElementById('mobileDetailsBirthday');
+            const contactRow = document.getElementById('mobileDetailsContact');
+            const tagsRow = document.getElementById('mobileDetailsTags');
+            const summary = document.getElementById('mobileDetailsSummary');
+
+            if (!birthdayRow || !contactRow || !tagsRow) return;
+
+            // Birthday (format: "MM-DD")
+            if (person.birthday) {
+                const [month, day] = person.birthday.split('-').map(Number);
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const formatted = `${monthNames[month - 1]} ${day}`;
+                birthdayRow.innerHTML = `<span>🎂 ${formatted}</span>`;
+            } else {
+                birthdayRow.innerHTML = '';
+            }
+
+            // Contact info (arrays: emails, phone_numbers)
+            let contactHtml = '';
+            const email = person.emails?.[0];
+            const phone = person.phone_numbers?.[0];
+            if (email) {
+                contactHtml += `<a href="mailto:${email}">📧 ${email}</a>`;
+            }
+            if (phone) {
+                contactHtml += `<a href="tel:${phone}">📱 ${phone}</a>`;
+            }
+            contactRow.innerHTML = contactHtml;
+
+            // Tags
+            if (person.tags && person.tags.length > 0) {
+                tagsRow.innerHTML = person.tags.map(tag =>
+                    `<span class="tag-chip">${tag}</span>`
+                ).join('');
+            } else {
+                tagsRow.innerHTML = '';
+            }
+
+            // Update summary text
+            const parts = [];
+            if (person.birthday) parts.push('Birthday');
+            if (email || phone) parts.push('Contact');
+            if (person.tags?.length) parts.push(`${person.tags.length} tag${person.tags.length > 1 ? 's' : ''}`);
+            summary.textContent = parts.length > 0 ? parts.join(' · ') : 'No details';
+
+            // Collapse drawer when switching people
+            const drawer = document.getElementById('mobileDetailsDrawer');
+            if (drawer) drawer.classList.remove('expanded');
+        }
 
         // ===============================
         // Performance Caching Infrastructure
@@ -7637,9 +8644,14 @@
             } else if (personId) {
                 // Person detail page: load person immediately, don't wait for people list
                 // This makes direct links to /crm/{personId} feel much faster
-                selectPerson(personId, false, true); // true = don't push to history
                 if (tab) {
-                    switchTab(tab, true); // true = don't update URL
+                    // Direct navigation to specific tab (e.g., /crm/{id}/timeline)
+                    // Must await person load before switching tabs to avoid race condition
+                    await selectPerson(personId, false, true);
+                    await switchTab(tab, true);
+                } else {
+                    // Regular person page - non-blocking for faster perceived load
+                    selectPerson(personId, false, true);
                 }
                 // Let people list finish loading in background
                 await peoplePromise;
@@ -7796,7 +8808,6 @@
             `).join('');
 
             updateMergeToolbar();
-            loadProfilePhotos();
         }
 
         // Toggle merge selection for a person
@@ -8330,6 +9341,11 @@
             closeEdgePanel(); // Close edge panel when switching people
             closeNodePanel(); // Close node panel when switching people
 
+            // Close mobile sidebar when selecting a person
+            if (isMobileView()) {
+                closePeoplePanel();
+            }
+
             // Clear charts immediately to prevent stale data showing
             clearChartsWithLoading();
 
@@ -8341,8 +9357,9 @@
                 updateUrl(personId, currentTab);
             }
 
-            // Show detail panel with loading state, load data in background (don't await)
-            loadPersonDetail(personId, stayOnCurrentTab);
+            // Show detail panel with loading state, load data in background
+            // Return promise so callers can optionally await (e.g., when switching to specific tab)
+            return loadPersonDetail(personId, stayOnCurrentTab);
         }
 
         // Load person detail - shows skeleton immediately, loads data progressively
@@ -8428,7 +9445,34 @@
             document.getElementById('detailName').textContent = 'Loading...';
             document.getElementById('detailCompany').textContent = '';
             document.getElementById('detailAvatar').textContent = '...';
+            document.getElementById('detailAvatar').style.backgroundImage = '';
+            document.getElementById('detailAvatar').classList.remove('has-photo');
             document.getElementById('detailContactQuick').innerHTML = '';
+
+            // Clear tags
+            const tagsEl = document.getElementById('detailTagsChips');
+            if (tagsEl) tagsEl.innerHTML = '';
+
+            // Clear contact info
+            const contactInfoEl = document.getElementById('contactInfoCompact');
+            if (contactInfoEl) contactInfoEl.innerHTML = '<div class="loading">Loading...</div>';
+
+            // Clear mobile details (birthday, tags)
+            const mobileBirthday = document.getElementById('mobileDetailsBirthday');
+            const mobileTags = document.getElementById('mobileDetailsTags');
+            if (mobileBirthday) mobileBirthday.innerHTML = '';
+            if (mobileTags) mobileTags.innerHTML = '';
+
+            // Clear header indicators (strength, dunbar)
+            const strengthValueEl = document.getElementById('headerStrengthValue');
+            const dunbarCircleEl = document.getElementById('headerDunbarCircle');
+            const dunbarLabelEl = document.getElementById('headerDunbarLabel');
+            if (strengthValueEl) strengthValueEl.textContent = '-';
+            if (dunbarCircleEl) {
+                dunbarCircleEl.textContent = '-';
+                dunbarCircleEl.className = 'header-dunbar-circle';
+            }
+            if (dunbarLabelEl) dunbarLabelEl.textContent = '';
 
             // Clear and show loading state for charts
             clearChartsWithLoading();
@@ -8438,13 +9482,14 @@
             document.getElementById('heroStatEvents').textContent = '-';
             document.getElementById('heroStatMessages').textContent = '-';
 
-            // Hide and clear additional hero stats (phone, slack, notes, contacts, linkedin)
+            // Hide and clear additional hero stats (phone, slack, notes, contacts, linkedin, photos)
             const additionalStats = [
                 { container: 'heroStatPhoneContainer', value: 'heroStatPhone' },
                 { container: 'heroStatSlackContainer', value: 'heroStatSlack' },
                 { container: 'heroStatNotesContainer', value: 'heroStatNotes' },
                 { container: 'heroStatContactsContainer', value: 'heroStatContacts' },
                 { container: 'heroStatLinkedInContainer', value: 'heroStatLinkedIn' },
+                { container: 'heroStatPhotosContainer', value: 'heroStatPhotos' },
             ];
             additionalStats.forEach(({ container, value }) => {
                 const containerEl = document.getElementById(container);
@@ -8458,6 +9503,12 @@
             if (strengthRing) {
                 const ctx = strengthRing.getContext('2d');
                 ctx.clearRect(0, 0, strengthRing.width, strengthRing.height);
+            }
+
+            // Clear strength ring fill (SVG version)
+            const ringFill = document.getElementById('headerStrengthRingFill');
+            if (ringFill) {
+                ringFill.style.strokeDashoffset = '113.1'; // Full circle = empty
             }
         }
 
@@ -8667,6 +9718,11 @@
                 renderEditableTags(person);
             } else {
                 document.getElementById('detailTagsChips').innerHTML = '';
+            }
+
+            // Update mobile details drawer
+            if (!isMePage) {
+                updateMobileDetails(person);
             }
 
             // Load Quick Facts (skip for Me page - has its own dashboard)
@@ -8960,6 +10016,37 @@
 
             // Update timeline filter visibility based on available data
             updateTimelineFilterVisibility();
+        }
+
+        // Update secondary hero stats (stats not on PersonEntity) from sourceTotals
+        // Called after heatmap loads to show phone, slack, notes, contacts, linkedin, photos
+        function updateSecondaryHeroStats() {
+            const phoneCount = (sourceTotals['phone'] || 0);
+            const slackCount = (sourceTotals['slack'] || 0);
+            const notesCount = (sourceTotals['vault'] || 0) + (sourceTotals['granola'] || 0);
+            const contactsCount = (sourceTotals['contacts'] || 0);
+            const linkedinCount = (sourceTotals['linkedin'] || 0);
+            const photosCount = (sourceTotals['photos'] || 0);
+
+            const updateStat = (containerId, valueId, count) => {
+                const container = document.getElementById(containerId);
+                const value = document.getElementById(valueId);
+                if (container && value) {
+                    if (count > 0) {
+                        container.style.display = '';
+                        value.textContent = formatCompactNumber(count);
+                    } else {
+                        container.style.display = 'none';
+                    }
+                }
+            };
+
+            updateStat('heroStatPhoneContainer', 'heroStatPhone', phoneCount);
+            updateStat('heroStatSlackContainer', 'heroStatSlack', slackCount);
+            updateStat('heroStatNotesContainer', 'heroStatNotes', notesCount);
+            updateStat('heroStatContactsContainer', 'heroStatContacts', contactsCount);
+            updateStat('heroStatLinkedInContainer', 'heroStatLinkedIn', linkedinCount);
+            updateStat('heroStatPhotosContainer', 'heroStatPhotos', photosCount);
         }
 
         /**
@@ -9395,8 +10482,9 @@
                 }
 
                 renderHeatMap();
-                // Don't overwrite hero stats - they show lifetime totals from PersonEntity,
-                // not the limited heatmap window
+                // Update secondary stats (phone, slack, notes, photos, etc.) from heatmap data
+                // Main stats (emails, events, messages) already set from PersonEntity lifetime totals
+                updateSecondaryHeroStats();
             } catch (error) {
                 console.error('Failed to load heat map:', error);
                 heatmapData = {};
@@ -11125,23 +12213,20 @@
                 return;
             }
 
-            // Try to load the photo
-            try {
-                const response = await fetch(`/api/photos/profile/${personId}`, { method: 'HEAD' });
-                if (response.ok) {
-                    avatar.style.backgroundImage = `url(/api/photos/profile/${personId})`;
-                    avatar.classList.add('has-photo');
-                    profilePhotoCache.set(personId, true);
-                } else {
-                    avatar.style.backgroundImage = '';
-                    avatar.classList.add('no-photo');
-                    profilePhotoCache.set(personId, false);
-                }
-            } catch {
+            // Try to load the photo using Image preload (HEAD returns 405 for FileResponse)
+            const photoUrl = `/api/photos/profile/${personId}`;
+            const img = new Image();
+            img.onload = () => {
+                avatar.style.backgroundImage = `url(${photoUrl})`;
+                avatar.classList.add('has-photo');
+                profilePhotoCache.set(personId, true);
+            };
+            img.onerror = () => {
                 avatar.style.backgroundImage = '';
                 avatar.classList.add('no-photo');
                 profilePhotoCache.set(personId, false);
-            }
+            };
+            img.src = photoUrl;
         }
 
         // Render Days Since Contact visualization
@@ -13480,27 +14565,41 @@
             const toDate = toInput?.value;
             const dateKey = (fromDate && toDate && fromDate === toDate) ? fromDate : null;
 
-            // Try cache: we cache with NO source filter (all), then filter client-side
-            // This allows instant source filter switching without API calls
-            const cached = getCachedTimeline(personId, dateKey);
+            // Get current filter state
             const sourceType = mapFilterToSourceType(timelineFilter);
 
-            if (cached && sourceType === null) {
-                // Cache hit and no source filter - use directly
+            // When filtering by source type, fetch that type directly from API
+            // This ensures we get ALL items of that type, not just what's in the 500-item cache
+            // (e.g., photos would be drowned out by thousands of messages in the cache)
+            if (sourceType !== null) {
+                container.innerHTML = '<div class="loading">Loading timeline...</div>';
+                try {
+                    const params = new URLSearchParams();
+                    if (dateKey) params.set('date', dateKey);
+                    params.set('limit', TIMELINE_LIMIT.toString());
+                    params.set('source_type', sourceType);
+
+                    const isMePage = isMyPage(personId);
+                    const baseUrl = isMePage ? '/me/timeline' : `/people/${personId}/timeline`;
+                    const data = await api(`${baseUrl}?${params.toString()}`);
+
+                    timelineData = data.items || [];
+                    updateTimelineCount(data.count || timelineData.length, data.has_more || false);
+                    renderTimeline();
+                    return;
+                } catch (error) {
+                    console.error('Failed to load filtered timeline:', error);
+                    container.innerHTML = '<div class="loading">Error loading timeline</div>';
+                    return;
+                }
+            }
+
+            // No source filter - try cache for "All" view
+            const cached = getCachedTimeline(personId, dateKey);
+            if (cached) {
                 timelineData = cached.items || [];
                 updateTimelineCount(cached.count || timelineData.length, cached.has_more || false);
                 updateTimelineFilterVisibility();
-                renderTimeline();
-                return;
-            }
-
-            if (cached && sourceType !== null) {
-                // Cache hit but need to filter by source - do it client-side
-                const sourceTypes = sourceType.split(',');
-                timelineData = (cached.items || []).filter(item =>
-                    sourceTypes.includes(item.source_type)
-                );
-                updateTimelineCount(timelineData.length, false);
                 renderTimeline();
                 return;
             }
@@ -13520,10 +14619,6 @@
                 // Always use consistent limit to prevent loading failures for high-volume contacts
                 params.set('limit', TIMELINE_LIMIT.toString());
 
-                // When fetching for cache, get ALL sources (no filter)
-                // We'll filter client-side for source type changes
-                // Only apply server-side filter if we're NOT caching (i.e., this is a forced refresh)
-
                 // Use different endpoint for /me page vs regular person page
                 const isMePage = isMyPage(personId);
                 const baseUrl = isMePage ? '/me/timeline' : `/people/${personId}/timeline`;
@@ -13534,18 +14629,9 @@
                 // Cache the full (unfiltered) result
                 setCachedTimeline(personId, dateKey, data);
 
-                // Apply source filter if needed
-                if (sourceType) {
-                    const sourceTypes = sourceType.split(',');
-                    timelineData = (data.items || []).filter(item =>
-                        sourceTypes.includes(item.source_type)
-                    );
-                    updateTimelineCount(timelineData.length, false);
-                } else {
-                    timelineData = data.items || [];
-                    updateTimelineCount(data.count || timelineData.length, data.has_more || false);
-                    updateTimelineFilterVisibility();
-                }
+                timelineData = data.items || [];
+                updateTimelineCount(data.count || timelineData.length, data.has_more || false);
+                updateTimelineFilterVisibility()
 
                 renderTimeline();
             } catch (error) {
@@ -15339,6 +16425,28 @@
             }
         }
 
+        // Toggle graph fullscreen mode (mobile)
+        function toggleGraphFullscreen() {
+            const tabGraph = document.getElementById('tabGraph');
+            if (!tabGraph) return;
+
+            const isFullscreen = tabGraph.classList.toggle('graph-fullscreen');
+            document.body.style.overflow = isFullscreen ? 'hidden' : '';
+
+            // Resize graph to new container dimensions after CSS transition
+            setTimeout(() => {
+                const container = document.getElementById('graphContainer');
+                if (graphSvg && container) {
+                    graphSvg.attr('width', container.clientWidth)
+                            .attr('height', container.clientHeight);
+                    // Re-fit to nodes if we have data
+                    if (graphNodes && graphNodes.length > 0) {
+                        fitToFirstDegreeNodes();
+                    }
+                }
+            }, 350);
+        }
+
         // Fit zoom to show all first-degree nodes
         function fitToFirstDegreeNodes() {
             if (!graphSvg || !graphZoom || !graphNodes || graphNodes.length === 0) return;
@@ -16222,12 +17330,13 @@
             const tabContent = document.getElementById(`tab${tabName.charAt(0).toUpperCase() + tabName.slice(1)}`);
             tabContent.style.display = tabName === 'graph' ? 'flex' : 'block';
 
-            // Toggle graph mode (compact header)
+            // Toggle compact header modes (graph/timeline)
             const detailContent = document.getElementById('detailContent');
+            detailContent.classList.remove('graph-mode', 'timeline-mode');
             if (tabName === 'graph') {
                 detailContent.classList.add('graph-mode');
-            } else {
-                detailContent.classList.remove('graph-mode');
+            } else if (tabName === 'timeline') {
+                detailContent.classList.add('timeline-mode');
             }
 
             // Load data if needed
