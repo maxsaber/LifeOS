@@ -191,7 +191,8 @@ def sync_apple_contacts(dry_run: bool = True) -> dict:
 
                 # Update birthday if contact has one and person doesn't
                 if contact.birthday and not person.birthday:
-                    person.birthday = contact.birthday
+                    # Convert datetime to "MM-DD" format
+                    person.birthday = f"{contact.birthday.month:02d}-{contact.birthday.day:02d}"
                     person_updated = True
                     stats['birthdays_synced'] += 1
 
