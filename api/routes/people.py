@@ -250,8 +250,8 @@ async def resolve_entity(request: EntityResolveRequest) -> EntityResolveResponse
     **PRIMARY TOOL for finding someone's email, full name, and contact info from a nickname or partial name.**
 
     Use this FIRST when you need to:
-    - Find someone's email address (e.g., "tay" -> annetaylorwalker@gmail.com)
-    - Get someone's full/canonical name (e.g., "tay" -> "Taylor Walker, MD, MPH")
+    - Find someone's email address (e.g., "john" -> john@example.com)
+    - Get someone's full/canonical name (e.g., "john" -> "John Smith")
     - Look up contact details before searching Gmail, Calendar, or other sources
 
     Example: To find emails to/from "Tay", first call this with {"name": "tay"} to get their email,

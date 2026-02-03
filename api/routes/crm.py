@@ -48,45 +48,31 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/crm", tags=["crm"])
 
-# Work email domain for category detection
-WORK_EMAIL_DOMAIN = "movementlabs.com"
+# Work email domain for category detection (loaded from settings)
+WORK_EMAIL_DOMAIN = settings.work_email_domain if hasattr(settings, 'work_email_domain') and settings.work_email_domain else "example.com"
 
-# Owner's person ID for "Me" page
-MY_PERSON_ID = "3f41e143-719f-4dc9-a9f1-389b2db5b166"
+# Owner's person ID for "Me" page (loaded from settings)
+MY_PERSON_ID = settings.my_person_id
 
-# Family last names (case-insensitive matching)
-FAMILY_LAST_NAMES = {"ramia"}
+# Family configuration - loaded from config/family_members.json
+import json
 
-# Family members by exact name (case-insensitive)
-FAMILY_EXACT_NAMES = {
-    # Walker/Lyras/Haddad
-    "taylor walker",
-    "cissy",
-    "ethan van drimmelen",
-    "evie lyras",
-    "jordan haddad",
-    # Jones family
-    "lucy jones",
-    "grandparents jones",
-    "bryce jones",
-    "bill jones",
-    "ryan a. jones",
-    "ryan jones",
-    "uncle dave",
-    "aunt judi",
-    "aunt kathleen",
-    # Berry family
-    "shane berry",
-    "shane e. berry",
-    "bryce berry",
-    "jonas berry",
-    "brian berry",
-    # Prenger/Townsend family
-    "kayla townsend",
-    "amy prenger",
-    "grammy",
-    "jeremy prenger",
-}
+def _load_family_config():
+    """Load family configuration from JSON file."""
+    config_path = Path(__file__).parent.parent.parent / "config" / "family_members.json"
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+            return (
+                set(name.lower() for name in config.get("family_last_names", [])),
+                set(name.lower() for name in config.get("family_exact_names", []))
+            )
+        except Exception as e:
+            logger.warning(f"Failed to load family config: {e}")
+    return set(), set()
+
+FAMILY_LAST_NAMES, FAMILY_EXACT_NAMES = _load_family_config()
 
 # Import manual strength overrides from centralized config
 from config.relationship_weights import STRENGTH_OVERRIDES_BY_ID
@@ -598,6 +584,28 @@ def _person_to_detail_response(
 # Endpoints
 
 
+class CRMConfigResponse(BaseModel):
+    """Response for CRM configuration."""
+    my_person_id: str = ""
+    work_email_domain: str = ""
+    partner_person_id: str = ""
+
+
+@router.get("/config", response_model=CRMConfigResponse)
+async def get_crm_config():
+    """
+    Get CRM configuration values for frontend.
+
+    Returns configuration that the frontend needs for proper operation,
+    such as the owner's person ID and work email domain.
+    """
+    return CRMConfigResponse(
+        my_person_id=settings.my_person_id,
+        work_email_domain=WORK_EMAIL_DOMAIN,
+        partner_person_id=PARTNER_PERSON_ID,
+    )
+
+
 @router.get("/birthdays/today")
 async def get_todays_birthdays():
     """Get all people with birthdays today."""
@@ -612,6 +620,34 @@ async def get_todays_birthdays():
     ]
 
     return {"birthdays": birthday_people, "count": len(birthday_people)}
+
+
+@router.get("/birthdays/all")
+async def get_all_birthdays():
+    """Get all people with birthdays, grouped by date."""
+    person_store = get_person_entity_store()
+    people = person_store.get_all()
+
+    # Group by birthday (MM-DD format)
+    by_date = {}
+    for p in people:
+        if p.birthday:
+            if p.birthday not in by_date:
+                by_date[p.birthday] = []
+            by_date[p.birthday].append({
+                "id": p.id,
+                "name": p.canonical_name,
+            })
+
+    # Sort people within each date by name
+    for date in by_date:
+        by_date[date].sort(key=lambda x: x["name"].lower())
+
+    return {
+        "birthdays": by_date,
+        "total_people": sum(len(v) for v in by_date.values()),
+        "total_dates": len(by_date),
+    }
 
 
 @router.get("/people", response_model=PersonListResponse)
@@ -3510,25 +3546,22 @@ async def get_me_interactions(
                 unique_total=unique_total,
             ))
 
-    # 5. Tracked Relationships (Parent + Parallel Parenting)
-    # Define tracked relationship configurations
-    TRACKED_RELATIONSHIPS_CONFIG = [
-        {
-            "name": "Parent Relationship",
-            "person_ids": [
-                "29a732c3-2356-4f60-bf21-956b3652883a",  # Bill Ramia
-                "8205b758-a86f-456c-8c1c-ae3d3b2aa434",  # Patricia Ramia
-            ],
-            "healthy_direction": "more",  # More interactions = healthier
-        },
-        {
-            "name": "Parallel Parenting",
-            "person_ids": [
-                "04bf94f8-20b7-4285-abb4-c64131b5542f",  # Thy Nguyen
-            ],
-            "healthy_direction": "less",  # Fewer interactions = healthier
-        },
-    ]
+    # 5. Tracked Relationships (configurable via config/family_members.json)
+    # Load tracked relationship configurations from config file
+    def _load_tracked_relationships() -> list:
+        """Load tracked relationships config from family_members.json."""
+        import json
+        config_path = Path(__file__).parent.parent.parent / "config" / "family_members.json"
+        if config_path.exists():
+            try:
+                with open(config_path) as f:
+                    config = json.load(f)
+                return config.get("tracked_relationships", [])
+            except Exception:
+                pass
+        return []
+
+    TRACKED_RELATIONSHIPS_CONFIG = _load_tracked_relationships()
 
     tracked_relationships = []
     for config in TRACKED_RELATIONSHIPS_CONFIG:
@@ -4892,8 +4925,21 @@ async def delete_link_override(override_id: str):
 # Relationship Insights Endpoints
 # ============================================================================
 
-# Taylor Walker's ID (hardcoded for relationship page)
-TAYLOR_WALKER_ID = "cb93e7bd-036c-4ef5-adb9-34a9147c4984"
+# Partner person ID for relationship page (loaded from config/relationship_overrides.json)
+def _load_partner_person_id() -> str:
+    """Load partner person ID from relationship overrides config."""
+    import json
+    config_path = Path(__file__).parent.parent.parent / "config" / "relationship_overrides.json"
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+            return config.get("partner_person_id", "")
+        except Exception:
+            pass
+    return ""
+
+PARTNER_PERSON_ID = _load_partner_person_id()
 
 
 class RelationshipInsightResponse(BaseModel):
@@ -4963,7 +5009,7 @@ async def get_relationship_insights(person_id: Optional[str] = None):
     """
     from api.services.relationship_insights import get_relationship_insight_store
 
-    target_id = person_id or TAYLOR_WALKER_ID
+    target_id = person_id or PARTNER_PERSON_ID
     store = get_relationship_insight_store()
 
     insights = store.get_all(target_id)
@@ -5013,7 +5059,7 @@ async def generate_relationship_insights(
         get_relationship_insight_generator,
     )
 
-    target_id = person_id or TAYLOR_WALKER_ID
+    target_id = person_id or PARTNER_PERSON_ID
     store = get_relationship_insight_store()
     generator = get_relationship_insight_generator()
 
@@ -5095,7 +5141,7 @@ async def analyze_relationship_tone(person_id: Optional[str] = None, months: int
     import anthropic
     from datetime import datetime, timezone, timedelta
 
-    target_id = person_id or TAYLOR_WALKER_ID
+    target_id = person_id or PARTNER_PERSON_ID
     interaction_store = get_interaction_store()
 
     # Get date range
@@ -5243,7 +5289,7 @@ async def analyze_relationship_tone_detailed(person_id: Optional[str] = None, mo
     from datetime import datetime, timezone, timedelta
     from collections import defaultdict
 
-    target_id = person_id or TAYLOR_WALKER_ID
+    target_id = person_id or PARTNER_PERSON_ID
     interaction_store = get_interaction_store()
 
     # Get date range

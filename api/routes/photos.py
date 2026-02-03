@@ -183,9 +183,11 @@ async def get_photos_for_person(
     interaction_store = get_interaction_store()
 
     # Get photo interactions for this person
+    # Use high limit to get all photos (default 1000 is too low for people with many photos)
     interactions = interaction_store.get_for_person(
         person_id,
         source_type="photos",
+        limit=10000,  # Support up to 10k photos per person
     )
 
     # Filter by date if provided
@@ -346,12 +348,30 @@ async def get_photo_thumbnail(uuid: str):
     Get a thumbnail for a photo by UUID.
 
     Returns the thumbnail image from the Photos library's derivatives folder.
-    Returns 404 if no thumbnail is available (photo may be in iCloud only).
+    Returns 404 if no thumbnail is available.
+    Returns 410 (Gone) if photo is in iCloud only (use X-iCloud-Only header to detect).
     """
     _check_photos_enabled()
 
     thumb_path = _get_thumbnail_path(uuid)
     if thumb_path is None:
+        # Check if photo is in iCloud only
+        from api.services.apple_photos import get_apple_photos_reader
+        try:
+            reader = get_apple_photos_reader()
+            is_local = reader.get_photo_icloud_status(uuid)
+            if not is_local:
+                # Photo exists but is in iCloud only - return 410 with indicator
+                raise HTTPException(
+                    status_code=410,
+                    detail="icloud-only",
+                    headers={"X-iCloud-Only": "true"}
+                )
+        except HTTPException:
+            raise  # Re-raise HTTP exceptions
+        except Exception:
+            pass  # If we can't check, just return 404
+
         raise HTTPException(
             status_code=404,
             detail=f"No thumbnail available for photo {uuid}"
@@ -453,8 +473,10 @@ async def open_photo_in_app(uuid: str):
     """
     Open a specific photo in the Photos app or Preview.
 
-    First tries to open the original file directly in Preview (allows viewing the actual photo).
-    Falls back to opening Photos app if the original isn't available locally.
+    Tries in order:
+    1. Open the original file directly in Preview (best quality)
+    2. Open the thumbnail/derivative if original is in iCloud only
+    3. Fall back to opening Photos app
     """
     _check_photos_enabled()
 
@@ -471,6 +493,19 @@ async def open_photo_in_app(uuid: str):
                 timeout=5,
             )
             return {"success": True, "message": f"Opened {file_path.name}"}
+        except Exception:
+            pass  # Fall through to thumbnail
+
+    # Try opening the thumbnail/derivative (often available even for iCloud photos)
+    thumb_path = _get_thumbnail_path(uuid)
+    if thumb_path and thumb_path.exists():
+        try:
+            subprocess.run(
+                ["open", str(thumb_path)],
+                capture_output=True,
+                timeout=5,
+            )
+            return {"success": True, "message": f"Opened thumbnail (original in iCloud)"}
         except Exception:
             pass  # Fall through to Photos app
 

@@ -122,7 +122,7 @@ class TestPersonEntity:
 
         entity2 = PersonEntity(
             canonical_name="Sarah Chen",
-            emails=["sarah.chen@gmail.com"],  # Different email
+            emails=["sarah.chen@example.com"],  # Different email
             position="Engineer",
             sources=["gmail", "calendar"],
             first_seen=datetime(2023, 6, 1),  # Earlier
@@ -143,7 +143,7 @@ class TestPersonEntity:
         # Should combine emails
         assert len(merged.emails) == 2
         assert "sarah@movementlabs.xyz" in merged.emails
-        assert "sarah.chen@gmail.com" in merged.emails
+        assert "sarah.chen@example.com" in merged.emails
 
         # Should combine sources
         assert set(merged.sources) == {"linkedin", "gmail", "calendar"}

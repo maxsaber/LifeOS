@@ -11,7 +11,8 @@ identified bad matches.
 """
 
 import sys
-sys.path.insert(0, '/Users/nathanramia/Documents/Code/LifeOS')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from api.services.person_entity import PersonEntityStore
 

@@ -103,7 +103,7 @@ from api.routes.crm_models._utils import (
     # Constants
     WORK_EMAIL_DOMAIN,
     MY_PERSON_ID,
-    TAYLOR_WALKER_ID,
+    PARTNER_PERSON_ID,
     FAMILY_LAST_NAMES,
     FAMILY_EXACT_NAMES,
     # Functions
@@ -191,7 +191,7 @@ __all__ = [
     # Constants
     "WORK_EMAIL_DOMAIN",
     "MY_PERSON_ID",
-    "TAYLOR_WALKER_ID",
+    "PARTNER_PERSON_ID",
     "FAMILY_LAST_NAMES",
     "FAMILY_EXACT_NAMES",
     # Functions

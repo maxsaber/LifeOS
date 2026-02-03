@@ -42,25 +42,44 @@ INSIGHT_CATEGORIES = {
     "ai_suggestions": "💡",  # Novel ideas from AI that weren't explicitly discussed
 }
 
-# Therapy notes path
-THERAPY_VAULT_PATH = "/Users/nathanramia/Notes 2025/Personal/Self-Improvement/Therapy and coaching"
+# Therapy notes path - relative to vault_path
+# Configure via LIFEOS_THERAPY_PATH or defaults to Personal/Self-Improvement/Therapy and coaching
+THERAPY_VAULT_SUBPATH = os.environ.get(
+    "LIFEOS_THERAPY_PATH",
+    "Personal/Self-Improvement/Therapy and coaching"
+)
 
-# Therapist configurations
+def _get_therapy_path() -> str:
+    """Get the full therapy notes path from vault + subpath."""
+    return str(settings.vault_path / THERAPY_VAULT_SUBPATH)
+
+THERAPY_VAULT_PATH = _get_therapy_path()
+
+# Therapist configurations - can be customized via environment or config
+# Names are used for display, aliases are used for matching in notes
+# Configure via LIFEOS_*_THERAPIST and LIFEOS_*_THERAPIST_ALIASES (comma-separated)
+def _parse_aliases(env_var: str) -> list:
+    """Parse comma-separated aliases from env var."""
+    val = os.environ.get(env_var, "")
+    if val:
+        return [a.strip().lower() for a in val.split(",") if a.strip()]
+    return []
+
 THERAPISTS = {
     "couples": {
-        "name": "Erica Turner",
-        "aliases": ["erica", "erica turner"],
-        "context": "couples therapy with Taylor",
+        "name": os.environ.get("LIFEOS_COUPLES_THERAPIST", ""),
+        "aliases": _parse_aliases("LIFEOS_COUPLES_THERAPIST_ALIASES"),
+        "context": os.environ.get("LIFEOS_COUPLES_THERAPY_CONTEXT", "couples therapy"),
     },
     "personal": {
-        "name": "Amy Morgan",
-        "aliases": ["amy", "amy morgan"],
-        "context": "Nathan's personal therapy",
+        "name": os.environ.get("LIFEOS_PERSONAL_THERAPIST", ""),
+        "aliases": _parse_aliases("LIFEOS_PERSONAL_THERAPIST_ALIASES"),
+        "context": os.environ.get("LIFEOS_PERSONAL_THERAPY_CONTEXT", "personal therapy"),
     },
 }
 
 # Legacy constant for backwards compatibility
-COUPLES_THERAPIST = "Erica Turner"
+COUPLES_THERAPIST = THERAPISTS["couples"]["name"]
 
 # Model for insight generation
 INSIGHTS_MODEL = "claude-opus-4-5-20251101"

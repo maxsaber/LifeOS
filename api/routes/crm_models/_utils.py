@@ -22,48 +22,48 @@ from api.routes.crm_models.models import (
 
 logger = logging.getLogger(__name__)
 
-# Work email domain for category detection
-WORK_EMAIL_DOMAIN = "movementlabs.com"
+# Work email domain for category detection (loaded from settings)
+WORK_EMAIL_DOMAIN = settings.work_email_domain if hasattr(settings, 'work_email_domain') and settings.work_email_domain else "example.com"
 
-# Owner's person ID for "Me" page
-MY_PERSON_ID = "3f41e143-719f-4dc9-a9f1-389b2db5b166"
+# Owner's person ID for "Me" page (loaded from settings)
+MY_PERSON_ID = settings.my_person_id
 
-# Taylor Walker's ID (hardcoded for relationship page)
-TAYLOR_WALKER_ID = "cb93e7bd-036c-4ef5-adb9-34a9147c4984"
+# Partner ID for relationship page (loaded from relationship_overrides.json if available)
+def _load_partner_person_id() -> str:
+    """Load partner person ID from relationship overrides config."""
+    import json
+    config_path = Path(__file__).parent.parent.parent.parent / "config" / "relationship_overrides.json"
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+            return config.get("partner_person_id", "")
+        except Exception:
+            pass
+    return ""
 
-# Family last names (case-insensitive matching)
-FAMILY_LAST_NAMES = {"ramia"}
+PARTNER_PERSON_ID = _load_partner_person_id()
 
-# Family members by exact name (case-insensitive)
-FAMILY_EXACT_NAMES = {
-    # Walker/Lyras/Haddad
-    "taylor walker",
-    "cissy",
-    "ethan van drimmelen",
-    "evie lyras",
-    "jordan haddad",
-    # Jones family
-    "lucy jones",
-    "grandparents jones",
-    "bryce jones",
-    "bill jones",
-    "ryan a. jones",
-    "ryan jones",
-    "uncle dave",
-    "aunt judi",
-    "aunt kathleen",
-    # Berry family
-    "shane berry",
-    "shane e. berry",
-    "bryce berry",
-    "jonas berry",
-    "brian berry",
-    # Prenger/Townsend family
-    "kayla townsend",
-    "amy prenger",
-    "grammy",
-    "jeremy prenger",
-}
+# Family configuration - loaded from config/family_members.json
+import json
+from pathlib import Path
+
+def _load_family_config():
+    """Load family configuration from JSON file."""
+    config_path = Path(__file__).parent.parent.parent.parent / "config" / "family_members.json"
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+            return (
+                set(name.lower() for name in config.get("family_last_names", [])),
+                set(name.lower() for name in config.get("family_exact_names", []))
+            )
+        except Exception as e:
+            logging.getLogger(__name__).warning(f"Failed to load family config: {e}")
+    return set(), set()
+
+FAMILY_LAST_NAMES, FAMILY_EXACT_NAMES = _load_family_config()
 
 
 def get_strength_override(person_id: str) -> float | None:

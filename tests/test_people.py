@@ -92,9 +92,9 @@ class TestAliasResolution:
 
     def test_resolves_email_to_name(self):
         """Should resolve email addresses to names."""
-        resolved = resolve_person_name("yoni@movementlabs.com")
-        # Should recognize as Yoni or return as-is if not in registry
-        assert resolved in ["Yoni", "yoni@movementlabs.com"]
+        resolved = resolve_person_name("user@example.com")
+        # Should recognize as name or return as-is if not in registry
+        assert resolved in ["User", "user@example.com"]
 
     def test_preserves_unknown_names(self):
         """Should preserve names not in dictionary."""

@@ -149,8 +149,7 @@ def send_sync_failure_alert(
 
     body_lines.extend([
         "",
-        "Check the LifeOS server logs for more details:",
-        "  tail -100 /Users/nathanramia/Documents/Code/LifeOS/logs/server.log",
+        "Check the LifeOS server logs for more details.",
     ])
 
     return send_alert(subject, "\n".join(body_lines))

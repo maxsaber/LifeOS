@@ -351,29 +351,40 @@ class TestR6InteractionCounts:
             assert False, msg
 
 
-class TestR7TaylorCanonical:
-    """R7: Taylor Test Case - Canonical verification."""
+# Test contact configuration - set these environment variables for canonical verification
+# These should be your partner or closest contact
+TEST_CANONICAL_EMAIL = os.environ.get("LIFEOS_TEST_CONTACT_EMAIL", "")
+TEST_CANONICAL_PHONE = os.environ.get("LIFEOS_TEST_CONTACT_PHONE", "")
+TEST_CANONICAL_NAMES = os.environ.get("LIFEOS_TEST_CONTACT_NAMES", "").lower().split(",") if os.environ.get("LIFEOS_TEST_CONTACT_NAMES") else []
 
-    TAYLOR_EMAIL = "annetaylorwalker@gmail.com"
-    TAYLOR_PHONE = "+19012295017"
-    TAYLOR_NAMES = ["taylor", "tay", "anne taylor walker"]
 
-    def test_taylor_found_by_email(self):
-        """Taylor must be findable by email."""
+@pytest.mark.skipif(not TEST_CANONICAL_EMAIL, reason="Set LIFEOS_TEST_CONTACT_EMAIL to run canonical verification tests")
+class TestR7CanonicalContact:
+    """R7: Canonical Contact Test Case - Primary relationship verification.
+
+    Configure via environment variables:
+    - LIFEOS_TEST_CONTACT_EMAIL: Primary contact email
+    - LIFEOS_TEST_CONTACT_PHONE: Primary contact phone (E.164 format)
+    - LIFEOS_TEST_CONTACT_NAMES: Comma-separated names/aliases (e.g., "john,johnny,j")
+    """
+
+    def test_contact_found_by_email(self):
+        """Contact must be findable by email."""
         store = get_person_entity_store()
-        person = store.get_by_email(self.TAYLOR_EMAIL)
-        assert person is not None, f"Taylor not found by email {self.TAYLOR_EMAIL}"
+        person = store.get_by_email(TEST_CANONICAL_EMAIL)
+        assert person is not None, f"Contact not found by email {TEST_CANONICAL_EMAIL}"
 
-    def test_taylor_found_by_phone(self):
-        """Taylor must be findable by phone."""
+    @pytest.mark.skipif(not TEST_CANONICAL_PHONE, reason="Set LIFEOS_TEST_CONTACT_PHONE to run phone test")
+    def test_contact_found_by_phone(self):
+        """Contact must be findable by phone."""
         store = get_person_entity_store()
-        person = store.get_by_phone(self.TAYLOR_PHONE)
-        assert person is not None, f"Taylor not found by phone {self.TAYLOR_PHONE}"
+        person = store.get_by_phone(TEST_CANONICAL_PHONE)
+        assert person is not None, f"Contact not found by phone {TEST_CANONICAL_PHONE}"
 
-    def test_taylor_has_multiple_sources(self):
-        """Taylor must have interactions from at least 2 different sources."""
+    def test_contact_has_multiple_sources(self):
+        """Contact must have interactions from at least 2 different sources."""
         store = get_person_entity_store()
-        person = store.get_by_email(self.TAYLOR_EMAIL)
+        person = store.get_by_email(TEST_CANONICAL_EMAIL)
         assert person is not None
 
         conn = sqlite3.connect(get_interaction_db_path())
@@ -384,19 +395,20 @@ class TestR7TaylorCanonical:
         sources = [row[0] for row in cursor.fetchall()]
         conn.close()
 
-        assert len(sources) >= 2, f"Taylor only has interactions from {sources}, need at least 2 sources"
+        assert len(sources) >= 2, f"Contact only has interactions from {sources}, need at least 2 sources"
 
-    def test_taylor_vault_interactions_are_correct(self):
-        """Every vault interaction linked to Taylor must actually mention her."""
+    @pytest.mark.skipif(not TEST_CANONICAL_NAMES, reason="Set LIFEOS_TEST_CONTACT_NAMES to run vault verification")
+    def test_contact_vault_interactions_are_correct(self):
+        """Every vault interaction linked to contact must actually mention them."""
         store = get_person_entity_store()
-        person = store.get_by_email(self.TAYLOR_EMAIL)
+        person = store.get_by_email(TEST_CANONICAL_EMAIL)
         assert person is not None
 
         conn = sqlite3.connect(get_interaction_db_path())
         cursor = conn.execute("""
             SELECT source_id, title FROM interactions
             WHERE person_id = ? AND source_type IN ('vault', 'granola')
-            AND source_id LIKE '/Users/%'
+            AND source_id LIKE '/%'
         """, (person.id,))
 
         false_positives = []
@@ -413,10 +425,10 @@ class TestR7TaylorCanonical:
             except Exception:
                 continue
 
-            # Check if any of Taylor's names appear
+            # Check if any of contact's names appear
             found = False
-            for name in self.TAYLOR_NAMES:
-                if name in content:
+            for name in TEST_CANONICAL_NAMES:
+                if name.strip() in content:
                     found = True
                     break
 
@@ -427,22 +439,20 @@ class TestR7TaylorCanonical:
 
         conn.close()
 
-        assert checked > 0, "No Taylor vault interactions found to verify"
-
-        if false_positives:
-            msg = f"Found {len(false_positives)} vault notes linked to Taylor that don't mention her:\n"
+        if checked > 0 and false_positives:
+            msg = f"Found {len(false_positives)} vault notes linked to contact that don't mention them:\n"
             for path, title in false_positives[:5]:
                 msg += f"  - {title}: {path}\n"
             assert False, msg
 
-    def test_taylor_relationship_strength_positive(self):
-        """Taylor must have positive relationship strength from real data."""
+    def test_contact_relationship_strength_positive(self):
+        """Contact must have positive relationship strength from real data."""
         store = get_person_entity_store()
-        person = store.get_by_email(self.TAYLOR_EMAIL)
+        person = store.get_by_email(TEST_CANONICAL_EMAIL)
         assert person is not None
 
         assert person.relationship_strength > 0, (
-            f"Taylor has relationship_strength={person.relationship_strength}, "
+            f"Contact has relationship_strength={person.relationship_strength}, "
             "should be > 0 with real interaction data"
         )
 

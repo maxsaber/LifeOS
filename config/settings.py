@@ -40,7 +40,11 @@ class Settings(BaseSettings):
     # Embedding Model
     # mxbai-embed-large-v1: Top-tier 1024-dim model, stable and well-tested
     embedding_model: str = "mixedbread-ai/mxbai-embed-large-v1"
-    embedding_cache_dir: str = "/Volumes/NVMe External Storage/huggingface_cache"
+    embedding_cache_dir: str = Field(
+        default="~/.cache/huggingface",
+        alias="LIFEOS_EMBEDDING_CACHE",
+        description="Directory for caching embedding model files"
+    )
 
     # Chunking
     chunk_size: int = 500  # tokens
@@ -76,20 +80,27 @@ class Settings(BaseSettings):
         alias="SLACK_REDIRECT_URI"
     )
 
+    # Work email domain for CRM category detection
+    work_email_domain: str = Field(
+        default="",
+        alias="LIFEOS_WORK_DOMAIN",
+        description="Your work email domain (e.g., yourcompany.com) for categorizing work contacts"
+    )
+
     # CRM Owner (the user's person ID for relationship tracking)
     # WARNING: This ID is from people_entities.json and must remain stable.
     # If you rebuild people_entities.json from scratch, this ID will become
     # invalid and you'll need to find your new ID and update this value.
     # See data/README.md for why you should NEVER rebuild from scratch.
     my_person_id: str = Field(
-        default="3f41e143-719f-4dc9-a9f1-389b2db5b166",  # Nathan Ramia
+        default="",
         alias="LIFEOS_MY_PERSON_ID",
         description="Your PersonEntity ID for relationship tracking"
     )
 
     # Apple Photos Integration
     photos_library_path: str = Field(
-        default="/Volumes/NVMe External Storage/Photos Library.photoslibrary",
+        default="~/Pictures/Photos Library.photoslibrary",
         alias="LIFEOS_PHOTOS_PATH",
         description="Path to Photos Library"
     )

@@ -47,6 +47,7 @@ class PhotoAsset:
     timestamp: datetime | None
     latitude: float | None
     longitude: float | None
+    is_local: bool = True  # True if locally available, False if iCloud-only
 
 
 @dataclass
@@ -358,6 +359,32 @@ class ApplePhotosReader:
                     person_uri=row["ZPERSONURI"],
                 )
             return None
+        finally:
+            conn.close()
+
+    def get_photo_icloud_status(self, uuid: str) -> bool:
+        """
+        Check if a photo is available locally or only in iCloud.
+
+        Args:
+            uuid: The photo asset UUID
+
+        Returns:
+            True if locally available, False if iCloud-only
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute("""
+                SELECT ZCLOUDLOCALSTATE
+                FROM ZASSET
+                WHERE ZUUID = ?
+                LIMIT 1
+            """, (uuid,))
+            row = cursor.fetchone()
+            if row:
+                # ZCLOUDLOCALSTATE: 1 = local, 0 = iCloud only
+                return row["ZCLOUDLOCALSTATE"] == 1
+            return False
         finally:
             conn.close()
 
