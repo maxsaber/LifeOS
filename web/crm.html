@@ -2230,13 +2230,39 @@
         }
         .photo-card {
             display: flex;
-            justify-content: space-between;
+            gap: 0.75rem;
             align-items: center;
             padding: 0.5rem 0;
             border-bottom: 1px solid var(--border);
         }
         .photo-card:last-child {
             border-bottom: none;
+        }
+        .photo-thumbnail {
+            width: 60px;
+            height: 60px;
+            object-fit: cover;
+            border-radius: 4px;
+            background: var(--bg-secondary);
+            flex-shrink: 0;
+        }
+        .photo-thumbnail-placeholder {
+            width: 60px;
+            height: 60px;
+            border-radius: 4px;
+            background: var(--bg-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+        .photo-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
         }
         .photo-time {
             color: var(--text-muted);
@@ -13523,8 +13549,15 @@
                         const data = await response.json();
                         details.innerHTML = data.photos.map(p => `
                             <div class="photo-card">
-                                <span class="photo-time">${formatTime(p.timestamp)}</span>
-                                <a href="${p.source_link}" target="_blank" class="photo-open-btn">Open in Photos</a>
+                                <img class="photo-thumbnail"
+                                     src="/api/photos/thumbnail/${p.uuid}"
+                                     onerror="this.outerHTML='<div class=\\'photo-thumbnail-placeholder\\'>📷</div>'"
+                                     loading="lazy"
+                                     alt="Photo">
+                                <div class="photo-info">
+                                    <span class="photo-time">${formatTime(p.timestamp)}</span>
+                                    <a href="/api/photos/open/${p.uuid}" class="photo-open-btn" onclick="event.preventDefault(); fetch(this.href); return false;">Open in Photos</a>
+                                </div>
                             </div>
                         `).join('') || '<div class="photo-card">No photos found</div>';
                         details.dataset.loaded = 'true';

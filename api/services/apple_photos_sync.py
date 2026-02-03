@@ -301,8 +301,8 @@ class ApplePhotosSync:
         """
         photos_reader = self._get_photos_reader()
 
-        # Get photos for this person
-        photos = photos_reader.get_photos_for_person(photos_person.pk, limit=500)
+        # Get photos for this person (high limit to capture all photos)
+        photos = photos_reader.get_photos_for_person(photos_person.pk, limit=5000)
 
         # Filter by since if provided
         if since:

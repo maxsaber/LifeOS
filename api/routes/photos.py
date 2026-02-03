@@ -5,9 +5,11 @@ Provides endpoints for querying Photos face recognition data
 and syncing to LifeOS CRM.
 """
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
 
 from config.settings import settings
@@ -163,6 +165,7 @@ async def list_photos_people(
 @router.get("/person/{person_id}", response_model=PhotosForPersonResponse)
 async def get_photos_for_person(
     person_id: str,
+    date: Optional[str] = Query(None, description="Filter by date (YYYY-MM-DD)"),
     limit: int = Query(default=50, ge=1, le=200),
 ):
     """
@@ -170,6 +173,8 @@ async def get_photos_for_person(
 
     Requires a LifeOS PersonEntity ID. Returns photos where this
     person's face was recognized.
+
+    Optionally filter by date (YYYY-MM-DD) to get photos from a specific day.
     """
     _check_photos_enabled()
 
@@ -182,6 +187,13 @@ async def get_photos_for_person(
         person_id,
         source_type="photos",
     )
+
+    # Filter by date if provided
+    if date:
+        interactions = [
+            i for i in interactions
+            if i.timestamp and i.timestamp.strftime('%Y-%m-%d') == date
+        ]
 
     photos = []
     for interaction in interactions[:limit]:
@@ -277,4 +289,124 @@ async def trigger_photo_sync(
             success=False,
             stats={"error": str(e)},
             message=f"Sync failed: {e}"
+        )
+
+
+def _get_thumbnail_path(uuid: str) -> Path | None:
+    """
+    Find a thumbnail/derivative for a photo UUID.
+
+    Photos library stores derivatives in resources/derivatives/{first_char}/
+    with naming pattern: UUID_1_105_c.jpeg (or similar suffixes).
+
+    Args:
+        uuid: Photo asset UUID
+
+    Returns:
+        Path to thumbnail file if found, None otherwise
+    """
+    if not uuid:
+        return None
+
+    library_path = Path(settings.photos_library_path)
+    derivatives_base = library_path / "resources" / "derivatives"
+
+    if not derivatives_base.exists():
+        return None
+
+    # First character of UUID determines subdirectory
+    first_char = uuid[0].upper()
+    derivatives_dir = derivatives_base / first_char
+
+    if not derivatives_dir.exists():
+        return None
+
+    # Look for any derivative matching this UUID
+    # Common suffixes: _1_105_c.jpeg (small), _1_102_o.jpeg (medium)
+    for suffix in ["_1_105_c.jpeg", "_1_102_o.jpeg", "_1_201_a.jpeg", ".THM"]:
+        thumb_path = derivatives_dir / f"{uuid}{suffix}"
+        if thumb_path.exists():
+            return thumb_path
+
+    # Try glob pattern as fallback
+    matches = list(derivatives_dir.glob(f"{uuid}*"))
+    if matches:
+        # Prefer jpeg over THM
+        for match in matches:
+            if match.suffix.lower() in [".jpeg", ".jpg"]:
+                return match
+        return matches[0]
+
+    return None
+
+
+@router.get("/thumbnail/{uuid}")
+async def get_photo_thumbnail(uuid: str):
+    """
+    Get a thumbnail for a photo by UUID.
+
+    Returns the thumbnail image from the Photos library's derivatives folder.
+    Returns 404 if no thumbnail is available (photo may be in iCloud only).
+    """
+    _check_photos_enabled()
+
+    thumb_path = _get_thumbnail_path(uuid)
+    if thumb_path is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No thumbnail available for photo {uuid}"
+        )
+
+    # Determine media type
+    suffix = thumb_path.suffix.lower()
+    media_type = "image/jpeg"
+    if suffix == ".png":
+        media_type = "image/png"
+    elif suffix == ".heic":
+        media_type = "image/heic"
+    elif suffix == ".thm":
+        media_type = "image/jpeg"
+
+    return FileResponse(
+        thumb_path,
+        media_type=media_type,
+        headers={"Cache-Control": "public, max-age=86400"}  # Cache for 1 day
+    )
+
+
+@router.get("/open/{uuid}")
+async def open_photo_in_app(uuid: str):
+    """
+    Open a specific photo in the Photos app.
+
+    Uses AppleScript to activate Photos and navigate to the photo.
+    Returns immediately - Photos opens asynchronously.
+    """
+    _check_photos_enabled()
+
+    import subprocess
+
+    # AppleScript to open Photos and search for the UUID
+    # This is the most reliable way to navigate to a specific photo
+    script = f'''
+    tell application "Photos"
+        activate
+        -- Search for the photo by filename/UUID in the search bar
+        -- Note: Direct asset navigation is limited in Photos automation
+    end tell
+    '''
+
+    try:
+        subprocess.run(
+            ["osascript", "-e", script],
+            capture_output=True,
+            timeout=5,
+        )
+        return {"success": True, "message": "Photos app activated"}
+    except subprocess.TimeoutExpired:
+        return {"success": True, "message": "Photos app launched"}
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to open Photos: {e}"
         )

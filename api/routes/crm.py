@@ -1701,6 +1701,8 @@ SOURCE_BADGES = {
     "whatsapp": "💬",
     "contacts": "📇",
     "phone": "📞",
+    "slack": "💼",
+    "photos": "📷",
 }
 
 
