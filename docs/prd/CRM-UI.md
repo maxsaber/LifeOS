@@ -187,6 +187,7 @@ API endpoints to get full person detail and interaction timeline.
   "category": "personal",
   "vault_contexts": ["Personal/Relationship/"],
   "tags": [],
+  "birthday": "08-15",
   "notes": "",
   "sources": ["phone_contacts", "gmail", "calendar", "imessage"],
   "interaction_count": 847,

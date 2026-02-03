@@ -271,6 +271,7 @@ class PersonDetailResponse(BaseModel):
     category: str = "unknown"
     vault_contexts: list[str] = []
     tags: list[str] = []
+    birthday: Optional[str] = None  # "MM-DD" format (month-day only)
     notes: str = ""
     sources: list[str] = []
     first_seen: Optional[str] = None
@@ -414,6 +415,7 @@ class NetworkEdge(BaseModel):
     shared_whatsapp_count: int = 0     # WhatsApp
     shared_slack_count: int = 0        # Slack DMs
     shared_phone_calls_count: int = 0  # Phone calls
+    shared_photos_count: int = 0       # Photos together
     is_linkedin_connection: bool = False
 
 
@@ -467,6 +469,7 @@ class PersonUpdateRequest(BaseModel):
     notes: Optional[str] = None
     tags: Optional[list[str]] = None
     category: Optional[str] = None
+    birthday: Optional[str] = None  # "MM-DD" format (month-day only), empty string to clear
 
 
 class PersonMergeRequest(BaseModel):
@@ -565,6 +568,7 @@ def _person_to_detail_response(
         category=computed_category,
         vault_contexts=person.vault_contexts,
         tags=person.tags,
+        birthday=person.birthday,  # Already "MM-DD" string or None
         notes=person.notes,
         sources=person.sources,
         first_seen=person.first_seen.isoformat() if person.first_seen else None,
@@ -760,6 +764,27 @@ async def update_person(person_id: str, request: PersonUpdateRequest):
 
     if request.category is not None:
         person.category = request.category
+
+    if request.birthday is not None:
+        if request.birthday == "":
+            person.birthday = None  # Allow clearing birthday
+        else:
+            # Parse input and store as "MM-DD" format (no year)
+            bday = request.birthday.strip()
+            if "/" in bday:
+                # "MM/DD" format
+                parts = bday.split("/")
+                month, day = int(parts[0]), int(parts[1])
+            elif "-" in bday and len(bday) <= 5:
+                # "MM-DD" format
+                parts = bday.split("-")
+                month, day = int(parts[0]), int(parts[1])
+            else:
+                # Try parsing as ISO date and extract month/day
+                from datetime import datetime
+                dt = datetime.fromisoformat(bday.replace('Z', '+00:00'))
+                month, day = dt.month, dt.day
+            person.birthday = f"{month:02d}-{day:02d}"
 
     person_store.update(person)
     person_store.save()
@@ -2512,6 +2537,7 @@ async def get_network_graph(
             shared_whatsapp_count=rel.shared_whatsapp_count or 0,
             shared_slack_count=rel.shared_slack_count or 0,
             shared_phone_calls_count=rel.shared_phone_calls_count or 0,
+            shared_photos_count=rel.shared_photos_count or 0,
             is_linkedin_connection=rel.is_linkedin_connection,
         ))
 
@@ -2536,6 +2562,7 @@ class RelationshipDetailResponse(BaseModel):
     shared_whatsapp_count: int = 0    # WhatsApp
     shared_slack_count: int = 0       # Slack DMs
     shared_phone_calls_count: int = 0  # Phone calls
+    shared_photos_count: int = 0      # Photos together
     is_linkedin_connection: bool = False
     # Computed totals
     total_interactions: int = 0
@@ -2580,6 +2607,7 @@ async def get_relationship_details(person_a_id: str, person_b_id: str):
                 shared_whatsapp_count=0,
                 shared_slack_count=0,
                 shared_phone_calls_count=0,
+                shared_photos_count=0,
                 is_linkedin_connection=False,
                 total_interactions=0,
                 first_seen_together=None,
@@ -2613,6 +2641,7 @@ async def get_relationship_details(person_a_id: str, person_b_id: str):
             shared_whatsapp_count=rel.shared_whatsapp_count or 0,
             shared_slack_count=rel.shared_slack_count or 0,
             shared_phone_calls_count=rel.shared_phone_calls_count or 0,
+            shared_photos_count=rel.shared_photos_count or 0,
             is_linkedin_connection=rel.is_linkedin_connection,
             total_interactions=rel.total_shared_interactions or 0,
             first_seen_together=rel.first_seen_together.isoformat() if rel.first_seen_together else None,

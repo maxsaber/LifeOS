@@ -79,6 +79,7 @@ class PersonDetailResponse(BaseModel):
     category: str = "unknown"
     vault_contexts: list[str] = []
     tags: list[str] = []
+    birthday: Optional[str] = None  # "MM-DD" format (month-day only)
     notes: str = ""
     sources: list[str] = []
     first_seen: Optional[str] = None
@@ -108,6 +109,7 @@ class PersonUpdateRequest(BaseModel):
     notes: Optional[str] = None
     tags: Optional[list[str]] = None
     category: Optional[str] = None
+    birthday: Optional[str] = None  # "MM-DD" format (month-day only), empty string to clear
 
 
 class PersonMergeRequest(BaseModel):

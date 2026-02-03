@@ -1153,6 +1153,29 @@
             color: var(--error);
         }
 
+        .detail-birthday-chip {
+            padding: 0.25rem 0.625rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--people);
+            border-radius: 12px;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+        }
+
+        .detail-birthday-chip .remove-birthday {
+            cursor: pointer;
+            color: var(--text-muted);
+            font-size: 0.875rem;
+            line-height: 1;
+        }
+
+        .detail-birthday-chip .remove-birthday:hover {
+            color: var(--error);
+        }
+
         .detail-tag-add {
             padding: 0.25rem 0.625rem;
             background: transparent;
@@ -3825,6 +3848,7 @@
         .channel-vault { background: linear-gradient(135deg, #00bcd4 0%, #0097a7 100%); }
         .channel-granola { background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); }
         .channel-linkedin { background: linear-gradient(135deg, #0077b5 0%, #005582 100%); }
+        .channel-photos { background: linear-gradient(135deg, #e040fb 0%, #aa00ff 100%); }
         .channel-other { background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); }
 
         /* Channel Mix Legend */
@@ -6024,6 +6048,11 @@
                                 <span class="hero-stat-value" id="heroStatLinkedIn">0</span>
                                 <span class="hero-stat-label">linkedin</span>
                             </div>
+                            <div class="hero-stat hero-stat-clickable" id="heroStatPhotosContainer" style="display: none;" onclick="navigateToTimelineFiltered('photos')">
+                                <span class="hero-stat-icon">📷</span>
+                                <span class="hero-stat-value" id="heroStatPhotos">0</span>
+                                <span class="hero-stat-label">photos</span>
+                            </div>
                             <div class="hero-stat-divider"></div>
                             <div class="hero-stat">
                                 <span class="hero-stat-icon">📍</span>
@@ -6053,6 +6082,11 @@
                                 <span class="hero-stat-icon">📅</span>
                                 <span class="hero-stat-value" id="familyStatCalendar">0</span>
                                 <span class="hero-stat-label">events</span>
+                            </div>
+                            <div class="hero-stat hero-stat-clickable" id="familyStatPhotosContainer" style="display: none;" onclick="navigateToTimelineFiltered('photos')">
+                                <span class="hero-stat-icon">📷</span>
+                                <span class="hero-stat-value" id="familyStatPhotos">0</span>
+                                <span class="hero-stat-label">photos</span>
                             </div>
                         </div>
 
@@ -6641,6 +6675,7 @@
                             <div class="timeline-filter-chip" data-source="phone" id="filterPhone" onclick="filterTimeline('phone')">📞 Calls</div>
                             <div class="timeline-filter-chip" data-source="slack" id="filterSlack" onclick="filterTimeline('slack')">💼 Slack</div>
                             <div class="timeline-filter-chip" data-source="notes" id="filterNotes" onclick="filterTimeline('notes')">📝 Notes</div>
+                            <div class="timeline-filter-chip" data-source="photos" id="filterPhotos" onclick="filterTimeline('photos')">📷 Photos</div>
                             <div class="timeline-date-range">
                                 <label>From:</label>
                                 <input type="date" id="timelineDateFrom" onchange="applyTimelineDateRange()">
@@ -6720,6 +6755,10 @@
                                             <label class="source-option">
                                                 <input type="checkbox" value="linkedin" checked onchange="updateSourceFilter()">
                                                 <span class="source-icon">🔗</span> LinkedIn
+                                            </label>
+                                            <label class="source-option">
+                                                <input type="checkbox" value="photos" checked onchange="updateSourceFilter()">
+                                                <span class="source-icon">📷</span> Photos
                                             </label>
                                         </div>
                                     </div>
@@ -6874,6 +6913,10 @@
                                 <div class="edge-panel-stat">
                                     <span class="edge-panel-stat-label">📞 Phone Calls</span>
                                     <span class="edge-panel-stat-value" id="edgePanelPhone">0</span>
+                                </div>
+                                <div class="edge-panel-stat">
+                                    <span class="edge-panel-stat-label">📷 Photos</span>
+                                    <span class="edge-panel-stat-value" id="edgePanelPhotos">0</span>
                                 </div>
                                 <div class="edge-panel-stat">
                                     <span class="edge-panel-stat-label">🔗 LinkedIn</span>
@@ -8467,7 +8510,7 @@
 
             // Editable tags in header (skip for Me page)
             if (!isMePage) {
-                renderEditableTags(person.tags || []);
+                renderEditableTags(person);
             } else {
                 document.getElementById('detailTagsChips').innerHTML = '';
             }
@@ -8554,15 +8597,33 @@
             }
         }
 
-        // Render editable tags
-        function renderEditableTags(tags) {
+        // Render editable tags (and birthday)
+        function renderEditableTags(person) {
             const container = document.getElementById('detailTagsChips');
-            let html = tags.map(tag => `
+            let html = '';
+
+            // Birthday display (to the left of tags)
+            if (person.birthday) {
+                // Birthday is "MM-DD" format - parse and display as "Aug 7"
+                const [month, day] = person.birthday.split('-').map(Number);
+                const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                const formatted = `${monthNames[month - 1]} ${day}`;
+                html += `<span class="detail-birthday-chip" title="Birthday">
+                    🎂 ${formatted}
+                    <span class="remove-birthday" onclick="removeBirthday()">×</span>
+                </span>`;
+            } else {
+                html += `<span class="detail-tag-add" onclick="addBirthday()">+ Add birthday</span>`;
+            }
+
+            // Tags
+            html += (person.tags || []).map(tag => `
                 <span class="detail-tag-chip">
                     ${escapeHtml(tag)}
                     <span class="remove-tag" onclick="removeTag('${escapeHtml(tag)}')">×</span>
                 </span>
             `).join('');
+
             html += `<span class="detail-tag-add" onclick="addTag()">+ Add tag</span>`;
             html += `<span class="detail-hide-btn" onclick="hideCurrentPerson()" title="Hide this person">Hide</span>`;
             container.innerHTML = html;
@@ -8709,6 +8770,7 @@
             const notesCount = (sourceTotals['vault'] || 0) + (sourceTotals['granola'] || 0);
             const contactsCount = (sourceTotals['contacts'] || 0);
             const linkedinCount = (sourceTotals['linkedin'] || 0);
+            const photosCount = (sourceTotals['photos'] || 0);
 
             // Update main stats (always shown)
             document.getElementById('heroStatEmails').textContent = formatCompactNumber(emailCount);
@@ -8734,6 +8796,7 @@
             updateStat('heroStatNotesContainer', 'heroStatNotes', notesCount);
             updateStat('heroStatContactsContainer', 'heroStatContacts', contactsCount);
             updateStat('heroStatLinkedInContainer', 'heroStatLinkedIn', linkedinCount);
+            updateStat('heroStatPhotosContainer', 'heroStatPhotos', photosCount);
 
             // Also update backwards compat stats
             document.getElementById('statEmails').textContent = emailCount;
@@ -8759,7 +8822,7 @@
             // Check if a date filter is active
             const hasDateFilter = timelineDateRangeFrom || timelineDateRangeTo;
 
-            let emailCount, eventCount, messageCount, phoneCount, slackCount, notesCount;
+            let emailCount, eventCount, messageCount, phoneCount, slackCount, notesCount, photosCount;
 
             if (hasDateFilter && timelineData && timelineData.length >= 0) {
                 // When date filter is active, count from actual timeline data
@@ -8775,6 +8838,7 @@
                 phoneCount = counts['phone'] || 0;
                 slackCount = counts['slack'] || 0;
                 notesCount = (counts['vault'] || 0) + (counts['granola'] || 0);
+                photosCount = counts['photos'] || 0;
             } else {
                 // No date filter - use global sourceTotals
                 emailCount = (sourceTotals['gmail'] || 0);
@@ -8783,6 +8847,7 @@
                 phoneCount = (sourceTotals['phone'] || 0);
                 slackCount = (sourceTotals['slack'] || 0);
                 notesCount = (sourceTotals['vault'] || 0) + (sourceTotals['granola'] || 0);
+                photosCount = (sourceTotals['photos'] || 0);
             }
 
             // Show/hide filter chips based on whether there's data
@@ -8797,6 +8862,7 @@
             updateFilter('filterPhone', phoneCount);
             updateFilter('filterSlack', slackCount);
             updateFilter('filterNotes', notesCount);
+            updateFilter('filterPhotos', photosCount);
         }
 
         // Render strength ring (circular progress indicator in header)
@@ -8942,6 +9008,40 @@
             }
         }
 
+        // Add birthday
+        async function addBirthday() {
+            const input = prompt('Enter birthday (MM/DD):');
+            if (!input || !selectedPersonId) return;
+
+            try {
+                // Send as-is - API will parse MM/DD or MM-DD format
+                await api(`/people/${selectedPersonId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ birthday: input.trim() })
+                });
+                await loadPersonDetail(selectedPersonId);
+            } catch (error) {
+                console.error('Failed to add birthday:', error);
+                alert('Failed to add birthday. Please use format MM/DD (e.g., 08/07 for August 7)');
+            }
+        }
+
+        // Remove birthday
+        async function removeBirthday() {
+            if (!selectedPersonId) return;
+            if (!confirm('Remove birthday?')) return;
+
+            try {
+                await api(`/people/${selectedPersonId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ birthday: '' })
+                });
+                await loadPersonDetail(selectedPersonId);
+            } catch (error) {
+                console.error('Failed to remove birthday:', error);
+            }
+        }
+
         // Render relationship strength breakdown
         function renderStrengthBreakdown(person) {
             const strength = person.relationship_strength || 0;
@@ -9020,7 +9120,8 @@
             'whatsapp': { badge: String.fromCodePoint(0x1F4F1), label: 'WhatsApp' },
             'signal': { badge: String.fromCodePoint(0x1F510), label: 'Signal' },
             'phone': { badge: String.fromCodePoint(0x1F4DE), label: 'Calls' },
-            'contacts': { badge: String.fromCodePoint(0x1F4C7), label: 'Contacts' }
+            'contacts': { badge: String.fromCodePoint(0x1F4C7), label: 'Contacts' },
+            'photos': { badge: String.fromCodePoint(0x1F4F7), label: 'Photos' }
         };
 
         // Load and render heat map
@@ -10425,6 +10526,7 @@
                 document.getElementById('familyStatMessages').textContent = '0';
                 document.getElementById('familyStatPhone').textContent = '0';
                 document.getElementById('familyStatCalendar').textContent = '0';
+                document.getElementById('familyStatPhotosContainer').style.display = 'none';
                 return;
             }
 
@@ -10437,6 +10539,7 @@
                 // For now, use 0 or we could add them to the endpoint later
                 document.getElementById('familyStatPhone').textContent = '0';
                 document.getElementById('familyStatCalendar').textContent = formatCompactNumber(stats.total_meetings || 0);
+                // Note: Photos stat is updated by loadFamilyHeatMap from sourceTotals
             } catch (error) {
                 console.error('Failed to load family stats:', error);
             }
@@ -10472,6 +10575,7 @@
             document.getElementById('familyStatMessages').textContent = '0';
             document.getElementById('familyStatPhone').textContent = '0';
             document.getElementById('familyStatCalendar').textContent = '0';
+            document.getElementById('familyStatPhotosContainer').style.display = 'none';
             // Reset family insights
             const emptyMessage = '<div class="insight-empty"><span class="insight-empty-icon">📊</span>Select family members to see data</div>';
             const daysSince = document.getElementById('daysSinceGrid');
@@ -10533,6 +10637,18 @@
             }
 
             renderHeatMap();
+
+            // Update photos stat from sourceTotals (since family stats endpoint doesn't include photos)
+            const photosCount = sourceTotals['photos'] || 0;
+            const photosContainer = document.getElementById('familyStatPhotosContainer');
+            if (photosContainer) {
+                if (photosCount > 0) {
+                    photosContainer.style.display = '';
+                    document.getElementById('familyStatPhotos').textContent = formatCompactNumber(photosCount);
+                } else {
+                    photosContainer.style.display = 'none';
+                }
+            }
         }
 
         // Render family health score chart
@@ -10857,6 +10973,7 @@
             vault: 'channel-vault',
             granola: 'channel-granola',
             linkedin: 'channel-linkedin',
+            photos: 'channel-photos',
         };
 
         const CHANNEL_LABELS = {
@@ -10869,6 +10986,7 @@
             vault: '📝 Notes',
             granola: '🥣 Granola',
             linkedin: '🔗 LinkedIn',
+            photos: '📷 Photos',
         };
 
         // Render Channel Mix visualization
@@ -13750,7 +13868,7 @@
             const selected = getSelectedSources();
             const label = document.getElementById('sourceFilterLabel');
 
-            if (selected.length === 6) {
+            if (selected.length === 8) {
                 label.textContent = 'All Sources';
             } else if (selected.length === 0) {
                 label.textContent = 'None';
@@ -13958,6 +14076,9 @@
             if (selectedSources.includes('phone')) {
                 weight += (edge.shared_phone_calls_count || 0) * 4;
             }
+            if (selectedSources.includes('photos')) {
+                weight += (edge.shared_photos_count || 0) * 3;
+            }
             if (selectedSources.includes('linkedin') && edge.is_linkedin_connection) {
                 weight += 10;
             }
@@ -13972,6 +14093,7 @@
             if (selectedSources.includes('whatsapp') && (edge.shared_whatsapp_count || 0) > 0) return true;
             if (selectedSources.includes('slack') && (edge.shared_slack_count || 0) > 0) return true;
             if (selectedSources.includes('phone') && (edge.shared_phone_calls_count || 0) > 0) return true;
+            if (selectedSources.includes('photos') && (edge.shared_photos_count || 0) > 0) return true;
             if (selectedSources.includes('linkedin') && edge.is_linkedin_connection) return true;
             return false;
         }
@@ -14637,7 +14759,7 @@
                                       (currentDegreeValue !== null ? currentDegreeValue : 'first');
             const sourceFilterValue = preservedSourceFilter !== null ? preservedSourceFilter :
                                       (currentSourceValue !== null ? currentSourceValue :
-                                       ['calendar', 'email', 'imessage', 'whatsapp', 'slack', 'linkedin']);
+                                       ['calendar', 'email', 'imessage', 'whatsapp', 'slack', 'phone', 'linkedin', 'photos']);
 
             // Only update DOM if we're using preserved values (navigation scenario)
             // Don't overwrite what the user just set for filter-triggered rebuilds
@@ -14659,7 +14781,7 @@
                 // Update label without triggering filter
                 const sourceLabel = document.getElementById('sourceFilterLabel');
                 if (sourceLabel) {
-                    if (sourceFilterValue.length === 6) {
+                    if (sourceFilterValue.length === 8) {
                         sourceLabel.textContent = 'All Sources';
                     } else if (sourceFilterValue.length === 0) {
                         sourceLabel.textContent = 'None';
@@ -14895,6 +15017,7 @@
                 document.getElementById('edgePanelWhatsapp').textContent = data.shared_whatsapp_count || 0;
                 document.getElementById('edgePanelSlack').textContent = data.shared_slack_count || 0;
                 document.getElementById('edgePanelPhone').textContent = data.shared_phone_calls_count || 0;
+                document.getElementById('edgePanelPhotos').textContent = data.shared_photos_count || 0;
                 document.getElementById('edgePanelLinkedin').textContent = data.is_linkedin_connection ? '✓ Connected' : '—';
 
                 // Format dates

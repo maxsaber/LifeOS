@@ -81,7 +81,7 @@ class PersonEntity:
     tags: list[str] = field(default_factory=list)  # User-defined tags
     notes: str = ""  # User notes about the person
     source_entity_count: int = 0  # Count of linked SourceEntity records
-    birthday: Optional[datetime] = None  # Birthday (month/day, year may be placeholder)
+    birthday: Optional[str] = None  # Birthday as "MM-DD" (month-day only, no year)
 
     # Hidden person (soft delete)
     # When hidden=True, person is excluded from search/list results and their
@@ -309,7 +309,7 @@ class PersonEntity:
         if self.hidden_at:
             data["hidden_at"] = self.hidden_at.isoformat()
         if self.birthday:
-            data["birthday"] = self.birthday.isoformat()
+            data["birthday"] = self.birthday  # Already "MM-DD" string
         # Remove private fields (they start with _)
         data.pop("_relationship_strength", None)
         # Add computed relationship_strength if available
@@ -331,8 +331,15 @@ class PersonEntity:
             dt = datetime.fromisoformat(data["hidden_at"])
             data["hidden_at"] = _make_aware(dt)
         if data.get("birthday") and isinstance(data["birthday"], str):
-            dt = datetime.fromisoformat(data["birthday"])
-            data["birthday"] = _make_aware(dt)
+            bday = data["birthday"]
+            # Handle old datetime format (e.g., "2000-08-07T00:00:00+00:00") -> convert to "MM-DD"
+            if "T" in bday or len(bday) > 5:
+                try:
+                    dt = datetime.fromisoformat(bday)
+                    data["birthday"] = f"{dt.month:02d}-{dt.day:02d}"
+                except ValueError:
+                    data["birthday"] = None
+            # Otherwise assume already in "MM-DD" format
         # Handle relationship_strength -> _relationship_strength
         if "relationship_strength" in data:
             data["_relationship_strength"] = data.pop("relationship_strength")
