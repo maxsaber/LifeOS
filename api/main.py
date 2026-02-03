@@ -581,3 +581,21 @@ async def relationship_page_with_path(path: str):
     if crm_path.exists():
         return FileResponse(str(crm_path))
     return {"message": "CRM page not found"}
+
+
+@app.get("/birthdays")
+async def birthdays_page():
+    """Serve the CRM UI for the Birthdays page."""
+    crm_path = Path(__file__).parent.parent / "web" / "crm.html"
+    if crm_path.exists():
+        return FileResponse(str(crm_path))
+    return {"message": "CRM page not found"}
+
+
+@app.get("/birthdays/{path:path}")
+async def birthdays_page_with_path(path: str):
+    """Serve the CRM UI for Birthdays sub-paths (client-side routing)."""
+    crm_path = Path(__file__).parent.parent / "web" / "crm.html"
+    if crm_path.exists():
+        return FileResponse(str(crm_path))
+    return {"message": "CRM page not found"}
