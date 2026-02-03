@@ -79,6 +79,7 @@ All data syncing is consolidated into a single daily sync with proper phase orde
                Link source entities to canonical PersonEntity records
 03:08          └─ Link Slack (match by email)
 03:08          └─ Link iMessage (match by phone)
+03:09          └─ Photos (sync face recognition to people)
 
                === PHASE 3: Relationship Building ===
                Build relationships using all collected interaction data
@@ -401,6 +402,7 @@ All sync scripts in `scripts/` follow the pattern:
 |--------|---------|-------------|
 | `link_slack_entities.py` | Link Slack users to people by email | `data/crm.db` |
 | `link_imessage_entities.py` | Link iMessage handles to people by phone | `data/imessage.db` |
+| `sync_photos.py` | Sync Photos face recognition to people | Photos.sqlite |
 
 ### Phase 3: Relationship Building
 
@@ -525,6 +527,7 @@ The unified sync runner (`run_all_syncs.py`) executes in this order:
 **Phase 2: Entity Processing**
 9. `link_slack` - Link Slack entities by email
 10. `link_imessage` - Link iMessage handles by phone
+11. `photos` - Sync Photos face recognition to people
 
 **Phase 3: Relationship Building**
 11. `relationship_discovery` - Discover relationships, populate edge weights

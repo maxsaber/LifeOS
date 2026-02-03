@@ -90,6 +90,13 @@ SYNC_SOURCES = {
         "phase": 2,
         "depends_on": ["imessage"],
     },
+    "photos": {
+        "description": "Sync Apple Photos face recognition to CRM",
+        "script": "scripts/sync_photos.py",
+        "frequency": "daily",
+        "phase": 2,
+        "depends_on": ["contacts"],
+    },
 
     # === Phase 3: Relationship Building ===
     "relationship_discovery": {

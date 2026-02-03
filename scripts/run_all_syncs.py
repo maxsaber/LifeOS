@@ -165,6 +165,7 @@ SYNC_ORDER = [
     # Link source entities to canonical PersonEntity records
     "link_slack",               # Link Slack users to people by email
     "link_imessage",            # Link iMessage handles to people by phone
+    "photos",                   # Sync Photos face data to people
 
     # === Phase 3: Relationship Building ===
     # Build relationships using all collected interaction data
@@ -199,6 +200,7 @@ SYNC_SCRIPTS = {
     # Phase 2: Entity Processing
     "link_slack": ("scripts/link_slack_entities.py", ["--execute"]),
     "link_imessage": ("scripts/link_imessage_entities.py", ["--execute"]),
+    "photos": ("scripts/sync_photos.py", ["--execute"]),
 
     # Phase 3: Relationship Building
     # Note: person_stats removed - each sync script now refreshes its own stats
@@ -220,6 +222,7 @@ SYNC_TIMEOUTS = {
     "gmail": 3600,                   # 60 min - fetches 365 days of emails via individual API calls
     "relationship_discovery": 3600,  # 60 min - processes all interactions for relationship edges
     "vault_reindex": 10800,          # 180 min (3 hours) - full reindex with gte-Qwen2-1.5B embeddings
+    "photos": 3600,                  # 60 min - large libraries may take time
 }
 
 
