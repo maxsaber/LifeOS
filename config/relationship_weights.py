@@ -52,26 +52,41 @@ PERIPHERAL_THRESHOLD = 3.0
 
 
 # =============================================================================
-# MANUAL STRENGTH OVERRIDES
+# MANUAL STRENGTH OVERRIDES (loaded from config/relationship_overrides.json)
 # =============================================================================
 # Force specific people to have a fixed relationship strength regardless of
 # calculated value. These also affect Dunbar circle placement.
 # Keys are person IDs (UUIDs), values are strength (0-100).
+#
+# To configure, create config/relationship_overrides.json (see .example.json)
 
-STRENGTH_OVERRIDES_BY_ID = {
-    "cb93e7bd-036c-4ef5-adb9-34a9147c4984": 100.0,  # Taylor Walker
-    "23b9aca8-8817-494a-a13e-7d7799f9b282": 100.0,  # Malea Ramia
-    "3f41e143-719f-4dc9-a9f1-389b2db5b166": 100.0,  # Nathan Ramia (self)
-    "04bf94f8-20b7-4285-abb4-c64131b5542f": 90.0,   # Thy Nguyen
-}
+import json
+from pathlib import Path
+import logging
 
-# Manual Dunbar circle overrides (person_id -> circle)
-# Circle 0 = closest relationships
-CIRCLE_OVERRIDES_BY_ID = {
-    "cb93e7bd-036c-4ef5-adb9-34a9147c4984": 0,  # Taylor Walker
-    "23b9aca8-8817-494a-a13e-7d7799f9b282": 0,  # Malea Ramia
-    "3f41e143-719f-4dc9-a9f1-389b2db5b166": 0,  # Nathan Ramia (self)
-}
+_logger = logging.getLogger(__name__)
+
+def _load_relationship_overrides():
+    """Load relationship overrides from JSON config file."""
+    config_path = Path(__file__).parent / "relationship_overrides.json"
+    strength_overrides = {}
+    circle_overrides = {}
+
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+            strength_overrides = config.get("strength_overrides", {})
+            circle_overrides = config.get("circle_overrides", {})
+            # Convert string values to proper types
+            strength_overrides = {k: float(v) for k, v in strength_overrides.items()}
+            circle_overrides = {k: int(v) for k, v in circle_overrides.items()}
+        except Exception as e:
+            _logger.warning(f"Failed to load relationship overrides: {e}")
+
+    return strength_overrides, circle_overrides
+
+STRENGTH_OVERRIDES_BY_ID, CIRCLE_OVERRIDES_BY_ID = _load_relationship_overrides()
 
 
 # =============================================================================
@@ -185,3 +200,29 @@ def compute_weighted_interaction_count(interactions_by_type: dict[str, int]) -> 
         weight = get_interaction_weight(source_type)
         total += count * weight
     return total
+
+
+# =============================================================================
+# TAG OVERRIDES (loaded from config/linkedin_tags.json)
+# =============================================================================
+# Manual tag overrides (person_id -> list of tags)
+# Tags follow format: industry:X, seniority:X, state:XX, city:X
+#
+# To configure, create config/linkedin_tags.json (see .example.json)
+
+def _load_tag_overrides():
+    """Load tag overrides from JSON config file."""
+    config_path = Path(__file__).parent / "linkedin_tags.json"
+    tag_overrides = {}
+
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+            tag_overrides = config.get("tag_overrides", {})
+        except Exception as e:
+            _logger.warning(f"Failed to load tag overrides: {e}")
+
+    return tag_overrides
+
+TAG_OVERRIDES_BY_ID: dict[str, list[str]] = _load_tag_overrides()

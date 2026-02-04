@@ -187,6 +187,7 @@ API endpoints to get full person detail and interaction timeline.
   "category": "personal",
   "vault_contexts": ["Personal/Relationship/"],
   "tags": [],
+  "birthday": "08-15",
   "notes": "",
   "sources": ["phone_contacts", "gmail", "calendar", "imessage"],
   "interaction_count": 847,
@@ -200,6 +201,8 @@ API endpoints to get full person detail and interaction timeline.
   "aliases": ["AJ", "A. Johnson"]
 }
 ```
+
+> **Birthday Notifications:** When contacts have birthdays matching today's date, a dismissible toast banner appears on CRM page load. The toast shows once per day (tracked via localStorage). See `GET /api/crm/birthdays/today` endpoint in `api/routes/crm.py` and toast UI in `web/crm.html`.
 
 **Endpoint:** `GET /api/crm/people/{id}/timeline`
 

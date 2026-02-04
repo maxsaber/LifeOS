@@ -43,10 +43,25 @@ def load_merged_ids() -> dict:
 
 
 def save_merged_ids(merged_ids: dict):
-    """Save the merged IDs mapping."""
+    """Save the merged IDs mapping with atomic write.
+
+    Uses temp file + rename to prevent corruption if process crashes mid-write.
+    """
+    import tempfile
+    import shutil
+    import os
+
     MERGED_IDS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with open(MERGED_IDS_FILE, 'w') as f:
-        json.dump(merged_ids, f, indent=2)
+
+    temp_fd, temp_path = tempfile.mkstemp(suffix=".json", dir=MERGED_IDS_FILE.parent)
+    try:
+        with os.fdopen(temp_fd, "w") as f:
+            json.dump(merged_ids, f, indent=2)
+        shutil.move(temp_path, MERGED_IDS_FILE)
+    except Exception:
+        if os.path.exists(temp_path):
+            os.unlink(temp_path)
+        raise
 
 
 def get_canonical_person_id(person_id: str) -> str:

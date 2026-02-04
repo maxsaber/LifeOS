@@ -164,9 +164,9 @@ class TestBriefingsService:
 
         mock_entity = PersonEntity(
             id="test-123",
-            canonical_name="Yoni",
-            emails=["yoni@movementlabs.com"],
-            company="Movement Labs",
+            canonical_name="John",
+            emails=["john@example.com"],
+            company="Example Corp",
             sources=["linkedin"],
         )
         mock_result = MagicMock()
@@ -179,14 +179,14 @@ class TestBriefingsService:
 
         with patch('api.services.briefings.get_synthesizer') as mock_synth:
             mock_synth.return_value.get_response = AsyncMock(
-                return_value="## Yoni — Briefing\n\nThis is the briefing content."
+                return_value="## John — Briefing\n\nThis is the briefing content."
             )
 
-            result = await service.generate_briefing("yoni")
+            result = await service.generate_briefing("john")
 
             assert result["status"] == "success"
             assert "briefing" in result
-            assert result["person_name"] == "Yoni"
+            assert result["person_name"] == "John"
 
     @pytest.mark.asyncio
     async def test_generate_briefing_handles_unknown_person(self, service, mock_hybrid_search):

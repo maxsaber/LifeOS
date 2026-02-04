@@ -64,6 +64,13 @@ class BriefingContext:
     # v2: Entity ID for linking
     entity_id: Optional[str] = None
 
+    # v3: CRM enrichment
+    person_facts: list[dict] = field(default_factory=list)  # Extracted facts
+    aliases: list[str] = field(default_factory=list)        # Known aliases
+    relationship_strength: float = 0.0                       # 0-100 scale
+    tags: list[str] = field(default_factory=list)           # User-defined tags
+    notes: str = ""                                          # User notes on person
+
 
 BRIEFING_PROMPT = """You are LifeOS, preparing a stakeholder briefing for Nathan.
 
@@ -71,15 +78,24 @@ Generate a concise, actionable briefing about {person_name} based on the context
 
 ## Person Metadata
 - Name: {resolved_name}
+- Aliases: {aliases_text}
 - Email: {email}
 - Company: {company}
 - Position: {position}
 - Category: {category}
+- Relationship Strength: {relationship_strength}/100
+- Tags: {tags_text}
 - LinkedIn: {linkedin_url}
 - Meetings (90 days): {meeting_count}
 - Emails (90 days): {email_count}
 - Note mentions: {mention_count}
 - Last interaction: {last_interaction}
+
+## User Notes
+{notes_text}
+
+## Known Facts About This Person
+{person_facts_text}
 
 ## Interaction History
 {interaction_history}
@@ -225,9 +241,36 @@ class BriefingsService:
                 context.mention_count = entity.mention_count
                 context.last_interaction = entity.last_seen
                 context.sources.extend(entity.sources)
+
+                # v3: Fetch CRM enrichment data
+                context.aliases = entity.aliases or []
+                context.tags = entity.tags or []
+                context.notes = entity.notes or ""
+                context.relationship_strength = entity.relationship_strength or 0.0
+
                 logger.debug(f"Resolved {person_name} via EntityResolver: {entity.canonical_name}")
         except Exception as e:
             logger.warning(f"Could not resolve person: {e}")
+
+        # v3: Get PersonFacts (extracted facts about this person)
+        if context.entity_id:
+            try:
+                from api.services.person_facts import get_person_fact_store
+                fact_store = get_person_fact_store()
+                facts = fact_store.get_for_person(context.entity_id)
+                context.person_facts = [
+                    {
+                        "category": f.category,
+                        "key": f.key,
+                        "value": f.value,
+                        "confidence": f.confidence,
+                        "confirmed": f.confirmed_by_user,
+                    }
+                    for f in facts if f.confidence >= 0.6
+                ]
+                logger.debug(f"Loaded {len(context.person_facts)} facts for {person_name}")
+            except Exception as e:
+                logger.warning(f"Could not get person facts: {e}")
 
         # Get interaction history from v2 InteractionStore (if available and entity found)
         if self.interaction_store and context.entity_id:
@@ -367,19 +410,42 @@ class BriefingsService:
         if context.linkedin_url:
             linkedin_line = f"**LinkedIn:** [{context.resolved_name}]({context.linkedin_url})"
 
+        # v3: Format CRM enrichment fields
+        aliases_text = ", ".join(context.aliases) if context.aliases else "None known"
+        tags_text = ", ".join(context.tags) if context.tags else "None"
+        notes_text = context.notes if context.notes else "_No notes._"
+
+        # Format facts by category
+        if context.person_facts:
+            facts_by_cat = {}
+            for fact in context.person_facts:
+                cat = fact["category"]
+                facts_by_cat.setdefault(cat, []).append(f"- {fact['key']}: {fact['value']}")
+            person_facts_text = "\n".join(
+                f"**{cat.title()}:**\n" + "\n".join(items)
+                for cat, items in facts_by_cat.items()
+            )
+        else:
+            person_facts_text = "_No facts extracted yet._"
+
         # Build prompt
         prompt = BRIEFING_PROMPT.format(
             person_name=context.person_name,
             resolved_name=context.resolved_name,
+            aliases_text=aliases_text,
             email=context.email or "Unknown",
             company=context.company or "Unknown",
             position=context.position or "Unknown",
             category=context.category,
+            relationship_strength=context.relationship_strength,
+            tags_text=tags_text,
             linkedin_url=context.linkedin_url or "N/A",
             meeting_count=context.meeting_count,
             email_count=context.email_count,
             mention_count=context.mention_count,
             last_interaction=context.last_interaction.strftime("%Y-%m-%d") if context.last_interaction else "Unknown",
+            notes_text=notes_text,
+            person_facts_text=person_facts_text,
             interaction_history=interaction_history,
             imessage_history=imessage_history,
             related_notes_text=related_notes_text,
@@ -406,6 +472,11 @@ class BriefingsService:
                     "mention_count": context.mention_count,
                     "last_interaction": context.last_interaction.isoformat() if context.last_interaction else None,
                     "entity_id": context.entity_id,
+                    # v3: CRM enrichment
+                    "relationship_strength": context.relationship_strength,
+                    "aliases": context.aliases,
+                    "tags": context.tags,
+                    "facts_count": len(context.person_facts),
                 },
                 "sources": context.sources,
                 "action_items_count": len(context.action_items),

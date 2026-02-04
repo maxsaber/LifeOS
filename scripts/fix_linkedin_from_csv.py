@@ -7,11 +7,14 @@ Clears linkedin_url, company, and position for entities marked as "no" (incorrec
 
 import csv
 import sys
-sys.path.insert(0, '/Users/nathanramia/Documents/Code/LifeOS')
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from api.services.person_entity import PersonEntityStore
 
-CSV_PATH = '/Users/nathanramia/Documents/Code/LifeOS/docs/archive/linkedin_Matches.csv'
+CSV_PATH = str(PROJECT_ROOT / 'docs/archive/linkedin_Matches.csv')
 
 def main():
     store = PersonEntityStore()

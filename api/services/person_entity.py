@@ -11,6 +11,7 @@ Key changes from PersonRecord:
 import fcntl
 import json
 import logging
+import os
 import sqlite3
 import uuid
 from dataclasses import dataclass, field, asdict
@@ -21,16 +22,9 @@ from typing import Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from api.services.people_aggregator import PersonRecord
 
+from api.utils.datetime_utils import make_aware as _make_aware
+
 logger = logging.getLogger(__name__)
-
-
-def _make_aware(dt: Optional[datetime]) -> Optional[datetime]:
-    """Ensure datetime is timezone-aware (UTC if naive)."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
 
 
 @dataclass
@@ -87,6 +81,7 @@ class PersonEntity:
     tags: list[str] = field(default_factory=list)  # User-defined tags
     notes: str = ""  # User notes about the person
     source_entity_count: int = 0  # Count of linked SourceEntity records
+    birthday: Optional[str] = None  # Birthday as "MM-DD" (month-day only, no year)
 
     # Hidden person (soft delete)
     # When hidden=True, person is excluded from search/list results and their
@@ -272,6 +267,9 @@ class PersonEntity:
         # Source entity count: sum
         source_entity_count = self.source_entity_count + other.source_entity_count
 
+        # Birthday: prefer self, then other
+        birthday = self.birthday or other.birthday
+
         return PersonEntity(
             id=self.id,  # Keep original ID
             canonical_name=self.canonical_name,
@@ -300,6 +298,7 @@ class PersonEntity:
             manual_dunbar_circle=self.manual_dunbar_circle,
             dunbar_circle=self.dunbar_circle,
             is_peripheral_contact=self.is_peripheral_contact,
+            birthday=birthday,
         )
 
     def to_dict(self) -> dict:
@@ -312,6 +311,8 @@ class PersonEntity:
             data["last_seen"] = self.last_seen.isoformat()
         if self.hidden_at:
             data["hidden_at"] = self.hidden_at.isoformat()
+        if self.birthday:
+            data["birthday"] = self.birthday  # Already "MM-DD" string
         # Remove private fields (they start with _)
         data.pop("_relationship_strength", None)
         # Add computed relationship_strength if available
@@ -332,6 +333,16 @@ class PersonEntity:
         if data.get("hidden_at") and isinstance(data["hidden_at"], str):
             dt = datetime.fromisoformat(data["hidden_at"])
             data["hidden_at"] = _make_aware(dt)
+        if data.get("birthday") and isinstance(data["birthday"], str):
+            bday = data["birthday"]
+            # Handle old datetime format (e.g., "2000-08-07T00:00:00+00:00") -> convert to "MM-DD"
+            if "T" in bday or len(bday) > 5:
+                try:
+                    dt = datetime.fromisoformat(bday)
+                    data["birthday"] = f"{dt.month:02d}-{dt.day:02d}"
+                except ValueError:
+                    data["birthday"] = None
+            # Otherwise assume already in "MM-DD" format
         # Handle relationship_strength -> _relationship_strength
         if "relationship_strength" in data:
             data["_relationship_strength"] = data.pop("relationship_strength")
@@ -348,6 +359,8 @@ class PersonEntity:
         data.setdefault("manual_dunbar_circle", None)
         data.setdefault("dunbar_circle", None)
         data.setdefault("is_peripheral_contact", False)
+        # Handle birthday field (default to None)
+        data.setdefault("birthday", None)
         return cls(**data)
 
     @classmethod
@@ -635,20 +648,76 @@ class PersonEntityStore:
                 self._phone_index.pop(phone, None)
 
     def save(self) -> None:
-        """Persist entities to disk with file locking for concurrent access safety."""
-        self.storage_path.parent.mkdir(parents=True, exist_ok=True)
+        """
+        Persist entities to disk with atomic writes and rolling backups.
 
+        Safety features:
+        1. Writes to temp file first, validates JSON, then atomic rename
+        2. Creates rolling backup before each save (keeps last 5)
+        3. Validates entity count doesn't drastically drop (>50% loss = abort)
+        """
+        import shutil
+        import tempfile
+
+        self.storage_path.parent.mkdir(parents=True, exist_ok=True)
         data = [entity.to_dict() for entity in self._entities.values()]
 
-        # Use exclusive lock to prevent concurrent writes from corrupting the file
-        with open(self.storage_path, "w") as f:
-            fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        # Pre-save validation: prevent drastic entity count drops
+        if self.storage_path.exists():
             try:
-                json.dump(data, f, indent=2)
-            finally:
-                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                with open(self.storage_path) as f:
+                    old_data = json.load(f)
+                old_count = len(old_data)
+                new_count = len(data)
+                # If we're losing more than 50% of entities, abort (likely corruption)
+                if old_count > 100 and new_count < old_count * 0.5:
+                    raise ValueError(
+                        f"Save aborted: entity count dropped from {old_count} to {new_count} "
+                        f"(>{50}% loss). This may indicate corruption. Check data before saving."
+                    )
+            except json.JSONDecodeError:
+                pass  # Old file was corrupt, OK to overwrite
 
-        logger.info(f"Saved {len(data)} entities to {self.storage_path}")
+        # Create rolling backup before save
+        if self.storage_path.exists():
+            backup_dir = self.storage_path.parent / "backups"
+            backup_dir.mkdir(exist_ok=True)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = backup_dir / f"people_entities.{timestamp}.json"
+            shutil.copy(self.storage_path, backup_path)
+            logger.info(f"Created backup: {backup_path}")
+
+            # Keep only last 5 backups
+            backups = sorted(backup_dir.glob("people_entities.*.json"))
+            for old_backup in backups[:-5]:
+                old_backup.unlink()
+                logger.debug(f"Removed old backup: {old_backup}")
+
+        # Write to temp file first (atomic write pattern)
+        temp_fd, temp_path = tempfile.mkstemp(
+            suffix=".json", dir=self.storage_path.parent
+        )
+        try:
+            with os.fdopen(temp_fd, "w") as f:
+                json.dump(data, f, indent=2)
+
+            # Validate the temp file: re-read and verify count
+            with open(temp_path) as f:
+                validated_data = json.load(f)
+            if len(validated_data) != len(data):
+                raise ValueError(
+                    f"Write validation failed: expected {len(data)}, got {len(validated_data)}"
+                )
+
+            # Atomic rename (same filesystem = atomic on POSIX)
+            shutil.move(temp_path, self.storage_path)
+            logger.info(f"Saved {len(data)} entities to {self.storage_path}")
+
+        except Exception:
+            # Clean up temp file on failure
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+            raise
 
     def add(self, entity: PersonEntity) -> Optional[PersonEntity]:
         """

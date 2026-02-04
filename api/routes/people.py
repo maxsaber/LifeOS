@@ -35,6 +35,7 @@ class PersonResponse(BaseModel):
     linkedin_url: Optional[str] = None
     display_name: Optional[str] = None
     aliases: Optional[list[str]] = None
+    birthday: Optional[str] = None  # ISO format date string
     # Relationship context fields (for smart routing)
     relationship_strength: float = 0.0  # 0-100 scale
     active_channels: list[str] = []  # Channels with activity in last 7 days
@@ -116,6 +117,7 @@ def _entity_to_response(entity, include_channels: bool = True) -> PersonResponse
         linkedin_url=entity.linkedin_url,
         display_name=entity.display_name,
         aliases=entity.aliases,
+        birthday=entity.birthday.isoformat() if entity.birthday else None,
         # Relationship context - strength comes from entity directly
         relationship_strength=entity.relationship_strength,
     )
@@ -248,8 +250,8 @@ async def resolve_entity(request: EntityResolveRequest) -> EntityResolveResponse
     **PRIMARY TOOL for finding someone's email, full name, and contact info from a nickname or partial name.**
 
     Use this FIRST when you need to:
-    - Find someone's email address (e.g., "tay" -> annetaylorwalker@gmail.com)
-    - Get someone's full/canonical name (e.g., "tay" -> "Taylor Walker, MD, MPH")
+    - Find someone's email address (e.g., "john" -> john@example.com)
+    - Get someone's full/canonical name (e.g., "john" -> "John Smith")
     - Look up contact details before searching Gmail, Calendar, or other sources
 
     Example: To find emails to/from "Tay", first call this with {"name": "tay"} to get their email,

@@ -6,7 +6,12 @@ They use real production data and should pass when the CRM is working correctly.
 
 NOTE: These tests require direct database access and will be skipped if
 the server is running (database locked). Stop the server to run these tests.
+
+IMPORTANT: These tests are designed for the developer's production environment.
+When setting up LifeOS for the first time, you'll need to configure TEST_CONTACT_EMAIL
+and TEST_CONTACT_PHONE with one of your contacts' information to verify integration.
 """
+import os
 import pytest
 from api.services.person_entity import get_person_entity_store
 from api.services.interaction_store import get_interaction_store
@@ -15,80 +20,78 @@ from api.services.interaction_store import get_interaction_store
 # All classes in this file require database access
 pytestmark = pytest.mark.usefixtures("require_db")
 
+# Test contact configuration - set these environment variables for data integrity tests
+# These should be a person you communicate with frequently
+TEST_CONTACT_EMAIL = os.environ.get("LIFEOS_TEST_CONTACT_EMAIL", "")
+TEST_CONTACT_PHONE = os.environ.get("LIFEOS_TEST_CONTACT_PHONE", "")
 
-class TestDataIntegrityTaylor:
+
+@pytest.mark.skipif(not TEST_CONTACT_EMAIL, reason="Set LIFEOS_TEST_CONTACT_EMAIL to run data integrity tests")
+class TestDataIntegrityPrimaryContact:
     """
-    Taylor (partner) is the canonical test case.
-    Should have highest interaction count in the system.
-
-    Known identifiers:
-    - Email: annetaylorwalker@gmail.com
-    - Phone: +19012295017
-    - Names: Tay, Taylor, Anne Taylor Walker
+    Primary contact data integrity tests.
+    Configure via LIFEOS_TEST_CONTACT_EMAIL and LIFEOS_TEST_CONTACT_PHONE.
+    This should be your most frequently contacted person (partner/close family).
     """
 
-    def test_taylor_exists_by_email(self):
-        """Taylor should be findable by email."""
+    def test_contact_exists_by_email(self):
+        """Contact should be findable by email."""
         store = get_person_entity_store()
-        person = store.get_by_email("annetaylorwalker@gmail.com")
-        assert person is not None, "Taylor not found by email"
+        person = store.get_by_email(TEST_CONTACT_EMAIL)
+        assert person is not None, f"Contact not found by email {TEST_CONTACT_EMAIL}"
 
-    def test_taylor_exists_by_phone(self):
-        """Taylor should be findable by phone."""
+    @pytest.mark.skipif(not TEST_CONTACT_PHONE, reason="Set LIFEOS_TEST_CONTACT_PHONE to run phone tests")
+    def test_contact_exists_by_phone(self):
+        """Contact should be findable by phone."""
         store = get_person_entity_store()
-        person = store.get_by_phone("+19012295017")
-        assert person is not None, "Taylor not found by phone"
+        person = store.get_by_phone(TEST_CONTACT_PHONE)
+        assert person is not None, f"Contact not found by phone {TEST_CONTACT_PHONE}"
 
-    def test_taylor_has_multiple_sources(self):
-        """Taylor should appear in multiple data sources."""
+    def test_contact_has_multiple_sources(self):
+        """Contact should appear in multiple data sources."""
         store = get_person_entity_store()
-        person = store.get_by_email("annetaylorwalker@gmail.com")
+        person = store.get_by_email(TEST_CONTACT_EMAIL)
         assert person is not None
 
         # Should have at least phone_contacts, and ideally gmail, calendar, imessage
         assert len(person.sources) >= 1, f"Expected >=1 sources, got {person.sources}"
 
-        # This is the real test - once everything is wired up correctly
-        # assert len(person.sources) >= 3, f"Expected >=3 sources, got {person.sources}"
-
-    def test_taylor_has_interactions(self):
-        """Taylor should have interaction records."""
+    def test_contact_has_interactions(self):
+        """Contact should have interaction records."""
         person_store = get_person_entity_store()
         interaction_store = get_interaction_store()
 
-        person = person_store.get_by_email("annetaylorwalker@gmail.com")
+        person = person_store.get_by_email(TEST_CONTACT_EMAIL)
         assert person is not None
 
         interactions = interaction_store.get_for_person(person.id, days_back=365)
 
-        # This is the critical test - Taylor should have MANY interactions
+        # This is the critical test - primary contact should have MANY interactions
         # If this fails with 0, the data isn't flowing through
-        assert len(interactions) > 0, f"Taylor ({person.id}) has 0 interactions in interaction_store"
+        assert len(interactions) > 0, f"Contact ({person.id}) has 0 interactions in interaction_store"
 
-    def test_taylor_interaction_count_not_zero(self):
-        """Taylor's PersonEntity should have non-zero interaction count."""
+    def test_contact_interaction_count_not_zero(self):
+        """Contact's PersonEntity should have non-zero interaction count."""
         store = get_person_entity_store()
-        person = store.get_by_email("annetaylorwalker@gmail.com")
+        person = store.get_by_email(TEST_CONTACT_EMAIL)
         assert person is not None
 
         total = person.email_count + person.meeting_count + person.mention_count
         # This is the critical test
         # If this fails, the PersonEntity isn't being updated with counts
         assert total > 0, (
-            f"Taylor has 0 total interactions on PersonEntity. "
+            f"Contact has 0 total interactions on PersonEntity. "
             f"email_count={person.email_count}, meeting_count={person.meeting_count}, "
             f"mention_count={person.mention_count}"
         )
 
-    def test_taylor_relationship_strength(self):
-        """Taylor should have high relationship strength (>0.5 at minimum)."""
+    def test_contact_relationship_strength(self):
+        """Contact should have high relationship strength (>0.0 at minimum)."""
         store = get_person_entity_store()
-        person = store.get_by_email("annetaylorwalker@gmail.com")
+        person = store.get_by_email(TEST_CONTACT_EMAIL)
         assert person is not None
 
-        # Currently returns 0.267 which is low for a partner
-        # Should be >0.8 once interactions are properly linked
-        assert person.relationship_strength > 0.0, "Taylor has 0 relationship strength"
+        assert person.relationship_strength > 0.0, "Contact has 0 relationship strength"
 
 
 class TestDataIntegrityTopContacts:

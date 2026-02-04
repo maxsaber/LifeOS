@@ -23,156 +23,118 @@ from api.services.drive import DriveService
 from api.services.gmail import GmailService
 from api.services.usage_store import get_usage_store
 from api.services.briefings import get_briefings_service
+from api.services.chat_helpers import (
+    extract_search_keywords,
+    expand_followup_query,
+    detect_compose_intent,
+    extract_date_context,
+    extract_message_date_range,
+    extract_message_search_terms,
+    format_messages_for_synthesis as _format_messages_for_synthesis,
+    format_raw_qa_section as _format_raw_qa_section,
+)
 from config.settings import settings
+from api.services.google_auth import GoogleAccount
 
 logger = logging.getLogger(__name__)
 
 
-def extract_search_keywords(query: str) -> list[str]:
-    """
-    Extract meaningful search keywords from a natural language query.
+# =============================================================================
+# Parallel Source Fetching Helpers
+# =============================================================================
 
-    Removes common words and extracts proper nouns and key terms.
-    """
-    # Common words to filter out
-    stop_words = {
-        'a', 'an', 'the', 'is', 'are', 'was', 'were', 'be', 'been', 'being',
-        'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could',
-        'should', 'may', 'might', 'must', 'shall', 'can', 'need', 'dare',
-        'ought', 'used', 'to', 'of', 'in', 'for', 'on', 'with', 'at', 'by',
-        'from', 'up', 'about', 'into', 'over', 'after', 'beneath', 'under',
-        'above', 'and', 'but', 'or', 'nor', 'so', 'yet', 'both', 'either',
-        'neither', 'not', 'only', 'own', 'same', 'than', 'too', 'very',
-        'just', 'also', 'now', 'here', 'there', 'when', 'where', 'why',
-        'how', 'all', 'each', 'every', 'both', 'few', 'more', 'most',
-        'other', 'some', 'such', 'no', 'any', 'i', 'me', 'my', 'myself',
-        'we', 'our', 'ours', 'ourselves', 'you', 'your', 'yours', 'yourself',
-        'he', 'him', 'his', 'himself', 'she', 'her', 'hers', 'herself',
-        'it', 'its', 'itself', 'they', 'them', 'their', 'theirs', 'themselves',
-        'what', 'which', 'who', 'whom', 'this', 'that', 'these', 'those',
-        'am', 'been', 'being', 'if', 'then', 'else', 'review', 'tell',
-        'show', 'find', 'get', 'give', 'look', 'help', 'please', 'thanks',
-        'summarize', 'summary', 'reference', 'notes', 'note', 'recent',
-        'previous', 'likely', 'talk', 'meeting', 'meetings', 'agenda',
-        'agendas', 'doc', 'document', 'google', 'file', 'files',
-        'later', 'today', 'tomorrow', 'week', 'month', 'year'
-    }
-
-    # Extract words, keeping proper nouns (capitalized words)
-    words = re.findall(r'\b[A-Za-z]+\b', query)
-    keywords = []
-
-    for word in words:
-        # Keep capitalized words (likely names) regardless of stop words
-        if word[0].isupper() and len(word) > 1:
-            keywords.append(word)
-        # Keep non-stop words that are at least 3 chars
-        elif word.lower() not in stop_words and len(word) >= 3:
-            keywords.append(word)
-
-    # Deduplicate while preserving order
-    seen = set()
-    unique_keywords = []
-    for kw in keywords:
-        if kw.lower() not in seen:
-            seen.add(kw.lower())
-            unique_keywords.append(kw)
-
-    return unique_keywords[:5]  # Limit to top 5 keywords
+async def _fetch_calendar_account(
+    account_type: GoogleAccount,
+    date_ref: str | None,
+) -> tuple[str, list]:
+    """Fetch calendar events from one account."""
+    try:
+        calendar = CalendarService(account_type)
+        if date_ref:
+            from datetime import datetime
+            target_date = datetime.strptime(date_ref, "%Y-%m-%d")
+            events = calendar.get_events_in_range(
+                target_date,
+                target_date + timedelta(days=1)
+            )
+        else:
+            events = calendar.get_upcoming_events(max_results=10)
+        return (account_type.value, events)
+    except Exception as e:
+        logger.warning(f"{account_type.value} calendar error: {e}")
+        return (account_type.value, [])
 
 
-def expand_followup_query(query: str, conversation_history: list) -> str:
-    """
-    Expand a follow-up query with context from conversation history.
-
-    Detects short queries with pronouns (our, their, they, them, he, she, it)
-    or implicit references and expands them with context from previous messages.
-
-    Args:
-        query: The current user query
-        conversation_history: List of previous messages in the conversation
-
-    Returns:
-        Expanded query with context, or original query if not a follow-up
-    """
-    if not conversation_history:
-        return query
-
-    query_lower = query.lower().strip()
-
-    # Follow-up indicators: short query with pronouns or implicit references
-    followup_patterns = [
-        "what about", "how about", "and ", "but ",
-        "their ", "they ", "them ", "he ", "she ", "it ",
-        "our ", "his ", "her ", "its ",
-        "the same", "more about", "anything else",
-        "what else", "tell me more"
-    ]
-
-    is_followup = (
-        len(query.split()) < 10 and  # Short query
-        any(pattern in query_lower for pattern in followup_patterns)
-    )
-
-    if not is_followup:
-        return query
-
-    # Find the most recent user question that mentions a person or topic
-    for msg in reversed(conversation_history):
-        if msg.role == "user":
-            # Extract person name or topic from previous query
-            prev_query_lower = msg.content.lower()
-
-            # Check for person-related queries
-            person_patterns = [
-                r"(?:with|about|from|to)\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
-                r"interactions?\s+with\s+([A-Z][a-zA-Z]+(?:\s+[A-Z][a-zA-Z]+)?)",
-            ]
-
-            for pattern in person_patterns:
-                match = re.search(pattern, msg.content, re.IGNORECASE)
-                if match:
-                    person_name = match.group(1).strip()
-                    # Avoid matching common words
-                    if person_name.lower() not in {'the', 'a', 'an', 'my', 'our', 'their'}:
-                        # Expand the query with the person name
-                        expanded = f"{query} (regarding {person_name})"
-                        return expanded
-
-            # If no person found but previous query exists, reference it
-            if len(msg.content) < 200:  # Don't include very long queries
-                expanded = f"{query} [Context: previous question was about '{msg.content[:100]}']"
-                return expanded
-            break
-
-    return query
+async def _fetch_gmail_account(
+    account_type: GoogleAccount,
+    person_email: str | None,
+    is_sent_to: bool,
+    search_term: str | None,
+) -> tuple[str, list]:
+    """Fetch emails from one account."""
+    try:
+        gmail = GmailService(account_type)
+        if person_email:
+            if is_sent_to:
+                messages = gmail.search(to_email=person_email, max_results=5, include_body=True)
+            else:
+                messages = gmail.search(from_email=person_email, max_results=5, include_body=True)
+        elif search_term:
+            messages = gmail.search(keywords=search_term, max_results=5)
+        else:
+            messages = gmail.search(max_results=5)
+        return (account_type.value, messages)
+    except Exception as e:
+        logger.warning(f"{account_type.value} gmail error: {e}")
+        return (account_type.value, [])
 
 
-def detect_compose_intent(query: str) -> bool:
-    """
-    Detect if the query is asking to compose/draft an email.
+async def _fetch_drive_account(
+    account_type: GoogleAccount,
+    search_term: str | None,
+) -> tuple[str, list, list]:
+    """Fetch drive files from one account. Returns (account, name_matches, content_matches)."""
+    if not search_term:
+        return (account_type.value, [], [])
+    try:
+        drive = DriveService(account_type)
+        name_files = drive.search(name=search_term, max_results=5)
+        content_files = drive.search(full_text=search_term, max_results=5)
+        return (account_type.value, name_files, content_files)
+    except Exception as e:
+        logger.warning(f"{account_type.value} drive error: {e}")
+        return (account_type.value, [], [])
 
-    Returns True if the query indicates email composition intent.
-    """
-    query_lower = query.lower()
 
-    # Compose intent patterns
-    compose_patterns = [
-        "draft an email",
-        "draft email",
-        "draft a message",
-        "compose an email",
-        "compose email",
-        "write an email",
-        "write email",
-        "send an email",  # We'll create a draft, not send
-        "send email",
-        "email to ",  # "email to John about..."
-        "write to ",  # "write to Sarah about..."
-        "draft to ",
-    ]
+async def _fetch_slack(query: str, top_k: int = 10) -> list:
+    """Fetch Slack messages."""
+    try:
+        from api.services.slack_indexer import get_slack_indexer
+        from api.services.slack_integration import is_slack_enabled
 
-    return any(pattern in query_lower for pattern in compose_patterns)
+        if is_slack_enabled():
+            slack_indexer = get_slack_indexer()
+            return slack_indexer.search(query=query, top_k=top_k)
+    except Exception as e:
+        logger.warning(f"Slack search error: {e}")
+    return []
+
+
+async def _fetch_vault(query: str, top_k: int, date_filter: str | None = None) -> list:
+    """Fetch vault chunks using hybrid search."""
+    try:
+        hybrid_search = HybridSearch()
+        if date_filter:
+            vector_store = VectorStore()
+            chunks = vector_store.search(query=query, top_k=top_k, filters={"modified_date": date_filter})
+            if not chunks:
+                chunks = hybrid_search.search(query=query, top_k=top_k)
+        else:
+            chunks = hybrid_search.search(query=query, top_k=top_k)
+        return chunks
+    except Exception as e:
+        logger.warning(f"Vault search error: {e}")
+        return []
 
 
 async def extract_draft_params(query: str, conversation_history: list = None) -> Optional[dict]:
@@ -227,173 +189,6 @@ Return ONLY valid JSON, no other text. Example:
 
     return None
 
-
-def extract_date_context(query: str) -> Optional[str]:
-    """
-    Extract date references from query and convert to YYYY-MM-DD format.
-
-    Supports: today, yesterday, this week, specific dates
-    """
-    query_lower = query.lower()
-    today = datetime.now()
-
-    if "today" in query_lower:
-        return today.strftime("%Y-%m-%d")
-    elif "yesterday" in query_lower:
-        return (today - timedelta(days=1)).strftime("%Y-%m-%d")
-    elif "this week" in query_lower:
-        # Return start of week (Monday)
-        start_of_week = today - timedelta(days=today.weekday())
-        return start_of_week.strftime("%Y-%m-%d")
-
-    # Check for explicit date patterns like "January 7" or "Jan 7"
-    month_pattern = r'(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sep|oct|nov|dec)\s+(\d{1,2})'
-    match = re.search(month_pattern, query_lower)
-    if match:
-        month_str, day = match.groups()
-        month_map = {
-            'january': 1, 'jan': 1, 'february': 2, 'feb': 2,
-            'march': 3, 'mar': 3, 'april': 4, 'apr': 4,
-            'may': 5, 'june': 6, 'jun': 6, 'july': 7, 'jul': 7,
-            'august': 8, 'aug': 8, 'september': 9, 'sep': 9,
-            'october': 10, 'oct': 10, 'november': 11, 'nov': 11,
-            'december': 12, 'dec': 12
-        }
-        month = month_map.get(month_str)
-        if month:
-            year = today.year
-            # If the date is in the future, assume last year
-            try:
-                date = datetime(year, month, int(day))
-                if date > today:
-                    date = datetime(year - 1, month, int(day))
-                return date.strftime("%Y-%m-%d")
-            except ValueError:
-                pass
-
-    return None
-
-
-def extract_message_date_range(query: str) -> tuple[Optional[datetime], Optional[datetime]]:
-    """
-    Extract date range for message queries.
-
-    Supports: last month, last week, in December, this month, past N days/weeks/months,
-              lately, recently
-    Returns (start_date, end_date) tuple.
-    """
-    query_lower = query.lower()
-    today = datetime.now()
-
-    # "lately" - default to last 30 days
-    if "lately" in query_lower:
-        start = today - timedelta(days=30)
-        return (start, today)
-
-    # "recently" or "recent" - default to last 14 days
-    if "recently" in query_lower or "recent " in query_lower:
-        start = today - timedelta(days=14)
-        return (start, today)
-
-    # "last month" or "past month"
-    if "last month" in query_lower or "past month" in query_lower:
-        # First day of last month
-        first_of_this_month = today.replace(day=1)
-        last_month_end = first_of_this_month - timedelta(days=1)
-        last_month_start = last_month_end.replace(day=1)
-        return (last_month_start, last_month_end)
-
-    # "this month"
-    if "this month" in query_lower:
-        first_of_month = today.replace(day=1, hour=0, minute=0, second=0)
-        return (first_of_month, today)
-
-    # "last week" or "past week"
-    if "last week" in query_lower or "past week" in query_lower:
-        start = today - timedelta(days=7)
-        return (start, today)
-
-    # "past N days/weeks/months"
-    past_pattern = r'(?:past|last)\s+(\d+)\s+(day|days|week|weeks|month|months)'
-    match = re.search(past_pattern, query_lower)
-    if match:
-        num, unit = match.groups()
-        num = int(num)
-        if 'day' in unit:
-            start = today - timedelta(days=num)
-        elif 'week' in unit:
-            start = today - timedelta(weeks=num)
-        elif 'month' in unit:
-            start = today - timedelta(days=num * 30)  # Approximate
-        return (start, today)
-
-    # "in December", "in January", etc.
-    month_pattern = r'\bin\s+(january|february|march|april|may|june|july|august|september|october|november|december)\b'
-    match = re.search(month_pattern, query_lower)
-    if match:
-        month_str = match.group(1)
-        month_map = {
-            'january': 1, 'february': 2, 'march': 3, 'april': 4,
-            'may': 5, 'june': 6, 'july': 7, 'august': 8,
-            'september': 9, 'october': 10, 'november': 11, 'december': 12
-        }
-        month = month_map.get(month_str)
-        if month:
-            year = today.year
-            # If month is in the future, use last year
-            if month > today.month:
-                year -= 1
-            start = datetime(year, month, 1)
-            # End of month
-            if month == 12:
-                end = datetime(year + 1, 1, 1) - timedelta(days=1)
-            else:
-                end = datetime(year, month + 1, 1) - timedelta(days=1)
-            return (start, end)
-
-    return (None, None)
-
-
-def extract_message_search_terms(query: str, person_name: str) -> Optional[str]:
-    """
-    Extract search terms for message content from query.
-
-    Looks for patterns like "about X", "regarding X", "mentioning X"
-    """
-    query_lower = query.lower()
-    person_lower = person_name.lower()
-
-    # Remove the person's name to focus on topic
-    query_without_person = query_lower.replace(person_lower, "").strip()
-
-    # Temporal words that shouldn't be search terms
-    temporal_words = {'lately', 'recently', 'today', 'yesterday', 'tomorrow',
-                      'last', 'this', 'next', 'week', 'month', 'year', 'now'}
-
-    # Patterns that indicate topic search
-    patterns = [
-        r'about\s+(.+?)(?:\s+with|\s+in|\s+from|\s*\??\s*$)',
-        r'regarding\s+(.+?)(?:\s+with|\s+in|\s+from|\s*\??\s*$)',
-        r'mentioning\s+(.+?)(?:\s+with|\s+in|\s+from|\s*\??\s*$)',
-        r'discussed?\s+(.+?)(?:\s+with|\s+in|\s+from|\s*\??\s*$)',
-        r'talked?\s+about\s+(.+?)(?:\s+with|\s+in|\s+from|\s*\??\s*$)',
-        r'talking\s+about\s+(.+?)(?:\s+with|\s+in|\s+from|\s*\??\s*$)',
-    ]
-
-    for pattern in patterns:
-        match = re.search(pattern, query_without_person)
-        if match:
-            term = match.group(1).strip()
-            # Clean up common words and punctuation
-            term = re.sub(r'\b(the|a|an|our|my|her|his|their)\b', '', term).strip()
-            term = term.rstrip('?').strip()
-            # Filter out temporal words
-            if term.lower() in temporal_words:
-                return None
-            if len(term) > 2:
-                return term
-
-    return None
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -551,8 +346,6 @@ async def ask_stream(request: AskStreamRequest):
                 draft_params = await extract_draft_params(request.question, conversation_history)
                 if draft_params:
                     try:
-                        from api.services.google_auth import GoogleAccount
-
                         # Determine account
                         account_str = draft_params.get("account", "personal").lower()
                         account_type = GoogleAccount.WORK if account_str == "work" else GoogleAccount.PERSONAL
@@ -605,11 +398,28 @@ async def ask_stream(request: AskStreamRequest):
                     print("Could not extract draft params, falling through to normal flow")
 
             # Expand follow-up queries with conversation context
+            # v3: Use enhanced conversation context for better follow-up handling
+            from api.services.conversation_context import (
+                extract_context_from_history,
+                expand_followup_with_context,
+            )
             query_for_routing = request.question
+            conv_context = None
             if conversation_history:
+                # First try the legacy expansion
                 query_for_routing = expand_followup_query(request.question, conversation_history)
                 if query_for_routing != request.question:
-                    print(f"Expanded query: '{request.question}' -> '{query_for_routing}'")
+                    print(f"Expanded query (legacy): '{request.question}' -> '{query_for_routing}'")
+                else:
+                    # Try enhanced context-based expansion
+                    conv_context = extract_context_from_history(conversation_history)
+                    if conv_context.has_person_context():
+                        query_for_routing = expand_followup_with_context(
+                            request.question,
+                            conv_context
+                        )
+                        if query_for_routing != request.question:
+                            print(f"Expanded query (context): '{request.question}' -> '{query_for_routing}'")
 
             # Route query to determine sources
             query_router = QueryRouter()
@@ -631,6 +441,53 @@ async def ask_stream(request: AskStreamRequest):
                 f"confidence: {routing_result.confidence})"
             )
 
+            # Check for name resolution failures (disambiguation or fuzzy suggestions)
+            if routing_result.relationship_context and routing_result.relationship_context.get("resolution_failed"):
+                failure_type = routing_result.relationship_context.get("failure_type")
+                query_name = routing_result.relationship_context.get("query_name", "")
+
+                if failure_type == "ambiguous":
+                    # Multiple people with same name - ask user to clarify
+                    candidates = routing_result.relationship_context.get("candidates", [])
+                    yield f"data: {json.dumps({'type': 'routing', 'sources': ['people'], 'reasoning': 'Name disambiguation needed', 'latency_ms': routing_result.latency_ms})}\n\n"
+                    response_text = f"I found multiple people named \"{query_name}\". Which one did you mean?\n\n"
+                    for i, c in enumerate(candidates, 1):
+                        context = c.get("context", "")
+                        strength = c.get("strength", 0)
+                        response_text += f"{i}. **{c['name']}** ({context}) - strength: {strength:.0f}/100\n"
+                    response_text += "\nPlease specify which person you're asking about.\n"
+
+                    # Stream the response
+                    for chunk in response_text:
+                        yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
+                        await asyncio.sleep(0.005)
+
+                    # Save assistant response
+                    store.add_message(conversation_id, "assistant", response_text)
+                    yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                    return
+
+                elif failure_type == "no_match":
+                    # No match - show fuzzy suggestions
+                    suggestions = routing_result.relationship_context.get("suggestions", [])
+                    yield f"data: {json.dumps({'type': 'routing', 'sources': ['people'], 'reasoning': 'Name not found, suggesting alternatives', 'latency_ms': routing_result.latency_ms})}\n\n"
+
+                    if suggestions:
+                        suggestion_text = ", ".join(f'"{s}"' for s in suggestions)
+                        response_text = f"I couldn't find anyone named \"{query_name}\" in your contacts. Did you mean: {suggestion_text}?\n\n"
+                    else:
+                        response_text = f"I couldn't find anyone named \"{query_name}\" in your contacts.\n\n"
+
+                    # Stream the response
+                    for chunk in response_text:
+                        yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
+                        await asyncio.sleep(0.005)
+
+                    # Save assistant response
+                    store.add_message(conversation_id, "assistant", response_text)
+                    yield f"data: {json.dumps({'type': 'done'})}\n\n"
+                    return
+
             # Add "attachment" to sources if attachments are present
             effective_sources = list(routing_result.sources)
             if request.attachments:
@@ -646,33 +503,91 @@ async def ask_stream(request: AskStreamRequest):
             # Get relevant data based on routing
             chunks = []
             extra_context = []  # For calendar/drive/gmail results
+            skipped_sources = []  # Track sources skipped due to sparse data
+
+            # v3: Determine adaptive limits based on fetch_depth
+            from api.services.query_router import FETCH_DEPTH_LIMITS
+            depth_limits = FETCH_DEPTH_LIMITS.get(routing_result.fetch_depth, FETCH_DEPTH_LIMITS["normal"])
+            email_char_limit = depth_limits["email_char_limit"]
+            vault_chunk_limit = depth_limits["vault_chunks"]
+            message_limit = depth_limits["message_limit"]
+            print(f"  Fetch depth: {routing_result.fetch_depth} -> limits: email={email_char_limit}, vault={vault_chunk_limit}, msgs={message_limit}")
+
+            # v3: Smart source skipping based on relationship context
+            rel_ctx = routing_result.relationship_context
+            if rel_ctx:
+                active_channels = rel_ctx.get("active_channels", [])
+                email_count = rel_ctx.get("email_count", 0)
+                message_count = rel_ctx.get("message_count", 0)
+
+                # Skip gmail if no email history with this person
+                if "gmail" in routing_result.sources and email_count < 3:
+                    if "gmail" not in active_channels:
+                        skipped_sources.append("gmail")
+                        print(f"  Skipping gmail (only {email_count} emails, not active)")
+
+                # Note: Don't skip slack here - it's not in relationship_context channels yet
 
             # Handle calendar queries - ALWAYS query both personal and work calendars
             if "calendar" in routing_result.sources:
-                print("FETCHING CALENDAR DATA (both personal and work)...")
-                from api.services.google_auth import GoogleAccount
+                print("FETCHING CALENDAR DATA (both personal and work, parallel)...")
                 all_events = []
 
-                for account_type in [GoogleAccount.PERSONAL, GoogleAccount.WORK]:
-                    try:
-                        calendar = CalendarService(account_type)
-                        # Parse date from query
-                        date_ref = extract_date_context(request.question)
-                        if date_ref:
-                            from datetime import datetime
-                            target_date = datetime.strptime(date_ref, "%Y-%m-%d")
-                            events = calendar.get_events_in_range(
-                                target_date,
-                                target_date + timedelta(days=1)
-                            )
-                        else:
-                            # Default to upcoming events
-                            events = calendar.get_upcoming_events(max_results=10)
+                # v3: Check if we should filter by person (for meeting prep queries)
+                person_filter_email = None
+                person_filter_name = routing_result.extracted_person_name
+                if person_filter_name and routing_result.relationship_context:
+                    # Check if query is about meeting prep with specific person
+                    query_lower = request.question.lower()
+                    prep_patterns = ["prep", "meeting with", "1:1 with", "call with"]
+                    if any(p in query_lower for p in prep_patterns):
+                        # Try to get email from CRM context for filtering
+                        try:
+                            from api.services.entity_resolver import get_entity_resolver
+                            resolver = get_entity_resolver()
+                            result = resolver.resolve(name=person_filter_name)
+                            if result and result.entity and result.entity.emails:
+                                person_filter_email = result.entity.emails[0]
+                                print(f"  Person filter: {person_filter_name} ({person_filter_email})")
+                        except Exception as e:
+                            print(f"  Could not resolve person for calendar filter: {e}")
 
+                # Parallel fetch from both accounts
+                date_ref = extract_date_context(request.question)
+                calendar_results = await asyncio.gather(
+                    _fetch_calendar_account(GoogleAccount.PERSONAL, date_ref),
+                    _fetch_calendar_account(GoogleAccount.WORK, date_ref),
+                    return_exceptions=True
+                )
+                for result in calendar_results:
+                    if isinstance(result, Exception):
+                        print(f"  Calendar fetch error: {result}")
+                    else:
+                        account, events = result
                         all_events.extend(events)
-                        print(f"  Found {len(events)} events from {account_type.value} calendar")
-                    except Exception as e:
-                        print(f"  {account_type.value} calendar error: {e}")
+                        print(f"  Found {len(events)} events from {account} calendar")
+
+                # v3: Filter events by person if specified
+                if person_filter_email or person_filter_name:
+                    filtered_events = []
+                    for event in all_events:
+                        # Check if person is an attendee
+                        attendee_match = False
+                        for attendee in event.attendees:
+                            if person_filter_email and person_filter_email.lower() in attendee.lower():
+                                attendee_match = True
+                                break
+                            if person_filter_name and person_filter_name.lower() in attendee.lower():
+                                attendee_match = True
+                                break
+                        # Also check title
+                        if person_filter_name and person_filter_name.lower() in event.title.lower():
+                            attendee_match = True
+                        if attendee_match:
+                            filtered_events.append(event)
+                    if filtered_events:
+                        print(f"  Filtered to {len(filtered_events)} events with {person_filter_name}")
+                        all_events = filtered_events
 
                 # Sort all events by start time
                 all_events.sort(key=lambda e: e.start_time)
@@ -703,8 +618,7 @@ async def ask_stream(request: AskStreamRequest):
 
             # Handle drive queries - query both personal and work accounts
             if "drive" in routing_result.sources:
-                print("FETCHING DRIVE DATA (both personal and work)...")
-                from api.services.google_auth import GoogleAccount
+                print("FETCHING DRIVE DATA (both personal and work, parallel)...")
 
                 # Extract keywords for search
                 keywords = extract_search_keywords(request.question)
@@ -715,31 +629,28 @@ async def ask_stream(request: AskStreamRequest):
                 content_matched_files = []  # Files matching by content
                 seen_file_ids = set()
 
-                for account_type in [GoogleAccount.PERSONAL, GoogleAccount.WORK]:
-                    try:
-                        drive = DriveService(account_type)
-                        if search_term:
-                            # Search by BOTH name and full_text to catch more results
-                            # Name search finds "Nathan/Kevin 1:1 notes" when searching "Kevin"
-                            name_files = drive.search(name=search_term, max_results=5)
-                            content_files = drive.search(full_text=search_term, max_results=5)
-
-                            # Track name matches separately (higher priority for reading content)
-                            for f in name_files:
-                                if f.file_id not in seen_file_ids:
-                                    seen_file_ids.add(f.file_id)
-                                    name_matched_files.append(f)
-
-                            for f in content_files:
-                                if f.file_id not in seen_file_ids:
-                                    seen_file_ids.add(f.file_id)
-                                    content_matched_files.append(f)
-
-                            print(f"  Found {len(name_files)} by name, {len(content_files)} by content from {account_type.value} drive")
-                        else:
-                            pass
-                    except Exception as e:
-                        print(f"  {account_type.value} drive error: {e}")
+                # Parallel fetch from both accounts
+                drive_results = await asyncio.gather(
+                    _fetch_drive_account(GoogleAccount.PERSONAL, search_term),
+                    _fetch_drive_account(GoogleAccount.WORK, search_term),
+                    return_exceptions=True
+                )
+                for result in drive_results:
+                    if isinstance(result, Exception):
+                        print(f"  Drive fetch error: {result}")
+                    else:
+                        account, name_files, content_files = result
+                        # Track name matches separately (higher priority for reading content)
+                        for f in name_files:
+                            if f.file_id not in seen_file_ids:
+                                seen_file_ids.add(f.file_id)
+                                name_matched_files.append(f)
+                        for f in content_files:
+                            if f.file_id not in seen_file_ids:
+                                seen_file_ids.add(f.file_id)
+                                content_matched_files.append(f)
+                        if name_files or content_files:
+                            print(f"  Found {len(name_files)} by name, {len(content_files)} by content from {account} drive")
 
                 # Prioritize name matches first, then content matches
                 all_files = name_matched_files + content_matched_files
@@ -804,9 +715,8 @@ async def ask_stream(request: AskStreamRequest):
                     print(f"  Total: {len(all_files)} drive files, {files_with_content} with initial content")
 
             # Handle gmail queries - query both personal and work accounts
-            if "gmail" in routing_result.sources:
-                print("FETCHING GMAIL DATA (both personal and work)...")
-                from api.services.google_auth import GoogleAccount
+            if "gmail" in routing_result.sources and "gmail" not in skipped_sources:
+                print("FETCHING GMAIL DATA (both personal and work, parallel)...")
                 from api.services.entity_resolver import get_entity_resolver
 
                 # Extract keywords for search
@@ -844,34 +754,20 @@ async def ask_stream(request: AskStreamRequest):
                         is_sent_to = True
                         print(f"  Query is about emails SENT TO {person_name}")
 
+                # Parallel fetch from both accounts
+                gmail_results = await asyncio.gather(
+                    _fetch_gmail_account(GoogleAccount.PERSONAL, person_email, is_sent_to, search_term),
+                    _fetch_gmail_account(GoogleAccount.WORK, person_email, is_sent_to, search_term),
+                    return_exceptions=True
+                )
                 all_messages = []
-                for account_type in [GoogleAccount.PERSONAL, GoogleAccount.WORK]:
-                    try:
-                        gmail = GmailService(account_type)
-                        # Use person email for targeted search
-                        # When we have a resolved email, fetch full body (fewer results since bodies are large)
-                        if person_email:
-                            if is_sent_to:
-                                messages = gmail.search(
-                                    to_email=person_email,
-                                    max_results=5,
-                                    include_body=True
-                                )
-                            else:
-                                messages = gmail.search(
-                                    from_email=person_email,
-                                    max_results=5,
-                                    include_body=True
-                                )
-                            print(f"  Searching {'to' if is_sent_to else 'from'}: {person_email} (with body)")
-                        elif search_term:
-                            messages = gmail.search(keywords=search_term, max_results=5)
-                        else:
-                            messages = gmail.search(max_results=5)  # Recent emails
+                for result in gmail_results:
+                    if isinstance(result, Exception):
+                        print(f"  Gmail fetch error: {result}")
+                    else:
+                        account, messages = result
                         all_messages.extend(messages)
-                        print(f"  Found {len(messages)} emails from {account_type.value} gmail")
-                    except Exception as e:
-                        print(f"  {account_type.value} gmail error: {e}")
+                        print(f"  Found {len(messages)} emails from {account} gmail")
 
                 if all_messages:
                     from zoneinfo import ZoneInfo
@@ -902,9 +798,9 @@ async def ask_stream(request: AskStreamRequest):
                         if date_str:
                             email_text += f"  Date: {date_str}\n"
                         # Show full body if available, otherwise snippet
+                        # v3: Use adaptive limit based on fetch_depth
                         if body:
-                            # Limit body to prevent context overflow
-                            body_preview = body[:2000] + "..." if len(body) > 2000 else body
+                            body_preview = body[:email_char_limit] + "..." if len(body) > email_char_limit else body
                             email_text += f"  Body:\n{body_preview}\n"
                         elif snippet:
                             email_text += f"  Preview: {snippet[:200]}...\n"
@@ -913,68 +809,44 @@ async def ask_stream(request: AskStreamRequest):
 
             # Handle slack queries - search Slack DMs and channels
             if "slack" in routing_result.sources:
-                print("SEARCHING SLACK...")
-                try:
-                    from api.services.slack_indexer import get_slack_indexer
-                    from api.services.slack_integration import is_slack_enabled
+                print("SEARCHING SLACK (async)...")
+                slack_results = await _fetch_slack(request.question, top_k=10)
 
-                    if is_slack_enabled():
-                        slack_indexer = get_slack_indexer()
-                        slack_results = slack_indexer.search(
-                            query=request.question,
-                            top_k=10,
-                        )
+                if slack_results:
+                    slack_text = "\n\n### Slack Messages\n\n"
+                    for msg in slack_results:
+                        channel_name = msg.get("channel_name", "Unknown")
+                        user_name = msg.get("user_name", "Unknown")
+                        timestamp = msg.get("timestamp", "")
+                        content = msg.get("content", "")
 
-                        if slack_results:
-                            slack_text = "\n\n### Slack Messages\n\n"
-                            for msg in slack_results:
-                                channel_name = msg.get("channel_name", "Unknown")
-                                user_name = msg.get("user_name", "Unknown")
-                                timestamp = msg.get("timestamp", "")
-                                content = msg.get("content", "")
+                        # Parse timestamp for display
+                        try:
+                            dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                            date_str = dt.strftime("%Y-%m-%d %H:%M")
+                        except:
+                            date_str = timestamp[:10] if timestamp else ""
 
-                                # Parse timestamp for display
-                                try:
-                                    dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-                                    date_str = dt.strftime("%Y-%m-%d %H:%M")
-                                except:
-                                    date_str = timestamp[:10] if timestamp else ""
+                        slack_text += f"**{channel_name}** - {user_name} ({date_str}):\n"
+                        slack_text += f"  {content[:500]}{'...' if len(content) > 500 else ''}\n\n"
 
-                                slack_text += f"**{channel_name}** - {user_name} ({date_str}):\n"
-                                slack_text += f"  {content[:500]}{'...' if len(content) > 500 else ''}\n\n"
-
-                            extra_context.append({"source": "slack", "content": slack_text})
-                            print(f"  Found {len(slack_results)} Slack messages")
-                        else:
-                            print("  No Slack messages found")
-                    else:
-                        print("  Slack not enabled")
-                except Exception as e:
-                    print(f"  Slack search error: {e}")
-                    logger.error(f"Slack search failed: {e}")
+                    extra_context.append({"source": "slack", "content": slack_text})
+                    print(f"  Found {len(slack_results)} Slack messages")
+                else:
+                    print("  No Slack messages found")
 
             # Handle vault queries (always include as fallback)
             if "vault" in routing_result.sources or not routing_result.sources or not extra_context:
-                # Use hybrid search (vector + BM25 keyword) for better keyword matching
-                hybrid_search = HybridSearch()
+                # v3: Use adaptive chunk limit based on fetch_depth
+                effective_vault_limit = vault_chunk_limit
 
                 # Check for date context in query
                 date_filter = extract_date_context(request.question)
                 if date_filter:
                     print(f"DATE CONTEXT DETECTED: {date_filter}")
-                    # For date-filtered queries, use vector store directly
-                    vector_store = VectorStore()
-                    chunks = vector_store.search(
-                        query=request.question,
-                        top_k=10,
-                        filters={"modified_date": date_filter}
-                    )
-                    # If no results with date filter, fall back to hybrid search
-                    if not chunks:
-                        print("  No results with date filter, falling back to hybrid search")
-                        chunks = hybrid_search.search(query=request.question, top_k=10)
-                else:
-                    chunks = hybrid_search.search(query=request.question, top_k=10)
+
+                # Use async vault fetch
+                chunks = await _fetch_vault(request.question, effective_vault_limit, date_filter)
 
                 # Log search results
                 print(f"\nVAULT SEARCH RESULTS (top {len(chunks)}):")
@@ -1000,8 +872,6 @@ async def ask_stream(request: AskStreamRequest):
                     print(f"  Extracted person name: {person_name}")
 
                     # Search calendar for person's email (7 days back and forward)
-                    from api.services.google_auth import GoogleAccount
-
                     for account_type in [GoogleAccount.PERSONAL, GoogleAccount.WORK]:
                         try:
                             calendar = CalendarService(account_type)
@@ -1086,12 +956,19 @@ async def ask_stream(request: AskStreamRequest):
                             else:
                                 print(f"  Querying messages: dates={start_date} to {end_date}, search={search_term}")
 
+                            # v3: Use message_limit from fetch_depth (set at top of function)
+                            # Explicit queries override with full context
+                            effective_message_limit = message_limit
+                            if start_date or search_term:
+                                effective_message_limit = 200  # Explicit queries get full context
+                            print(f"  Message limit: {effective_message_limit} (depth={routing_result.fetch_depth})")
+
                             msg_result = query_person_messages(
                                 entity_id=entity_id,
                                 search_term=search_term,
                                 start_date=effective_start,
                                 end_date=effective_end,
-                                limit=150 if (start_date or search_term) else 50,  # Fewer for auto-queries
+                                limit=effective_message_limit,
                             )
 
                             if msg_result["count"] > 0:
@@ -1204,6 +1081,48 @@ async def ask_stream(request: AskStreamRequest):
             if conversation_history:
                 print(f"Including {len(conversation_history)} messages of conversation history for synthesis")
 
+            # v3: Build confidence metadata for synthesis
+            confidence_metadata = None
+            if "people" in routing_result.sources:
+                # Extract relationship context if available
+                rel_context = None
+                for ctx in extra_context:
+                    if ctx.get("source") == "relationship_context":
+                        rel_context = ctx
+                        break
+
+                # Calculate data quality metrics
+                vault_chunk_count = len([c for c in chunks if c.get("metadata", {}).get("source") != "relationship_context"])
+                message_count = sum(ctx.get("count", 0) for ctx in extra_context if ctx.get("source") == "imessage")
+
+                confidence_metadata = {
+                    "routing_confidence": routing_result.confidence,
+                    "sources_queried": routing_result.sources,
+                    "vault_chunks": vault_chunk_count,
+                    "message_count": message_count,
+                }
+                if rel_context:
+                    # Parse relationship strength from context if available
+                    confidence_metadata["relationship_context_available"] = True
+
+                print(f"  Confidence metadata: {confidence_metadata}")
+
+                # Add confidence context to first chunk for Claude's awareness
+                confidence_block = f"""## Query Confidence
+- Routing confidence: {routing_result.confidence:.0%}
+- Sources queried: {', '.join(routing_result.sources)}
+- Vault chunks found: {vault_chunk_count}
+- Messages found: {message_count}
+
+Note: If data is sparse, acknowledge limitations. If relationship context is rich, synthesize deeply.
+"""
+                chunks.insert(0, {
+                    "content": confidence_block,
+                    "file_name": "[SYSTEM_CONTEXT]",
+                    "file_path": "_system",
+                    "metadata": {"source": "_system"}
+                })
+
             prompt = construct_prompt(request.question, chunks, conversation_history=conversation_history)
 
             # Prepare attachments for synthesizer (convert Pydantic models to dicts)
@@ -1313,16 +1232,23 @@ Please continue your response, incorporating this additional information. Do NOT
                             yield f"data: {json.dumps({'type': 'content', 'content': chunk})}\n\n"
                         await asyncio.sleep(0)
 
-            # Save assistant response
+            # Save assistant response with enhanced routing metadata
+            routing_metadata = {
+                "sources": effective_sources,
+                "reasoning": routing_result.reasoning,
+                "fetch_depth": routing_result.fetch_depth,
+            }
+            if skipped_sources:
+                routing_metadata["skipped_sources"] = skipped_sources
+            if routing_result.extracted_person_name:
+                routing_metadata["person"] = routing_result.extracted_person_name
+
             store.add_message(
                 conversation_id,
                 "assistant",
                 full_response,
                 sources=sources,
-                routing={
-                    "sources": effective_sources,
-                    "reasoning": routing_result.reasoning
-                }
+                routing=routing_metadata
             )
             print(f"Saved assistant response ({len(full_response)} chars)")
 
@@ -1339,29 +1265,6 @@ Please continue your response, incorporating this additional information. Do NOT
             "Connection": "keep-alive",
         }
     )
-
-
-def _format_messages_for_synthesis(messages: list, include_sources: bool) -> str:
-    """Format conversation messages for synthesis prompt."""
-    parts = []
-    for msg in messages:
-        prefix = "User" if msg.role == "user" else "Assistant"
-        parts.append(f"{prefix}: {msg.content}")
-        if include_sources and msg.sources:
-            sources_str = ", ".join(s.get("file_name", "unknown") for s in msg.sources)
-            parts.append(f"[Sources: {sources_str}]")
-    return "\n\n".join(parts)
-
-
-def _format_raw_qa_section(messages: list) -> str:
-    """Format raw Q&A section to append to note."""
-    parts = ["", "---", "", "## Original Conversation", ""]
-    for msg in messages:
-        prefix = "**User:**" if msg.role == "user" else "**Assistant:**"
-        parts.append(prefix)
-        parts.append(msg.content)
-        parts.append("")
-    return "\n".join(parts)
 
 
 @router.post("/save-to-vault")

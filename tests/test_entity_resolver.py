@@ -66,7 +66,7 @@ def populated_resolver(temp_store):
         ),
         PersonEntity(
             canonical_name="Taylor",
-            emails=["taylor@gmail.com"],
+            emails=["taylor@example.com"],
             phone_numbers=["+15559876543"],
             category="family",
             vault_contexts=["Personal/"],

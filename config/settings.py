@@ -40,7 +40,11 @@ class Settings(BaseSettings):
     # Embedding Model
     # mxbai-embed-large-v1: Top-tier 1024-dim model, stable and well-tested
     embedding_model: str = "mixedbread-ai/mxbai-embed-large-v1"
-    embedding_cache_dir: str = "/Volumes/NVMe External Storage/huggingface_cache"
+    embedding_cache_dir: str = Field(
+        default="~/.cache/huggingface",
+        alias="LIFEOS_EMBEDDING_CACHE",
+        description="Directory for caching embedding model files"
+    )
 
     # Chunking
     chunk_size: int = 500  # tokens
@@ -51,8 +55,9 @@ class Settings(BaseSettings):
 
     # Local LLM Router (Ollama)
     ollama_host: str = Field(default="http://localhost:11434", alias="OLLAMA_HOST")
-    ollama_model: str = Field(default="llama3.2:3b", alias="OLLAMA_MODEL")
-    ollama_timeout: int = Field(default=10, alias="OLLAMA_TIMEOUT")
+    ollama_model: str = Field(default="qwen2.5:7b-instruct", alias="OLLAMA_MODEL")
+    ollama_timeout: int = Field(default=45, alias="OLLAMA_TIMEOUT")  # 7B model needs more time
+    ollama_retry_timeout: int = Field(default=60, alias="OLLAMA_RETRY_TIMEOUT")  # Longer timeout for retries
 
     # Cross-encoder re-ranking (P9.2)
     # Query-aware reranking: protects BM25 exact matches for factual queries
@@ -75,16 +80,41 @@ class Settings(BaseSettings):
         alias="SLACK_REDIRECT_URI"
     )
 
+    # Work email domain for CRM category detection
+    work_email_domain: str = Field(
+        default="",
+        alias="LIFEOS_WORK_DOMAIN",
+        description="Your work email domain (e.g., yourcompany.com) for categorizing work contacts"
+    )
+
     # CRM Owner (the user's person ID for relationship tracking)
     # WARNING: This ID is from people_entities.json and must remain stable.
     # If you rebuild people_entities.json from scratch, this ID will become
     # invalid and you'll need to find your new ID and update this value.
     # See data/README.md for why you should NEVER rebuild from scratch.
     my_person_id: str = Field(
-        default="3f41e143-719f-4dc9-a9f1-389b2db5b166",  # Nathan Ramia
+        default="",
         alias="LIFEOS_MY_PERSON_ID",
         description="Your PersonEntity ID for relationship tracking"
     )
+
+    # Apple Photos Integration
+    photos_library_path: str = Field(
+        default="~/Pictures/Photos Library.photoslibrary",
+        alias="LIFEOS_PHOTOS_PATH",
+        description="Path to Photos Library"
+    )
+
+    @property
+    def photos_db_path(self) -> str:
+        """Get path to Photos.sqlite database."""
+        return f"{self.photos_library_path}/database/Photos.sqlite"
+
+    @property
+    def photos_enabled(self) -> bool:
+        """Check if Photos database is available."""
+        from pathlib import Path
+        return Path(self.photos_db_path).exists()
 
 
 settings = Settings()

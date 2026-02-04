@@ -228,6 +228,7 @@ class TestMyPersonIdConstant:
         # Should not raise
         uuid.UUID(MY_PERSON_ID)
 
-    def test_my_person_id_matches_expected(self):
-        """MY_PERSON_ID should match the expected value."""
-        assert MY_PERSON_ID == "3f41e143-719f-4dc9-a9f1-389b2db5b166"
+    def test_my_person_id_from_settings(self):
+        """MY_PERSON_ID should come from settings (not hardcoded)."""
+        from config.settings import settings
+        assert MY_PERSON_ID == settings.my_person_id

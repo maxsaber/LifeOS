@@ -4,6 +4,7 @@ Indexer service for LifeOS.
 Watches the Obsidian vault for file changes and indexes content to ChromaDB.
 Supports incremental indexing based on file modification times.
 """
+import gc
 import os
 import re
 import time
@@ -146,7 +147,7 @@ class IndexerService:
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state_path.write_text(json.dumps(state, indent=2))
 
-    def index_all(self, force: bool = False) -> int:
+    def index_all(self, force: bool = False, skip_summaries: bool = False) -> int:
         """
         Index markdown files in the vault.
 
@@ -157,6 +158,7 @@ class IndexerService:
 
         Args:
             force: If True, reindex all files regardless of modification time
+            skip_summaries: If True, skip LLM summary generation for faster indexing
 
         Returns:
             Number of files indexed
@@ -208,11 +210,11 @@ class IndexerService:
         # Index changed files, saving progress incrementally
         count = 0
         all_affected_person_ids: set[str] = set()
-        save_interval = 50  # Save state every N files
+        save_interval = 10  # Save state every N files (small to survive timeouts)
 
         for file_path, mtime in files_to_index:
             try:
-                affected_ids = self.index_file(file_path, skip_stats_refresh=True)
+                affected_ids = self.index_file(file_path, skip_stats_refresh=True, skip_summaries=skip_summaries)
                 if affected_ids:
                     all_affected_person_ids.update(affected_ids)
 
@@ -220,9 +222,10 @@ class IndexerService:
                 index_state[file_path] = mtime
                 count += 1
 
-                # Save progress periodically
+                # Save progress and clean up memory periodically
                 if count % save_interval == 0:
                     self._save_index_state(index_state)
+                    gc.collect()  # Prevent memory bloat during long indexing runs
                     logger.info(f"  Indexed {count}/{len(files_to_index)} files (progress saved)...")
 
             except Exception as e:
@@ -232,6 +235,13 @@ class IndexerService:
         self._save_index_state(index_state)
         logger.info(f"Indexed {count} files (final save)")
 
+        # Retry failed summaries with simpler prompt and longer timeout
+        if not skip_summaries:
+            retry_count = self._retry_failed_summaries()
+            if retry_count > 0:
+                logger.info(f"Retried {retry_count} failed summaries")
+            gc.collect()  # Clean up after retry phase
+
         # Batch refresh all affected person stats ONCE at the end
         if all_affected_person_ids:
             from api.services.person_stats import refresh_person_stats
@@ -240,7 +250,7 @@ class IndexerService:
 
         return count
 
-    def index_file(self, file_path: str, skip_stats_refresh: bool = False) -> set[str] | None:
+    def index_file(self, file_path: str, skip_stats_refresh: bool = False, skip_summaries: bool = False) -> set[str] | None:
         """
         Index a single file.
 
@@ -248,6 +258,7 @@ class IndexerService:
             file_path: Path to the file
             skip_stats_refresh: If True, return affected person IDs instead of refreshing.
                                Used by index_all() to batch refresh at the end.
+            skip_summaries: If True, skip LLM summary generation for faster indexing.
 
         Returns:
             Set of affected person IDs if skip_stats_refresh=True, else None
@@ -332,24 +343,37 @@ class IndexerService:
             )
 
         # Generate document summary for discovery queries (P9.4)
-        try:
-            from api.services.summarizer import generate_summary
-            summary = generate_summary(body, path.name)
-            if summary:
-                summary_id = f"{path.resolve()}::summary"
-                summary_content = f"Document summary for {path.name}: {summary}"
-
-                # Add summary chunk to BM25 (for keyword search)
-                self.bm25_index.add_document(
-                    doc_id=summary_id,
-                    content=summary_content,
-                    file_name=path.name,
-                    people=all_people if all_people else None
+        # Uses tiered summarization: SKIP for archives, HIGH for important content
+        if not skip_summaries:
+            try:
+                from api.services.summarizer import (
+                    generate_summary, get_summary_tier, SummaryTier, add_summary_failure
                 )
 
-                logger.debug(f"Generated summary for {file_path}")
-        except Exception as e:
-            logger.warning(f"Summary generation failed for {file_path}: {e}")
+                tier = get_summary_tier(file_path)
+
+                if tier == SummaryTier.SKIP:
+                    logger.debug(f"Skipping summary for {file_path} (tier: SKIP)")
+                else:
+                    summary, success = generate_summary(body, path.name)
+                    if success and summary:
+                        summary_id = f"{path.resolve()}::summary"
+                        summary_content = f"Document summary for {path.name}: {summary}"
+
+                        # Add summary chunk to BM25 (for keyword search)
+                        self.bm25_index.add_document(
+                            doc_id=summary_id,
+                            content=summary_content,
+                            file_name=path.name,
+                            people=all_people if all_people else None
+                        )
+
+                        logger.debug(f"Generated summary for {file_path} (tier: {tier.value})")
+                    elif not success:
+                        # Track failure for retry at end of indexing
+                        add_summary_failure(file_path, path.name)
+            except Exception as e:
+                logger.warning(f"Summary generation failed for {file_path}: {e}")
 
         logger.debug(f"Indexed {file_path} with {len(chunks)} chunks")
 
@@ -376,6 +400,64 @@ class IndexerService:
         self.bm25_index.delete_document(summary_id)
 
         logger.debug(f"Deleted {file_path} from index (resolved: {real_path})")
+
+    def _retry_failed_summaries(self) -> int:
+        """
+        Retry summary generation for files that failed in the first pass.
+
+        Uses a simpler prompt and longer timeout for better success rate.
+
+        Returns:
+            Number of files successfully retried
+        """
+        from api.services.summarizer import (
+            load_summary_failures, clear_summary_failures, retry_summary
+        )
+
+        failures = load_summary_failures()
+        failed_files = failures.get("files", [])
+
+        if not failed_files:
+            return 0
+
+        logger.info(f"Retrying {len(failed_files)} failed summaries with simpler prompt...")
+
+        success_count = 0
+        for failure in failed_files:
+            file_path = failure["file_path"]
+            file_name = failure["file_name"]
+
+            try:
+                path = Path(file_path)
+                if not path.exists():
+                    continue
+
+                content = path.read_text(encoding="utf-8")
+                # Extract body (skip frontmatter)
+                from api.services.chunker import extract_frontmatter
+                _, body = extract_frontmatter(content)
+
+                summary = retry_summary(body, file_name)
+                if summary:
+                    summary_id = f"{path.resolve()}::summary"
+                    summary_content = f"Document summary for {file_name}: {summary}"
+
+                    # Add to BM25 index
+                    self.bm25_index.add_document(
+                        doc_id=summary_id,
+                        content=summary_content,
+                        file_name=file_name
+                    )
+                    success_count += 1
+
+            except Exception as e:
+                logger.warning(f"Retry failed for {file_path}: {e}")
+
+        # Clear failures list after processing
+        clear_summary_failures()
+        logger.info(f"Summary retry complete: {success_count}/{len(failed_files)} succeeded")
+
+        return success_count
 
     def _extract_note_date(self, path: Path, frontmatter: dict) -> str:
         """

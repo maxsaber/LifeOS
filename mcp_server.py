@@ -34,83 +34,251 @@ OPENAPI_URL = f"{API_BASE}/openapi.json"
 CURATED_ENDPOINTS = {
     "/api/ask": {
         "name": "lifeos_ask",
-        "description": "Ask a question to LifeOS. Queries your knowledge base (vault notes, calendar, email, drive, people) and returns a synthesized answer with source citations. Use this for general questions about your personal data.",
+        "description": "Query the knowledge base with RAG synthesis. Returns a natural language answer with source citations. Use for open-ended questions like 'what did we discuss about X?' or 'summarize my notes on Y'. For raw search results without synthesis, use lifeos_search instead.",
         "method": "POST"
     },
     "/api/search": {
         "name": "lifeos_search",
-        "description": "Search the LifeOS vault without synthesis. Returns raw search results ranked by relevance. Use this when you want to see the actual source documents rather than a synthesized answer.",
+        "description": "Search the vault without synthesis. Returns raw document chunks with relevance scores. Use when you need specific documents or want to process results yourself. For synthesized answers, use lifeos_ask instead.",
         "method": "POST"
     },
     "/api/calendar/upcoming": {
         "name": "lifeos_calendar_upcoming",
-        "description": "Get upcoming calendar events from Google Calendar (personal and work accounts).",
+        "description": "Get upcoming calendar events for the next N days. Use for 'what's on my calendar?' or 'what meetings do I have this week?'. For searching past events, use lifeos_calendar_search instead.",
         "method": "GET"
     },
     "/api/calendar/search": {
         "name": "lifeos_calendar_search",
-        "description": "Search calendar events by keyword.",
+        "description": "Search calendar events by keyword. Returns past and future events matching the query. Use for 'when did I meet with X?' or 'find meetings about Y'. For upcoming events only, use lifeos_calendar_upcoming.",
         "method": "GET"
     },
     "/api/gmail/search": {
         "name": "lifeos_gmail_search",
-        "description": "Search emails in Gmail by keyword.",
+        "description": "Search emails in Gmail. Returns email metadata and full body for top 5 results. Use for 'find emails about X' or 'what did Y say in email?'. Supports filtering by account (personal/work).",
         "method": "GET"
     },
     "/api/drive/search": {
         "name": "lifeos_drive_search",
-        "description": "Search files in Google Drive by name or content.",
+        "description": "Search files in Google Drive by name or content. Returns file metadata with links. Use for 'find the document about X' or 'what files do I have about Y?'.",
         "method": "GET"
     },
     "/api/conversations": {
         "name": "lifeos_conversations_list",
-        "description": "List recent LifeOS conversations.",
+        "description": "List recent LifeOS conversations. Returns conversation IDs and titles for continuing previous chats.",
         "method": "GET"
     },
     "/api/memories": {
         "name": "lifeos_memories_create",
-        "description": "Save a memory to LifeOS for future reference. Memories persist across sessions and can be retrieved later.",
+        "description": "Save a memory for future reference. Use when user says 'remember that...' or wants to store information for later. Memories persist across conversations.",
         "method": "POST"
     },
     "/api/memories/search/{query}": {
         "name": "lifeos_memories_search",
-        "description": "Search saved memories by keyword.",
+        "description": "Search saved memories. Use when user asks 'what did I tell you about X?' or wants to recall previously saved information.",
         "method": "GET"
     },
     "/api/people/search": {
         "name": "lifeos_people_search",
-        "description": """Search for people in your network by name or email.
+        "description": """Search for people in your network by name or email. Returns entity_id (required for other people tools), relationship_strength, and active_channels. Always use this first to get entity_id before calling lifeos_person_profile, lifeos_person_timeline, lifeos_person_connections, or lifeos_person_facts.
 
-Returns relationship context to guide follow-up queries:
-- relationship_strength: How important this person is (0-100)
-- active_channels: Which channels have recent activity (last 7 days)
-- days_since_contact: How long since last interaction
+RETURNS for each match:
+- canonical_name, email, company, position
+- relationship_strength: 0-100 score (higher = closer relationship)
+- active_channels: Communication channels with recent activity (last 7 days)
+- days_since_contact: Days since last interaction
+- entity_id: Required for all follow-up tools
 
-Use active_channels to decide what to query next:
-- If "imessage" is active, call lifeos_imessage_search with their entity_id
-- If "gmail" is active, call lifeos_gmail_search with their email
-- If no active channels, they may be a dormant contact""",
+FOLLOW-UP TOOLS (use entity_id):
+- lifeos_person_profile(entity_id) → Full CRM profile with contact info, notes, tags
+- lifeos_person_timeline(entity_id) → Chronological interaction history
+- lifeos_person_connections(entity_id) → Who they work with, shared meetings
+- lifeos_person_facts(entity_id) → Extracted facts (family, interests, etc.)
+- lifeos_imessage_search(entity_id=...) → Message history
+
+ROUTING GUIDANCE based on active_channels:
+- "imessage" active → lifeos_imessage_search with entity_id
+- "gmail" active → lifeos_gmail_search with their email
+- "slack" active → lifeos_slack_search with user_id
+- No active channels → Check profile for notes (dormant contact)""",
         "method": "GET"
     },
     "/health/full": {
         "name": "lifeos_health",
-        "description": "Check if all LifeOS services are healthy and responding. Tests vault search, calendar, gmail, drive, people, memories, and more.",
+        "description": "Check if all LifeOS services are healthy. Use for debugging connection issues.",
         "method": "GET"
     },
     "/api/imessage/search": {
         "name": "lifeos_imessage_search",
-        "description": "Search iMessage/SMS text message history. Search by text content (q), phone number (phone), or person entity ID (entity_id). Filter by date range (after/before) or direction (sent/received). Returns message text, timestamp, and associated person.",
+        "description": "Search iMessage/SMS text message history. Returns messages with sender, timestamp, and content. Use for 'what did X text me about?' or 'find messages about Y'. Supports filtering by phone number, entity_id, date range, or direction (sent/received).",
         "method": "GET"
     },
     "/api/gmail/drafts": {
         "name": "lifeos_gmail_draft",
-        "description": "Create a draft email in Gmail. Provide 'to' (recipient), 'subject', and 'body'. Optional: 'cc', 'bcc', 'html' (bool), 'account' (personal/work). Returns draft_id and gmail_url to open the draft directly in Gmail for review before sending.",
+        "description": "Create a draft email in Gmail. Returns draft ID and URL to open in Gmail. Use when user wants to compose an email. The draft is NOT sent - user must review and send manually. Provide 'to', 'subject', 'body'. Optional: 'cc', 'bcc', 'account' (personal/work).",
         "method": "POST"
     },
     "/api/slack/search": {
         "name": "lifeos_slack_search",
-        "description": "Search Slack messages semantically. Searches DMs, group DMs, and channels you have access to. Returns messages with sender, channel, and timestamp. Useful for finding what someone said about a topic or recalling conversations.",
+        "description": "Semantic search across Slack messages. Returns messages with channel, user, and content. Use for 'what was discussed in Slack about X?' or 'find messages from Y in Slack'. Searches DMs, group DMs, and channels.",
         "method": "POST"
+    },
+    "/api/crm/people/{person_id}/facts": {
+        "name": "lifeos_person_facts",
+        "description": """Get extracted facts about a person from their interactions. Returns facts organized by category (family, interests, work, dates) with confidence scores. Requires entity_id from lifeos_people_search. Use before drafting personalized messages or preparing for meetings.
+
+Categories: family (spouse, kids, pets), interests (hobbies, sports), background (hometown, alma_mater), work (role, projects), dates (birthday), travel
+
+Each fact includes: key, value, confidence (0-1), confirmed status, source_quote
+
+WORKFLOW: lifeos_people_search → get entity_id → lifeos_person_facts""",
+        "method": "GET"
+    },
+    "/api/crm/people/{person_id}": {
+        "name": "lifeos_person_profile",
+        "description": """Get comprehensive CRM profile for a person. Returns all contact info (emails, phones), relationship metrics, tags, and notes. Requires entity_id from lifeos_people_search. Use for 'tell me about X' or when you need full contact details.
+
+WHAT IT RETURNS:
+- emails, phone_numbers, linkedin_url
+- company, position, vault_contexts
+- relationship_strength (0-100), category (work/personal/family)
+- meeting_count, email_count, message_count
+- tags, notes (user annotations)
+- facts (extracted personal details)
+
+REQUIRES: entity_id from lifeos_people_search.
+
+Use this instead of lifeos_people_search when you need all emails, phone numbers, or user notes.""",
+        "method": "GET"
+    },
+    "/api/crm/people/{person_id}/timeline": {
+        "name": "lifeos_person_timeline",
+        "description": """Get chronological interaction history for a person. Returns recent emails, messages, meetings in time order. Requires entity_id from lifeos_people_search. Use for 'catch me up on X' or 'what's been happening with Y?'.
+
+RETURNS chronological list of interactions (newest first):
+- source_type: gmail, imessage, calendar, slack, vault
+- timestamp, summary, metadata (subject, attendees, etc.)
+
+PARAMETERS:
+- person_id (required): entity_id from lifeos_people_search
+- days_back: How far back to look (default: 365)
+- source_type: Filter by source (e.g., "imessage", "gmail,slack")
+- limit: Max results (default: 50)
+
+WORKFLOW: lifeos_people_search → get entity_id → lifeos_person_timeline""",
+        "method": "GET"
+    },
+    "/api/calendar/meeting-prep": {
+        "name": "lifeos_meeting_prep",
+        "description": """Get intelligent meeting preparation context for a date. Returns each meeting with related notes, past meetings with same attendees, and relevant documents. Use for 'prep me for my meetings today' or 'what should I know for my 1:1 with X?'.
+
+RETURNS for each meeting:
+- title, time, attendees, location, description
+- related_notes: People notes, past meeting notes, topic notes
+- attachments: Files attached to calendar event
+
+PARAMETERS:
+- date: YYYY-MM-DD format (defaults to today)
+- include_all_day: Include all-day events (default: false)
+- max_related_notes: Max notes per meeting (default: 4)
+
+Use this instead of separate calendar + vault searches for meeting prep.""",
+        "method": "GET"
+    },
+    "/api/crm/family/communication-gaps": {
+        "name": "lifeos_communication_gaps",
+        "description": """Find people you haven't contacted recently. Requires comma-separated person_ids from lifeos_people_search. Use for 'who should I reach out to?' or 'which family members haven't I talked to?'. Returns days since last contact.
+
+RETURNS:
+- gaps: List of communication gaps (person_id, person_name, gap_days)
+- person_summaries: days_since_last_contact, average_gap_days, current_gap_days
+
+PARAMETERS:
+- person_ids (required): Comma-separated entity IDs from lifeos_people_search
+- days_back: History to analyze (default: 365)
+- min_gap_days: Minimum gap to report (default: 14)
+
+WORKFLOW: lifeos_people_search → get entity_ids → lifeos_communication_gaps(person_ids=id1,id2,id3)""",
+        "method": "GET"
+    },
+    "/api/crm/people/{person_id}/connections": {
+        "name": "lifeos_person_connections",
+        "description": """Get people connected to a person through shared meetings, emails, messages, and LinkedIn. Use after lifeos_people_search to find who someone works with or knows.
+
+RETURNS for each connection:
+- person_id, name, company, relationship_type
+- shared_events_count, shared_threads_count, shared_messages_count
+- shared_slack_count, shared_whatsapp_count
+- relationship_strength, last_seen_together
+
+Use for 'who does X work with?' or 'who are X's connections?'.
+
+REQUIRES: person_id (entity_id) from lifeos_people_search.""",
+        "method": "GET"
+    },
+    "/api/crm/relationship/insights": {
+        "name": "lifeos_relationship_insights",
+        "description": """Get relationship insights and observations about people. Returns patterns like 'frequently meets with X' or 'collaborates on Y project'. Insights are extracted from therapy notes and conversations.
+
+RETURNS:
+- insights: List with category, text, source_title, source_link, confirmed status
+- Categories: communication_patterns, emotional_needs, conflict_areas, growth_areas
+
+PARAMETERS:
+- person_id (optional): Focus on specific person (defaults to primary relationship)
+
+Use for understanding relationship dynamics and patterns.""",
+        "method": "GET"
+    },
+    "/api/photos/person/{person_id}": {
+        "name": "lifeos_photos_person",
+        "description": """Get photos containing a specific person from Apple Photos face recognition.
+
+RETURNS:
+- person_id: The requested person's entity ID
+- photos: List of photos with uuid, timestamp, source_link
+- count: Total number of photos
+
+PARAMETERS:
+- person_id (required): entity_id from lifeos_people_search
+- limit: Max photos to return (default: 50)
+
+REQUIRES: entity_id from lifeos_people_search.
+
+Use for 'show me photos of X' or 'find pictures with Y'.""",
+        "method": "GET"
+    },
+    "/api/photos/shared/{person_a_id}/{person_b_id}": {
+        "name": "lifeos_photos_shared",
+        "description": """Get photos where two people appear together (co-appearances).
+
+RETURNS:
+- person_a_id, person_b_id: The two people
+- shared_photo_count: Total photos together
+- photos: List of photos with uuid, timestamp, source_link
+
+PARAMETERS:
+- person_a_id (required): First person's entity_id
+- person_b_id (required): Second person's entity_id
+- limit: Max photos to return (default: 20)
+
+Use for 'photos of me with X' or 'pictures of X and Y together'.
+
+WORKFLOW: lifeos_people_search for both people → get entity_ids → lifeos_photos_shared""",
+        "method": "GET"
+    },
+    "/api/photos/stats": {
+        "name": "lifeos_photos_stats",
+        "description": """Get statistics about Apple Photos library face recognition data.
+
+RETURNS:
+- total_named_people: People recognized in Photos
+- people_with_contacts: People linked to Apple Contacts
+- total_face_detections: Total face appearances
+- multi_person_photos: Photos with 2+ named people
+- photos_enabled: Whether Photos integration is available
+
+Use to check Photos integration status or get overview of photo data.""",
+        "method": "GET"
     },
 }
 
@@ -337,6 +505,62 @@ class LifeOSMCPServer:
                     "user_id": {"type": "string", "description": "Filter by specific user ID"}
                 },
                 "required": ["query"]
+            },
+            "lifeos_person_facts": {
+                "type": "object",
+                "properties": {
+                    "person_id": {"type": "string", "description": "The person's entity_id from lifeos_people_search"}
+                },
+                "required": ["person_id"]
+            },
+            "lifeos_person_profile": {
+                "type": "object",
+                "properties": {
+                    "person_id": {"type": "string", "description": "The person's entity_id from lifeos_people_search"}
+                },
+                "required": ["person_id"]
+            },
+            "lifeos_person_timeline": {
+                "type": "object",
+                "properties": {
+                    "person_id": {"type": "string", "description": "The person's entity_id from lifeos_people_search"},
+                    "days_back": {"type": "integer", "description": "Days of history to include (default: 365)", "default": 365},
+                    "source_type": {"type": "string", "description": "Filter by source type (e.g., 'imessage', 'gmail,slack')"},
+                    "limit": {"type": "integer", "description": "Max results (default: 50)", "default": 50}
+                },
+                "required": ["person_id"]
+            },
+            "lifeos_meeting_prep": {
+                "type": "object",
+                "properties": {
+                    "date": {"type": "string", "description": "Date in YYYY-MM-DD format (defaults to today)"},
+                    "include_all_day": {"type": "boolean", "description": "Include all-day events", "default": False},
+                    "max_related_notes": {"type": "integer", "description": "Max related notes per meeting (1-10)", "default": 4}
+                }
+            },
+            "lifeos_communication_gaps": {
+                "type": "object",
+                "properties": {
+                    "person_ids": {"type": "string", "description": "Comma-separated person IDs to analyze"},
+                    "days_back": {"type": "integer", "description": "Days of history to analyze (default: 365)", "default": 365},
+                    "min_gap_days": {"type": "integer", "description": "Minimum gap to report in days (default: 14)", "default": 14}
+                },
+                "required": ["person_ids"]
+            },
+            "lifeos_person_connections": {
+                "type": "object",
+                "properties": {
+                    "person_id": {"type": "string", "description": "The person's entity_id from lifeos_people_search"},
+                    "relationship_type": {"type": "string", "description": "Filter by type (e.g., 'colleague', 'friend')"},
+                    "limit": {"type": "integer", "description": "Max results (default: 50)", "default": 50}
+                },
+                "required": ["person_id"]
+            },
+            "lifeos_relationship_insights": {
+                "type": "object",
+                "properties": {
+                    "person_id": {"type": "string", "description": "Optional: Focus on specific person's insights"}
+                }
             }
         }
 
@@ -567,6 +791,218 @@ class LifeOSMCPServer:
                 content = content.replace("\n", " ").strip()
                 text += f"- **{timestamp}** in {channel}\n"
                 text += f"  {user}: {content}\n\n"
+            return text
+
+        elif tool_name == "lifeos_person_facts":
+            facts = data.get("facts", [])
+            if not facts:
+                return "No facts extracted for this person yet."
+            by_category = data.get("by_category", {})
+            text = f"Found {len(facts)} facts:\n\n"
+            for cat, cat_facts in by_category.items():
+                text += f"**{cat.title()}:**\n"
+                for f in cat_facts:
+                    key = f.get("key", "")
+                    value = f.get("value", "")
+                    confidence = f.get("confidence", 0)
+                    confirmed = "✓" if f.get("confirmed_by_user") else ""
+                    text += f"  - {key}: {value} (conf: {confidence:.0%}) {confirmed}\n"
+                text += "\n"
+            return text
+
+        elif tool_name == "lifeos_person_profile":
+            name = data.get("display_name", data.get("canonical_name", "Unknown"))
+            text = f"**{name}**\n\n"
+            if emails := data.get("emails"):
+                text += f"**Emails:** {', '.join(emails)}\n"
+            if phones := data.get("phone_numbers"):
+                text += f"**Phones:** {', '.join(phones)}\n"
+            if company := data.get("company"):
+                text += f"**Company:** {company}\n"
+            if position := data.get("position"):
+                text += f"**Position:** {position}\n"
+            if linkedin := data.get("linkedin_url"):
+                text += f"**LinkedIn:** {linkedin}\n"
+            text += f"**Relationship Strength:** {data.get('relationship_strength', 0):.0f}/100\n"
+            text += f"**Category:** {data.get('category', 'unknown')}\n"
+            if sources := data.get("sources"):
+                text += f"**Data Sources:** {', '.join(sources)}\n"
+            if tags := data.get("tags"):
+                text += f"**Tags:** {', '.join(tags)}\n"
+            if notes := data.get("notes"):
+                text += f"\n**Notes:**\n{notes}\n"
+            # Interaction counts
+            meeting_count = data.get("meeting_count", 0)
+            email_count = data.get("email_count", 0)
+            mention_count = data.get("mention_count", 0)
+            if meeting_count or email_count or mention_count:
+                text += f"\n**Interactions:** {meeting_count} meetings, {email_count} emails, {mention_count} mentions\n"
+            return text
+
+        elif tool_name == "lifeos_person_timeline":
+            items = data.get("items", [])
+            total = data.get("total_count", len(items))
+            if not items:
+                return "No interactions found for this person."
+            text = f"Found {total} interactions:\n\n"
+            for item in items[:30]:  # Limit display
+                source = item.get("source_type", "unknown")
+                timestamp = item.get("timestamp", "")[:16].replace("T", " ")
+                summary = item.get("summary", "")[:200]
+                # Use emoji for source type
+                emoji = {
+                    "gmail": "📧",
+                    "imessage": "💬",
+                    "whatsapp": "💬",
+                    "calendar": "📅",
+                    "slack": "💼",
+                    "vault": "📝",
+                    "granola": "📝",
+                }.get(source, "•")
+                text += f"{emoji} **{timestamp}** [{source}]\n"
+                text += f"   {summary}\n\n"
+            if total > 30:
+                text += f"\n_... and {total - 30} more interactions_\n"
+            return text
+
+        elif tool_name == "lifeos_meeting_prep":
+            meetings = data.get("meetings", [])
+            date = data.get("date", "")
+            if not meetings:
+                return f"No meetings found for {date}."
+            text = f"**Meeting Prep for {date}** ({len(meetings)} meetings)\n\n"
+            for m in meetings:
+                text += f"### {m.get('title', 'Untitled')}\n"
+                text += f"**Time:** {m.get('start_time', '')} - {m.get('end_time', '')}\n"
+                if attendees := m.get("attendees"):
+                    text += f"**With:** {', '.join(attendees[:5])}"
+                    if len(attendees) > 5:
+                        text += f" (+{len(attendees) - 5} more)"
+                    text += "\n"
+                if location := m.get("location"):
+                    text += f"**Location:** {location}\n"
+                if description := m.get("description"):
+                    text += f"**Description:** {description}\n"
+                # Related notes
+                if related := m.get("related_notes"):
+                    text += "\n**Related Notes:**\n"
+                    for note in related:
+                        relevance = note.get("relevance", "")
+                        title = note.get("title", "")
+                        relevance_emoji = {
+                            "attendee": "👤",
+                            "past_meeting": "📅",
+                            "topic": "📄",
+                        }.get(relevance, "•")
+                        text += f"  {relevance_emoji} {title}"
+                        if note.get("date"):
+                            text += f" ({note['date']})"
+                        text += "\n"
+                # Attachments
+                if attachments := m.get("attachments"):
+                    text += "\n**Attachments:**\n"
+                    for att in attachments:
+                        text += f"  📎 [{att.get('title', 'File')}]({att.get('url', '')})\n"
+                text += "\n---\n\n"
+            return text
+
+        elif tool_name == "lifeos_communication_gaps":
+            gaps = data.get("gaps", [])
+            summaries = data.get("person_summaries", [])
+            if not summaries:
+                return "No communication data found for these people."
+            text = "## Communication Gap Analysis\n\n"
+            # Show person summaries first
+            text += "### Overview\n"
+            for s in summaries:
+                name = s.get("person_name", "Unknown")
+                days = s.get("days_since_last_contact", 999)
+                avg = s.get("average_gap_days", 0)
+                current = s.get("current_gap_days", 0)
+                # Flag if current gap is significantly longer than average
+                alert = "⚠️ " if current > avg * 1.5 and current > 14 else ""
+                text += f"- **{name}**: {alert}{days} days since contact"
+                if avg:
+                    text += f" (avg gap: {avg:.0f} days)"
+                text += "\n"
+            # Show significant gaps
+            if gaps:
+                text += "\n### Significant Gaps\n"
+                for g in gaps[:10]:
+                    name = g.get("person_name", "Unknown")
+                    gap_days = g.get("gap_days", 0)
+                    start = g.get("gap_start", "")[:10]
+                    end = g.get("gap_end", "")[:10]
+                    text += f"- **{name}**: {gap_days} days ({start} to {end})\n"
+            return text
+
+        elif tool_name == "lifeos_person_connections":
+            connections = data.get("connections", [])
+            count = data.get("count", len(connections))
+            if not connections:
+                return "No connections found for this person."
+            text = f"Found {count} connections:\n\n"
+            for c in connections[:20]:
+                name = c.get("name", "Unknown")
+                company = c.get("company", "")
+                rel_type = c.get("relationship_type", "")
+                strength = c.get("relationship_strength", 0)
+                # Calculate total shared interactions
+                shared = (
+                    c.get("shared_events_count", 0) +
+                    c.get("shared_threads_count", 0) +
+                    c.get("shared_messages_count", 0) +
+                    c.get("shared_slack_count", 0) +
+                    c.get("shared_whatsapp_count", 0)
+                )
+                text += f"- **{name}**"
+                if company:
+                    text += f" ({company})"
+                text += "\n"
+                text += f"  Shared interactions: {shared}"
+                if rel_type:
+                    text += f" | Type: {rel_type}"
+                text += f" | Strength: {strength:.0f}/100\n"
+                # Breakdown of shared items
+                details = []
+                if c.get("shared_events_count"):
+                    details.append(f"{c['shared_events_count']} meetings")
+                if c.get("shared_threads_count"):
+                    details.append(f"{c['shared_threads_count']} email threads")
+                if c.get("shared_messages_count"):
+                    details.append(f"{c['shared_messages_count']} messages")
+                if c.get("shared_slack_count"):
+                    details.append(f"{c['shared_slack_count']} Slack msgs")
+                if details:
+                    text += f"  ({', '.join(details)})\n"
+                if c.get("last_seen_together"):
+                    text += f"  Last seen together: {c['last_seen_together'][:10]}\n"
+                text += "\n"
+            return text
+
+        elif tool_name == "lifeos_relationship_insights":
+            insights = data.get("insights", [])
+            confirmed_count = data.get("confirmed_count", 0)
+            unconfirmed_count = data.get("unconfirmed_count", 0)
+            if not insights:
+                return "No relationship insights found."
+            text = f"## Relationship Insights ({confirmed_count} confirmed, {unconfirmed_count} unconfirmed)\n\n"
+            # Group by category
+            by_category = {}
+            for i in insights:
+                cat = i.get("category", "other")
+                if cat not in by_category:
+                    by_category[cat] = []
+                by_category[cat].append(i)
+            for cat, cat_insights in by_category.items():
+                icon = cat_insights[0].get("category_icon", "")
+                text += f"### {icon} {cat.replace('_', ' ').title()}\n"
+                for i in cat_insights:
+                    confirmed = "✓" if i.get("confirmed") else ""
+                    text += f"- {i.get('text', '')} {confirmed}\n"
+                    if i.get("source_title"):
+                        text += f"  _Source: {i['source_title']}_\n"
+                text += "\n"
             return text
 
         # Default: return formatted JSON

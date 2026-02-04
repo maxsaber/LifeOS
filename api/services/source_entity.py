@@ -18,24 +18,10 @@ from pathlib import Path
 from typing import Optional
 
 from config.settings import settings
+from api.utils.datetime_utils import make_aware as _make_aware
+from api.utils.db_paths import get_crm_db_path
 
 logger = logging.getLogger(__name__)
-
-
-def _make_aware(dt: Optional[datetime]) -> Optional[datetime]:
-    """Ensure datetime is timezone-aware (UTC if naive)."""
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=timezone.utc)
-    return dt
-
-
-def get_crm_db_path() -> str:
-    """Get the path to the CRM database."""
-    db_dir = Path(settings.chroma_path).parent
-    db_dir.mkdir(parents=True, exist_ok=True)
-    return str(db_dir / "crm.db")
 
 
 # Valid source types
@@ -52,6 +38,7 @@ SOURCE_TYPES = {
     "granola",
     "phone_call",
     "phone",
+    "photos",
 }
 
 # Link status values
@@ -163,6 +150,7 @@ class SourceEntity:
             "vault": "📝",
             "granola": "📝",
             "phone_call": "📞",
+            "photos": "📷",
         }
         return badges.get(self.source_type, "📄")
 

@@ -16,6 +16,12 @@ Options:
     --dry-run         Don't actually sync, just report what would run
     --force           Run even if sync was run recently
 """
+# Load environment variables from .env FIRST, before any other imports
+# This is critical for launchd/cron which don't have access to shell environment
+from pathlib import Path
+from dotenv import load_dotenv
+load_dotenv(Path(__file__).parent.parent / ".env")
+
 import argparse
 import logging
 import subprocess
@@ -165,6 +171,7 @@ SYNC_ORDER = [
     # Link source entities to canonical PersonEntity records
     "link_slack",               # Link Slack users to people by email
     "link_imessage",            # Link iMessage handles to people by phone
+    "photos",                   # Sync Photos face data to people
 
     # === Phase 3: Relationship Building ===
     # Build relationships using all collected interaction data
@@ -175,7 +182,7 @@ SYNC_ORDER = [
 
     # === Phase 4: Vector Store Indexing ===
     # Index content with fresh people data available for entity resolution
-    # "vault_reindex",            # TEMPORARILY DISABLED - manual reindex in progress
+    "vault_reindex",            # Re-enabled after manual reindex completed
     "crm_vectorstore",          # Index CRM people for semantic search
 
     # === Phase 5: Content Sync ===
@@ -204,11 +211,13 @@ SYNC_SCRIPTS = {
     # Phase 2: Entity Processing
     "link_slack": ("scripts/link_slack_entities.py", ["--execute"]),
     "link_imessage": ("scripts/link_imessage_entities.py", ["--execute"]),
+    "photos": ("scripts/sync_photos.py", ["--execute"]),
 
     # Phase 3: Relationship Building
     # Note: person_stats removed - each sync script now refreshes its own stats
     "relationship_discovery": ("scripts/sync_relationship_discovery.py", ["--execute"]),
     "strengths": ("scripts/sync_strengths.py", ["--execute"]),
+    "push_birthdays": ("scripts/push_birthdays_to_contacts.py", ["--execute"]),
 
     # Phase 4: Vector Store Indexing
     "vault_reindex": ("scripts/sync_vault_reindex.py", ["--execute"]),
@@ -229,6 +238,8 @@ SYNC_TIMEOUTS = {
     "gmail": 3600,                   # 60 min - fetches 365 days of emails via individual API calls
     "relationship_discovery": 3600,  # 60 min - processes all interactions for relationship edges
     "vault_reindex": 10800,          # 180 min (3 hours) - full reindex with gte-Qwen2-1.5B embeddings
+    "photos": 3600,                  # 60 min - large libraries may take time
+    "slack": 3600,                   # 60 min - rate limited API, 100+ DM channels to sync
 }
 
 
@@ -325,21 +336,45 @@ def run_sync(source: str, dry_run: bool = False) -> tuple[bool, dict]:
 
         return True, stats
 
-    except subprocess.TimeoutExpired:
+    except subprocess.TimeoutExpired as e:
         timeout_minutes = SYNC_TIMEOUTS.get(source, 1800) // 60
+
+        # Capture partial output from the killed process
+        partial_stdout = e.stdout or ""
+        partial_stderr = e.stderr or ""
+
+        # Parse what was accomplished before timeout
+        stats = _parse_sync_output(partial_stdout)
+
+        # Build error message with partial progress info
         error_msg = f"Sync timed out after {timeout_minutes} minutes"
+        if stats.get("processed", 0) > 0 or stats.get("created", 0) > 0:
+            error_msg += f" (partial progress: {stats.get('processed', 0)} processed, {stats.get('created', 0)} created)"
+
         logger.error(f"Sync timeout for {source}")
+        if partial_stdout:
+            # Log last 50 lines of output to see progress
+            last_lines = "\n".join(partial_stdout.strip().split("\n")[-50:])
+            logger.info(f"Partial output before timeout:\n{last_lines}")
 
         record_sync_complete(
             run_id,
             SyncStatus.FAILED,
+            records_processed=stats.get("processed", 0),
+            records_created=stats.get("created", 0),
+            records_updated=stats.get("updated", 0),
             errors=1,
             error_message=error_msg,
         )
 
-        record_sync_error(source, error_msg, error_type="timeout")
-        log_error_to_markdown(source, error_msg, "timeout")
-        return False, {"error": error_msg}
+        # Include partial output in markdown log for visibility
+        full_error_msg = error_msg
+        if partial_stdout:
+            full_error_msg += f"\n\nLast output before timeout:\n{partial_stdout[-2000:]}"
+
+        record_sync_error(source, full_error_msg[:1000], error_type="timeout")
+        log_error_to_markdown(source, full_error_msg, "timeout")
+        return False, {"error": error_msg, **stats}
 
     except Exception as e:
         error_msg = str(e)

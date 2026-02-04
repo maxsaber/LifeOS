@@ -34,7 +34,7 @@ from fastapi.exceptions import RequestValidationError
 from pathlib import Path
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from api.routes import search, ask, calendar, gmail, drive, people, chat, briefings, admin, conversations, memories, imessage, crm, slack, digest
+from api.routes import search, ask, calendar, gmail, drive, people, chat, briefings, admin, conversations, memories, imessage, crm, slack, digest, photos
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -241,6 +241,7 @@ app.include_router(imessage.router)
 app.include_router(crm.router)
 app.include_router(slack.router)
 app.include_router(digest.router)
+app.include_router(photos.router)
 
 # Serve static files
 web_dir = Path(__file__).parent.parent / "web"
@@ -559,6 +560,42 @@ async def family_page():
 @app.get("/family/{path:path}")
 async def family_page_with_path(path: str):
     """Serve the CRM UI for Family sub-paths (client-side routing)."""
+    crm_path = Path(__file__).parent.parent / "web" / "crm.html"
+    if crm_path.exists():
+        return FileResponse(str(crm_path))
+    return {"message": "CRM page not found"}
+
+
+@app.get("/relationship")
+async def relationship_page():
+    """Serve the CRM UI for the Relationship dashboard (Taylor Walker)."""
+    crm_path = Path(__file__).parent.parent / "web" / "crm.html"
+    if crm_path.exists():
+        return FileResponse(str(crm_path))
+    return {"message": "CRM page not found"}
+
+
+@app.get("/relationship/{path:path}")
+async def relationship_page_with_path(path: str):
+    """Serve the CRM UI for Relationship sub-paths (client-side routing)."""
+    crm_path = Path(__file__).parent.parent / "web" / "crm.html"
+    if crm_path.exists():
+        return FileResponse(str(crm_path))
+    return {"message": "CRM page not found"}
+
+
+@app.get("/birthdays")
+async def birthdays_page():
+    """Serve the CRM UI for the Birthdays page."""
+    crm_path = Path(__file__).parent.parent / "web" / "crm.html"
+    if crm_path.exists():
+        return FileResponse(str(crm_path))
+    return {"message": "CRM page not found"}
+
+
+@app.get("/birthdays/{path:path}")
+async def birthdays_page_with_path(path: str):
+    """Serve the CRM UI for Birthdays sub-paths (client-side routing)."""
     crm_path = Path(__file__).parent.parent / "web" / "crm.html"
     if crm_path.exists():
         return FileResponse(str(crm_path))

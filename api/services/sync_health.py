@@ -90,6 +90,13 @@ SYNC_SOURCES = {
         "phase": 2,
         "depends_on": ["imessage"],
     },
+    "photos": {
+        "description": "Sync Apple Photos face recognition to CRM",
+        "script": "scripts/sync_photos.py",
+        "frequency": "daily",
+        "phase": 2,
+        "depends_on": ["contacts"],
+    },
 
     # === Phase 3: Relationship Building ===
     "relationship_discovery": {
@@ -106,6 +113,13 @@ SYNC_SOURCES = {
         "frequency": "daily",
         "phase": 3,
         "depends_on": ["relationship_discovery"],
+    },
+    "push_birthdays": {
+        "description": "Push LifeOS birthdays to Apple Contacts",
+        "script": "scripts/push_birthdays_to_contacts.py",
+        "frequency": "daily",
+        "phase": 3,
+        "depends_on": ["contacts"],  # Run after contacts are synced
     },
 
     # === Phase 4: Vector Store Indexing ===

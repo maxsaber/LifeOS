@@ -41,6 +41,7 @@ from config.relationship_weights import (
     PERIPHERAL_THRESHOLD,
     STRENGTH_OVERRIDES_BY_ID,
     CIRCLE_OVERRIDES_BY_ID,
+    TAG_OVERRIDES_BY_ID,
 )
 import math
 
@@ -390,6 +391,10 @@ def update_all_strengths() -> dict:
     for person in people:
         try:
             strength = compute_strength_for_person(person)
+            # Apply manual override if defined
+            override = STRENGTH_OVERRIDES_BY_ID.get(person.id)
+            if override is not None:
+                strength = override
             person.relationship_strength = strength
             person.is_peripheral_contact = strength < PERIPHERAL_THRESHOLD
             if person.is_peripheral_contact:
@@ -404,6 +409,9 @@ def update_all_strengths() -> dict:
     # Compute Dunbar circles for non-peripheral contacts
     circles_result = compute_all_dunbar_circles(store)
 
+    # Apply tag overrides
+    tags_result = apply_tag_overrides(store)
+
     # Save all updates
     store.save()
 
@@ -414,6 +422,7 @@ def update_all_strengths() -> dict:
         "total": len(people),
         "peripheral_count": peripheral_count,
         "circles_computed": circles_result.get("assigned", 0),
+        "tags_applied": tags_result.get("applied", 0),
     }
 
 
@@ -488,6 +497,51 @@ def compute_all_dunbar_circles(store=None) -> dict:
     return {
         "assigned": assigned,
         "total_non_peripheral": len(non_peripheral),
+    }
+
+
+def apply_tag_overrides(store=None) -> dict:
+    """
+    Apply tag overrides from TAG_OVERRIDES_BY_ID to all matching people.
+
+    This ensures tags defined in config/relationship_weights.py are applied
+    and persist across syncs. Override tags are ADDED to existing tags (merged),
+    preserving any user-added tags.
+
+    Args:
+        store: PersonEntityStore instance (optional, will get if not provided)
+
+    Returns:
+        Statistics about the application
+    """
+    if store is None:
+        store = get_person_entity_store()
+
+    applied = 0
+    not_found = 0
+
+    for person_id, override_tags in TAG_OVERRIDES_BY_ID.items():
+        person = store.get_by_id(person_id)
+        if person:
+            # Merge: existing tags + any missing override tags
+            existing_set = set(person.tags)
+            override_set = set(override_tags)
+            if not override_set.issubset(existing_set):
+                # Add missing override tags while preserving existing ones
+                merged_tags = list(existing_set | override_set)
+                person.tags = merged_tags
+                store.update(person)
+                applied += 1
+        else:
+            not_found += 1
+
+    if applied > 0:
+        logger.info(f"Applied tag overrides to {applied} people ({not_found} not found)")
+
+    return {
+        "applied": applied,
+        "not_found": not_found,
+        "total_overrides": len(TAG_OVERRIDES_BY_ID),
     }
 
 

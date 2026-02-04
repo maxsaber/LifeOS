@@ -51,7 +51,7 @@ pip install -r requirements.txt
 # Install Ollama and pull model
 brew install ollama
 ollama serve &
-ollama pull llama3.2:3b
+ollama pull qwen2.5:7b-instruct
 ```
 
 ### Configuration
@@ -68,7 +68,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 GOOGLE_CLIENT_ID=your-client-id
 GOOGLE_CLIENT_SECRET=your-client-secret
 OLLAMA_HOST=http://localhost:11434
-OLLAMA_MODEL=llama3.2:3b
+OLLAMA_MODEL=qwen2.5:7b-instruct
 ```
 
 ### Running
@@ -146,7 +146,7 @@ LifeOS/
 | Embeddings | sentence-transformers (`all-MiniLM-L6-v2`) |
 | Vector DB | ChromaDB (server mode, port 8001) |
 | Keyword Index | SQLite FTS5 (BM25) |
-| Query Router | Ollama + Llama 3.2 3B |
+| Query Router | Ollama + Qwen 2.5 7B |
 | Synthesis | Claude API (Anthropic) |
 | Backend | FastAPI + Python 3.13 |
 

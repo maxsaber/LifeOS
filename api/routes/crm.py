@@ -60,45 +60,31 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/crm", tags=["crm"])
 
-# Work email domain for category detection
-WORK_EMAIL_DOMAIN = "movementlabs.com"
+# Work email domain for category detection (loaded from settings)
+WORK_EMAIL_DOMAIN = settings.work_email_domain if hasattr(settings, 'work_email_domain') and settings.work_email_domain else "example.com"
 
-# Owner's person ID for "Me" page
-MY_PERSON_ID = "3f41e143-719f-4dc9-a9f1-389b2db5b166"
+# Owner's person ID for "Me" page (loaded from settings)
+MY_PERSON_ID = settings.my_person_id
 
-# Family last names (case-insensitive matching)
-FAMILY_LAST_NAMES = {"ramia"}
+# Family configuration - loaded from config/family_members.json
+import json
 
-# Family members by exact name (case-insensitive)
-FAMILY_EXACT_NAMES = {
-    # Walker/Lyras/Haddad
-    "taylor walker",
-    "cissy",
-    "ethan van drimmelen",
-    "evie lyras",
-    "jordan haddad",
-    # Jones family
-    "lucy jones",
-    "grandparents jones",
-    "bryce jones",
-    "bill jones",
-    "ryan a. jones",
-    "ryan jones",
-    "uncle dave",
-    "aunt judi",
-    "aunt kathleen",
-    # Berry family
-    "shane berry",
-    "shane e. berry",
-    "bryce berry",
-    "jonas berry",
-    "brian berry",
-    # Prenger/Townsend family
-    "kayla townsend",
-    "amy prenger",
-    "grammy",
-    "jeremy prenger",
-}
+def _load_family_config():
+    """Load family configuration from JSON file."""
+    config_path = Path(__file__).parent.parent.parent / "config" / "family_members.json"
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+            return (
+                set(name.lower() for name in config.get("family_last_names", [])),
+                set(name.lower() for name in config.get("family_exact_names", []))
+            )
+        except Exception as e:
+            logger.warning(f"Failed to load family config: {e}")
+    return set(), set()
+
+FAMILY_LAST_NAMES, FAMILY_EXACT_NAMES = _load_family_config()
 
 # Import manual strength overrides from centralized config
 from config.relationship_weights import STRENGTH_OVERRIDES_BY_ID
@@ -294,6 +280,7 @@ class PersonDetailResponse(BaseModel):
     category: str = "unknown"
     vault_contexts: list[str] = []
     tags: list[str] = []
+    birthday: Optional[str] = None  # "MM-DD" format (month-day only)
     notes: str = ""
     sources: list[str] = []
     first_seen: Optional[str] = None
@@ -437,6 +424,7 @@ class NetworkEdge(BaseModel):
     shared_whatsapp_count: int = 0     # WhatsApp
     shared_slack_count: int = 0        # Slack DMs
     shared_phone_calls_count: int = 0  # Phone calls
+    shared_photos_count: int = 0       # Photos together
     is_linkedin_connection: bool = False
 
 
@@ -595,6 +583,7 @@ class PersonUpdateRequest(BaseModel):
     linkedin_url: Optional[str] = None
     emails: Optional[list[str]] = None
     phone_numbers: Optional[list[str]] = None
+    birthday: Optional[str] = None  # "MM-DD" format (month-day only), empty string to clear
 
 
 class PersonMergeRequest(BaseModel):
@@ -693,6 +682,7 @@ def _person_to_detail_response(
         category=computed_category,
         vault_contexts=person.vault_contexts,
         tags=person.tags,
+        birthday=person.birthday,  # Already "MM-DD" string or None
         notes=person.notes,
         sources=person.sources,
         first_seen=person.first_seen.isoformat() if person.first_seen else None,
@@ -720,6 +710,72 @@ def _person_to_detail_response(
 
 
 # Endpoints
+
+
+class CRMConfigResponse(BaseModel):
+    """Response for CRM configuration."""
+    my_person_id: str = ""
+    work_email_domain: str = ""
+    partner_person_id: str = ""
+
+
+@router.get("/config", response_model=CRMConfigResponse)
+async def get_crm_config():
+    """
+    Get CRM configuration values for frontend.
+
+    Returns configuration that the frontend needs for proper operation,
+    such as the owner's person ID and work email domain.
+    """
+    return CRMConfigResponse(
+        my_person_id=settings.my_person_id,
+        work_email_domain=WORK_EMAIL_DOMAIN,
+        partner_person_id=PARTNER_PERSON_ID,
+    )
+
+
+@router.get("/birthdays/today")
+async def get_todays_birthdays():
+    """Get all people with birthdays today."""
+    person_store = get_person_entity_store()
+    people = person_store.get_all()
+
+    today_mm_dd = datetime.now().strftime("%m-%d")
+    birthday_people = [
+        _person_to_detail_response(p, include_related=False)
+        for p in people
+        if p.birthday == today_mm_dd
+    ]
+
+    return {"birthdays": birthday_people, "count": len(birthday_people)}
+
+
+@router.get("/birthdays/all")
+async def get_all_birthdays():
+    """Get all people with birthdays, grouped by date."""
+    person_store = get_person_entity_store()
+    people = person_store.get_all()
+
+    # Group by birthday (MM-DD format)
+    by_date = {}
+    for p in people:
+        if p.birthday:
+            if p.birthday not in by_date:
+                by_date[p.birthday] = []
+            by_date[p.birthday].append({
+                "id": p.id,
+                "name": p.canonical_name,
+            })
+
+    # Sort people within each date by name
+    for date in by_date:
+        by_date[date].sort(key=lambda x: x["name"].lower())
+
+    return {
+        "birthdays": by_date,
+        "total_people": sum(len(v) for v in by_date.values()),
+        "total_dates": len(by_date),
+    }
 
 
 @router.get("/people", response_model=PersonListResponse)
@@ -926,6 +982,27 @@ async def update_person(person_id: str, request: PersonUpdateRequest):
         elif 0 <= request.manual_dunbar_circle <= 7:
             person.manual_dunbar_circle = request.manual_dunbar_circle
         # Ignore invalid values outside 0-7 range (except -1)
+
+    if request.birthday is not None:
+        if request.birthday == "":
+            person.birthday = None  # Allow clearing birthday
+        else:
+            # Parse input and store as "MM-DD" format (no year)
+            bday = request.birthday.strip()
+            if "/" in bday:
+                # "MM/DD" format
+                parts = bday.split("/")
+                month, day = int(parts[0]), int(parts[1])
+            elif "-" in bday and len(bday) <= 5:
+                # "MM-DD" format
+                parts = bday.split("-")
+                month, day = int(parts[0]), int(parts[1])
+            else:
+                # Try parsing as ISO date and extract month/day
+                from datetime import datetime
+                dt = datetime.fromisoformat(bday.replace('Z', '+00:00'))
+                month, day = dt.month, dt.day
+            person.birthday = f"{month:02d}-{day:02d}"
 
     person_store.update(person)
     person_store.save()
@@ -1827,6 +1904,8 @@ SOURCE_BADGES = {
     "whatsapp": "💬",
     "contacts": "📇",
     "phone": "📞",
+    "slack": "💼",
+    "photos": "📷",
 }
 
 
@@ -3003,6 +3082,10 @@ async def get_network_graph(
     depth: int = Query(default=2, ge=1, le=4, description="Hops from center person"),
     min_strength: float = Query(default=0.0, ge=0.0, le=1.0, description="Minimum relationship strength"),
     category: Optional[str] = Query(default=None, description="Filter by category"),
+    allow_full_graph: bool = Query(
+        default=False,
+        description="Required to load full graph without center_on (expensive operation)"
+    ),
 ):
     """
     Get network graph data for D3.js visualization.
@@ -3013,12 +3096,21 @@ async def get_network_graph(
     If center_on is provided, only returns people within 'depth' hops
     of the center person. Otherwise, returns all people and relationships.
 
+    PERFORMANCE: Without center_on, this loads ALL relationships (5000+ edges).
+    Set allow_full_graph=true to explicitly opt-in to this expensive operation.
+
     Each node includes a 'degree' field:
     - 0 = center person
     - 1 = first-degree connection (direct connection to center)
     - 2 = second-degree connection (connection of connection)
     - etc.
     """
+    # Require explicit opt-in for full graph (no center_on)
+    if not center_on and not allow_full_graph:
+        raise HTTPException(
+            status_code=400,
+            detail="center_on is required. Set allow_full_graph=true to load all relationships."
+        )
     start_time = time.time()
     person_store = get_person_entity_store()
     rel_store = get_relationship_store()
@@ -3136,6 +3228,7 @@ async def get_network_graph(
             shared_whatsapp_count=rel.shared_whatsapp_count or 0,
             shared_slack_count=rel.shared_slack_count or 0,
             shared_phone_calls_count=rel.shared_phone_calls_count or 0,
+            shared_photos_count=rel.shared_photos_count or 0,
             is_linkedin_connection=rel.is_linkedin_connection,
         ))
 
@@ -3160,6 +3253,7 @@ class RelationshipDetailResponse(BaseModel):
     shared_whatsapp_count: int = 0    # WhatsApp
     shared_slack_count: int = 0       # Slack DMs
     shared_phone_calls_count: int = 0  # Phone calls
+    shared_photos_count: int = 0      # Photos together
     is_linkedin_connection: bool = False
     # Computed totals
     total_interactions: int = 0
@@ -3204,6 +3298,7 @@ async def get_relationship_details(person_a_id: str, person_b_id: str):
                 shared_whatsapp_count=0,
                 shared_slack_count=0,
                 shared_phone_calls_count=0,
+                shared_photos_count=0,
                 is_linkedin_connection=False,
                 total_interactions=0,
                 first_seen_together=None,
@@ -3237,6 +3332,7 @@ async def get_relationship_details(person_a_id: str, person_b_id: str):
             shared_whatsapp_count=rel.shared_whatsapp_count or 0,
             shared_slack_count=rel.shared_slack_count or 0,
             shared_phone_calls_count=rel.shared_phone_calls_count or 0,
+            shared_photos_count=rel.shared_photos_count or 0,
             is_linkedin_connection=rel.is_linkedin_connection,
             total_interactions=rel.total_shared_interactions or 0,
             first_seen_together=rel.first_seen_together.isoformat() if rel.first_seen_together else None,
@@ -3474,8 +3570,10 @@ class MonthlyMessagingVolume(BaseModel):
     """Messaging volume by Dunbar circle for a single month."""
     month: str  # "YYYY-MM"
     total: int
-    by_circle: dict[str, int]  # circle "0"-"4" -> count
+    by_circle: dict[str, int]  # circle "0"-"4" -> message count
     circle_percentages: dict[str, float]  # circle -> % of total
+    unique_by_circle: dict[str, int] = {}  # circle -> unique people count
+    unique_total: int = 0  # total unique people that month
 
 
 class HealthScorePoint(BaseModel):
@@ -4036,8 +4134,12 @@ async def get_me_interactions(
             ))
 
     # 4. Messaging Volume by Circle (iMessage + WhatsApp only)
-    # Group by month, then by circle
-    monthly_messaging = defaultdict(lambda: {"total": 0, "by_circle": defaultdict(int)})
+    # Group by month, then by circle - track both message counts and unique people
+    monthly_messaging = defaultdict(lambda: {
+        "total": 0,
+        "by_circle": defaultdict(int),
+        "people_by_circle": defaultdict(set),  # circle -> set of person_ids
+    })
     for interaction in all_interactions:
         source = (interaction.source_type or "").lower()
         if source not in ('imessage', 'whatsapp'):
@@ -4056,6 +4158,7 @@ async def get_me_interactions(
             circle = 5  # Group 5+ as "outer"
         monthly_messaging[month_key]["total"] += 1
         monthly_messaging[month_key]["by_circle"][str(circle)] += 1
+        monthly_messaging[month_key]["people_by_circle"][str(circle)].add(person_id)
 
     # Build messaging list (based on days_back)
     messaging_by_circle = []
@@ -4068,32 +4171,34 @@ async def get_me_interactions(
             percentages = {}
             for c, count in by_circle.items():
                 percentages[c] = round(count / total * 100, 1) if total > 0 else 0
+            # Calculate unique people per circle
+            unique_by_circle = {c: len(people) for c, people in data["people_by_circle"].items()}
+            unique_total = len(set().union(*data["people_by_circle"].values())) if data["people_by_circle"] else 0
             messaging_by_circle.append(MonthlyMessagingVolume(
                 month=month,
                 total=total,
                 by_circle=by_circle,
                 circle_percentages=percentages,
+                unique_by_circle=unique_by_circle,
+                unique_total=unique_total,
             ))
 
-    # 5. Tracked Relationships (Parent + Parallel Parenting)
-    # Define tracked relationship configurations
-    TRACKED_RELATIONSHIPS_CONFIG = [
-        {
-            "name": "Parent Relationship",
-            "person_ids": [
-                "83379ad5-0ac9-4c26-ba77-b38130596cdd",  # Edward Saber
-                "21ecb3c-cd42-4312-bbd2-40736dfb78ee",  # Cheryl Saber
-            ],
-            "healthy_direction": "more",  # More interactions = healthier
-        },
-        {
-            "name": "Parallel Parenting",
-            "person_ids": [
-                "04bf94f8-20b7-4285-abb4-c64131b5542f",  # Thy Nguyen
-            ],
-            "healthy_direction": "less",  # Fewer interactions = healthier
-        },
-    ]
+    # 5. Tracked Relationships (configurable via config/family_members.json)
+    # Load tracked relationship configurations from config file
+    def _load_tracked_relationships() -> list:
+        """Load tracked relationships config from family_members.json."""
+        import json
+        config_path = Path(__file__).parent.parent.parent / "config" / "family_members.json"
+        if config_path.exists():
+            try:
+                with open(config_path) as f:
+                    config = json.load(f)
+                return config.get("tracked_relationships", [])
+            except Exception:
+                pass
+        return []
+
+    TRACKED_RELATIONSHIPS_CONFIG = _load_tracked_relationships()
 
     tracked_relationships = []
     for config in TRACKED_RELATIONSHIPS_CONFIG:
@@ -4248,6 +4353,8 @@ async def get_family_members():
 
     Returns people with category="family" sorted by relationship strength.
     Includes dunbar_circle, last_seen, by_source breakdown, and streak data.
+
+    Uses batch interaction fetch to avoid N+1 query problem.
     """
     from datetime import timedelta
     from collections import defaultdict
@@ -4260,66 +4367,75 @@ async def get_family_members():
     now = datetime.now(timezone.utc)
     today = now.date()
 
-    # Filter to family members only
-    family_members = []
+    # Helper to get week number (week 0 = last 7 days, week -1 = 8-14 days ago, etc.)
+    def get_week_number(d, reference):
+        days_diff = (reference - d).days
+        return -(days_diff // 7)
+
+    # First pass: identify family members and collect their IDs
+    family_people = []
     for person in all_people:
         if person.id == MY_PERSON_ID:
             continue
         computed_category = compute_person_category(person, [])
         if computed_category == "family":
-            # Get interaction breakdown by source (last 365 days)
-            interactions = interaction_store.get_for_person(person.id, days_back=365)
-            by_source: dict[str, int] = defaultdict(int)
-            for i in interactions:
-                by_source[i.source_type] += 1
+            family_people.append(person)
 
-            # Calculate current streak (consecutive WEEKS with at least one contact)
-            # A week counts if there's any contact in that 7-day period
-            interaction_dates = set()
-            for i in interactions:
-                if hasattr(i.timestamp, 'date'):
-                    interaction_dates.add(i.timestamp.date())
-                else:
-                    try:
-                        dt = datetime.fromisoformat(str(i.timestamp).replace('Z', '+00:00'))
-                        interaction_dates.add(dt.date())
-                    except Exception:
-                        pass
+    # Batch fetch all interactions for family members in ONE query
+    family_ids = {p.id for p in family_people}
+    all_interactions = interaction_store.get_for_people_batch(family_ids, days_back=365)
 
-            # Group dates by week (week 0 = last 7 days, week -1 = 8-14 days ago, etc.)
-            def get_week_number(d, reference):
-                days_diff = (reference - d).days
-                return -(days_diff // 7)
+    # Second pass: process interactions for each family member
+    family_members = []
+    for person in family_people:
+        interactions = all_interactions.get(person.id, [])
 
-            weeks_with_contact = set()
-            for d in interaction_dates:
-                week_num = get_week_number(d, today)
-                weeks_with_contact.add(week_num)
+        # Calculate by_source breakdown
+        by_source: dict[str, int] = defaultdict(int)
+        for i in interactions:
+            by_source[i.source_type] += 1
 
-            # Count consecutive weeks starting from week 0 (or -1 if no contact this week)
-            current_streak = 0
-            if 0 in weeks_with_contact:
-                start_week = 0
-            elif -1 in weeks_with_contact:
-                start_week = -1
+        # Calculate current streak (consecutive WEEKS with at least one contact)
+        interaction_dates = set()
+        for i in interactions:
+            if hasattr(i.timestamp, 'date'):
+                interaction_dates.add(i.timestamp.date())
             else:
-                start_week = None
+                try:
+                    dt = datetime.fromisoformat(str(i.timestamp).replace('Z', '+00:00'))
+                    interaction_dates.add(dt.date())
+                except Exception:
+                    pass
 
-            if start_week is not None:
-                check_week = start_week
-                while check_week in weeks_with_contact:
-                    current_streak += 1
-                    check_week -= 1
+        weeks_with_contact = set()
+        for d in interaction_dates:
+            week_num = get_week_number(d, today)
+            weeks_with_contact.add(week_num)
 
-            family_members.append(FamilyMember(
-                id=person.id,
-                name=person.canonical_name,
-                relationship_strength=person.relationship_strength or 0.0,
-                dunbar_circle=person.dunbar_circle,
-                last_seen=person.last_seen.isoformat() if person.last_seen else None,
-                by_source=dict(by_source),
-                current_streak=current_streak,
-            ))
+        # Count consecutive weeks starting from week 0 (or -1 if no contact this week)
+        current_streak = 0
+        if 0 in weeks_with_contact:
+            start_week = 0
+        elif -1 in weeks_with_contact:
+            start_week = -1
+        else:
+            start_week = None
+
+        if start_week is not None:
+            check_week = start_week
+            while check_week in weeks_with_contact:
+                current_streak += 1
+                check_week -= 1
+
+        family_members.append(FamilyMember(
+            id=person.id,
+            name=person.canonical_name,
+            relationship_strength=person.relationship_strength or 0.0,
+            dunbar_circle=person.dunbar_circle,
+            last_seen=person.last_seen.isoformat() if person.last_seen else None,
+            by_source=dict(by_source),
+            current_streak=current_streak,
+        ))
 
     # Sort by relationship strength descending
     family_members.sort(key=lambda m: m.relationship_strength, reverse=True)
@@ -5440,3 +5556,564 @@ async def delete_link_override(override_id: str):
         raise HTTPException(status_code=404, detail=f"Override '{override_id}' not found")
 
     return {"status": "deleted", "id": override_id}
+
+
+# ============================================================================
+# Relationship Insights Endpoints
+# ============================================================================
+
+# Partner person ID for relationship page (loaded from config/relationship_overrides.json)
+def _load_partner_person_id() -> str:
+    """Load partner person ID from relationship overrides config."""
+    import json
+    config_path = Path(__file__).parent.parent.parent / "config" / "relationship_overrides.json"
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+            return config.get("partner_person_id", "")
+        except Exception:
+            pass
+    return ""
+
+PARTNER_PERSON_ID = _load_partner_person_id()
+
+
+class RelationshipInsightResponse(BaseModel):
+    """Response model for a relationship insight."""
+    id: str
+    person_id: str
+    category: str
+    text: str
+    source_title: Optional[str] = None
+    source_link: Optional[str] = None
+    source_date: Optional[str] = None
+    confirmed: bool = False
+    created_at: Optional[str] = None
+    category_icon: str = ""
+
+
+class RelationshipInsightsResponse(BaseModel):
+    """Response for relationship insights endpoint."""
+    insights: list[RelationshipInsightResponse]
+    last_generated: Optional[str] = None
+    confirmed_count: int = 0
+    unconfirmed_count: int = 0
+
+
+class ToneDataPoint(BaseModel):
+    """A single month's tone data."""
+    month: str  # YYYY-MM
+    tone: str  # warm, neutral, tense, etc.
+    score: float  # 0-100 scale
+    sample_count: int = 0
+
+
+class ToneDataPointDetailed(BaseModel):
+    """A single month's tone data with separate scores for each person."""
+    month: str  # YYYY-MM
+    nathan_score: float  # 0-100 scale for Nathan's messages
+    taylor_score: float  # 0-100 scale for Taylor's messages
+    combined_score: float  # Average of the two
+    nathan_sample_count: int = 0
+    taylor_sample_count: int = 0
+
+
+class ToneAnalysisResponse(BaseModel):
+    """Response for tone analysis endpoint."""
+    monthly_tones: list[ToneDataPoint]
+    trend: str  # stable-positive, improving, declining, variable
+    generated_at: str
+
+
+class ToneAnalysisDetailedResponse(BaseModel):
+    """Response for detailed tone analysis with separate Nathan/Taylor scores."""
+    monthly_tones: list[ToneDataPointDetailed]
+    nathan_trend: str
+    taylor_trend: str
+    combined_trend: str
+    nathan_average: float  # Overall average for Nathan
+    taylor_average: float  # Overall average for Taylor
+    generated_at: str
+
+
+@router.get("/relationship/insights", response_model=RelationshipInsightsResponse)
+async def get_relationship_insights(person_id: Optional[str] = None):
+    """
+    Get all relationship insights for Taylor Walker.
+
+    Returns both confirmed and unconfirmed insights, sorted with confirmed first.
+    """
+    from api.services.relationship_insights import get_relationship_insight_store
+
+    target_id = person_id or PARTNER_PERSON_ID
+    store = get_relationship_insight_store()
+
+    insights = store.get_all(target_id)
+    last_generated = store.get_last_generated(target_id)
+
+    confirmed_count = sum(1 for i in insights if i.confirmed)
+    unconfirmed_count = len(insights) - confirmed_count
+
+    return RelationshipInsightsResponse(
+        insights=[
+            RelationshipInsightResponse(
+                id=i.id,
+                person_id=i.person_id,
+                category=i.category,
+                text=i.text,
+                source_title=i.source_title,
+                source_link=i.source_link,
+                source_date=i.source_date.isoformat() if i.source_date else None,
+                confirmed=i.confirmed,
+                created_at=i.created_at.isoformat() if i.created_at else None,
+                category_icon=i.to_dict().get("category_icon", ""),
+            )
+            for i in insights
+        ],
+        last_generated=last_generated.isoformat() if last_generated else None,
+        confirmed_count=confirmed_count,
+        unconfirmed_count=unconfirmed_count,
+    )
+
+
+@router.post("/relationship/insights/generate", response_model=RelationshipInsightsResponse)
+async def generate_relationship_insights(
+    person_id: Optional[str] = None,
+    category: Optional[str] = None
+):
+    """
+    Generate new relationship insights from therapy notes.
+
+    If category is specified, only generates for that category (keeps others intact).
+    Otherwise, generates for all categories.
+
+    Keeps confirmed insights, deletes unconfirmed (in target categories), and generates new ones.
+    Uses Claude Sonnet for insight extraction.
+    """
+    from api.services.relationship_insights import (
+        get_relationship_insight_store,
+        get_relationship_insight_generator,
+    )
+
+    target_id = person_id or PARTNER_PERSON_ID
+    store = get_relationship_insight_store()
+    generator = get_relationship_insight_generator()
+
+    # Generate new insights (this also handles deletion of unconfirmed)
+    insights = generator.generate(target_id, category=category)
+    last_generated = store.get_last_generated(target_id)
+
+    # If category was specified, only return insights for that category
+    if category:
+        insights = [i for i in insights if i.category == category]
+
+    confirmed_count = sum(1 for i in insights if i.confirmed)
+    unconfirmed_count = len(insights) - confirmed_count
+
+    return RelationshipInsightsResponse(
+        insights=[
+            RelationshipInsightResponse(
+                id=i.id,
+                person_id=i.person_id,
+                category=i.category,
+                text=i.text,
+                source_title=i.source_title,
+                source_link=i.source_link,
+                source_date=i.source_date.isoformat() if i.source_date else None,
+                confirmed=i.confirmed,
+                created_at=i.created_at.isoformat() if i.created_at else None,
+                category_icon=i.to_dict().get("category_icon", ""),
+            )
+            for i in insights
+        ],
+        last_generated=last_generated.isoformat() if last_generated else None,
+        confirmed_count=confirmed_count,
+        unconfirmed_count=unconfirmed_count,
+    )
+
+
+@router.post("/relationship/insights/{insight_id}/confirm")
+async def confirm_relationship_insight(insight_id: str):
+    """
+    Mark an insight as confirmed.
+
+    Confirmed insights persist across refreshes and are never regenerated.
+    """
+    from api.services.relationship_insights import get_relationship_insight_store
+
+    store = get_relationship_insight_store()
+    success = store.confirm(insight_id)
+
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Insight '{insight_id}' not found")
+
+    return {"status": "confirmed", "id": insight_id}
+
+
+@router.delete("/relationship/insights/{insight_id}")
+async def delete_relationship_insight(insight_id: str):
+    """
+    Delete/dismiss an insight.
+    """
+    from api.services.relationship_insights import get_relationship_insight_store
+
+    store = get_relationship_insight_store()
+    success = store.delete(insight_id)
+
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Insight '{insight_id}' not found")
+
+    return {"status": "deleted", "id": insight_id}
+
+
+@router.post("/relationship/tone-analysis", response_model=ToneAnalysisResponse)
+async def analyze_relationship_tone(person_id: Optional[str] = None, months: int = 12):
+    """
+    Analyze tone/sentiment in iMessage conversations over time.
+
+    Samples messages from each month and uses Claude to classify emotional tone.
+    Returns monthly tone scores and overall trend.
+    """
+    import anthropic
+    from datetime import datetime, timezone, timedelta
+
+    target_id = person_id or PARTNER_PERSON_ID
+    interaction_store = get_interaction_store()
+
+    # Get date range
+    now = datetime.now(timezone.utc)
+    start_date = now - timedelta(days=months * 30)
+
+    # Fetch iMessage interactions for this person
+    interactions = interaction_store.get_for_person(
+        person_id=target_id,
+        source_type="imessage",
+        limit=5000,
+    )
+
+    # Group by month (interactions are Interaction objects, not dicts)
+    by_month: dict[str, list] = {}
+    for interaction in interactions:
+        dt = interaction.timestamp
+        if dt < start_date:
+            continue
+        month_key = dt.strftime("%Y-%m")
+        if month_key not in by_month:
+            by_month[month_key] = []
+        by_month[month_key].append(interaction)
+
+    if not by_month:
+        return ToneAnalysisResponse(
+            monthly_tones=[],
+            trend="insufficient-data",
+            generated_at=now.isoformat(),
+        )
+
+    # Sample messages for tone analysis (max 20 per month)
+    sampled_text = []
+    for month in sorted(by_month.keys()):
+        month_msgs = by_month[month][:20]
+        messages = []
+        for msg in month_msgs:
+            title = msg.title or ""
+            if title:
+                messages.append(title)
+        if messages:
+            sampled_text.append(f"=== {month} ===\n" + "\n".join(messages[:10]))
+
+    if not sampled_text:
+        return ToneAnalysisResponse(
+            monthly_tones=[],
+            trend="insufficient-data",
+            generated_at=now.isoformat(),
+        )
+
+    # Use Claude to analyze tone
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+
+    prompt = f"""Analyze the emotional warmth of these iMessage conversations between Nathan and Taylor over time.
+
+For each month provided, rate the overall emotional warmth on a scale from 0 to 100:
+- 100 = Extremely warm and supportive: Affectionate, loving, deeply connected, emotionally present
+- 75 = Warm: Friendly, caring, engaged, positive
+- 50 = Neutral: Everyday logistics, matter-of-fact, neither warm nor cold
+- 25 = Cool: Brief, distant, minimal emotional engagement
+- 0 = Cold and dismissive: Tense, frustrated, disconnected, hostile
+
+Look for indicators like:
+- Terms of endearment, "I love you", affectionate language → Higher scores
+- Supportive statements, showing care, asking about feelings → Higher scores
+- Purely transactional/logistical messages → Middle scores
+- Short, curt responses, lack of warmth → Lower scores
+- Conflict, frustration, criticism → Lower scores
+
+Return ONLY valid JSON with a score for EACH month listed:
+{{
+  "monthly_tones": [
+    {{"month": "2025-03", "score": 72}},
+    {{"month": "2025-04", "score": 65}}
+  ],
+  "trend": "stable-positive"
+}}
+
+Trend options: stable-positive, stable-neutral, improving, declining, variable
+
+MESSAGES:
+{chr(10).join(sampled_text)}"""
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=2048,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        response_text = response.content[0].text
+
+        # Parse JSON
+        if "```json" in response_text:
+            json_start = response_text.find("```json") + 7
+            json_end = response_text.find("```", json_start)
+            response_text = response_text[json_start:json_end].strip()
+        elif "```" in response_text:
+            json_start = response_text.find("```") + 3
+            json_end = response_text.find("```", json_start)
+            response_text = response_text[json_start:json_end].strip()
+
+        import json
+        data = json.loads(response_text)
+
+        monthly_tones = []
+        for item in data.get("monthly_tones", []):
+            score = float(item.get("score", 50))
+            # Derive tone label from score (0-100 scale)
+            if score >= 75:
+                tone = "warm"
+            elif score >= 50:
+                tone = "neutral"
+            else:
+                tone = "cool"
+            monthly_tones.append(ToneDataPoint(
+                month=item.get("month", ""),
+                tone=tone,
+                score=score,
+                sample_count=len(by_month.get(item.get("month", ""), [])),
+            ))
+
+        return ToneAnalysisResponse(
+            monthly_tones=monthly_tones,
+            trend=data.get("trend", "variable"),
+            generated_at=now.isoformat(),
+        )
+
+    except Exception as e:
+        logger.error(f"Tone analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Tone analysis failed: {str(e)}")
+
+
+@router.post("/relationship/tone-analysis-detailed", response_model=ToneAnalysisDetailedResponse)
+async def analyze_relationship_tone_detailed(person_id: Optional[str] = None, months: int = 12):
+    """
+    Analyze tone/sentiment separately for Nathan and Taylor in iMessage conversations.
+
+    Groups messages by week, analyzes each person's tone separately, normalizes 0-100,
+    then aggregates to monthly averages. Returns separate scores for each person
+    plus a combined average.
+    """
+    import anthropic
+    import json
+    from datetime import datetime, timezone, timedelta
+    from collections import defaultdict
+
+    target_id = person_id or PARTNER_PERSON_ID
+    interaction_store = get_interaction_store()
+
+    # Get date range
+    now = datetime.now(timezone.utc)
+    start_date = now - timedelta(days=months * 30)
+
+    # Fetch iMessage interactions for this person
+    interactions = interaction_store.get_for_person(
+        person_id=target_id,
+        source_type="imessage",
+        limit=10000,  # Get more for weekly analysis
+    )
+
+    # Separate messages by sender and group by week
+    # iMessage interactions have is_from_me attribute or we check title patterns
+    nathan_by_week: dict[str, list] = defaultdict(list)
+    taylor_by_week: dict[str, list] = defaultdict(list)
+
+    for interaction in interactions:
+        dt = interaction.timestamp
+        if dt < start_date:
+            continue
+
+        # Week key: year-week number
+        week_key = dt.strftime("%Y-W%W")
+        title = interaction.title or ""
+
+        # Determine sender from title arrow prefix
+        # → means sent BY Nathan, ← means received FROM Taylor
+        is_from_nathan = title.startswith("→")
+        message_text = title.lstrip("→←").strip() if title else ""
+
+        if is_from_nathan:
+            nathan_by_week[week_key].append(message_text)
+        else:
+            taylor_by_week[week_key].append(message_text)
+
+    if not nathan_by_week and not taylor_by_week:
+        return ToneAnalysisDetailedResponse(
+            monthly_tones=[],
+            nathan_trend="insufficient-data",
+            taylor_trend="insufficient-data",
+            combined_trend="insufficient-data",
+            nathan_average=50.0,
+            taylor_average=50.0,
+            generated_at=now.isoformat(),
+        )
+
+    # Get all weeks and sort them
+    all_weeks = sorted(set(nathan_by_week.keys()) | set(taylor_by_week.keys()))
+
+    # Sample messages for tone analysis (max 10 per week per person)
+    def format_weekly_samples(by_week: dict, person_name: str) -> str:
+        lines = []
+        for week in all_weeks:
+            msgs = by_week.get(week, [])
+            if msgs:
+                sample = [m for m in msgs[:10] if m]
+                if sample:
+                    lines.append(f"=== {week} ({person_name}) ===\n" + "\n".join(sample))
+        return "\n\n".join(lines)
+
+    nathan_text = format_weekly_samples(nathan_by_week, "Nathan")
+    taylor_text = format_weekly_samples(taylor_by_week, "Taylor")
+
+    # Use Claude to analyze tone for each person
+    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
+
+    prompt = f"""Analyze the emotional warmth of these iMessage conversations between Nathan and Taylor.
+Messages are grouped by week and separated by sender.
+
+For EACH week where messages exist, rate emotional warmth on a scale from 0 to 100:
+- 100 = Extremely warm: Affectionate, loving, deeply connected
+- 75 = Warm: Friendly, caring, positive
+- 50 = Neutral: Everyday logistics, matter-of-fact
+- 25 = Cool: Brief, distant, minimal warmth
+- 0 = Cold: Tense, frustrated, hostile
+
+Analyze Nathan's messages and Taylor's messages SEPARATELY.
+
+NATHAN'S MESSAGES:
+{nathan_text if nathan_text else "(No messages)"}
+
+TAYLOR'S MESSAGES:
+{taylor_text if taylor_text else "(No messages)"}
+
+Return ONLY valid JSON with separate scores for each person for each week:
+{{
+  "weekly_scores": [
+    {{"week": "2025-W01", "nathan_score": 72, "taylor_score": 68}},
+    {{"week": "2025-W02", "nathan_score": 65, "taylor_score": 70}}
+  ],
+  "nathan_trend": "stable-positive",
+  "taylor_trend": "stable-positive"
+}}
+
+Trend options: stable-positive, stable-neutral, improving, declining, variable
+If a person has no messages for a week, omit their score for that week (don't put null)."""
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-5",
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        response_text = response.content[0].text
+
+        # Parse JSON
+        if "```json" in response_text:
+            json_start = response_text.find("```json") + 7
+            json_end = response_text.find("```", json_start)
+            response_text = response_text[json_start:json_end].strip()
+        elif "```" in response_text:
+            json_start = response_text.find("```") + 3
+            json_end = response_text.find("```", json_start)
+            response_text = response_text[json_start:json_end].strip()
+
+        data = json.loads(response_text)
+        weekly_scores = data.get("weekly_scores", [])
+
+        # Aggregate weekly scores to monthly
+        monthly_nathan: dict[str, list] = defaultdict(list)
+        monthly_taylor: dict[str, list] = defaultdict(list)
+
+        for item in weekly_scores:
+            week = item.get("week", "")
+            if not week:
+                continue
+
+            # Convert week to month (approximate: use the Monday of that week)
+            try:
+                year = int(week[:4])
+                week_num = int(week.split("W")[1])
+                # Get first day of that week
+                from datetime import date
+                first_day = date.fromisocalendar(year, week_num, 1)
+                month_key = first_day.strftime("%Y-%m")
+            except (ValueError, IndexError):
+                continue
+
+            if "nathan_score" in item:
+                monthly_nathan[month_key].append(float(item["nathan_score"]))
+            if "taylor_score" in item:
+                monthly_taylor[month_key].append(float(item["taylor_score"]))
+
+        # Compute monthly averages
+        all_months = sorted(set(monthly_nathan.keys()) | set(monthly_taylor.keys()))
+
+        monthly_tones = []
+        all_nathan_scores = []
+        all_taylor_scores = []
+
+        for month in all_months:
+            nathan_scores = monthly_nathan.get(month, [])
+            taylor_scores = monthly_taylor.get(month, [])
+
+            nathan_avg = sum(nathan_scores) / len(nathan_scores) if nathan_scores else 50.0
+            taylor_avg = sum(taylor_scores) / len(taylor_scores) if taylor_scores else 50.0
+            combined_avg = (nathan_avg + taylor_avg) / 2
+
+            all_nathan_scores.extend(nathan_scores)
+            all_taylor_scores.extend(taylor_scores)
+
+            monthly_tones.append(ToneDataPointDetailed(
+                month=month,
+                nathan_score=round(nathan_avg, 1),
+                taylor_score=round(taylor_avg, 1),
+                combined_score=round(combined_avg, 1),
+                nathan_sample_count=len(nathan_by_week.get(month, [])),
+                taylor_sample_count=len(taylor_by_week.get(month, [])),
+            ))
+
+        # Overall averages
+        nathan_overall = sum(all_nathan_scores) / len(all_nathan_scores) if all_nathan_scores else 50.0
+        taylor_overall = sum(all_taylor_scores) / len(all_taylor_scores) if all_taylor_scores else 50.0
+
+        return ToneAnalysisDetailedResponse(
+            monthly_tones=monthly_tones,
+            nathan_trend=data.get("nathan_trend", "variable"),
+            taylor_trend=data.get("taylor_trend", "variable"),
+            combined_trend="stable-positive" if abs(nathan_overall - taylor_overall) < 10 else "variable",
+            nathan_average=round(nathan_overall, 1),
+            taylor_average=round(taylor_overall, 1),
+            generated_at=now.isoformat(),
+        )
+
+    except Exception as e:
+        logger.error(f"Detailed tone analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Tone analysis failed: {str(e)}")

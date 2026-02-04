@@ -17,15 +17,17 @@ class TestGenerateSummary:
         """Should return None for content < 100 chars."""
         from api.services.summarizer import generate_summary
 
-        result = generate_summary("Short content.", "test.md")
-        assert result is None
+        summary, success = generate_summary("Short content.", "test.md")
+        assert summary is None
+        assert success is True  # Not a failure, just skipped
 
     def test_returns_none_for_empty_content(self):
         """Should return None for empty content."""
         from api.services.summarizer import generate_summary
 
-        result = generate_summary("", "test.md")
-        assert result is None
+        summary, success = generate_summary("", "test.md")
+        assert summary is None
+        assert success is True  # Not a failure, just skipped
 
     @patch("api.services.summarizer.httpx.Client")
     def test_calls_ollama_with_prompt(self, mock_client_class):
@@ -44,11 +46,11 @@ class TestGenerateSummary:
 
         # Call function
         content = "Long content " * 20  # > 100 chars
-        result = generate_summary(content, "test.md")
+        summary, success = generate_summary(content, "test.md")
 
         # Verify
-        assert result is not None
-        assert "meeting note" in result.lower() or "budget" in result.lower()
+        assert summary is not None
+        assert "meeting note" in summary.lower() or "budget" in summary.lower()
         mock_client.post.assert_called_once()
 
     @patch("api.services.summarizer.httpx.Client")
@@ -75,8 +77,8 @@ class TestGenerateSummary:
         assert "[... content truncated ...]" in prompt
 
     @patch("api.services.summarizer.httpx.Client")
-    def test_returns_fallback_on_timeout(self, mock_client_class):
-        """Should return fallback summary on Ollama timeout."""
+    def test_returns_none_on_timeout(self, mock_client_class):
+        """Should return (None, False) on Ollama timeout for retry tracking."""
         import httpx
         from api.services.summarizer import generate_summary
 
@@ -88,15 +90,15 @@ class TestGenerateSummary:
 
         # Content must be > 100 chars to avoid early return
         content = "This is some real content about meeting notes with Kevin and Sarah. " * 3 + "\n\nMore content here."
-        result = generate_summary(content, "meeting.md")
+        summary, success = generate_summary(content, "meeting.md")
 
-        # Should return fallback summary
-        assert result is not None
-        assert "meeting.md" in result
+        # Should return None with failure flag for retry
+        assert summary is None
+        assert success is False
 
     @patch("api.services.summarizer.httpx.Client")
-    def test_returns_fallback_on_connection_error(self, mock_client_class):
-        """Should return fallback summary on connection error."""
+    def test_returns_none_on_connection_error(self, mock_client_class):
+        """Should return (None, False) on connection error for retry tracking."""
         import httpx
         from api.services.summarizer import generate_summary
 
@@ -108,11 +110,11 @@ class TestGenerateSummary:
 
         # Content must be > 100 chars to avoid early return
         content = "Document content here with enough length to process. " * 3 + "This is important project documentation."
-        result = generate_summary(content, "notes.md")
+        summary, success = generate_summary(content, "notes.md")
 
-        # Should return fallback summary
-        assert result is not None
-        assert "notes.md" in result
+        # Should return None with failure flag for retry
+        assert summary is None
+        assert success is False
 
 
 class TestFallbackSummary:
@@ -257,11 +259,12 @@ We discussed the Q4 budget projections and identified cost reduction opportuniti
 - [ ] Sarah: Review vendor contracts
 """
 
-        result = generate_summary(content, "Q4 Budget Review.md")
+        summary, success = generate_summary(content, "Q4 Budget Review.md")
 
         # Should return a summary
-        assert result is not None
-        assert len(result) >= 20
-        assert len(result) <= 500
+        assert summary is not None
+        assert success is True
+        assert len(summary) >= 20
+        assert len(summary) <= 500
         # Should mention key topics
-        assert any(word in result.lower() for word in ["budget", "meeting", "q4", "review"])
+        assert any(word in summary.lower() for word in ["budget", "meeting", "q4", "review"])

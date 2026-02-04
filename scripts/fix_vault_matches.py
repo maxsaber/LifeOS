@@ -14,12 +14,13 @@ import sqlite3
 import sys
 from pathlib import Path
 
-sys.path.insert(0, '/Users/nathanramia/Documents/Code/LifeOS')
+PROJECT_ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 from api.services.person_entity import PersonEntityStore
 from api.services.interaction_store import ensure_interaction_db
 
-CSV_PATH = '/Users/nathanramia/Documents/Code/LifeOS/docs/archive/vault_matches.csv'
+CSV_PATH = str(PROJECT_ROOT / 'docs/archive/vault_matches.csv')
 
 
 def parse_correction(correction_text: str) -> dict:
