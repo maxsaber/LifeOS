@@ -33,6 +33,7 @@ SOURCE_TYPES = {
     "whatsapp",
     "signal",
     "contacts",
+    "phone_contacts",
     "linkedin",
     "vault",
     "granola",
