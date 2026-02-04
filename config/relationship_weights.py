@@ -30,20 +30,20 @@ USE_LOG_FREQUENCY_SCALING = True
 # Lifetime frequency component - ensures historical relationships don't completely vanish
 # Combines: (recent_freq * RECENT_WEIGHT) + (lifetime_freq * LIFETIME_WEIGHT)
 LIFETIME_FREQUENCY_ENABLED = True
-LIFETIME_FREQUENCY_WEIGHT = 0.3   # 30% of frequency score from lifetime interactions
-RECENT_FREQUENCY_WEIGHT = 0.7    # 70% of frequency score from recent (365-day) interactions
-LIFETIME_FREQUENCY_TARGET = 750  # Higher target for all-time (harder to max out)
+LIFETIME_FREQUENCY_WEIGHT = 0.35   # % of frequency score from lifetime interactions
+RECENT_FREQUENCY_WEIGHT = 0.65    # % of frequency score from recent (365-day) interactions
+LIFETIME_FREQUENCY_TARGET = 1250  # Higher target for all-time (harder to max out)
 
 # Recency discount for zero-interaction contacts
 # People with no tracked interactions get NO recency credit
 # (contacts list and LinkedIn connections shouldn't inflate scores)
-MIN_INTERACTIONS_FOR_FULL_RECENCY = 3  # Need at least 3 interactions for full recency credit
+MIN_INTERACTIONS_FOR_FULL_RECENCY = 15  # Need at least 15 interactions for full recency credit
 ZERO_INTERACTION_RECENCY_MULTIPLIER = 0.0  # Zero interactions = 0% recency (contacts/LinkedIn don't count)
 
 # Peripheral contact threshold
 # People with relationship_strength below this are marked as peripheral contacts
 # and excluded from expensive aggregation calculations (placed in Dunbar circle 7)
-PERIPHERAL_THRESHOLD = 3.0
+PERIPHERAL_THRESHOLD = 5.0
 
 
 # =============================================================================
@@ -103,7 +103,7 @@ INTERACTION_TYPE_WEIGHTS: dict[str, float] = {
     "imessage": 1.5,          # Personal text message
     "whatsapp": 1.5,          # Personal messaging app
     "signal": 1.5,            # Secure personal messaging
-    "slack": 0.6,             # Work DM (less personal, often noisy)
+    "slack": 0.3,             # Work DM (less personal, often noisy)
 
     # Voice/Video (highest effort, synchronous)
     "phone_call": 3.0,        # Voice call - high effort
@@ -111,7 +111,7 @@ INTERACTION_TYPE_WEIGHTS: dict[str, float] = {
     "facetime": 2.0,          # Video call - high effort
 
     # Calendar (meetings - synchronous, high signal)
-    "calendar": 5.0,          # Meetings - strong relationship signal
+    "calendar": 4.0,          # Meetings - strong relationship signal
     # Future: calendar_1on1: 1.5, calendar_small_group: 1.0, calendar_large_meeting: 0.5
 
     # Email (async, often broadcast/CC)
@@ -123,7 +123,7 @@ INTERACTION_TYPE_WEIGHTS: dict[str, float] = {
     "granola": 0.8,           # Meeting notes (AI-generated)
 
     # Photos (face recognition - in photos together)
-    "photos": 0.5,            # In photos together
+    "photos": 5.0,            # In photos together
 
     # Contact sources (static, not interactions)
     "linkedin": 0.3,          # LinkedIn connection (passive)
@@ -133,6 +133,37 @@ INTERACTION_TYPE_WEIGHTS: dict[str, float] = {
 
 # Default weight for unknown interaction types
 DEFAULT_INTERACTION_WEIGHT = 1.0
+
+
+# =============================================================================
+# INTERACTION SUBTYPE WEIGHTS
+# =============================================================================
+# More granular weights for interaction subtypes (parsed from title/metadata).
+# These override the base INTERACTION_TYPE_WEIGHTS when available.
+
+INTERACTION_SUBTYPE_WEIGHTS: dict[str, float] = {
+    # Gmail subtypes (parsed from title prefix: →/←/↔)
+    "gmail_received": 1.0,      # ← prefix - received email
+    "gmail_sent": 1.2,          # → prefix - sent email (higher effort)
+    "gmail_cc": 0.3,            # ↔ prefix - CC'd/thread participant
+
+    # Calendar subtypes (derived from attendee_count)
+    "calendar_1on1": 6.0,         # 1 other attendee - high intimacy
+    "calendar_small_group": 4.0,  # 2-5 other attendees
+    "calendar_large_meeting": 2.0,  # 6+ other attendees - diluted attention
+}
+
+
+# =============================================================================
+# ACCOUNT-BASED MULTIPLIERS
+# =============================================================================
+# Personal accounts are weighted higher than work accounts.
+# Rationale: Personal email/calendar interactions are more relationship-focused.
+
+ACCOUNT_MULTIPLIERS: dict[str, dict[str, float]] = {
+    "gmail": {"personal": 2.0, "work": 1.0},
+    "calendar": {"personal": 3.0, "work": 1.0},
+}
 
 
 # =============================================================================
@@ -170,17 +201,39 @@ ENTITY_CACHE_TTL_SECONDS = 1800  # 30 minutes
 # HELPER FUNCTIONS
 # =============================================================================
 
-def get_interaction_weight(source_type: str) -> float:
+def get_interaction_weight(
+    source_type: str,
+    subtype: str | None = None,
+    source_account: str | None = None,
+) -> float:
     """
-    Get the weight for an interaction type.
+    Get the weight for an interaction, considering subtype and account.
+
+    Priority:
+    1. If subtype provided and in INTERACTION_SUBTYPE_WEIGHTS, use that
+    2. Otherwise, use base weight from INTERACTION_TYPE_WEIGHTS
+    3. Apply account multiplier if source_account provided
 
     Args:
         source_type: The source type (e.g., "gmail", "imessage", "calendar")
+        subtype: Optional subtype (e.g., "gmail_sent", "calendar_1on1")
+        source_account: Optional account type ("personal" or "work")
 
     Returns:
-        Weight multiplier for this interaction type
+        Weight multiplier for this interaction
     """
-    return INTERACTION_TYPE_WEIGHTS.get(source_type, DEFAULT_INTERACTION_WEIGHT)
+    # Get base weight (subtype takes priority if available)
+    if subtype and subtype in INTERACTION_SUBTYPE_WEIGHTS:
+        base_weight = INTERACTION_SUBTYPE_WEIGHTS[subtype]
+    else:
+        base_weight = INTERACTION_TYPE_WEIGHTS.get(source_type, DEFAULT_INTERACTION_WEIGHT)
+
+    # Apply account multiplier if applicable
+    if source_account and source_type in ACCOUNT_MULTIPLIERS:
+        multiplier = ACCOUNT_MULTIPLIERS[source_type].get(source_account, 1.0)
+        return base_weight * multiplier
+
+    return base_weight
 
 
 def compute_weighted_interaction_count(interactions_by_type: dict[str, int]) -> float:
@@ -197,6 +250,36 @@ def compute_weighted_interaction_count(interactions_by_type: dict[str, int]) -> 
     for source_type, count in interactions_by_type.items():
         weight = get_interaction_weight(source_type)
         total += count * weight
+    return total
+
+
+def compute_weighted_interaction_count_detailed(
+    interactions: list[dict],
+) -> float:
+    """
+    Compute weighted interaction count using detailed subtype and account info.
+
+    This is the preferred method when subtype and account data is available,
+    as it provides more accurate weighting.
+
+    Args:
+        interactions: List of dicts with keys:
+            - source_type: str (required)
+            - subtype: str | None (optional)
+            - source_account: str | None (optional, "personal" or "work")
+            - count: int (required)
+
+    Returns:
+        Weighted sum of interactions
+    """
+    total = 0.0
+    for item in interactions:
+        weight = get_interaction_weight(
+            item["source_type"],
+            item.get("subtype"),
+            item.get("source_account"),
+        )
+        total += item["count"] * weight
     return total
 
 

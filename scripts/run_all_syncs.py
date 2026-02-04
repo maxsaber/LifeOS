@@ -190,6 +190,10 @@ SYNC_ORDER = [
     # Pull external content into vault (will be indexed on next run)
     "google_docs",              # Sync Google Docs to vault as markdown
     "google_sheets",            # Sync Google Sheets to vault as markdown
+
+    # === Phase 6: Post-Sync Cleanup ===
+    # Clean up entity data quality issues after all other syncs
+    "entity_cleanup",           # Auto-hide non-humans, queue duplicates for review
 ]
 
 # Scripts that can be run directly
@@ -223,6 +227,9 @@ SYNC_SCRIPTS = {
     # Phase 5: Content Sync
     "google_docs": ("scripts/sync_google_docs.py", ["--execute"]),
     "google_sheets": ("scripts/sync_google_sheets.py", ["--execute"]),
+
+    # Phase 6: Post-Sync Cleanup
+    "entity_cleanup": ("scripts/sync_entity_cleanup.py", ["--execute"]),
 }
 
 # Per-source timeout overrides (seconds)
@@ -233,6 +240,7 @@ SYNC_TIMEOUTS = {
     "relationship_discovery": 3600,  # 60 min - processes all interactions for relationship edges
     "photos": 3600,                  # 60 min - large libraries may take time
     "slack": 3600,                   # 60 min - rate limited API, 100+ DM channels to sync
+    "vault_reindex": None,           # No timeout - runs as long as needed
 }
 
 

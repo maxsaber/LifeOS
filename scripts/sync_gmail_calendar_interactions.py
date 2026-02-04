@@ -263,6 +263,8 @@ def sync_gmail_interactions(
                             source_link,
                             message_id,
                             datetime.now(timezone.utc).isoformat(),
+                            account_type.value,  # source_account: "personal" or "work"
+                            None,  # attendee_count: N/A for gmail
                         ))
                         affected_person_ids.add(sender_person_id)
                         existing.add(message_id)
@@ -323,6 +325,8 @@ def sync_gmail_interactions(
                             source_link,
                             participant_source_id,
                             datetime.now(timezone.utc).isoformat(),
+                            account_type.value,  # source_account: "personal" or "work"
+                            None,  # attendee_count: N/A for gmail
                         ))
                         affected_person_ids.add(participant_result.entity.id)
                         existing.add(participant_source_id)
@@ -391,6 +395,8 @@ def sync_gmail_interactions(
                             source_link,
                             source_id,  # Use email-specific source_id for deduplication
                             datetime.now(timezone.utc).isoformat(),
+                            account_type.value,  # source_account: "personal" or "work"
+                            None,  # attendee_count: N/A for gmail
                         ))
                         created_for_this_email += 1
                         # Track for stats refresh
@@ -527,6 +533,10 @@ def sync_calendar_interactions(
                 # No attendees - skip
                 continue
 
+            # Count other attendees (excluding self) for meeting size classification
+            # This is used to determine calendar_1on1 vs calendar_small_group vs calendar_large_meeting
+            other_attendee_count = len(attendees)  # All attendees here are "other" (self excluded by resolver)
+
             for attendee in attendees:
                 # Create unique source_id per event+attendee
                 source_id = f"{event.event_id}:{attendee}"
@@ -584,6 +594,8 @@ def sync_calendar_interactions(
                     source_link,
                     source_id,
                     datetime.now(timezone.utc).isoformat(),
+                    account_type.value,  # source_account: "personal" or "work"
+                    other_attendee_count,  # attendee_count: for calendar size classification
                 ))
                 stats['interactions_inserted'] += 1
 
@@ -725,11 +737,17 @@ def _parse_attendees_from_title(title: str) -> list[str]:
 
 
 def _insert_batch(conn: sqlite3.Connection, batch: list):
-    """Insert a batch of interactions."""
+    """Insert a batch of interactions.
+
+    Batch tuples should have 11 elements:
+    (id, person_id, timestamp, source_type, title, snippet, source_link, source_id,
+     created_at, source_account, attendee_count)
+    """
     conn.executemany("""
         INSERT OR IGNORE INTO interactions
-        (id, person_id, timestamp, source_type, title, snippet, source_link, source_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (id, person_id, timestamp, source_type, title, snippet, source_link, source_id,
+         created_at, source_account, attendee_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, batch)
 
 

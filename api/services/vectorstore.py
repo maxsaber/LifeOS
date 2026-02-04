@@ -107,6 +107,14 @@ class VectorStore:
                 "people": json.dumps(metadata.get("people", [])),
                 "tags": json.dumps(metadata.get("tags", []))
             }
+            # Copy any extra chunk-level metadata (e.g., channel_id, timestamp for Slack)
+            for key, value in chunk.items():
+                if key not in ("content", "chunk_index") and key not in chunk_meta:
+                    # ChromaDB only accepts str, int, float, bool
+                    if isinstance(value, (str, int, float, bool)):
+                        chunk_meta[key] = value
+                    elif value is None:
+                        chunk_meta[key] = ""
             metadatas.append(chunk_meta)
 
         # Add to collection
