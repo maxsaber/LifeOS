@@ -225,7 +225,7 @@ SYNC_SCRIPTS = {
 
 # Per-source timeout overrides (seconds)
 # Default is 30 minutes (1800). These sources need more time.
-# Note: vault_reindex runs separately at midnight via its own launchd job (no timeout)
+# Note: vault_reindex has no timeout - it runs as long as needed
 SYNC_TIMEOUTS = {
     "gmail": 3600,                   # 60 min - fetches 365 days of emails via individual API calls
     "relationship_discovery": 3600,  # 60 min - processes all interactions for relationship edges
