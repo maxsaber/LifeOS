@@ -53,15 +53,15 @@ class TestActionItemDetection:
         text = """
 # Meeting Summary
 
-Action: Nathan → Send the updated budget by Friday
+Action: John → Send the updated budget by Friday
 Action: Alex → Review hiring pipeline
 """
         actions = extract_action_items(text, source_file="summary.md", source_date="2025-01-05")
 
         assert len(actions) >= 2
-        nathan_action = next((a for a in actions if a.owner == "Nathan"), None)
-        assert nathan_action is not None
-        assert "budget" in nathan_action.task.lower()
+        john_action = next((a for a in actions if a.owner == "John"), None)
+        assert john_action is not None
+        assert "budget" in john_action.task.lower()
 
     def test_detects_todo_pattern(self):
         """Should detect TODO: pattern."""
@@ -95,7 +95,7 @@ Some other content here.
     def test_extracts_owner_from_checkbox(self):
         """Should extract owner from checkbox items."""
         text = """
-- [ ] Nathan: Send budget proposal
+- [ ] John: Send budget proposal
 - [ ] @Alex Review the numbers
 - [ ] Sam → Update spreadsheet
 """
@@ -103,7 +103,7 @@ Some other content here.
 
         assert len(actions) >= 3
         owners = [a.owner for a in actions if a.owner]
-        assert "Nathan" in owners
+        assert "John" in owners
         assert "Alex" in owners
         assert "Sam" in owners
 
@@ -168,7 +168,7 @@ class TestActionRegistry:
         """Should add action items to registry."""
         action = ActionItem(
             task="Send budget proposal",
-            owner="Nathan",
+            owner="John",
             status="open",
             source_file="/vault/meeting.md",
             source_date="2025-01-05"
@@ -201,8 +201,8 @@ class TestActionRegistry:
     def test_filters_by_owner(self, registry):
         """Should filter actions by owner."""
         registry.add_action(ActionItem(
-            task="Nathan's task",
-            owner="Nathan",
+            task="John's task",
+            owner="John",
             status="open",
             source_file="test.md",
             source_date="2025-01-05"
@@ -215,15 +215,15 @@ class TestActionRegistry:
             source_date="2025-01-05"
         ))
 
-        nathan_actions = registry.get_actions_by_owner("Nathan")
-        assert len(nathan_actions) == 1
-        assert nathan_actions[0].owner == "Nathan"
+        john_actions = registry.get_actions_by_owner("John")
+        assert len(john_actions) == 1
+        assert john_actions[0].owner == "John"
 
     def test_filters_by_person_involved(self, registry):
         """Should find actions involving a person (owner or mentioned)."""
         registry.add_action(ActionItem(
             task="Send report to Alex",
-            owner="Nathan",
+            owner="John",
             status="open",
             source_file="test.md",
             source_date="2025-01-05"

@@ -135,6 +135,41 @@ class Settings(BaseSettings):
         description="Pipe-separated regex patterns for personal relationship meeting routing"
     )
 
+    # Partner name for relationship features
+    partner_name: str = Field(
+        default="Partner",
+        alias="LIFEOS_PARTNER_NAME",
+        description="Partner's name for relationship insights"
+    )
+
+    # Therapist patterns for meeting classification (pipe-separated full names)
+    therapist_patterns: str = Field(
+        default="",
+        alias="LIFEOS_THERAPIST_PATTERNS",
+        description="Pipe-separated therapist names for meeting routing (e.g., 'Amy Morgan|Erica Turner')"
+    )
+
+    # Current work vault path (include trailing slash)
+    current_work_path: str = Field(
+        default="Work/",
+        alias="LIFEOS_CURRENT_WORK_PATH",
+        description="Vault path prefix for current work"
+    )
+
+    # Personal archive path (include trailing slash)
+    personal_archive_path: str = Field(
+        default="Personal/zArchive/",
+        alias="LIFEOS_PERSONAL_ARCHIVE_PATH",
+        description="Vault path prefix for archived personal items"
+    )
+
+    # Relationship folder name (for partner-specific content)
+    relationship_folder: str = Field(
+        default="Relationship",
+        alias="LIFEOS_RELATIONSHIP_FOLDER",
+        description="Folder name under Personal/ for relationship content"
+    )
+
     # Backup directory
     backup_path: str = Field(
         default="./data/backups",

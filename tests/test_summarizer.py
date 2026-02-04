@@ -244,7 +244,7 @@ class TestSummarizerIntegration:
         content = """# Meeting Notes - Q4 Budget Review
 
 Date: 2025-01-13
-Attendees: Kevin, Sarah, Nathan
+Attendees: Kevin, Sarah, John
 
 ## Summary
 We discussed the Q4 budget projections and identified cost reduction opportunities.

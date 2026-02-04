@@ -11,7 +11,7 @@ class TestQueryClassifier:
         """Possessive + identifier keyword = factual."""
         from api.services.query_classifier import classify_query
 
-        assert classify_query("Taylor's KTN") == "factual"
+        assert classify_query("Jane's KTN") == "factual"
         assert classify_query("Alex's phone number") == "factual"
         assert classify_query("What is John's passport?") == "factual"
 
@@ -20,7 +20,7 @@ class TestQueryClassifier:
         from api.services.query_classifier import classify_query
 
         # Uses ALIAS_MAP to detect known names
-        assert classify_query("Taylor's birthday") == "factual"
+        assert classify_query("Jane's birthday") == "factual"
         assert classify_query("What is Alex's email?") == "factual"
 
     def test_discovery_queries_are_semantic(self):
@@ -42,7 +42,7 @@ class TestQueryClassifier:
         """Short queries with proper nouns = factual."""
         from api.services.query_classifier import classify_query
 
-        assert classify_query("Taylor birthday") == "factual"
+        assert classify_query("Jane birthday") == "factual"
         assert classify_query("Alex phone") == "factual"
 
     def test_complex_semantic_query(self):

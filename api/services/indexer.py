@@ -301,8 +301,14 @@ class IndexerService:
                 if note_date_str:
                     note_date = datetime.strptime(note_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
                 else:
-                    # Use file mtime as fallback for undated notes
-                    note_date = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc)
+                    # Use file creation time as fallback for undated notes
+                    # st_birthtime is more reliable than st_mtime which gets updated by syncs/backups
+                    stat = path.stat()
+                    if hasattr(stat, 'st_birthtime'):
+                        note_date = datetime.fromtimestamp(stat.st_birthtime, tz=timezone.utc)
+                    else:
+                        # Fall back to mtime on systems without birthtime (Linux)
+                        note_date = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
                 affected_person_ids = self._sync_people_to_v2(path, all_people, note_date, is_granola)
 
                 # Refresh stats for affected people (unless caller will batch refresh)

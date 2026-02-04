@@ -3,11 +3,11 @@ Tests for People Tracking functionality.
 P1.4 Acceptance Criteria:
 - Extracts person names from note content
 - Handles aliases (Alex → Alex Johnson)
-- Handles misspellings (Malia → Jordan)
+- Handles misspellings
 - Tracks last-mention date per person
 - Person filter works in search API
 - "What do I know about Alex" returns relevant context
-- Excludes self-references (Nathan)
+- Excludes self-references (configured user name)
 """
 import pytest
 
@@ -30,11 +30,11 @@ class TestPeopleExtraction:
 
     def test_extracts_bold_names(self):
         """Should extract names in bold format."""
-        text = "Met with **Alex** and **Madi** today to discuss the budget."
+        text = "Met with **Alex** and **Sarah** today to discuss the budget."
         people = extract_people_from_text(text)
 
         assert "Alex" in people
-        assert "Madi" in people
+        assert "Sarah" in people
 
     def test_extracts_names_from_people_dictionary(self):
         """Should recognize names from the People Dictionary (if configured)."""
@@ -72,21 +72,23 @@ class TestPeopleExtraction:
         assert "Alex" in people
 
     def test_excludes_self_references(self):
-        """Should exclude self-references (Nathan)."""
-        text = "Nathan met with Alex to discuss the project. I'll follow up."
+        """Should exclude self-references (configured user name)."""
+        from config.settings import settings
+        user_name = settings.user_name if settings.user_name else "User"
+        text = f"{user_name} met with Alex to discuss the project. I'll follow up."
         people = extract_people_from_text(text)
 
-        assert "Nathan" not in people
+        assert user_name not in people
         assert "Alex" in people
 
     def test_handles_possessives(self):
         """Should extract names even with possessives."""
         # Use bold format to ensure extraction regardless of dictionary config
-        text = "**Alex**'s idea was great. **Taylor**'s schedule is busy."
+        text = "**Alex**'s idea was great. **Jane**'s schedule is busy."
         people = extract_people_from_text(text)
 
         assert "Alex" in people
-        assert "Taylor" in people
+        assert "Jane" in people
 
 
 class TestAliasResolution:
@@ -162,10 +164,10 @@ class TestPeopleRegistry:
 
     def test_tracks_last_mention_date(self, registry):
         """Should track the most recent mention date."""
-        registry.record_mention("Madi", "/vault/old.md", "2025-01-01")
-        registry.record_mention("Madi", "/vault/new.md", "2025-01-10")
+        registry.record_mention("Sarah", "/vault/old.md", "2025-01-01")
+        registry.record_mention("Sarah", "/vault/new.md", "2025-01-10")
 
-        person = registry.get_person("Madi")
+        person = registry.get_person("Sarah")
         assert person["last_mention_date"] == "2025-01-10"
 
     def test_increments_mention_count(self, registry):
@@ -252,7 +254,7 @@ type: meeting
 
 # Team Standup
 
-Met with **Alex** and **Madi** today.
+Met with **Alex** and **Sarah** today.
 Discussed Q1 goals with the team.
 """)
 
@@ -264,7 +266,7 @@ type: note
 
 # Weekend Plans
 
-Taking Malia to the park. Taylor is making dinner.
+Taking Alice to the park. Jane is making dinner.
 """)
 
             yield vault

@@ -34,8 +34,20 @@ PERSONAL_CATEGORIES = {"romantic", "parenting", "personal", "family", "social", 
 # (psychology could be therapy OR just a personal discussion about feelings)
 THERAPY_HINT_CATEGORIES = {"psychology", "romantic", "parenting"}
 
+def _get_therapist_patterns() -> list[str]:
+    """Get therapist name patterns from settings."""
+    try:
+        from config.settings import settings
+        if settings.therapist_patterns:
+            return [rf"\b{name}\b" for name in settings.therapist_patterns.split("|")]
+    except Exception:
+        pass
+    return []
+
+
 # Content patterns that CONFIRM therapy (required to route to therapy folder)
 # Category alone is NOT sufficient - we need these content signals
+# Base patterns + dynamically loaded therapist names from settings
 THERAPY_CONTENT_PATTERNS = [
     r"\btherapy\s*session\b",
     r"\btherapist\b",
@@ -45,11 +57,7 @@ THERAPY_CONTENT_PATTERNS = [
     r"\btherapy\b.*\b(?:appointment|meeting)\b",
     r"\bspeaker\s*\d+.*therapist\b",
     r"\btalks?\s+with\s+(?:their|my)\s+therapist\b",
-    # Known therapist names
-    r"\bAmy\s*Morgan\b",
-    r"\bErica\s*Turner\b",
-    r"\bErika\s*Turner\b",
-]
+] + _get_therapist_patterns()
 
 # Content patterns that suggest work (used to confirm/override category)
 WORK_CONTENT_PATTERNS = [
@@ -70,8 +78,20 @@ PERSONAL_CONTENT_PATTERNS = [
     r"\bpersonal\b",
 ]
 
+def _get_partner_pattern() -> list[str]:
+    """Get partner name pattern from settings."""
+    try:
+        from config.settings import settings
+        if settings.partner_name:
+            return [rf"\b{settings.partner_name}\b"]
+    except Exception:
+        pass
+    return []
+
+
 # Content patterns for RELATIONSHIP discussions
 # Routes to Personal/Relationship/Omi
+# Base patterns + dynamically loaded partner name from settings
 RELATIONSHIP_CONTENT_PATTERNS = [
     r"\bromantic\s*partner",
     r"\brelationship\b.*\b(?:conflict|discussion|issue)\b",
@@ -79,8 +99,7 @@ RELATIONSHIP_CONTENT_PATTERNS = [
     r"\bpartner\b.*\b(?:feels?|said|wants?)\b",
     r"\bcouple\b.*\b(?:conflict|discussion|works?)\b",
     r"\bcommunication\s*(?:conflict|issue|style)\b",
-    r"\bTaylor\b",  # Known partner name
-]
+] + _get_partner_pattern()
 
 # Content patterns for PERSONAL finance (overrides business/finance category)
 # These are personal matters even if Omi categorizes them as "business" or "finance"
@@ -126,11 +145,16 @@ class OmiProcessor:
         self._lock = threading.Lock()
 
         # Destination folders (all under vault_path)
+        # Work path loaded from settings
+        from config.settings import settings
+        work_path = settings.current_work_path.rstrip("/") if settings.current_work_path else "Work"
+        relationship_folder = settings.relationship_folder if settings.relationship_folder else "Relationship"
+
         self.dest_personal = "Personal/Omi"
-        self.dest_relationship = "Personal/Relationship/Omi"
+        self.dest_relationship = f"Personal/{relationship_folder}/Omi"
         self.dest_finance = "Personal/Finance/Omi"
         self.dest_therapy = "Personal/Self-Improvement/Therapy and coaching/Omi"
-        self.dest_work = "Work/ML/Meetings/Omi"
+        self.dest_work = f"{work_path}/Meetings/Omi"
 
     def find_files_by_omi_id(self, omi_id: str, exclude_path: Optional[Path] = None) -> list[Path]:
         """
@@ -265,21 +289,21 @@ class OmiProcessor:
         if is_work_category and has_work_content:
             return (
                 self.dest_work,
-                ["omi", "meeting", "work", "ml"],
+                ["omi", "meeting", "work"],
                 f"Category '{category}' + work content patterns"
             )
 
         if is_work_category:
             return (
                 self.dest_work,
-                ["omi", "meeting", "work", "ml"],
+                ["omi", "meeting", "work"],
                 f"Category '{category}' suggests work"
             )
 
         if has_work_content and not is_personal_category:
             return (
                 self.dest_work,
-                ["omi", "meeting", "work", "ml"],
+                ["omi", "meeting", "work"],
                 "Content contains work patterns"
             )
 

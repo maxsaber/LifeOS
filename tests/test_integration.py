@@ -54,15 +54,15 @@ type: meeting
 # Team Standup
 
 ## Attendees
-- Nathan
+- John
 - Alex
-- Madi
+- Sarah
 
 ## Updates
 Everyone shared their progress on Q1 goals.
 
 ## Action Items
-- [ ] Nathan: Send budget proposal by Friday
+- [ ] John: Send budget proposal by Friday
 - [ ] Alex: Review hiring pipeline
 """)
 
@@ -70,7 +70,7 @@ Everyone shared their progress on Q1 goals.
             (vault / "Work" / "ML" / "Meetings" / "Budget Review 20250106.md").write_text("""---
 tags: [meeting, work, finance]
 type: meeting
-people: [Kevin, Nathan]
+people: [Kevin, John]
 ---
 
 # Budget Review
@@ -83,7 +83,7 @@ We reviewed the Q1 budget allocations with Kevin from finance.
 
 ## Next Steps
 - [ ] Kevin: Send updated budget spreadsheet
-- [ ] Nathan: Present to leadership
+- [ ] John: Present to leadership
 """)
 
             # 4. Long note that should be chunked

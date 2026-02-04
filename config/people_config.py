@@ -3,9 +3,13 @@ People System Configuration for LifeOS.
 
 Maps email domains to vault contexts and normalizes company names for entity resolution.
 
-Note: Entity resolution weights are now in config/relationship_weights.py
+Note: Domain mappings and company normalization are loaded from config/crm_mappings.yaml
+(gitignored - see config/crm_mappings.example.yaml for template).
+Entity resolution weights are in config/relationship_weights.py
 """
+from pathlib import Path
 from typing import Optional
+import logging
 
 # Import entity resolution weights from centralized config
 from config.relationship_weights import (
@@ -18,56 +22,61 @@ from config.relationship_weights import (
     ENTITY_CACHE_TTL_SECONDS,
 )
 
-
-# Domain → Vault Context Map
-# Maps email domains to vault folder paths where people from that organization appear
-DOMAIN_CONTEXT_MAP: dict[str, list[str]] = {
-    # Current job - Movement Labs
-    "movementlabs.xyz": ["Work/ML/"],
-    "movementlabs.com": ["Work/ML/"],
-
-    # Previous jobs (archived)
-    "murmuration.org": ["Personal/zArchive/Murm/"],
-    "bluelabs.com": ["Personal/zArchive/BlueLabs/"],
-    "bluelabs.io": ["Personal/zArchive/BlueLabs/"],
-    "decktech.com": ["Personal/zArchive/Deck/"],
-    "rise.com": ["Personal/zArchive/Rise/"],
-
-    # Personal domains
-    "gmail.com": ["Personal/"],
-    "icloud.com": ["Personal/"],
-}
+logger = logging.getLogger(__name__)
 
 
-# Company Normalization Map
-# Maps LinkedIn company names to email domains and vault contexts
-# Used to link LinkedIn records (which have company names) to email-based records
-COMPANY_NORMALIZATION: dict[str, dict] = {
-    "Movement Labs": {
-        "domains": ["movementlabs.xyz", "movementlabs.com"],
-        "vault_contexts": ["Work/ML/"],
-    },
-    "Murmuration": {
-        "domains": ["murmuration.org"],
-        "vault_contexts": ["Personal/zArchive/Murm/"],
-    },
-    "BlueLabs": {
-        "domains": ["bluelabs.com", "bluelabs.io"],
-        "vault_contexts": ["Personal/zArchive/BlueLabs/"],
-    },
-    "BlueLabs Analytics": {
-        "domains": ["bluelabs.com", "bluelabs.io"],
-        "vault_contexts": ["Personal/zArchive/BlueLabs/"],
-    },
-    "Deck": {
-        "domains": ["decktech.com"],
-        "vault_contexts": ["Personal/zArchive/Deck/"],
-    },
-    "Rise": {
-        "domains": ["rise.com"],
-        "vault_contexts": ["Personal/zArchive/Rise/"],
-    },
-}
+def _load_crm_mappings() -> tuple[dict[str, list[str]], dict[str, dict]]:
+    """
+    Load CRM mappings from YAML config file.
+
+    Returns:
+        Tuple of (domain_context_map, company_normalization)
+    """
+    config_path = Path(__file__).parent / "crm_mappings.yaml"
+
+    # Default mappings for common personal email domains
+    default_domain_map: dict[str, list[str]] = {
+        "gmail.com": ["Personal/"],
+        "icloud.com": ["Personal/"],
+        "outlook.com": ["Personal/"],
+        "hotmail.com": ["Personal/"],
+        "yahoo.com": ["Personal/"],
+    }
+    default_company_norm: dict[str, dict] = {}
+
+    if not config_path.exists():
+        logger.info("No crm_mappings.yaml found, using defaults only")
+        return default_domain_map, default_company_norm
+
+    try:
+        import yaml
+        with open(config_path) as f:
+            config = yaml.safe_load(f) or {}
+
+        # Parse domain mappings
+        domain_map = dict(default_domain_map)  # Start with defaults
+        for domain, info in config.get("domain_mappings", {}).items():
+            if isinstance(info, dict) and "vault_contexts" in info:
+                domain_map[domain.lower()] = info["vault_contexts"]
+
+        # Parse company normalization
+        company_norm = dict(default_company_norm)
+        for company, info in config.get("company_normalization", {}).items():
+            if isinstance(info, dict):
+                company_norm[company] = {
+                    "domains": info.get("domains", []),
+                    "vault_contexts": info.get("vault_contexts", []),
+                }
+
+        return domain_map, company_norm
+
+    except Exception as e:
+        logger.warning(f"Failed to load crm_mappings.yaml: {e}, using defaults")
+        return default_domain_map, default_company_norm
+
+
+# Load mappings at module import time
+DOMAIN_CONTEXT_MAP, COMPANY_NORMALIZATION = _load_crm_mappings()
 
 
 # Entity Resolution Configuration
@@ -118,7 +127,7 @@ def get_vault_contexts_for_domain(domain: str) -> list[str]:
     Get vault contexts associated with an email domain.
 
     Args:
-        domain: Email domain (e.g., "movementlabs.xyz")
+        domain: Email domain (e.g., "example.com")
 
     Returns:
         List of vault context paths, or empty list if domain unknown
@@ -131,7 +140,7 @@ def get_domains_for_company(company_name: str) -> list[str]:
     Get email domains associated with a company name.
 
     Args:
-        company_name: Company name from LinkedIn (e.g., "Movement Labs")
+        company_name: Company name from LinkedIn (e.g., "Example Corp")
 
     Returns:
         List of email domains, or empty list if company unknown
@@ -145,7 +154,7 @@ def get_vault_contexts_for_company(company_name: str) -> list[str]:
     Get vault contexts associated with a company name.
 
     Args:
-        company_name: Company name from LinkedIn (e.g., "Movement Labs")
+        company_name: Company name from LinkedIn (e.g., "Example Corp")
 
     Returns:
         List of vault context paths, or empty list if company unknown

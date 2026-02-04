@@ -701,15 +701,21 @@ class EntityResolver:
 
     def _infer_vault_contexts(self, file_path: str) -> list[str]:
         """Infer vault context from file path."""
+        from config.settings import settings
         path_str = str(file_path).replace("\\", "/")
 
-        # Check known context patterns
-        if "Work/ML" in path_str:
-            return ["Work/ML/"]
-        elif "Personal/zArchive/Murm" in path_str:
-            return ["Personal/zArchive/Murm/"]
-        elif "Personal/zArchive/BlueLabs" in path_str:
-            return ["Personal/zArchive/BlueLabs/"]
+        # Check current work path first (most specific)
+        if settings.current_work_path and settings.current_work_path in path_str:
+            return [settings.current_work_path]
+        # Check archive paths from crm_mappings (loaded dynamically)
+        elif settings.personal_archive_path and settings.personal_archive_path in path_str:
+            # Try to find more specific archive context
+            from config.people_config import DOMAIN_CONTEXT_MAP
+            for contexts in DOMAIN_CONTEXT_MAP.values():
+                for ctx in contexts:
+                    if ctx.startswith(settings.personal_archive_path) and ctx in path_str:
+                        return [ctx]
+            return [settings.personal_archive_path]
         elif "Personal/" in path_str:
             return ["Personal/"]
         elif "Work/" in path_str:
@@ -719,11 +725,12 @@ class EntityResolver:
 
     def _infer_category(self, file_path: str) -> str:
         """Infer category from file path."""
+        from config.settings import settings
         path_str = str(file_path).replace("\\", "/")
 
         if "Work/" in path_str:
             return "work"
-        elif "Personal/Relationship" in path_str or "Personal/Malea" in path_str:
+        elif f"Personal/{settings.relationship_folder}" in path_str:
             return "family"
         elif "Personal/" in path_str:
             return "personal"
@@ -732,17 +739,27 @@ class EntityResolver:
 
     def _infer_context_suffix(self, file_path: str) -> str:
         """Infer disambiguation suffix from file path."""
+        from config.settings import settings
+        from config.people_config import COMPANY_NORMALIZATION
         path_str = str(file_path).replace("\\", "/")
 
-        if "Work/ML" in path_str:
-            return "Movement"
-        elif "Personal/zArchive/Murm" in path_str:
-            return "Murmuration"
-        elif "Personal/zArchive/BlueLabs" in path_str:
-            return "BlueLabs"
-        elif "Personal/zArchive/Deck" in path_str:
-            return "Deck"
-        elif "Work/" in path_str:
+        # Check current work path
+        if settings.current_work_path and settings.current_work_path in path_str:
+            # Try to find company name from normalization map
+            for company, info in COMPANY_NORMALIZATION.items():
+                if any(settings.current_work_path in ctx for ctx in info.get("vault_contexts", [])):
+                    return company.split()[0]  # First word of company name
+            return "Work"
+
+        # Check archive paths for company context
+        if settings.personal_archive_path and settings.personal_archive_path in path_str:
+            for company, info in COMPANY_NORMALIZATION.items():
+                for ctx in info.get("vault_contexts", []):
+                    if ctx in path_str:
+                        return company.split()[0]
+            return "Archive"
+
+        if "Work/" in path_str:
             return "Work"
         elif "Personal/" in path_str:
             return "Personal"

@@ -221,7 +221,7 @@ class TestProtectedReranking:
         reranker = RerankerService()
 
         results = [
-            {"id": "exact_match", "content": "Taylor's KTN: TT11YZS7J", "hybrid_score": 0.9},
+            {"id": "exact_match", "content": "Jane's KTN: JD12ABC34", "hybrid_score": 0.9},
             {"id": "semantic_1", "content": "General travel information", "hybrid_score": 0.8},
             {"id": "semantic_2", "content": "Passport and visa requirements", "hybrid_score": 0.7},
             {"id": "semantic_3", "content": "Airport security guidelines", "hybrid_score": 0.6},
@@ -229,7 +229,7 @@ class TestProtectedReranking:
 
         # Protect index 0 (the exact match)
         reranked = reranker.rerank(
-            query="Taylor's KTN",
+            query="Jane's KTN",
             results=results,
             top_k=3,
             protected_indices=[0]
@@ -296,7 +296,7 @@ class TestProtectedReranking:
         mock_model.predict.return_value = [0.5, 0.4, 0.3]
 
         results = [
-            {"id": "exact_match", "content": "Taylor's KTN: TT11YZS7J", "hybrid_score": 0.9},
+            {"id": "exact_match", "content": "Jane's KTN: JD12ABC34", "hybrid_score": 0.9},
             {"id": "semantic_1", "content": "General travel information", "hybrid_score": 0.8},
             {"id": "semantic_2", "content": "Passport and visa requirements", "hybrid_score": 0.7},
             {"id": "semantic_3", "content": "Airport security guidelines", "hybrid_score": 0.6},
@@ -304,7 +304,7 @@ class TestProtectedReranking:
 
         with patch.object(reranker, '_get_model', return_value=mock_model):
             reranked = reranker.rerank(
-                query="Taylor's KTN",
+                query="Jane's KTN",
                 results=results,
                 top_k=3,
                 protected_indices=[0]

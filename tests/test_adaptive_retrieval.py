@@ -56,9 +56,9 @@ class TestExtractSearchKeywords:
         """Should return keywords in order of appearance."""
         from api.routes.chat import extract_search_keywords
 
-        keywords = extract_search_keywords("Kevin budget Nathan planning")
-        # Should be in order: Kevin, budget, Nathan, planning
-        assert keywords.index("Kevin") < keywords.index("Nathan")
+        keywords = extract_search_keywords("Kevin budget Bob planning")
+        # Should be in order: Kevin, budget, Bob, planning
+        assert keywords.index("Kevin") < keywords.index("Bob")
 
     def test_deduplicates_keywords(self):
         """Should deduplicate case-insensitively."""

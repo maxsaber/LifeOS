@@ -264,7 +264,7 @@ class TestKeywordFallback:
 
         test_queries = [
             "Tell me about Alex",
-            "Prep me for meeting with Madi",
+            "Prep me for meeting with Sarah",
             "Who is Kevin?",
         ]
 
@@ -317,7 +317,7 @@ class TestRouterAccuracy:
 
         # Email queries
         ("Did Kevin email me about the budget?", ["gmail"]),
-        ("What did Madi say in her last email?", ["gmail", "people"]),
+        ("What did Sarah say in her last email?", ["gmail", "people"]),
         ("Show me emails from last week", ["gmail"]),
 
         # Drive queries

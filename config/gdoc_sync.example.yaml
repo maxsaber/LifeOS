@@ -3,6 +3,8 @@
 # This file defines which Google Docs should be synced to your Obsidian vault.
 # Sync runs nightly at 3 AM Eastern as part of the regular sync.
 #
+# Copy this file to gdoc_sync.yaml and configure your documents.
+#
 # Each document needs:
 #   - doc_id: The Google Doc ID (from the URL)
 #   - vault_path: Path relative to your vault root
@@ -19,9 +21,9 @@
 sync_enabled: true
 
 documents:
-  - doc_id: "18xvPzJws3FUwbJ9q4Nd1153cJbDmXhjlFeTSwLcV9ac"
-    vault_path: "Work/ML/Meetings/1-1s/Madi syncs.md"
+  - doc_id: "YOUR_GOOGLE_DOC_ID"
+    vault_path: "Work/Meetings/Synced Doc.md"
     account: "work"
-  - doc_id: "1sOvriVosqAj9No88F6OezO1_XiKBFd1tJ4U3GS_kESw"
-    vault_path: "Work/Job Search/Current Resume.md"
+  - doc_id: "ANOTHER_DOC_ID"
+    vault_path: "Personal/Notes/Another Doc.md"
     account: "personal"

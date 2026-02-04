@@ -337,12 +337,12 @@ Some relationships require manual overrides that persist through sync cycles. Th
 ```python
 # Strength overrides - force specific relationship_strength values
 STRENGTH_OVERRIDES_BY_ID = {
-    "cb93e7bd-036c-4ef5-adb9-34a9147c4984": 100.0,  # Taylor Walker
+    "<partner-person-id>": 100.0,  # Partner
 }
 
 # Circle overrides - force specific Dunbar circle assignments
 CIRCLE_OVERRIDES_BY_ID = {
-    "cb93e7bd-036c-4ef5-adb9-34a9147c4984": 0,  # Taylor Walker
+    "<partner-person-id>": 0,  # Partner
 }
 
 # Tag overrides - apply tags from LinkedIn data extraction

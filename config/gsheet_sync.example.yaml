@@ -2,11 +2,13 @@
 #
 # This file defines which Google Sheets should be synced to your Obsidian vault.
 # Sync runs nightly at 3 AM Eastern as part of the regular sync.
+#
+# Copy this file to gsheet_sync.yaml and configure your sheets.
 
 sync_enabled: true
 
 sheets:
-  - sheet_id: "1tFihaD4CosKIjqFn67I1SmJ6Oi41R_9RXiXxrLQu3pk"
+  - sheet_id: "YOUR_GOOGLE_SHEET_ID"
     name: "Daily Journal"
     account: "personal"
     range: "Form Responses 1"
@@ -15,21 +17,8 @@ sheets:
     # Map column names to clean YAML keys for Dataview
     # Note: Column names must match exactly (including ? marks)
     field_mappings:
-      "Alcohol yesterday": "alcohol"
-      "Feelings": "feeling"
-      "Bad feelings": "bad_feeling"
-      "Tired feelings": "tired_feeling"
-      "Meaningful connection with Taylor last 24h?": "connection_taylor"
-      "Meaningful connection with Malea last 24h?": "connection_malea"
-      "Sleep yesterday": "sleep"
-      "One word for the day": "one_word"
-      "Caffeine today": "caffeine"
-      "Exercise today": "exercise"
-      "Mood today": "mood"
-      "Stress today": "stress"
-      "Body today": "body"
-      "Ate for fuel or comfort, last 24h": "eating"
-      "What is the most emotionally resonant thing that happened today?": "resonant_moment"
+      "Your Column Name": "field_key"
+      "Another Column": "another_key"
 
     outputs:
       # Individual journal notes with YAML frontmatter (best for Dataview)
@@ -45,7 +34,7 @@ sheets:
       # Append to existing daily notes
       daily_notes:
         enabled: false
-        path_pattern: "Work/ML/Daily Notes/{date}.md"
+        path_pattern: "Work/Daily Notes/{date}.md"
         section_header: "## Daily Journal"
         insert_after: "## Meetings"
         create_if_missing: false

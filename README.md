@@ -42,7 +42,7 @@ LifeOS is a self-hosted RAG (Retrieval-Augmented Generation) system that provide
 ### Installation
 
 ```bash
-git clone https://github.com/nbramia/LifeOS.git
+git clone https://github.com/yourusername/LifeOS.git
 cd LifeOS
 python -m venv venv
 source venv/bin/activate

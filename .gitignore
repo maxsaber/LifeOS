@@ -45,6 +45,8 @@ config/relationship_overrides.json
 config/family_members.json
 config/linkedin_tags.json
 config/crm_mappings.yaml
+config/gsheet_sync.yaml
+config/gdoc_sync.yaml
 
 # Launchd plist files (use .plist.template to create)
 config/launchd/*.plist

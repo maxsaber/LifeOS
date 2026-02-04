@@ -188,26 +188,26 @@ When a person or project has known context (company, project folder), target tho
 ---
 
 ### 2.2 Recent Interactions with Personal Contact
-**Query:** "What have Tay and I been talking about lately?"
+**Query:** "What have my partner and I been talking about lately?"
 
 **Orchestration Steps:**
-1. **People** - Resolve "Tay" to entity, get:
-   - Phone: +1-901-xxx-xxxx
-   - Email: annetaylorwalker@gmail.com
+1. **People** - Resolve partner alias to entity, get:
+   - Phone: +1-xxx-xxx-xxxx
+   - Email: partner@example.com
    - Category: personal (partner)
-2. **iMessage** - Search for messages with Tay's phone number in last 30 days
-3. **Calendar** - Search for events with Tay's email (personal appointments, trips)
-4. **Gmail** - Search personal Gmail for threads with Tay
-5. **Vault** - Search in `Personal/` folders for mentions of "Tay" or "Taylor"
+2. **iMessage** - Search for messages with partner's phone number in last 30 days
+3. **Calendar** - Search for events with partner's email (personal appointments, trips)
+4. **Gmail** - Search personal Gmail for threads with partner
+5. **Vault** - Search in `Personal/` folders for mentions of partner name
 
 **Expected Searches:**
 | Source | Query/Filter | Time Range |
 |--------|-------------|------------|
-| People | name match "Tay" OR alias "Tay" | Entity resolution |
-| iMessage | phone = +19012295017 | Last 30 days |
-| Calendar | attendees contains annetaylorwalker@gmail.com | Last 30 days + next 30 days |
-| Gmail (personal) | from:annetaylorwalker@gmail.com OR to:... | Last 30 days |
-| Vault | path:Personal/* AND (Tay OR Taylor) | Last 60 days |
+| People | name match partner name/alias | Entity resolution |
+| iMessage | phone = partner's number | Last 30 days |
+| Calendar | attendees contains partner@example.com | Last 30 days + next 30 days |
+| Gmail (personal) | from:partner@example.com OR to:... | Last 30 days |
+| Vault | path:Personal/* AND partner name | Last 60 days |
 
 **Output Should Include:**
 - Summary of text conversation topics
@@ -217,7 +217,7 @@ When a person or project has known context (company, project folder), target tho
 #### Report Card: Test 2.2 (Evaluated 2026-01-09)
 | Criterion | Pass? | Notes |
 |-----------|-------|-------|
-| Resolved "Tay" alias to correct entity | ✅ | Alias resolution working |
+| Resolved partner alias to correct entity | ✅ | Alias resolution working |
 | Got phone number from entity | ✅ | |
 | Recognized personal contact category | ✅ | |
 | Prioritized iMessage (personal contact) | ✅ | 150+ messages returned |
@@ -309,23 +309,23 @@ When a person or project has known context (company, project folder), target tho
 ## 3. Project & Topic Queries
 
 ### 3.1 Project Status
-**Query:** "What's the latest on the Movement Labs partnership?"
+**Query:** "What's the latest on the Acme Corp partnership?"
 
 **Orchestration Steps:**
-1. **People** - Identify Movement Labs contacts (Joe Huston, etc.)
-2. **Gmail** - Threads with Movement Labs contacts, recent first
+1. **People** - Identify Acme Corp contacts (Joe Huston, etc.)
+2. **Gmail** - Threads with Acme Corp contacts, recent first
 3. **Calendar** - Recent/upcoming meetings with ML folks
-4. **Vault** - Search `Work/ML/` folder for recent notes
-5. **Drive** - Documents with "Movement Labs" in name or shared with @movementlabs.org
+4. **Vault** - Search `Work/Acme/` folder for recent notes
+5. **Drive** - Documents with "Acme Corp" in name or shared with @acme.example.com
 
 **Expected Searches:**
 | Source | Query/Filter | Time Range |
 |--------|-------------|------------|
-| People | company = "Movement Labs" | Get contact list |
-| Gmail | from:*@movementlabs.org OR subject:"Movement Labs" | Last 60 days |
-| Calendar | attendees contains *@movementlabs.org | Last 60 days + next 30 |
-| Vault | path:Work/ML/* | Last 60 days, recent first |
-| Drive | name contains "Movement Labs" OR sharedWith *@movementlabs.org | Last 60 days |
+| People | company = "Acme Corp" | Get contact list |
+| Gmail | from:*@acme.example.com OR subject:"Acme Corp" | Last 60 days |
+| Calendar | attendees contains *@acme.example.com | Last 60 days + next 30 |
+| Vault | path:Work/Acme/* | Last 60 days, recent first |
+| Drive | name contains "Acme Corp" OR sharedWith *@acme.example.com | Last 60 days |
 
 #### Report Card: Test 3.1
 | Criterion | Pass? | Notes |
@@ -333,7 +333,7 @@ When a person or project has known context (company, project folder), target tho
 | Identified ML contacts from People | ☐ | |
 | Searched Gmail with ML email domain | ☐ | |
 | Searched Calendar with ML attendees | ☐ | |
-| Targeted Vault to Work/ML/ folder | ☐ | |
+| Targeted Vault to Work/Acme/ folder | ☐ | |
 | Searched Drive for ML documents | ☐ | |
 | Applied recency bias (60 days) | ☐ | |
 | **Score** | _/6 | |
@@ -924,7 +924,7 @@ When a person or project has known context (company, project folder), target tho
    - Result: Proper date filtering for temporal queries
 
 3. **Vault search filter bug (ChromaDB)**
-   - Issue: `{"people": ["Taylor"]}` filter passed to ChromaDB caused error
+   - Issue: `{"people": ["PersonName"]}` filter passed to ChromaDB caused error
    - Fix: Removed list-based filter in `briefings.py`, rely on semantic search
    - Result: Vault searches work correctly
 
@@ -933,7 +933,7 @@ When a person or project has known context (company, project folder), target tho
 | Test | Query | Routing Before | Routing After | Score |
 |------|-------|----------------|---------------|-------|
 | 2.1 | Recent interactions with Ben Calvin | `['people']` | `['people', 'gmail', 'calendar', 'vault']` | 7/8 |
-| 2.2 | What have Tay and I been talking about lately? | `['people', 'vault']` | `['people', 'gmail', 'calendar', 'vault']` + iMessage | 7/8 |
+| 2.2 | What have my partner and I been talking about lately? | `['people', 'vault']` | `['people', 'gmail', 'calendar', 'vault']` + iMessage | 7/8 |
 | 5.1 | Prep me for meeting with Mobilize team | - | `['people', 'vault', 'calendar']` | 4/7 |
 | 5.3 | Quick context before my 3pm call | - | `['vault', 'calendar']` | 3/5 |
 

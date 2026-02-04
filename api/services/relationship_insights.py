@@ -32,8 +32,8 @@ logger = logging.getLogger(__name__)
 # Insight categories with their icons
 INSIGHT_CATEGORIES = {
     # Actionable commitments by person
-    "for_me": "🎯",  # Things Taylor asked for, or things I (Nathan) committed to, or things a therapist said I (Nathan) should do
-    "for_taylor": "💜",  # Things I asked for, or things Taylor committed to do, or things a therapist said she should do
+    "for_me": "🎯",  # Things partner asked for, or things user committed to
+    "for_partner": "💜",  # Things user asked for, or things partner committed to
     # Analysis categories
     "growth_patterns": "📈",  # How the relationship has improved
     "recurring_themes": "🔄",  # Topics that come up repeatedly
@@ -567,26 +567,30 @@ class RelationshipInsightGenerator:
 
     def _build_generation_prompt(self, notes_text: str, exclusion_text: str, category: Optional[str] = None) -> str:
         """Build the Claude prompt for insight generation, optionally for a specific category."""
+        from config.settings import settings
+
+        user_name = settings.user_name if settings.user_name else "User"
+        partner_name = settings.partner_name if settings.partner_name else "Partner"
 
         # Category-specific prompts
         category_prompts = {
-            "for_me": """Focus ONLY on extracting insights for the "for_me" category.
+            "for_me": f"""Focus ONLY on extracting insights for the "for_me" category.
 
-This category is about things Nathan should work on:
-- Requests Taylor has made ("Taylor asked Nathan to...")
-- Commitments Nathan made ("Nathan said he would...")
-- Therapist recommendations for Nathan ("Erica suggested Nathan...")
+This category is about things {user_name} should work on:
+- Requests {partner_name} has made ("{partner_name} asked {user_name} to...")
+- Commitments {user_name} made ("{user_name} said he would...")
+- Therapist recommendations for {user_name} ("Therapist suggested {user_name}...")
 
 Be very specific about what was actually asked or promised. Quote or closely paraphrase.
 Extract 4-6 actionable insights.
 Include source_title for each insight.""",
 
-            "for_taylor": """Focus ONLY on extracting insights for the "for_taylor" category.
+            "for_partner": f"""Focus ONLY on extracting insights for the "for_partner" category.
 
-This category is about things Taylor should work on:
-- Requests Nathan has made ("Nathan asked Taylor to...")
-- Commitments Taylor made ("Taylor said she would...")
-- Therapist recommendations for Taylor ("Erica suggested Taylor...")
+This category is about things {partner_name} should work on:
+- Requests {user_name} has made ("{user_name} asked {partner_name} to...")
+- Commitments {partner_name} made ("{partner_name} said they would...")
+- Therapist recommendations for {partner_name} ("Therapist suggested {partner_name}...")
 
 Be very specific about what was actually asked or promised. Quote or closely paraphrase.
 Extract 4-6 actionable insights.
@@ -612,14 +616,14 @@ Reference specific situations from the notes to illustrate growth.
 Extract 4-6 insights.
 Include source_title for each insight.""",
 
-            "recurring_themes": """Focus ONLY on extracting insights for the "recurring_themes" category.
+            "recurring_themes": f"""Focus ONLY on extracting insights for the "recurring_themes" category.
 
 This category is about topics that come up repeatedly in sessions:
 - Patterns to be aware of
 - Issues that resurface
 - Underlying dynamics that keep appearing
 
-Help Nathan recognize these patterns so he can be mindful of them.
+Help {user_name} recognize these patterns so they can be mindful of them.
 Extract 4-6 insights.
 Include source_title for each insight.""",
 
@@ -639,7 +643,7 @@ Include source_title for each insight.""",
             # Category-specific prompt
             return f"""Analyze these couples therapy notes and extract relationship insights.
 
-You are helping Nathan track relationship growth from his couples therapy sessions with Taylor.
+You are helping {user_name} track relationship growth from therapy sessions with {partner_name}.
 
 {category_prompts[category]}
 {exclusion_text}
@@ -650,7 +654,7 @@ Return ONLY valid JSON (no markdown, no explanation):
     {{
       "category": "{category}",
       "text": "Specific insight text here",
-      "source_title": {"\"20230115 Couples Therapy with Erica\"" if category != "ai_suggestions" else "null"}
+      "source_title": {"\"20230115 Couples Therapy\"" if category != "ai_suggestions" else "null"}
     }}
   ]
 }}
@@ -661,20 +665,20 @@ THERAPY NOTES:
         # Full prompt for all categories
         return f"""Analyze these couples therapy notes and extract relationship insights.
 
-You are helping Nathan track relationship growth and commitments from his therapy - both his individual therapy (therapist Amy Morgan) and couples therapy sessions with partner Taylor (therapist Erica Turner). Extract specific, actionable insights organized by who needs to act on them.
+You are helping {user_name} track relationship growth and commitments from therapy - both individual therapy and couples therapy sessions with partner {partner_name}. Extract specific, actionable insights organized by who needs to act on them.
 
 CATEGORIES TO EXTRACT:
 
 **COMMITMENTS (most important - be very specific about what was asked/promised):**
-- for_me: Things Nathan should work on. Include:
-  - Requests Taylor has made ("Taylor asked Nathan to...")
-  - Commitments Nathan made ("Nathan said he would...")
-  - Therapist recommendations for Nathan ("Erica suggested Nathan...")
+- for_me: Things {user_name} should work on. Include:
+  - Requests {partner_name} has made ("{partner_name} asked {user_name} to...")
+  - Commitments {user_name} made ("{user_name} said they would...")
+  - Therapist recommendations for {user_name} ("Therapist suggested {user_name}...")
 
-- for_taylor: Things Taylor should work on. Include:
-  - Requests Nathan has made ("Nathan asked Taylor to...")
-  - Commitments Taylor made ("Taylor said she would...")
-  - Therapist recommendations for Taylor ("Erica suggested Taylor...")
+- for_partner: Things {partner_name} should work on. Include:
+  - Requests {user_name} has made ("{user_name} asked {partner_name} to...")
+  - Commitments {partner_name} made ("{partner_name} said they would...")
+  - Therapist recommendations for {partner_name} ("Therapist suggested {partner_name}...")
 
 **PATTERNS:**
 - growth_patterns: Concrete improvements observed over time (with examples)
@@ -686,7 +690,7 @@ CATEGORIES TO EXTRACT:
 
 RULES:
 - Be specific and actionable, not generic advice
-- For for_me/for_taylor: Quote or closely paraphrase what was actually said/requested
+- For for_me/for_partner: Quote or closely paraphrase what was actually said/requested
 - Reference specific situations from the notes
 - Keep each insight to 1-2 sentences
 - Extract 3-5 insights per category
@@ -699,13 +703,13 @@ Return ONLY valid JSON (no markdown, no explanation):
   "insights": [
     {{
       "category": "for_me",
-      "text": "Taylor asked for more proactive communication about plans - let her know schedule changes before they happen",
-      "source_title": "20230115 Couples Therapy with Erica"
+      "text": "{partner_name} asked for more proactive communication about plans - let them know schedule changes before they happen",
+      "source_title": "20230115 Couples Therapy"
     }},
     {{
-      "category": "for_taylor",
-      "text": "Nathan asked for space to decompress after work before diving into heavy topics",
-      "source_title": "20230115 Couples Therapy with Erica"
+      "category": "for_partner",
+      "text": "{user_name} asked for space to decompress after work before diving into heavy topics",
+      "source_title": "20230115 Couples Therapy"
     }},
     {{
       "category": "ai_suggestions",

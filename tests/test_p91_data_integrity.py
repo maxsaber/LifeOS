@@ -216,7 +216,7 @@ class TestR3VaultLinks:
         if row:
             source_id = row[0]
             # Extract vault name and relative path
-            # Path format: /Users/nathanramia/Notes 2025/...
+            # Path format: /Users/<username>/Notes 2025/...
             # Obsidian URL: obsidian://open?vault=Notes%202025&file=...
 
             path = Path(source_id)
@@ -458,7 +458,7 @@ class TestR7CanonicalContact:
 
 
 class TestR8Top10Verification:
-    """R8: Top 10 Verification - Not overfitting to Taylor."""
+    """R8: Top 10 Verification - Not overfitting to a single contact."""
 
     def test_top_10_all_have_interactions(self):
         """Top 10 people by interaction count must all have real interactions."""

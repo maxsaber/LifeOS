@@ -4513,8 +4513,8 @@
             border-radius: 10px 10px 0 0;
         }
 
-        .insight-panel-nathan::before { background: var(--rel-warm); }
-        .insight-panel-taylor::before { background: #9b59b6; }
+        .insight-panel-user::before { background: var(--rel-warm); }
+        .insight-panel-partner::before { background: #9b59b6; }
         .insight-panel-ai::before { background: linear-gradient(90deg, #f1c40f, #f39c12); }
         .insight-panel-growth::before { background: var(--rel-teal); }
         .insight-panel-themes::before { background: #e67e22; }
@@ -7750,12 +7750,12 @@
                             <!-- Therapy Insights - Row 1: Actionable Commitments -->
                             <div class="insights-section-label">Therapy Insights - Commitments</div>
                             <div class="insights-grid-3col">
-                                <!-- For Nathan -->
-                                <div class="insight-panel insight-panel-nathan">
+                                <!-- For Me -->
+                                <div class="insight-panel insight-panel-user">
                                     <div class="insight-panel-header">
                                         <div class="insight-panel-title-group">
                                             <span class="insight-panel-icon">🎯</span>
-                                            <span class="insight-panel-title">For Nathan</span>
+                                            <span class="insight-panel-title">For Me</span>
                                         </div>
                                         <button class="insight-panel-refresh" onclick="refreshInsightCategory('for_me')" title="Refresh">↻</button>
                                     </div>
@@ -7765,17 +7765,17 @@
                                     </div>
                                 </div>
 
-                                <!-- For Taylor -->
-                                <div class="insight-panel insight-panel-taylor">
+                                <!-- For Partner -->
+                                <div class="insight-panel insight-panel-partner">
                                     <div class="insight-panel-header">
                                         <div class="insight-panel-title-group">
                                             <span class="insight-panel-icon">💜</span>
-                                            <span class="insight-panel-title">For Taylor</span>
+                                            <span class="insight-panel-title">For Partner</span>
                                         </div>
-                                        <button class="insight-panel-refresh" onclick="refreshInsightCategory('for_taylor')" title="Refresh">↻</button>
+                                        <button class="insight-panel-refresh" onclick="refreshInsightCategory('for_partner')" title="Refresh">↻</button>
                                     </div>
-                                    <div class="insight-panel-subtitle">Things she's working on</div>
-                                    <div class="insight-panel-content" id="insightsForTaylor">
+                                    <div class="insight-panel-subtitle">Things they're working on</div>
+                                    <div class="insight-panel-content" id="insightsForPartner">
                                         <div class="insight-panel-loading">Loading...</div>
                                     </div>
                                 </div>
@@ -7868,8 +7868,8 @@
                                         <div class="tone-view-dropdown" style="position: relative;">
                                             <select id="toneViewSelect" onchange="setToneViewMode(this.value)" style="font-size: 0.7rem; padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-subtle); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer;">
                                                 <option value="combined">Shared Tone</option>
-                                                <option value="nathan">My Tone</option>
-                                                <option value="taylor">Taylor's Tone</option>
+                                                <option value="user">My Tone</option>
+                                                <option value="partner">Partner's Tone</option>
                                                 <option value="both">Both</option>
                                             </select>
                                         </div>
@@ -11086,16 +11086,10 @@
                 await loadFamilyMembers();
             }
 
-            // If no family members selected, use defaults (Bill, Patricia, Malea, Anna)
+            // If no family members selected, use all available
             if (selectedFamilyIds.length === 0 && familyMembers.length > 0) {
-                // Filter to only include defaults that exist in the family members list
-                selectedFamilyIds = DEFAULT_FAMILY_IDS.filter(id =>
-                    familyMembers.some(m => m.id === id)
-                );
-                // Fall back to all if none of the defaults exist
-                if (selectedFamilyIds.length === 0) {
-                    selectedFamilyIds = familyMembers.map(m => m.id);
-                }
+                // Default to all family members
+                selectedFamilyIds = familyMembers.map(m => m.id);
             }
 
             // Render dropdown AFTER defaults are set so checkboxes reflect selection
@@ -11479,7 +11473,7 @@
         // Category to container ID mapping
         const INSIGHT_PANEL_IDS = {
             'for_me': 'insightsForMe',
-            'for_taylor': 'insightsForTaylor',
+            'for_partner': 'insightsForPartner',
             'ai_suggestions': 'insightsAiSuggestions',
             'growth_patterns': 'insightsGrowth',
             'recurring_themes': 'insightsThemes',
@@ -11487,6 +11481,7 @@
             // Legacy mappings - merge into new categories for display
             'focus_areas': 'insightsForMe',
             'action_items': 'insightsForMe',
+            'for_taylor': 'insightsForPartner',  // Legacy support
         };
 
         // Load relationship insights from therapy notes
@@ -11552,7 +11547,7 @@
             });
 
             // Render each category into its panel
-            const mainCategories = ['for_me', 'for_taylor', 'ai_suggestions', 'growth_patterns', 'recurring_themes', 'relationship_strengths'];
+            const mainCategories = ['for_me', 'for_partner', 'ai_suggestions', 'growth_patterns', 'recurring_themes', 'relationship_strengths'];
 
             mainCategories.forEach(category => {
                 const containerId = INSIGHT_PANEL_IDS[category];
@@ -11568,7 +11563,7 @@
                 }
             });
 
-            // Handle legacy categories - merge into For Nathan panel
+            // Handle legacy categories - merge into For Me panel
             const legacyCategories = ['focus_areas', 'action_items'];
             const forMeContainer = document.getElementById('insightsForMe');
             if (forMeContainer) {
@@ -11672,10 +11667,10 @@
             }
         }
 
-        // Tone view mode: 'nathan', 'taylor', 'combined', 'both'
+        // Tone view mode: 'user', 'partner', 'combined', 'both'
         let toneViewMode = 'combined';
 
-        // Load tone analysis (detailed version with separate Nathan/Taylor scores)
+        // Load tone analysis (detailed version with separate user/partner scores)
         async function loadToneAnalysis() {
             const container = document.getElementById('toneTimelineViz');
             try {
@@ -11717,11 +11712,11 @@
 
             // Calculate nuanced metrics
             let sentByMe = 0;
-            let sentByTaylor = 0;
+            let sentByPartner = 0;
             let conversationsStartedByMe = 0;
-            let conversationsStartedByTaylor = 0;
+            let conversationsStartedByPartner = 0;
             let myResponseCount = 0;
-            let taylorResponseCount = 0;
+            let partnerResponseCount = 0;
 
             // Gap threshold for "new conversation" (4 hours in ms)
             const CONVERSATION_GAP = 4 * 60 * 60 * 1000;
@@ -11731,13 +11726,13 @@
 
             iMessages.forEach((msg, idx) => {
                 const isFromMe = msg.title && msg.title.startsWith('→');
-                const isFromTaylor = msg.title && msg.title.startsWith('←');
+                const isFromPartner = msg.title && msg.title.startsWith('←');
                 const timestamp = new Date(msg.timestamp);
 
                 if (isFromMe) {
                     sentByMe++;
-                } else if (isFromTaylor) {
-                    sentByTaylor++;
+                } else if (isFromPartner) {
+                    sentByPartner++;
                 }
 
                 // Detect conversation starts (first message after gap or first ever)
@@ -11745,26 +11740,26 @@
                     // New conversation
                     if (isFromMe) {
                         conversationsStartedByMe++;
-                    } else if (isFromTaylor) {
-                        conversationsStartedByTaylor++;
+                    } else if (isFromPartner) {
+                        conversationsStartedByPartner++;
                     }
                 } else {
                     // Same conversation - track responses (sender changed)
                     if (lastSender !== null) {
-                        if (isFromMe && lastSender === 'taylor') {
+                        if (isFromMe && lastSender === 'partner') {
                             myResponseCount++;
-                        } else if (isFromTaylor && lastSender === 'me') {
-                            taylorResponseCount++;
+                        } else if (isFromPartner && lastSender === 'me') {
+                            partnerResponseCount++;
                         }
                     }
                 }
 
                 lastTimestamp = timestamp;
-                lastSender = isFromMe ? 'me' : (isFromTaylor ? 'taylor' : lastSender);
+                lastSender = isFromMe ? 'me' : (isFromPartner ? 'partner' : lastSender);
             });
 
-            const totalMessages = sentByMe + sentByTaylor;
-            const totalConversations = conversationsStartedByMe + conversationsStartedByTaylor;
+            const totalMessages = sentByMe + sentByPartner;
+            const totalConversations = conversationsStartedByMe + conversationsStartedByPartner;
 
             const meMessagePercent = totalMessages > 0 ? Math.round((sentByMe / totalMessages) * 100) : 50;
             const meInitiatePercent = totalConversations > 0 ? Math.round((conversationsStartedByMe / totalConversations) * 100) : 50;
@@ -11786,13 +11781,13 @@
                                 <div class="dynamics-bar-value">${conversationsStartedByMe}</div>
                             </div>
                             <div class="dynamics-bar-container">
-                                <div class="dynamics-bar-label">Taylor</div>
+                                <div class="dynamics-bar-label">Partner</div>
                                 <div class="dynamics-bar">
                                     <div class="dynamics-bar-fill" style="width: ${100 - meInitiatePercent}%; background: ${initiateBalanceColor}; opacity: 0.6;"></div>
                                 </div>
-                                <div class="dynamics-bar-value">${conversationsStartedByTaylor}</div>
+                                <div class="dynamics-bar-value">${conversationsStartedByPartner}</div>
                             </div>
-                            <div class="dynamics-insight">${meInitiatePercent > 55 ? 'You reach out more often' : meInitiatePercent < 45 ? 'Taylor reaches out more often' : 'Balanced initiation'}</div>
+                            <div class="dynamics-insight">${meInitiatePercent > 55 ? 'You reach out more often' : meInitiatePercent < 45 ? 'Partner reaches out more often' : 'Balanced initiation'}</div>
                         </div>
                         <div class="dynamics-metric">
                             <div class="dynamics-label">Message Volume</div>
@@ -11804,13 +11799,13 @@
                                 <div class="dynamics-bar-value">${sentByMe.toLocaleString()}</div>
                             </div>
                             <div class="dynamics-bar-container">
-                                <div class="dynamics-bar-label">Taylor</div>
+                                <div class="dynamics-bar-label">Partner</div>
                                 <div class="dynamics-bar">
                                     <div class="dynamics-bar-fill" style="width: ${100 - meMessagePercent}%; background: ${messageBalanceColor}; opacity: 0.6;"></div>
                                 </div>
-                                <div class="dynamics-bar-value">${sentByTaylor.toLocaleString()}</div>
+                                <div class="dynamics-bar-value">${sentByPartner.toLocaleString()}</div>
                             </div>
-                            <div class="dynamics-insight">${Math.abs(meMessagePercent - 50) <= 10 ? 'Well balanced conversation' : meMessagePercent > 50 ? 'You send more messages' : 'Taylor sends more messages'}</div>
+                            <div class="dynamics-insight">${Math.abs(meMessagePercent - 50) <= 10 ? 'Well balanced conversation' : meMessagePercent > 50 ? 'You send more messages' : 'Partner sends more messages'}</div>
                         </div>
                     </div>
                     <div class="dynamics-summary">
@@ -11845,8 +11840,8 @@
 
             // Helper to get score based on view mode
             const getScore = (t) => {
-                if (toneViewMode === 'nathan') return t.nathan_score ?? t.score ?? 50;
-                if (toneViewMode === 'taylor') return t.taylor_score ?? t.score ?? 50;
+                if (toneViewMode === 'user') return t.user_score ?? t.score ?? 50;
+                if (toneViewMode === 'partner') return t.partner_score ?? t.score ?? 50;
                 if (toneViewMode === 'combined') return t.combined_score ?? t.score ?? 50;
                 return t.combined_score ?? t.score ?? 50;
             };
@@ -11875,8 +11870,8 @@
             };
 
             // Colors
-            const nathanColor = '#3b82f6';  // Blue
-            const taylorColor = '#ec4899';  // Pink
+            const userColor = '#3b82f6';  // Blue
+            const partnerColor = '#ec4899';  // Pink
             const combinedColor = '#8b5cf6'; // Purple
 
             // Build lines based on view mode
@@ -11884,18 +11879,18 @@
             let legendItems = [];
 
             if (toneViewMode === 'both') {
-                lines.push({ points: buildPoints(t => t.nathan_score ?? 50), color: nathanColor, label: 'Nathan' });
-                lines.push({ points: buildPoints(t => t.taylor_score ?? 50), color: taylorColor, label: 'Taylor' });
-                legendItems = [{ color: nathanColor, label: 'Nathan' }, { color: taylorColor, label: 'Taylor' }];
+                lines.push({ points: buildPoints(t => t.user_score ?? 50), color: userColor, label: 'Me' });
+                lines.push({ points: buildPoints(t => t.partner_score ?? 50), color: partnerColor, label: 'Partner' });
+                legendItems = [{ color: userColor, label: 'Me' }, { color: partnerColor, label: 'Partner' }];
             } else {
-                const color = toneViewMode === 'nathan' ? nathanColor : toneViewMode === 'taylor' ? taylorColor : combinedColor;
+                const color = toneViewMode === 'user' ? userColor : toneViewMode === 'partner' ? partnerColor : combinedColor;
                 lines.push({ points: buildPoints(getScore), color, label: toneViewMode });
             }
 
             // Averages
-            const nathanAvg = data.nathan_average ?? 50;
-            const taylorAvg = data.taylor_average ?? 50;
-            const combinedAvg = (nathanAvg + taylorAvg) / 2;
+            const userAvg = data.user_average ?? 50;
+            const partnerAvg = data.partner_average ?? 50;
+            const combinedAvg = (userAvg + partnerAvg) / 2;
 
             // Grid lines
             const gridLines = [0, 25, 50, 75, 100].map(val => {
@@ -11940,9 +11935,9 @@
 
             // Summary
             let summaryText = '';
-            if (toneViewMode === 'nathan') summaryText = `Nathan avg: ${Math.round(nathanAvg)} · Trend: ${data.nathan_trend?.replace('-', ' ') || 'variable'}`;
-            else if (toneViewMode === 'taylor') summaryText = `Taylor avg: ${Math.round(taylorAvg)} · Trend: ${data.taylor_trend?.replace('-', ' ') || 'variable'}`;
-            else if (toneViewMode === 'both') summaryText = `Nathan: ${Math.round(nathanAvg)} · Taylor: ${Math.round(taylorAvg)}`;
+            if (toneViewMode === 'user') summaryText = `My avg: ${Math.round(userAvg)} · Trend: ${data.user_trend?.replace('-', ' ') || 'variable'}`;
+            else if (toneViewMode === 'partner') summaryText = `Partner avg: ${Math.round(partnerAvg)} · Trend: ${data.partner_trend?.replace('-', ' ') || 'variable'}`;
+            else if (toneViewMode === 'both') summaryText = `Me: ${Math.round(userAvg)} · Partner: ${Math.round(partnerAvg)}`;
             else summaryText = `Shared avg: ${Math.round(combinedAvg)} · Trend: ${data.combined_trend?.replace('-', ' ') || 'variable'}`;
 
             container.innerHTML = `

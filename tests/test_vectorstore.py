@@ -59,7 +59,7 @@ class TestVectorStore:
             "file_name": "test.md",
             "modified_date": datetime.now().isoformat(),
             "note_type": "Personal",
-            "people": ["Nathan"],
+            "people": ["John"],
             "tags": ["test"]
         }
 
@@ -203,7 +203,7 @@ class TestVectorStore:
             "file_name": "meta.md",
             "modified_date": "2025-01-05T10:00:00",
             "note_type": "Work",
-            "people": ["Alex", "Madi"],
+            "people": ["Alex", "Sarah"],
             "tags": ["meeting", "budget"]
         }
 

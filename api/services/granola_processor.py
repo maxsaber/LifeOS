@@ -23,76 +23,114 @@ import frontmatter
 logger = logging.getLogger(__name__)
 
 
-# Classification patterns from PRD P0.1
-# FILENAME_RULES are checked first against filename only - higher priority
-FILENAME_RULES = [
-    {
-        "name": "finance_filename",
-        "patterns": [
-            r"\bmoney\s*meeting\b", r"\bbudget\b", r"\bfinance\b",
-            r"\bfinancial\b", r"\brevenue\b"
-        ],
-        "destination": "Work/ML/Finance",
-        "tags": ["meeting", "work", "ml", "finance"]
-    },
-    {
-        "name": "therapy_filename",
-        "patterns": [
-            r"\btherapy\b", r"\bAmy\s*Morgan\b",
-            r"\bErica\s*Turner\b", r"\bErika\s*Turner\b"
-        ],
-        "destination": "Personal/Self-Improvement/Therapy and coaching",
-        "tags": ["meeting", "therapy", "personal"]
-    },
-]
+def _get_work_path() -> str:
+    """Get current work path from settings."""
+    try:
+        from config.settings import settings
+        return settings.current_work_path.rstrip("/") if settings.current_work_path else "Work"
+    except Exception:
+        return "Work"
 
-# CONTENT_RULES are checked against content - lower priority, more specific
-CLASSIFICATION_RULES = [
-    {
-        "name": "therapy",
-        "patterns": [
-            r"\btherapy\s*session\b", r"\btherapist\b",
-            r"\bAmy\s*Morgan\b", r"\bErica\s*Turner\b", r"\bErika\s*Turner\b",
-            r"\bcouples\s*therapy\b", r"\bindividual\s*therapy\b"
-        ],
-        "destination": "Personal/Self-Improvement/Therapy and coaching",
-        "tags": ["meeting", "therapy", "personal"]
-    },
-    # NOTE: Finance classification removed from content rules - was too aggressive.
-    # Meetings that merely mentioned "budget planning" in a section were being
-    # miscategorized. Finance is now detected via FILENAME_RULES only (if the
-    # meeting filename contains "budget", "finance", etc., it's about finance).
-    {
-        "name": "hiring",
-        "patterns": [
-            r"\bjob\s*interview\b", r"\bhiring\s*decision\b",
-            r"\bjob\s*description\b", r"\bcandidate\s*interview\b",
-            r"\brecruitment\s*for\s*(?:position|role)\b", r"\bresume\s*review\b",
-            r"\binterview\s*panel\b", r"\binterview\s*feedback\b"
-        ],
-        "destination": "Work/ML/People/Hiring",
-        "tags": ["meeting", "work", "ml", "hiring"]
-    },
-    {
-        "name": "strategy",
-        "patterns": [
-            r"\bstrategy\s*meeting\b", r"\bstrategic\s*planning\b",
-            r"\bquarterly\s*planning\b", r"\bgoal\s*setting\b",
-            r"\bOKR\s*review\b", r"\broadmap\s*planning\b"
-        ],
-        "destination": "Work/ML/Strategy and planning",
-        "tags": ["meeting", "work", "ml", "strategy"]
-    },
-    {
-        "name": "union",
-        "patterns": [
-            r"\bunion\s*meeting\b", r"\bunion\s*steward\b",
-            r"\bcollective\s*bargaining\b", r"\bgrievance\b"
-        ],
-        "destination": "Work/ML/People/Union",
-        "tags": ["meeting", "work", "ml"]
-    },
-]
+
+def _get_therapist_patterns() -> list[str]:
+    """Get therapist name patterns from settings."""
+    try:
+        from config.settings import settings
+        if settings.therapist_patterns:
+            return [rf"\b{name}\b" for name in settings.therapist_patterns.split("|")]
+    except Exception:
+        pass
+    return []
+
+
+def _build_filename_rules() -> list[dict]:
+    """Build filename rules dynamically using settings."""
+    work_path = _get_work_path()
+    therapist_patterns = _get_therapist_patterns()
+
+    rules = [
+        {
+            "name": "finance_filename",
+            "patterns": [
+                r"\bmoney\s*meeting\b", r"\bbudget\b", r"\bfinance\b",
+                r"\bfinancial\b", r"\brevenue\b"
+            ],
+            "destination": f"{work_path}/Finance",
+            "tags": ["meeting", "work", "finance"]
+        },
+    ]
+
+    # Add therapy filename rule if therapist patterns configured
+    therapy_patterns = [r"\btherapy\b"] + therapist_patterns
+    if therapy_patterns:
+        rules.append({
+            "name": "therapy_filename",
+            "patterns": therapy_patterns,
+            "destination": "Personal/Self-Improvement/Therapy and coaching",
+            "tags": ["meeting", "therapy", "personal"]
+        })
+
+    return rules
+
+
+def _build_content_rules() -> list[dict]:
+    """Build content classification rules dynamically using settings."""
+    work_path = _get_work_path()
+    therapist_patterns = _get_therapist_patterns()
+
+    # Base therapy patterns
+    therapy_content_patterns = [
+        r"\btherapy\s*session\b", r"\btherapist\b",
+        r"\bcouples\s*therapy\b", r"\bindividual\s*therapy\b"
+    ] + therapist_patterns
+
+    return [
+        {
+            "name": "therapy",
+            "patterns": therapy_content_patterns,
+            "destination": "Personal/Self-Improvement/Therapy and coaching",
+            "tags": ["meeting", "therapy", "personal"]
+        },
+        # NOTE: Finance classification removed from content rules - was too aggressive.
+        # Meetings that merely mentioned "budget planning" in a section were being
+        # miscategorized. Finance is now detected via FILENAME_RULES only (if the
+        # meeting filename contains "budget", "finance", etc., it's about finance).
+        {
+            "name": "hiring",
+            "patterns": [
+                r"\bjob\s*interview\b", r"\bhiring\s*decision\b",
+                r"\bjob\s*description\b", r"\bcandidate\s*interview\b",
+                r"\brecruitment\s*for\s*(?:position|role)\b", r"\bresume\s*review\b",
+                r"\binterview\s*panel\b", r"\binterview\s*feedback\b"
+            ],
+            "destination": f"{work_path}/People/Hiring",
+            "tags": ["meeting", "work", "hiring"]
+        },
+        {
+            "name": "strategy",
+            "patterns": [
+                r"\bstrategy\s*meeting\b", r"\bstrategic\s*planning\b",
+                r"\bquarterly\s*planning\b", r"\bgoal\s*setting\b",
+                r"\bOKR\s*review\b", r"\broadmap\s*planning\b"
+            ],
+            "destination": f"{work_path}/Strategy and planning",
+            "tags": ["meeting", "work", "strategy"]
+        },
+        {
+            "name": "union",
+            "patterns": [
+                r"\bunion\s*meeting\b", r"\bunion\s*steward\b",
+                r"\bcollective\s*bargaining\b", r"\bgrievance\b"
+            ],
+            "destination": f"{work_path}/People/Union",
+            "tags": ["meeting", "work"]
+        },
+    ]
+
+
+# Build rules at module load time
+FILENAME_RULES = _build_filename_rules()
+CLASSIFICATION_RULES = _build_content_rules()
 
 
 def _get_personal_relationship_rule() -> Optional[dict]:
@@ -216,9 +254,9 @@ class GranolaProcessor:
 
         Priority order:
         1. Filename-based rules (highest priority)
-        2. 1-1 meetings with known ML people
+        2. 1-1 meetings with known colleagues
         3. Content-based rules
-        4. Default (Work/ML/Meetings)
+        4. Default (Work/Meetings)
 
         Args:
             content: Full note content
@@ -227,6 +265,10 @@ class GranolaProcessor:
         Returns:
             Tuple of (destination_folder, tags, classification_rationale)
         """
+        from config.settings import settings
+        work_path = _get_work_path()
+        user_name = settings.user_name.lower() if settings.user_name else "user"
+
         filename_lower = filename.lower()
         content_lower = content.lower()
 
@@ -237,23 +279,23 @@ class GranolaProcessor:
                     rationale = f"Filename matched '{pattern}' for category '{rule['name']}'"
                     return rule["destination"], rule["tags"], rationale
 
-        # 2. Check for 1-1 meetings with ML people (based on filename)
+        # 2. Check for 1-1 meetings with colleagues (based on filename)
         for person in CURRENT_COLLEAGUES:
             person_lower = person.lower()
             patterns = [
-                rf"{person_lower}.*nathan",
-                rf"nathan.*{person_lower}",
-                rf"{person_lower}\s*x\s*nathan",
-                rf"nathan\s*x\s*{person_lower}",
-                rf"{person_lower}[-/]nathan",
-                rf"nathan[-/]{person_lower}",
+                rf"{person_lower}.*{user_name}",
+                rf"{user_name}.*{person_lower}",
+                rf"{person_lower}\s*x\s*{user_name}",
+                rf"{user_name}\s*x\s*{person_lower}",
+                rf"{person_lower}[-/]{user_name}",
+                rf"{user_name}[-/]{person_lower}",
                 rf"^{person_lower}\b",  # Starts with person name
             ]
             for pattern in patterns:
                 if re.search(pattern, filename_lower):
                     return (
-                        "Work/ML/Meetings",
-                        ["meeting", "work", "ml", "1-1"],
+                        f"{work_path}/Meetings",
+                        ["meeting", "work", "1-1"],
                         f"1-1 meeting with {person}"
                     )
 
@@ -264,10 +306,10 @@ class GranolaProcessor:
                     rationale = f"Content matched '{pattern}' for category '{rule['name']}'"
                     return rule["destination"], rule["tags"], rationale
 
-        # 4. Default: Work/ML/Meetings for any other meeting notes
+        # 4. Default: Work meetings folder
         return (
-            "Work/ML/Meetings",
-            ["meeting", "work", "ml"],
+            f"{work_path}/Meetings",
+            ["meeting", "work"],
             "Default classification - work meeting"
         )
 

@@ -190,26 +190,30 @@ class TestDataFlowDiagnosis:
         # This helps diagnose the issue
         assert len(person_ids) > 0, "No person_ids found in interactions"
 
-    def test_check_for_taylor_by_any_identifier(self):
+    def test_check_for_partner_by_any_identifier(self):
         """
-        Search interactions for Taylor by any known identifier.
+        Search interactions for partner by any known identifier.
 
-        This helps diagnose if Taylor's interactions exist but under a different person_id.
+        This helps diagnose if partner's interactions exist but under a different person_id.
+        Requires LIFEOS_PARTNER_NAME to be set in environment.
         """
         import sqlite3
         from api.services.interaction_store import get_interaction_db_path
+        from config.settings import settings
+
+        partner_name = settings.partner_name if settings.partner_name else "Partner"
 
         conn = sqlite3.connect(get_interaction_db_path())
 
-        # Check if there's a title or snippet mentioning Taylor
+        # Check if there's a title or snippet mentioning partner
         cursor = conn.execute("""
             SELECT person_id, title, source_type, timestamp
             FROM interactions
-            WHERE title LIKE '%Taylor%' OR title LIKE '%Tay%'
+            WHERE title LIKE ? OR title LIKE ?
             LIMIT 5
-        """)
-        taylor_mentions = cursor.fetchall()
+        """, (f'%{partner_name}%', f'%{partner_name[:3]}%'))
+        partner_mentions = cursor.fetchall()
         conn.close()
 
-        print(f"Interactions mentioning Taylor in title: {taylor_mentions}")
+        print(f"Interactions mentioning partner in title: {partner_mentions}")
         # This is diagnostic - doesn't fail

@@ -124,8 +124,8 @@ class TestDiscoverFromCalendarDirect:
             person_store = MagicMock()
             me = PersonEntity(
                 id="me-uuid",
-                canonical_name="Nathan",
-                emails=["nathan@example.com"],
+                canonical_name="John",
+                emails=["john@example.com"],
             )
             other = PersonEntity(
                 id="other-uuid",

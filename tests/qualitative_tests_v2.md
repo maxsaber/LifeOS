@@ -176,12 +176,12 @@
 ---
 
 ### 4.2 Comparing Interactions
-**Query:** "Who have I been in touch with more - Kevin or Madi?"
+**Query:** "Who have I been in touch with more - Kevin or Sarah?"
 
 **Expected Sources:**
 | Source | Query/Filter | Time Range |
 |--------|-------------|------------|
-| People | briefings for Kevin and Madi | Interaction counts |
+| People | briefings for Kevin and Sarah | Interaction counts |
 | Calendar | count meetings with each | Last 90 days |
 | Gmail | count threads with each | Last 90 days |
 

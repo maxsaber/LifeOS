@@ -321,7 +321,7 @@ Get relationship insights and patterns extracted from therapy notes and conversa
 }
 ```
 
-**Categories:** focus_areas, recurring_themes, relationship_strengths, growth_patterns, for_me, for_taylor, ai_suggestions
+**Categories:** focus_areas, recurring_themes, relationship_strengths, growth_patterns, for_me, for_partner, ai_suggestions
 
 ### GET /api/crm/people/{id}/strength-breakdown
 

@@ -16,8 +16,8 @@ This implementation addresses the integration gaps identified in the audit:
 ---
 
 ## Key IDs Referenced
-- Nathan Ramia: `3f41e143-719f-4dc9-a9f1-389b2db5b166`
-- Taylor Walker: `cb93e7bd-036c-4ef5-adb9-34a9147c4984`
+- User: `<user-uuid>` (your PersonEntity ID)
+- Partner: `<partner-uuid>` (your partner's PersonEntity ID)
 
 ---
 
@@ -170,11 +170,11 @@ Added context block to synthesis prompt for people queries:
 
 ### Briefing Endpoint
 ```bash
-curl "http://localhost:8000/api/briefing/Taylor%20Walker" | jq '.metadata'
+curl "http://localhost:8000/api/briefing/Jane%20Doe" | jq '.metadata'
 ```
 Returns:
 - `relationship_strength`: 100.0
-- `aliases`: ["Tay", "Taylor Walker", "Taylor", ...]
+- `aliases`: ["Jane", "Jane Doe", "JD", ...]
 - `facts_count`: 11
 
 ### MCP Tools
@@ -219,4 +219,4 @@ Not implemented in this phase:
 - Source skipping based on entity metadata (email_count, meeting_count)
 - Channel-aware source ordering
 - Post-retrieval confidence check with search expansion
-- Migration script for associating Taylor's relationship facts with Nathan
+- Migration script for associating partner's relationship facts with user

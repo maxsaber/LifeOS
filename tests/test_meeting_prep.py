@@ -47,7 +47,7 @@ class TestHelperFunctions:
 
     def test_normalize_title_removes_date(self):
         """Should remove date patterns from title."""
-        assert "2026-01-28" not in _normalize_title_for_search("1:1 with Yoni - 2026-01-28")
+        assert "2026-01-28" not in _normalize_title_for_search("1:1 with Alex - 2026-01-28")
         assert "2026/01/28" not in _normalize_title_for_search("Meeting 2026/01/28")
 
     def test_normalize_title_removes_temporal_words(self):
@@ -56,9 +56,9 @@ class TestHelperFunctions:
         assert "weekly" not in result.lower()
 
     def test_normalize_title_converts_hyphenated_names(self):
-        """Should convert Nathan-Brandon to Nathan Brandon."""
-        result = _normalize_title_for_search("Nathan-Brandon")
-        assert result == "Nathan Brandon"
+        """Should convert John-Bob to John Bob."""
+        result = _normalize_title_for_search("John-Bob")
+        assert result == "John Bob"
 
     def test_extract_person_names_from_attendees(self):
         """Should extract names from attendee list."""
@@ -70,16 +70,16 @@ class TestHelperFunctions:
     def test_extract_person_names_from_title(self):
         """Should extract names from 'with X' pattern."""
         attendees = []
-        names = _extract_person_names(attendees, "1:1 with Yoni")
-        assert "Yoni" in names
+        names = _extract_person_names(attendees, "1:1 with Alex")
+        assert "Alex" in names
 
     def test_extract_person_names_deduplicates(self):
         """Should deduplicate names."""
-        attendees = ["yoni@example.com", "Yoni"]
-        names = _extract_person_names(attendees, "Meeting with Yoni")
-        # Should have Yoni only once
-        yoni_count = sum(1 for n in names if "yoni" in n.lower())
-        assert yoni_count == 1
+        attendees = ["alex@example.com", "Alex"]
+        names = _extract_person_names(attendees, "Meeting with Alex")
+        # Should have Alex only once
+        alex_count = sum(1 for n in names if "alex" in n.lower())
+        assert alex_count == 1
 
 
 class TestFindPeopleNotes:
@@ -90,16 +90,16 @@ class TestFindPeopleNotes:
         mock_search = MagicMock()
         mock_search.search.return_value = [
             {
-                "file_path": "/vault/Work/ML/People/Yoni Rechtman.md",
-                "file_name": "Yoni Rechtman.md",
-                "content": "Yoni is the director...",
+                "file_path": "/vault/Work/ML/People/Alex Rechtman.md",
+                "file_name": "Alex Rechtman.md",
+                "content": "Alex is the director...",
             }
         ]
 
-        notes = _find_people_notes(["Yoni"], mock_search)
+        notes = _find_people_notes(["Alex"], mock_search)
 
         assert len(notes) == 1
-        assert notes[0].title == "Yoni Rechtman"
+        assert notes[0].title == "Alex Rechtman"
         assert notes[0].relevance == "attendee"
         mock_search.search.assert_called()
 
@@ -110,11 +110,11 @@ class TestFindPeopleNotes:
             {
                 "file_path": "/vault/Work/ML/Meetings/meeting.md",
                 "file_name": "meeting.md",
-                "content": "Yoni attended...",
+                "content": "Alex attended...",
             }
         ]
 
-        notes = _find_people_notes(["Yoni"], mock_search)
+        notes = _find_people_notes(["Alex"], mock_search)
         assert len(notes) == 0
 
 
@@ -126,15 +126,15 @@ class TestFindPastMeetings:
         mock_search = MagicMock()
         mock_search.search.return_value = [
             {
-                "file_path": "/vault/Work/ML/Meetings/1-1s/Yoni-Nathan 20260121.md",
-                "file_name": "Yoni-Nathan 20260121.md",
+                "file_path": "/vault/Work/Meetings/1-1s/Alex-John 20260121.md",
+                "file_name": "Alex-John 20260121.md",
                 "content": "Discussed Q1 goals...",
                 "metadata": {"date": "2026-01-21"},
             }
         ]
 
         event_date = datetime(2026, 1, 28, 10, 0, tzinfo=timezone.utc)
-        notes = _find_past_meetings("1:1 with Yoni", event_date, mock_search)
+        notes = _find_past_meetings("1:1 with Alex", event_date, mock_search)
 
         assert len(notes) == 1
         assert notes[0].relevance == "past_meeting"
@@ -166,10 +166,10 @@ class TestGetMeetingPrep:
         return [
             CalendarEvent(
                 event_id="1",
-                title="1:1 with Yoni",
+                title="1:1 with Alex",
                 start_time=datetime(2026, 1, 28, 10, 0, tzinfo=timezone.utc),
                 end_time=datetime(2026, 1, 28, 10, 30, tzinfo=timezone.utc),
-                attendees=["yoni@example.com"],
+                attendees=["alex@example.com"],
                 description="Weekly sync",
                 source_account="work",
                 html_link="https://calendar.google.com/event?eid=123",
@@ -189,8 +189,8 @@ class TestGetMeetingPrep:
         """Create mock search results."""
         return [
             {
-                "file_path": "/vault/Work/ML/People/Yoni Rechtman.md",
-                "file_name": "Yoni Rechtman.md",
+                "file_path": "/vault/Work/ML/People/Alex Rechtman.md",
+                "file_name": "Alex Rechtman.md",
                 "content": "Director of Engineering",
                 "metadata": {},
             }
@@ -241,7 +241,7 @@ class TestGetMeetingPrep:
 
         meeting = result.meetings[0]
         assert meeting.event_id == "1"
-        assert meeting.title == "1:1 with Yoni"
+        assert meeting.title == "1:1 with Alex"
         assert ":" in meeting.start_time  # Time format
         assert meeting.html_link is not None
         assert isinstance(meeting.related_notes, list)
@@ -345,19 +345,19 @@ class TestMeetingPrepEndpoint:
             meetings=[
                 MeetingPrep(
                     event_id="1",
-                    title="1:1 with Yoni",
+                    title="1:1 with Alex",
                     start_time="10:00 AM",
                     end_time="10:30 AM",
                     html_link="https://calendar.google.com/event?eid=123",
-                    attendees=["yoni@example.com"],
+                    attendees=["alex@example.com"],
                     description="Weekly sync",
                     location=None,
                     is_all_day=False,
                     source_account="work",
                     related_notes=[
                         RelatedNote(
-                            title="Yoni Rechtman",
-                            path="Work/ML/People/Yoni Rechtman.md",
+                            title="Alex Rechtman",
+                            path="Work/ML/People/Alex Rechtman.md",
                             relevance="attendee",
                         )
                     ],
@@ -397,7 +397,7 @@ class TestMeetingPrepEndpoint:
             assert data["count"] == 1
 
             meeting = data["meetings"][0]
-            assert meeting["title"] == "1:1 with Yoni"
+            assert meeting["title"] == "1:1 with Alex"
             assert "related_notes" in meeting
             assert len(meeting["related_notes"]) == 1
 

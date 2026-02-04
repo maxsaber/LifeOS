@@ -110,14 +110,14 @@ type: meeting
 # Team Standup
 
 ## Attendees
-- Nathan
+- John
 - Alex
 
 ## Updates
 Everyone shared their progress.
 
 ## Action Items
-- [ ] Nathan: Send report
+- [ ] John: Send report
 """)
 
         indexer.index_all()
