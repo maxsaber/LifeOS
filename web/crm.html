@@ -8868,9 +8868,10 @@
         const SEARCH_CACHE_MAX = 10;
         const SEARCH_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
-        function getSearchCacheKey(query, dunbarFilters) {
+        function getSearchCacheKey(query, dunbarFilters, tagFilters) {
             const dunbarKey = [...dunbarFilters].sort().join(',');
-            return `${query}:${dunbarKey}`;
+            const tagKey = tagFilters ? [...tagFilters].sort().join(',') : '';
+            return `${query}:${dunbarKey}:${tagKey}`;
         }
 
         function getCachedSearch(cacheKey) {
@@ -8891,6 +8892,11 @@
                 searchCache.delete(oldest);
             }
             searchCache.set(cacheKey, { data: structuredClone(data), timestamp: Date.now() });
+        }
+
+        function clearSearchCache() {
+            searchCache.clear();
+            console.log('[Cache] Search cache cleared');
         }
 
         // Graph Weight Stats Cache - memoize weight calculations
@@ -9306,7 +9312,7 @@
             const listEl = document.getElementById('peopleList');
 
             // Build cache key from search query and dunbar filters
-            const cacheKey = getSearchCacheKey(searchQuery, peopleDunbarFilters);
+            const cacheKey = getSearchCacheKey(searchQuery, peopleDunbarFilters, peopleTagFilters);
             const cached = getCachedSearch(cacheKey);
 
             if (cached) {
@@ -9342,6 +9348,9 @@
                 const onlyOuterCircles = peopleDunbarFilters.size > 0 &&
                     [...peopleDunbarFilters].every(c => c === '5' || c === '6+');
 
+                // If tag filters are active, pass to server for filtering
+                const hasTagFilters = peopleTagFilters.size > 0 && peopleTagFilters.size < allAvailableTags.length;
+
                 const fetchPromises = searchTerms.map(term => {
                     const params = new URLSearchParams();
                     if (term) params.set('q', term);
@@ -9350,6 +9359,11 @@
                     // If only outer circles selected, filter server-side to get relevant results
                     if (onlyOuterCircles) {
                         params.set('dunbar_circles', [...peopleDunbarFilters].join(','));
+                    }
+                    // If tag filters active, filter server-side to include people outside top 300
+                    if (hasTagFilters) {
+                        params.set('tags', [...peopleTagFilters].join(','));
+                        params.set('limit', '1000');  // Increase limit for tag filtering
                     }
                     return api(`/people?${params}`);
                 });
@@ -10265,7 +10279,7 @@
             // Toggle Me Dashboard vs Person Content Grid visibility
             const meDashboard = document.getElementById('meDashboard');
             const personContentGrid = document.getElementById('personContentGrid');
-            const sourceEntitiesFooter = document.getElementById('sourceEntities');
+            const sourceEntitiesFooter = document.getElementById('sourceEntitiesFooter');
 
             // Header indicators (strength ring, dunbar circle) - hide for Me page
             const headerIndicators = document.querySelector('.header-indicators');
@@ -10927,6 +10941,12 @@
                         method: 'PATCH',
                         body: JSON.stringify({ tags })
                     });
+                    // Update local people array for filtering
+                    const localPerson = people.find(p => p.id === selectedPersonId);
+                    if (localPerson) localPerson.tags = tags;
+                    // Clear search cache so tag changes are reflected in filters
+                    clearSearchCache();
+                    collectAllTags();
                     await loadPersonDetail(selectedPersonId);
                 }
             } catch (error) {
@@ -10945,6 +10965,12 @@
                     method: 'PATCH',
                     body: JSON.stringify({ tags })
                 });
+                // Update local people array for filtering
+                const localPerson = people.find(p => p.id === selectedPersonId);
+                if (localPerson) localPerson.tags = tags;
+                // Clear search cache so tag changes are reflected in filters
+                clearSearchCache();
+                collectAllTags();
                 await loadPersonDetail(selectedPersonId);
             } catch (error) {
                 console.error('Failed to remove tag:', error);
@@ -18629,6 +18655,7 @@
 
         function updatePeopleTagFilter() {
             const checkboxes = document.querySelectorAll('#peopleTagOptions input[type="checkbox"]');
+            const prevSize = peopleTagFilters.size;
             peopleTagFilters.clear();
             checkboxes.forEach(cb => {
                 if (cb.checked) peopleTagFilters.add(cb.value);
@@ -18643,7 +18670,14 @@
                 label.textContent = `${peopleTagFilters.size} Tag${peopleTagFilters.size !== 1 ? 's' : ''}`;
             }
 
-            renderPeopleList();
+            // If tag filter changed from/to active, reload from API to get correct people
+            const wasActive = prevSize > 0 && prevSize < allAvailableTags.length;
+            const isActive = peopleTagFilters.size > 0 && peopleTagFilters.size < allAvailableTags.length;
+            if (wasActive !== isActive || isActive) {
+                loadPeople();  // Fetch from API with tag filter
+            } else {
+                renderPeopleList();  // Just re-render local data
+            }
         }
 
         function selectAllTags() {
@@ -18750,6 +18784,8 @@
 
             // Clear selection and refresh
             clearSelection();
+            // Clear search cache so tag changes are reflected in filters
+            clearSearchCache();
             // Rebuild tag filter options to include new tag
             collectAllTags();
         }
