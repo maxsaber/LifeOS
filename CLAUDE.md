@@ -2,6 +2,30 @@
 
 Critical instructions for AI agents (Claude, Cursor, Copilot, etc.) working on this codebase.
 
+---
+
+## Project Overview
+
+LifeOS is a self-hosted AI assistant that indexes personal data (notes, emails, messages) for semantic search and synthesis.
+
+**Key Concepts:**
+- **Two-tier data model**: SourceEntity (raw observations) → PersonEntity (canonical records)
+- **Hybrid search**: Vector (ChromaDB) + keyword (BM25/FTS5)
+- **Entity resolution**: Links emails/phones to canonical people
+
+**Tech Stack:**
+- FastAPI backend (port 8000)
+- ChromaDB vector store (port 8001)
+- Ollama for query routing
+- Claude API for synthesis
+
+**Documentation:**
+- [README.md](README.md) - Quick start and architecture
+- [docs/architecture/](docs/architecture/) - Technical details
+- [docs/getting-started/](docs/getting-started/) - Setup guides
+
+---
+
 # Development Workflow
 
 1. **Edit code**
@@ -133,6 +157,50 @@ Running `uvicorn api.main:app` directly causes **ghost server processes**:
 3. This creates TWO servers on different interfaces
 4. User sees different behavior via localhost vs Tailscale/network
 5. Code changes appear to "not work" because the wrong server handles requests
+
+---
+
+## Common Tasks
+
+### Check Service Health
+
+```bash
+curl http://localhost:8000/health/full | jq
+```
+
+### Search for a Person
+
+```bash
+curl "http://localhost:8000/api/crm/people?q=Name" | jq '.people[0]'
+```
+
+### Run a Search Query
+
+```bash
+curl -X POST http://localhost:8000/api/search \
+  -H "Content-Type: application/json" \
+  -d '{"query": "search terms", "top_k": 10}' | jq
+```
+
+### Trigger Vault Reindex
+
+```bash
+curl -X POST http://localhost:8000/api/admin/reindex
+```
+
+### Run Manual Sync
+
+```bash
+uv run python scripts/run_all_syncs.py --dry-run  # Preview
+uv run python scripts/run_all_syncs.py --execute --force  # Execute
+```
+
+### Debug Sync Issues
+
+```bash
+uv run python scripts/run_all_syncs.py --status
+tail -50 logs/lifeos-api-error.log
+```
 
 
 

@@ -38,19 +38,19 @@ How LifeOS ingests, stores, and resolves data from multiple sources.
 | LinkedIn Profiles | Browser Scraping | Full profile data (experience, education, skills) |
 | Granola | Folder watcher | Meeting transcripts, attendees |
 
-### Current Data Volume
+### Example Data Volume
 
-| Metric | Count |
-|--------|-------|
-| Total People (Canonical) | ~3,645 |
-| Total Source Entities | ~126,000 |
-| Total Interactions | ~167,000 |
-| Gmail (Personal) | ~33,000 emails |
-| Gmail (Work) | ~6,000 emails |
-| Calendar (Personal) | ~955 events |
-| Calendar (Work) | ~6,000 events |
-| Apple Contacts | ~1,175 contacts |
-| WhatsApp Contacts | ~1,643 contacts |
+| Metric | Example Count |
+|--------|---------------|
+| Total People (Canonical) | ~3,500+ |
+| Total Source Entities | ~125,000+ |
+| Total Interactions | ~165,000+ |
+| Gmail (Personal) | ~30,000+ emails |
+| Gmail (Work) | ~5,000+ emails |
+| Calendar (Personal) | ~1,000 events |
+| Calendar (Work) | ~5,000+ events |
+| Apple Contacts | ~1,000+ contacts |
+| WhatsApp Contacts | ~1,500+ contacts |
 
 ---
 
@@ -163,7 +163,7 @@ Configure `LIFEOS_ALERT_EMAIL` in `.env` to receive notifications when sync step
 | ChromaDB | `data/chromadb/` | Vector embeddings | Nightly reindex, File watcher |
 | ChromaDB (Slack) | `lifeos_slack` collection | Slack message vectors | Nightly Slack sync |
 | BM25 Index | `data/chromadb/bm25_index.db` | Keyword search | Nightly reindex, File watcher |
-| Vault | `~/Notes 2025/` | Primary knowledge base | User, Granola, Omi, GDoc Sync |
+| Vault | Configured via `LIFEOS_VAULT_PATH` | Primary knowledge base | User, Granola, Omi, GDoc Sync |
 | PersonEntity | `data/people_entities.json` | Resolved identities | People v2 sync, iMessage sync |
 | SourceEntity | `data/crm.db` | Raw observations | All sync scripts |
 | Interactions | `data/crm.db` | Interactions per person | People v2 sync, Slack sync |
@@ -493,8 +493,8 @@ All scheduled times use **America/New_York** (Eastern Time).
 
 **Required Environment:**
 ```bash
-SLACK_USER_TOKEN=xoxp-...  # User OAuth token with scopes: users:read, conversations.history, im:history
-SLACK_TEAM_ID=T02F5DW71LY  # Workspace ID
+SLACK_USER_TOKEN=xoxp-...      # User OAuth token with scopes: users:read, conversations.history, im:history
+SLACK_TEAM_ID=T02XXXXXXXX      # Your workspace ID
 ```
 
 **Sync Process:**
