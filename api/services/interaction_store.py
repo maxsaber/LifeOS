@@ -154,6 +154,7 @@ class Interaction:
         badges = {
             "gmail": "📧",
             "calendar": "📅",
+            "in_person": "🤝",
             "vault": "📝",
             "granola": "📝",
             "imessage": "💬",
@@ -512,6 +513,42 @@ class InteractionStore:
                 GROUP BY source_type
             """,
                 (person_id, cutoff.isoformat()),
+            )
+
+            return {row[0]: row[1] for row in cursor.fetchall()}
+        finally:
+            conn.close()
+
+    def get_interaction_counts_between(
+        self,
+        person_id: str,
+        start: datetime,
+        end: datetime,
+    ) -> dict[str, int]:
+        """
+        Get count of interactions by source type for a person within a date range.
+
+        Args:
+            person_id: PersonEntity ID
+            start: Range start (inclusive)
+            end: Range end (inclusive)
+
+        Returns:
+            Dict mapping source_type to count
+        """
+        start = _make_aware(start)
+        end = _make_aware(end)
+
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(
+                """
+                SELECT source_type, COUNT(*) as count
+                FROM interactions
+                WHERE person_id = ? AND timestamp >= ? AND timestamp <= ?
+                GROUP BY source_type
+                """,
+                (person_id, start.isoformat(), end.isoformat()),
             )
 
             return {row[0]: row[1] for row in cursor.fetchall()}
@@ -973,8 +1010,9 @@ class InteractionStore:
         count_parts = []
         if counts.get("gmail", 0):
             count_parts.append(f"📧 {counts['gmail']} emails")
-        if counts.get("calendar", 0):
-            count_parts.append(f"📅 {counts['calendar']} meetings")
+        meetings = counts.get("calendar", 0) + counts.get("in_person", 0)
+        if meetings:
+            count_parts.append(f"📅 {meetings} meetings")
         if counts.get("vault", 0) or counts.get("granola", 0):
             notes = counts.get("vault", 0) + counts.get("granola", 0)
             count_parts.append(f"📝 {notes} notes")

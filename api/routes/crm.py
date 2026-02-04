@@ -5,6 +5,7 @@ Provides comprehensive endpoints for managing people, relationships,
 and entity linking workflows.
 """
 from collections import defaultdict
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Union
@@ -16,7 +17,8 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile, File
 from pydantic import BaseModel, Field
 
 from api.services.person_entity import PersonEntity, get_person_entity_store
-from api.services.interaction_store import get_interaction_store
+from api.services.interaction_store import Interaction, get_interaction_store
+from api.services.person_stats import refresh_person_stats
 from config.people_config import InteractionConfig
 from config.settings import settings
 from api.services.source_entity import (
@@ -109,6 +111,13 @@ def _get_strength_override(person_id: str) -> float | None:
     return STRENGTH_OVERRIDES_BY_ID.get(person_id)
 
 
+def _ensure_aware(dt: datetime) -> datetime:
+    """Ensure datetime is timezone-aware in UTC."""
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
 def _is_family_member(name: str) -> bool:
     """Check if a name matches family criteria."""
     if not name:
@@ -142,6 +151,10 @@ def compute_person_category(person: PersonEntity, source_entities: list = None) 
     # 1. Check if this is "me" (the CRM owner)
     if person.id == settings.my_person_id:
         return "self"
+
+    # Manual override from stored person category (family/work/personal only)
+    if person.category in {"family", "work", "personal"}:
+        return person.category
 
     # 2. Check family membership (by name)
     if _is_family_member(person.canonical_name):
@@ -554,12 +567,34 @@ class CommitmentExtractionResponse(BaseModel):
     errors: int = 0
 
 
+class ManualEventCreateRequest(BaseModel):
+    """Request payload for logging an in-person event."""
+    title: str = Field(..., min_length=1, max_length=200)
+    occurred_at: datetime = Field(..., description="ISO timestamp when the event happened")
+    location: Optional[str] = Field(default=None, max_length=200)
+    notes: Optional[str] = Field(default=None, max_length=1000)
+    duration_minutes: Optional[int] = Field(default=None, ge=0, le=1440)
+
+
+class ManualEventResponse(BaseModel):
+    """Response after logging a manual event."""
+    status: str
+    interaction_id: str
+
+
 class PersonUpdateRequest(BaseModel):
     """Request for updating a person."""
     notes: Optional[str] = None
     tags: Optional[list[str]] = None
     category: Optional[str] = None
     manual_dunbar_circle: Optional[int] = None  # 0-7 to override, or explicit None to clear
+    canonical_name: Optional[str] = None
+    display_name: Optional[str] = None
+    company: Optional[str] = None
+    position: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    emails: Optional[list[str]] = None
+    phone_numbers: Optional[list[str]] = None
 
 
 class PersonMergeRequest(BaseModel):
@@ -854,6 +889,36 @@ async def update_person(person_id: str, request: PersonUpdateRequest):
     if request.category is not None:
         person.category = request.category
 
+    if request.canonical_name is not None:
+        person.canonical_name = request.canonical_name.strip()
+        if not person.display_name:
+            person.display_name = person.canonical_name
+
+    if request.display_name is not None:
+        person.display_name = request.display_name.strip()
+
+    if request.company is not None:
+        person.company = request.company.strip() or None
+
+    if request.position is not None:
+        person.position = request.position.strip() or None
+
+    if request.linkedin_url is not None:
+        person.linkedin_url = request.linkedin_url.strip() or None
+
+    if request.emails is not None:
+        cleaned_emails = [email.strip().lower() for email in request.emails if email and email.strip()]
+        person.emails = cleaned_emails
+
+    if request.phone_numbers is not None:
+        cleaned_numbers = [phone.strip() for phone in request.phone_numbers if phone and phone.strip()]
+        person.phone_numbers = cleaned_numbers
+        if cleaned_numbers:
+            if person.phone_primary not in cleaned_numbers:
+                person.phone_primary = cleaned_numbers[0]
+        else:
+            person.phone_primary = None
+
     # Handle manual_dunbar_circle: -1 means clear/reset to auto, 0-7 sets the circle
     if request.manual_dunbar_circle is not None:
         if request.manual_dunbar_circle == -1:
@@ -982,7 +1047,7 @@ def _recalculate_person_stats(person_id: str, int_conn, person_store) -> dict:
     }
 
     person.email_count = counts.get('gmail', 0)
-    person.meeting_count = counts.get('calendar', 0)
+    person.meeting_count = counts.get('calendar', 0) + counts.get('in_person', 0)
     person.message_count = (
         counts.get('imessage', 0) +
         counts.get('whatsapp', 0) +
@@ -1084,7 +1149,7 @@ def _recalculate_relationship_with_me(person_id: str, my_person_id: str, int_con
     last_seen = datetime.fromisoformat(row[1]).replace(tzinfo=timezone.utc) if row and row[1] else None
 
     # Calculate shared counts (interactions with this person = shared with me)
-    shared_events = counts.get('calendar', 0)
+    shared_events = counts.get('calendar', 0) + counts.get('in_person', 0)
     shared_threads = counts.get('gmail', 0)
     shared_messages = counts.get('imessage', 0)
     shared_whatsapp = counts.get('whatsapp', 0)
@@ -1755,6 +1820,7 @@ async def get_person_timeline(
 SOURCE_BADGES = {
     "gmail": "📧",
     "calendar": "📅",
+    "in_person": "🤝",
     "vault": "📝",
     "granola": "📝",
     "imessage": "💬",
@@ -2519,6 +2585,51 @@ async def extract_person_commitments(
         raise HTTPException(status_code=500, detail=f"Commitment extraction failed: {str(e)}")
 
 
+@router.post("/people/{person_id}/events/manual", response_model=ManualEventResponse)
+async def create_manual_event(person_id: str, request: ManualEventCreateRequest):
+    """
+    Log an in-person event that isn't synced from a calendar.
+
+    The event is stored as an interaction so it shows up on the timeline
+    and contributes to relationship metrics.
+    """
+    person_store = get_person_entity_store()
+    person = person_store.get_by_id(person_id)
+
+    if not person:
+        raise HTTPException(status_code=404, detail=f"Person '{person_id}' not found")
+
+    event_time = _ensure_aware(request.occurred_at)
+    title = request.title.strip() or f"In-person with {person.display_name or person.canonical_name}"
+
+    snippet_parts = []
+    if request.location:
+        snippet_parts.append(request.location.strip())
+    if request.duration_minutes:
+        snippet_parts.append(f"{request.duration_minutes} min")
+    if request.notes:
+        snippet_parts.append(request.notes.strip())
+    snippet = " · ".join(part for part in snippet_parts if part) or None
+
+    interaction = Interaction(
+        id=str(uuid.uuid4()),
+        person_id=person_id,
+        timestamp=event_time,
+        source_type="in_person",
+        title=title,
+        snippet=snippet,
+        source_link="",
+        source_id=f"manual_event:{uuid.uuid4()}",
+        created_at=datetime.now(timezone.utc),
+    )
+
+    interaction_store = get_interaction_store()
+    interaction_store.add(interaction)
+    refresh_person_stats([person_id])
+
+    return ManualEventResponse(status="created", interaction_id=interaction.id)
+
+
 @router.patch("/commitments/{commitment_id}", response_model=CommitmentResponse)
 async def update_commitment(commitment_id: str, update: CommitmentUpdate):
     """
@@ -2812,7 +2923,7 @@ async def sync_source(source_type: str):
     """
     Trigger a sync for a specific data source.
     """
-    valid_sources = {"gmail", "calendar", "slack", "contacts", "imessage", "linkedin", "vault"}
+    valid_sources = {"gmail", "calendar", "in_person", "slack", "contacts", "imessage", "linkedin", "vault"}
     if source_type not in valid_sources:
         raise HTTPException(status_code=400, detail=f"Invalid source type: {source_type}")
 
@@ -3755,7 +3866,7 @@ async def get_me_interactions(
     # Uses "vs. average" approach with personal/family interactions only
     # Counts: iMessage, WhatsApp, phone calls, calendar events, and email
     # Limited to top 25 family/personal contacts by relationship strength
-    HEALTH_INTERACTION_TYPES = {'imessage', 'whatsapp', 'phone', 'phone_call', 'calendar', 'gmail'}
+    HEALTH_INTERACTION_TYPES = {'imessage', 'whatsapp', 'phone', 'phone_call', 'calendar', 'in_person', 'gmail'}
 
     # Get top 25 family/personal contacts by relationship strength
     personal_family_people = [
@@ -3970,8 +4081,8 @@ async def get_me_interactions(
         {
             "name": "Parent Relationship",
             "person_ids": [
-                "29a732c3-2356-4f60-bf21-956b3652883a",  # Bill Ramia
-                "8205b758-a86f-456c-8c1c-ae3d3b2aa434",  # Patricia Ramia
+                "83379ad5-0ac9-4c26-ba77-b38130596cdd",  # Edward Saber
+                "21ecb3c-cd42-4312-bbd2-40736dfb78ee",  # Cheryl Saber
             ],
             "healthy_direction": "more",  # More interactions = healthier
         },

@@ -8,6 +8,8 @@ Tests are organized by endpoint group:
 - Sync health and status
 - Statistics
 """
+from datetime import datetime, timezone
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -106,6 +108,48 @@ class TestPersonTimeline:
         assert response.status_code == 200
         data = response.json()
         assert "days" in data or "total_interactions" in data
+
+
+class TestManualEvents:
+    """Tests for manual in-person event logging."""
+
+    def test_manual_event_logging_updates_timeline_and_counts(self, client, sample_person_id):
+        """POST /people/{id}/events/manual creates an interaction and updates stats."""
+        # Baseline meeting count
+        detail_resp = client.get(f"/api/crm/people/{sample_person_id}")
+        assert detail_resp.status_code == 200
+        original_meetings = detail_resp.json().get("meeting_count", 0)
+
+        occurred_at = datetime.now(timezone.utc).replace(microsecond=0)
+        payload = {
+            "title": "Test manual meeting",
+            "occurred_at": occurred_at.isoformat(),
+            "location": "LifeOS HQ",
+            "notes": "Discussed roadmap.",
+            "duration_minutes": 45,
+        }
+
+        create_resp = client.post(f"/api/crm/people/{sample_person_id}/events/manual", json=payload)
+        assert create_resp.status_code == 200
+        event_data = create_resp.json()
+        assert event_data["status"] == "created"
+        event_id = event_data["interaction_id"]
+
+        # Stats should refresh so meeting count increases
+        updated_detail = client.get(f"/api/crm/people/{sample_person_id}")
+        assert updated_detail.status_code == 200
+        updated_meetings = updated_detail.json().get("meeting_count", 0)
+        assert updated_meetings >= original_meetings + 1
+
+        # Timeline filtered to in-person events on that date should include the new entry
+        date_str = payload["occurred_at"][:10]
+        timeline_resp = client.get(
+            f"/api/crm/people/{sample_person_id}/timeline",
+            params={"source_type": "in_person", "date": date_str, "limit": 200},
+        )
+        assert timeline_resp.status_code == 200
+        timeline_items = timeline_resp.json().get("items", [])
+        assert any(item["id"] == event_id for item in timeline_items)
 
 
 class TestPersonConnections:

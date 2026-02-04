@@ -102,6 +102,10 @@ class PersonEntity:
     # Manual Dunbar circle override (0-7, or None for auto-calculated)
     # When set, this value is used instead of the calculated circle position
     manual_dunbar_circle: Optional[int] = None
+    # Auto-calculated Dunbar circle (0-7) derived from relationship strength
+    dunbar_circle: Optional[int] = None
+    # Flag for outer-perimeter contacts; computed when strength < threshold
+    is_peripheral_contact: bool = False
 
     def __post_init__(self):
         """Set display_name to canonical_name if not specified."""
@@ -293,6 +297,9 @@ class PersonEntity:
             tags=tags,
             notes=notes,
             source_entity_count=source_entity_count,
+            manual_dunbar_circle=self.manual_dunbar_circle,
+            dunbar_circle=self.dunbar_circle,
+            is_peripheral_contact=self.is_peripheral_contact,
         )
 
     def to_dict(self) -> dict:
@@ -339,6 +346,8 @@ class PersonEntity:
         data.setdefault("hidden_reason", "")
         # Handle manual Dunbar circle (default to None = auto-calculated)
         data.setdefault("manual_dunbar_circle", None)
+        data.setdefault("dunbar_circle", None)
+        data.setdefault("is_peripheral_contact", False)
         return cls(**data)
 
     @classmethod
