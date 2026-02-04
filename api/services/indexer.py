@@ -29,6 +29,7 @@ try:
         get_interaction_store,
         create_vault_interaction,
         build_obsidian_link,
+        UNDATED_SENTINEL,
     )
     from api.services.source_entity import (
         get_source_entity_store,
@@ -297,24 +298,24 @@ class IndexerService:
         if HAS_V2_PEOPLE and all_people:
             try:
                 from datetime import timezone
-                note_date_str = self._extract_note_date(path, frontmatter)
+                note_date_str = self._extract_note_date(path, frontmatter, body)
+
                 if note_date_str:
+                    # Dated note: use extracted date
                     note_date = datetime.strptime(note_date_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
                 else:
-                    # Use file creation time as fallback for undated notes
-                    # st_birthtime is more reliable than st_mtime which gets updated by syncs/backups
-                    stat = path.stat()
-                    if hasattr(stat, 'st_birthtime'):
-                        note_date = datetime.fromtimestamp(stat.st_birthtime, tz=timezone.utc)
-                    else:
-                        # Fall back to mtime on systems without birthtime (Linux)
-                        note_date = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc)
+                    # Undated note: use sentinel date so it still appears in counts
+                    # and can be shown in an "Undated" section of timeline
+                    note_date = UNDATED_SENTINEL
+                    logger.debug(f"Undated note (using sentinel date): {path.name}")
+
                 affected_person_ids = self._sync_people_to_v2(path, all_people, note_date, is_granola)
 
                 # Refresh stats for affected people (unless caller will batch refresh)
                 if affected_person_ids and not skip_stats_refresh:
                     from api.services.person_stats import refresh_person_stats
                     refresh_person_stats(list(affected_person_ids))
+
             except Exception as e:
                 logger.warning(f"Failed to sync people to v2 for {file_path}: {e}")
 
@@ -322,7 +323,7 @@ class IndexerService:
         metadata = {
             "file_path": str(path.resolve()),
             "file_name": path.name,
-            "modified_date": self._extract_note_date(path, frontmatter),
+            "modified_date": self._extract_note_date(path, frontmatter, body),
             "note_type": self._infer_note_type(path),
             "people": all_people,
             "tags": frontmatter.get("tags", []),
@@ -465,24 +466,26 @@ class IndexerService:
 
         return success_count
 
-    def _extract_note_date(self, path: Path, frontmatter: dict) -> str:
+    def _extract_note_date(self, path: Path, frontmatter: dict, body: str = "") -> str:
         """
-        Extract the actual date of the note from filename.
-
-        Only trusts date stamps in filenames since file modification times
-        are unreliable due to copy/move operations.
+        Extract note date using priority cascade.
 
         Priority:
-        1. Date patterns in filename (YYYY-MM-DD, YYYYMMDD)
-        2. Return empty string for undated files
+        1. Filename patterns (YYYY-MM-DD, YYYYMMDD)
+        2. Frontmatter fields: created, date, created_at, creation_date
+        3. Body text: "Created: ...", "Date: ..."
+        4. Return empty string (NO file timestamp fallback)
 
         Args:
             path: Path to the file
             frontmatter: Parsed frontmatter dict
+            body: Note body content (for searching date patterns)
 
         Returns:
             ISO format date string or empty string if no date found
         """
+        from api.utils.date_parser import parse_note_date
+
         filename = path.stem  # filename without extension
 
         # 1. Look for YYYY-MM-DD pattern in filename
@@ -497,7 +500,27 @@ class IndexerService:
             if 2000 <= year <= 2100 and 1 <= month <= 12 and 1 <= day <= 31:
                 return f"{year:04d}-{month:02d}-{day:02d}"
 
-        # 3. No reliable date found - return empty string
+        # 3. Frontmatter fields
+        for field in ['created', 'date', 'created_at', 'creation_date']:
+            if field in frontmatter:
+                value = frontmatter[field]
+                if isinstance(value, datetime):
+                    return value.strftime("%Y-%m-%d")
+                if isinstance(value, str):
+                    parsed = parse_note_date(value)
+                    if parsed:
+                        return parsed
+
+        # 4. Body text patterns (first 2000 chars)
+        body_sample = body[:2000] if body else ""
+        for pattern in [r"Created:\s*(.+?)(?:\n|$)", r"Date:\s*(.+?)(?:\n|$)"]:
+            match = re.search(pattern, body_sample, re.IGNORECASE)
+            if match:
+                parsed = parse_note_date(match.group(1).strip())
+                if parsed:
+                    return parsed
+
+        # 5. No reliable date found - return empty string
         # The vector store will give these a neutral recency score
         return ""
 

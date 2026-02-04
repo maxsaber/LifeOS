@@ -21,6 +21,10 @@ from api.utils.datetime_utils import make_aware as _make_aware
 
 logger = logging.getLogger(__name__)
 
+# Sentinel date for undated vault notes - allows them to appear in counts
+# while being filterable in timeline views
+UNDATED_SENTINEL = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
 
 def get_interaction_db_path() -> str:
     """Get the path to the interactions database."""
@@ -790,6 +794,29 @@ class InteractionStore:
         try:
             cursor = conn.execute(
                 "DELETE FROM interactions WHERE person_id = ?", (person_id,)
+            )
+            conn.commit()
+            return cursor.rowcount
+        finally:
+            conn.close()
+
+    def delete_by_source_type(self, source_type: str) -> int:
+        """
+        Delete all interactions of a specific source type.
+
+        Useful for cleanup before re-indexing vault notes with improved
+        date extraction logic.
+
+        Args:
+            source_type: The source type to delete (e.g., "vault", "granola")
+
+        Returns:
+            Number of interactions deleted
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(
+                "DELETE FROM interactions WHERE source_type = ?", (source_type,)
             )
             conn.commit()
             return cursor.rowcount
