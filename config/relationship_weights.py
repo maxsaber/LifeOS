@@ -122,6 +122,9 @@ INTERACTION_TYPE_WEIGHTS: dict[str, float] = {
     "vault": 0.7,             # Mentioned in your notes
     "granola": 0.8,           # Meeting notes (AI-generated)
 
+    # Photos (face recognition - in photos together)
+    "photos": 0.5,            # In photos together
+
     # Contact sources (static, not interactions)
     "linkedin": 0.3,          # LinkedIn connection (passive)
     "contacts": 0.2,          # In your contacts (very passive)
