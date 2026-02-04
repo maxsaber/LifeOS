@@ -181,8 +181,8 @@ SYNC_ORDER = [
     "strengths",                # Calculate relationship strength scores
 
     # === Phase 4: Vector Store Indexing ===
-    # Note: vault_reindex runs separately at midnight via its own launchd job
-    # This allows unlimited time for full reindex with LLM summaries
+    # Index content with fresh people data available for entity resolution
+    "vault_reindex",            # Full reindex with LLM summaries (no timeout)
     "crm_vectorstore",          # Index CRM people for semantic search
 
     # === Phase 5: Content Sync ===
