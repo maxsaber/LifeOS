@@ -13,7 +13,7 @@ import json
 import uuid
 import logging
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -243,6 +243,33 @@ class SourceEntityStore:
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_source_entities_observed_at
                 ON source_entities(observed_at DESC)
+            """)
+
+            # Add match_attempted_at and match_attempt_count columns for tracking
+            # entities that failed resolution attempts (migration for existing DBs)
+            try:
+                conn.execute("""
+                    ALTER TABLE source_entities
+                    ADD COLUMN match_attempted_at TIMESTAMP
+                """)
+                logger.info("Added match_attempted_at column")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
+            try:
+                conn.execute("""
+                    ALTER TABLE source_entities
+                    ADD COLUMN match_attempt_count INTEGER DEFAULT 0
+                """)
+                logger.info("Added match_attempt_count column")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+
+            # Index for finding entities that need re-matching
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_source_entities_match_attempts
+                ON source_entities(match_attempted_at, match_attempt_count)
+                WHERE canonical_person_id IS NULL
             """)
 
             conn.commit()
@@ -713,6 +740,275 @@ class SourceEntityStore:
                 (phone,)
             )
             return [SourceEntity.from_row(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
+    def get_unlinked_by_email(self, email: str) -> list[SourceEntity]:
+        """
+        Get unlinked source entities matching a specific email.
+
+        Args:
+            email: Email address to match (case-insensitive)
+
+        Returns:
+            List of unlinked SourceEntity objects with this email
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(
+                """SELECT * FROM source_entities
+                   WHERE LOWER(observed_email) = LOWER(?)
+                   AND canonical_person_id IS NULL""",
+                (email,)
+            )
+            return [SourceEntity.from_row(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
+    def get_unlinked_by_phone(self, phone: str) -> list[SourceEntity]:
+        """
+        Get unlinked source entities matching a specific phone.
+
+        Args:
+            phone: Phone number to match
+
+        Returns:
+            List of unlinked SourceEntity objects with this phone
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(
+                """SELECT * FROM source_entities
+                   WHERE observed_phone = ?
+                   AND canonical_person_id IS NULL""",
+                (phone,)
+            )
+            return [SourceEntity.from_row(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
+    def link_unlinked_by_email(
+        self,
+        email: str,
+        person_id: str,
+        confidence: float = 1.0,
+    ) -> int:
+        """
+        Link all unlinked source entities with this email to a person.
+
+        This is used for retroactive linking when a person gains a new email
+        address. All existing unlinked source entities with that email
+        will be linked to the person.
+
+        Args:
+            email: Email address to match (case-insensitive)
+            person_id: Canonical person ID to link to
+            confidence: Link confidence score (default 1.0)
+
+        Returns:
+            Number of entities that were linked
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(
+                """UPDATE source_entities SET
+                       canonical_person_id = ?,
+                       link_confidence = ?,
+                       link_status = ?,
+                       linked_at = ?
+                   WHERE LOWER(observed_email) = LOWER(?)
+                   AND canonical_person_id IS NULL
+                   AND link_status != ?""",
+                (
+                    person_id,
+                    confidence,
+                    LINK_STATUS_AUTO,
+                    datetime.now(timezone.utc).isoformat(),
+                    email,
+                    LINK_STATUS_CONFIRMED,  # Don't overwrite confirmed links
+                )
+            )
+            conn.commit()
+            count = cursor.rowcount
+            if count > 0:
+                logger.info(f"Retroactively linked {count} source entities with email {email} to person {person_id[:8]}...")
+            return count
+        finally:
+            conn.close()
+
+    def link_unlinked_by_phone(
+        self,
+        phone: str,
+        person_id: str,
+        confidence: float = 1.0,
+    ) -> int:
+        """
+        Link all unlinked source entities with this phone to a person.
+
+        This is used for retroactive linking when a person gains a new phone
+        number. All existing unlinked source entities with that phone
+        will be linked to the person.
+
+        Args:
+            phone: Phone number to match
+            person_id: Canonical person ID to link to
+            confidence: Link confidence score (default 1.0)
+
+        Returns:
+            Number of entities that were linked
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(
+                """UPDATE source_entities SET
+                       canonical_person_id = ?,
+                       link_confidence = ?,
+                       link_status = ?,
+                       linked_at = ?
+                   WHERE observed_phone = ?
+                   AND canonical_person_id IS NULL
+                   AND link_status != ?""",
+                (
+                    person_id,
+                    confidence,
+                    LINK_STATUS_AUTO,
+                    datetime.now(timezone.utc).isoformat(),
+                    phone,
+                    LINK_STATUS_CONFIRMED,  # Don't overwrite confirmed links
+                )
+            )
+            conn.commit()
+            count = cursor.rowcount
+            if count > 0:
+                logger.info(f"Retroactively linked {count} source entities with phone {phone} to person {person_id[:8]}...")
+            return count
+        finally:
+            conn.close()
+
+    def record_match_attempt(self, entity_id: str) -> bool:
+        """
+        Record a failed match attempt for a source entity.
+
+        Increments match_attempt_count and updates match_attempted_at timestamp.
+        Used to track entities that have been processed but couldn't be matched.
+
+        Args:
+            entity_id: Source entity ID
+
+        Returns:
+            True if updated, False if entity not found
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(
+                """UPDATE source_entities SET
+                       match_attempted_at = ?,
+                       match_attempt_count = COALESCE(match_attempt_count, 0) + 1
+                   WHERE id = ?
+                   AND canonical_person_id IS NULL""",
+                (
+                    datetime.now(timezone.utc).isoformat(),
+                    entity_id,
+                )
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        finally:
+            conn.close()
+
+    def get_unlinked_for_rematching(
+        self,
+        source_type: Optional[str] = None,
+        min_days_since_attempt: int = 30,
+        max_attempts: int = 3,
+        limit: int = 1000,
+    ) -> list[SourceEntity]:
+        """
+        Get unlinked entities eligible for re-matching.
+
+        Filters out:
+        - Entities that were attempted recently (within min_days_since_attempt)
+        - Entities with too many failed attempts (>= max_attempts)
+
+        Args:
+            source_type: Optional filter by source type
+            min_days_since_attempt: Skip if attempted within this many days
+            max_attempts: Skip if attempted this many times or more
+            limit: Maximum entities to return
+
+        Returns:
+            List of SourceEntity objects eligible for re-matching
+        """
+        conn = self._get_connection()
+        try:
+            cutoff_date = (
+                datetime.now(timezone.utc) - timedelta(days=min_days_since_attempt)
+            ).isoformat()
+
+            if source_type:
+                cursor = conn.execute("""
+                    SELECT * FROM source_entities
+                    WHERE canonical_person_id IS NULL
+                      AND source_type = ?
+                      AND (match_attempted_at IS NULL OR match_attempted_at < ?)
+                      AND (match_attempt_count IS NULL OR match_attempt_count < ?)
+                    ORDER BY observed_at DESC
+                    LIMIT ?
+                """, (source_type, cutoff_date, max_attempts, limit))
+            else:
+                cursor = conn.execute("""
+                    SELECT * FROM source_entities
+                    WHERE canonical_person_id IS NULL
+                      AND (match_attempted_at IS NULL OR match_attempted_at < ?)
+                      AND (match_attempt_count IS NULL OR match_attempt_count < ?)
+                    ORDER BY observed_at DESC
+                    LIMIT ?
+                """, (cutoff_date, max_attempts, limit))
+
+            return [SourceEntity.from_row(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
+    def count_unlinked_for_rematching(
+        self,
+        source_type: Optional[str] = None,
+        min_days_since_attempt: int = 30,
+        max_attempts: int = 3,
+    ) -> int:
+        """
+        Count unlinked entities eligible for re-matching.
+
+        Args:
+            source_type: Optional filter by source type
+            min_days_since_attempt: Skip if attempted within this many days
+            max_attempts: Skip if attempted this many times or more
+
+        Returns:
+            Count of eligible entities
+        """
+        conn = self._get_connection()
+        try:
+            cutoff_date = (
+                datetime.now(timezone.utc) - timedelta(days=min_days_since_attempt)
+            ).isoformat()
+
+            if source_type:
+                cursor = conn.execute("""
+                    SELECT COUNT(*) FROM source_entities
+                    WHERE canonical_person_id IS NULL
+                      AND source_type = ?
+                      AND (match_attempted_at IS NULL OR match_attempted_at < ?)
+                      AND (match_attempt_count IS NULL OR match_attempt_count < ?)
+                """, (source_type, cutoff_date, max_attempts))
+            else:
+                cursor = conn.execute("""
+                    SELECT COUNT(*) FROM source_entities
+                    WHERE canonical_person_id IS NULL
+                      AND (match_attempted_at IS NULL OR match_attempted_at < ?)
+                      AND (match_attempt_count IS NULL OR match_attempt_count < ?)
+                """, (cutoff_date, max_attempts))
+
+            return cursor.fetchone()[0]
         finally:
             conn.close()
 

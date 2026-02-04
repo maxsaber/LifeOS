@@ -26,90 +26,15 @@ from api.services.source_entity import (
     create_calendar_source_entity,
 )
 from config.settings import settings
+from config.marketing_patterns import (
+    MARKETING_EMAIL_PREFIXES,
+    MARKETING_NAME_PATTERNS,
+    COMMERCIAL_SENDER_SUBSTRINGS,
+    MARKETING_DOMAINS,
+)
 
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 logger = logging.getLogger(__name__)
-
-# Marketing/promotional email patterns to skip
-# These are email address prefixes that typically indicate automated/marketing emails
-MARKETING_EMAIL_PREFIXES = {
-    'noreply', 'no-reply', 'no_reply', 'donotreply', 'do-not-reply', 'do_not_reply',
-    'newsletter', 'newsletters', 'news',
-    'marketing', 'promo', 'promotions', 'offers', 'deals',
-    'notifications', 'notification', 'notify', 'alert', 'alerts',
-    'updates', 'update', 'info', 'information',
-    'support', 'help', 'helpdesk', 'customerservice', 'customer-service',
-    'mailer', 'mailer-daemon', 'postmaster', 'webmaster',
-    'bounce', 'bounces', 'unsubscribe',
-    'billing', 'invoices', 'invoice', 'receipts', 'receipt',
-    'orders', 'order', 'shipping', 'delivery',
-    'feedback', 'survey', 'surveys',
-    'hello', 'hi', 'team', 'contact',
-    'admin', 'administrator', 'system', 'automated',
-    'reply', 'replies',  # Generic auto-reply addresses
-    # Newsletter-specific prefixes
-    'digest', 'daily', 'weekly', 'monthly', 'morning', 'evening',
-    'playbook', 'briefing', 'roundup', 'recap', 'summary',
-    'forecast', 'report', 'insider', 'dispatch', 'bulletin',
-    'edition', 'highlights', 'headlines', 'breaking',
-}
-
-# Sender NAME patterns that indicate marketing/newsletter (checked against sender display name)
-MARKETING_NAME_PATTERNS = {
-    'newsletter', 'digest', 'playbook', 'briefing', 'roundup',
-    'weekly', 'daily', 'morning', 'evening', 'update',
-    'forecast', 'report', 'insider', 'dispatch', 'bulletin',
-    'alerts', 'notifications', 'noreply', 'no-reply',
-}
-
-# Commercial/transactional senders to always skip (substring match in email or name)
-# These are companies that only send automated/transactional emails
-COMMERCIAL_SENDER_SUBSTRINGS = {
-    'amazon', 'ebay', 'etsy', 'gusto', 'gustin',
-    'capitalone', 'capital one', 'monarch', 'usaa',
-}
-
-# Known marketing/transactional email domains to skip (dedicated marketing domains only)
-# NOTE: Do NOT include domains where real people work (google.com, amazon.com, etc.)
-# Only include domains that are EXCLUSIVELY used for automated/marketing emails
-MARKETING_DOMAINS = {
-    # Email service providers (dedicated sending domains)
-    'mailchimp.com', 'mail.mailchimp.com', 'mailchimpapp.net', 'mailchi.mp',
-    'sendgrid.net',  # Note: sendgrid.com is different
-    'ccsend.com',  # Constant Contact sending domain
-    'mailgun.org',
-    'amazonses.com',  # AWS SES (not amazon.com where employees work)
-    'postmarkapp.com',
-    'sparkpostmail.com',
-    'mandrillapp.com',
-    'sendinblue.com', 'brevo.com',
-    'klaviyomail.com',  # Not klaviyo.com
-    'hubspotmail.com', 'hs-mail.com',  # Not hubspot.com
-    'intercom-mail.com',  # Not intercom.io
-    'cmail19.com', 'cmail20.com',  # Campaign Monitor sending domains
-    'responsys.net',
-    # Social media notification domains (dedicated sending domains)
-    'facebookmail.com',  # Not fb.com where employees work
-    'linkedin-email.com',  # Not linkedin.com
-    'redditmail.com',  # Not reddit.com
-    # Service notification domains (dedicated sending domains)
-    'shopifyemail.com',  # Not shopify.com
-    'dropboxmail.com',  # Not dropbox.com
-    'slack-msgs.com',  # Not slack.com
-    # Newsletter platforms (dedicated sending subdomains)
-    'substack.com',  # Newsletter platform
-    'email.politico.com',  # POLITICO newsletters
-    'email.axios.com',  # Axios newsletters
-    'email.theatlantic.com',
-    'email.nytimes.com', 'e.newyorktimes.com',
-    'email.washingtonpost.com',
-    'email.wsj.com',
-    'e.forbes.com',
-    'email.bloomberg.com',
-    'mail.beehiiv.com',  # Newsletter platform
-    'news.ycombinator.com',  # Hacker News
-    'ghost.io',  # Newsletter platform
-}
 
 
 def is_marketing_email(email: str, sender_name: str = None) -> bool:

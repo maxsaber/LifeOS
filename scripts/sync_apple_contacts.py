@@ -61,6 +61,7 @@ def sync_apple_contacts(dry_run: bool = True) -> dict:
         'persons_created': 0,
         'persons_updated': 0,
         'birthdays_synced': 0,
+        'entities_retrolinked': 0,  # Source entities retroactively linked
         'skipped': 0,
         'errors': 0,
     }
@@ -136,6 +137,10 @@ def sync_apple_contacts(dry_run: bool = True) -> dict:
                 person = result.entity
                 person_updated = False
 
+                # Track original emails/phones BEFORE modifications for retroactive linking
+                original_emails = set(e.lower() for e in person.emails)
+                original_phones = set(person.phone_numbers)
+
                 # Link source entity to person
                 if source_entity.canonical_person_id != person.id:
                     if not dry_run:
@@ -205,6 +210,19 @@ def sync_apple_contacts(dry_run: bool = True) -> dict:
                 if person_updated:
                     if not dry_run:
                         person_store.update(person)
+
+                        # Retroactively link unlinked source entities for new emails/phones
+                        new_emails = set(e.lower() for e in person.emails) - original_emails
+                        new_phones = set(person.phone_numbers) - original_phones
+
+                        for email in new_emails:
+                            linked = source_store.link_unlinked_by_email(email, person.id)
+                            stats['entities_retrolinked'] += linked
+
+                        for phone in new_phones:
+                            linked = source_store.link_unlinked_by_phone(phone, person.id)
+                            stats['entities_retrolinked'] += linked
+
                     stats['persons_updated'] += 1
 
                 if result.is_new:
@@ -227,6 +245,7 @@ def sync_apple_contacts(dry_run: bool = True) -> dict:
     logger.info(f"Persons created: {stats['persons_created']}")
     logger.info(f"Persons updated: {stats['persons_updated']}")
     logger.info(f"Birthdays synced: {stats['birthdays_synced']}")
+    logger.info(f"Entities retrolinked: {stats['entities_retrolinked']}")
     logger.info(f"Skipped: {stats['skipped']}")
     logger.info(f"Errors: {stats['errors']}")
 
