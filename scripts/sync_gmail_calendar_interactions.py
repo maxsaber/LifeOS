@@ -12,6 +12,7 @@ import sqlite3
 import uuid
 import logging
 import argparse
+import time
 from datetime import datetime, timedelta, timezone
 
 from api.services.gmail import GmailService
@@ -508,16 +509,20 @@ def sync_calendar_interactions(
     end_date = datetime.now(timezone.utc) + timedelta(days=30)  # Include upcoming
 
     try:
-        logger.info(f"Fetching calendar events from {account_type.value} account...")
+        logger.info(f"Fetching calendar events from {account_type.value} account ({days_back} days back)...")
+        api_start = time.time()
         events = calendar.get_events_in_range(
             start_date=start_date,
             end_date=end_date,
             max_results=2500,
         )
-        logger.info(f"Found {len(events)} events")
+        api_elapsed = time.time() - api_start
+        logger.info(f"Found {len(events)} events (API call took {api_elapsed:.1f}s)")
         stats['events_fetched'] = len(events)
 
         batch = []
+        process_start = time.time()
+        events_processed = 0
 
         for event in events:
             # Process each attendee
@@ -613,6 +618,16 @@ def sync_calendar_interactions(
                     source_entity.linked_at = datetime.now(timezone.utc)
                     source_entity_store.add_or_update(source_entity)
                     stats['source_entities_created'] += 1
+
+            # Progress logging every 100 events
+            events_processed += 1
+            if events_processed % 100 == 0:
+                elapsed = time.time() - process_start
+                logger.info(f"  Processed {events_processed}/{len(events)} events ({elapsed:.1f}s elapsed)")
+
+        # Final timing
+        process_elapsed = time.time() - process_start
+        logger.info(f"Processed all {len(events)} events in {process_elapsed:.1f}s")
 
         # Insert batch
         if batch and not dry_run:
