@@ -293,6 +293,11 @@ class PersonDetailResponse(BaseModel):
     message_count: int = 0  # iMessage/SMS count
     # Manual Dunbar circle override (0-7, or None for auto-calculated)
     manual_dunbar_circle: Optional[int] = None
+    # Cached sentiment data
+    sentiment_score: Optional[float] = None  # -1.0 to +1.0
+    sentiment_trend: Optional[str] = None  # "improving", "stable", "declining"
+    sentiment_trend_delta: Optional[float] = None
+    sentiment_updated_at: Optional[str] = None
     # Related data
     source_entities: list[SourceEntityResponse] = []
     relationships: list[RelationshipResponse] = []
@@ -694,6 +699,10 @@ def _person_to_detail_response(
         mention_count=person.mention_count,
         message_count=person.message_count,
         manual_dunbar_circle=person.manual_dunbar_circle,
+        sentiment_score=person.sentiment_score,
+        sentiment_trend=person.sentiment_trend,
+        sentiment_trend_delta=person.sentiment_trend_delta,
+        sentiment_updated_at=person.sentiment_updated_at.isoformat() if person.sentiment_updated_at else None,
     )
 
     if include_related:
@@ -2500,6 +2509,23 @@ async def extract_person_sentiment(
             force=force,
             model=model,
         )
+
+        # Cache aggregated sentiment in person entity
+        sentiment_store = get_sentiment_store()
+        scores = sentiment_store.get_for_person(person_id, days=365)
+        if scores:
+            avg_score = sum(s.score for s in scores) / len(scores)
+            trend_data = sentiment_store.get_trend(person_id, days=90)
+            trend = trend_data.get("trend", "stable")
+            trend_delta = trend_data.get("delta", 0.0)
+
+            # Update person entity with cached sentiment
+            person.sentiment_score = round(avg_score, 3)
+            person.sentiment_trend = trend
+            person.sentiment_trend_delta = round(trend_delta, 3)
+            person.sentiment_updated_at = datetime.now(timezone.utc)
+            person_store.update(person)
+            person_store.save()
 
         return SentimentExtractionResponse(
             status="completed",

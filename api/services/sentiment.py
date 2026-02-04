@@ -361,7 +361,7 @@ class SentimentExtractor:
     DEFAULT_MODEL = MODEL_HAIKU
 
     # Batch settings
-    MAX_INTERACTIONS_PER_BATCH = 50
+    MAX_INTERACTIONS_PER_BATCH = 20
 
     def __init__(self, store: Optional[SentimentStore] = None):
         """Initialize extractor."""
@@ -448,7 +448,7 @@ class SentimentExtractor:
 
         response = self.client.messages.create(
             model=model,
-            max_tokens=2048,
+            max_tokens=4096,
             messages=[{"role": "user", "content": prompt}]
         )
 
@@ -523,7 +523,24 @@ Interactions:
                 json_end = response_text.find("```", json_start)
                 response_text = response_text[json_start:json_end].strip()
 
-            data = json.loads(response_text)
+            # Try to parse as-is first
+            try:
+                data = json.loads(response_text)
+            except json.JSONDecodeError:
+                # Try to recover truncated JSON array
+                # Find the last complete object by looking for "},"
+                if response_text.strip().startswith("["):
+                    # Find last complete object
+                    last_complete = response_text.rfind("},")
+                    if last_complete > 0:
+                        # Trim to last complete object and close the array
+                        response_text = response_text[:last_complete + 1] + "]"
+                        data = json.loads(response_text)
+                        logger.warning(f"Recovered truncated JSON, parsed partial response")
+                    else:
+                        raise
+                else:
+                    raise
 
             # Build lookup for interaction IDs
             interaction_ids = {i.get("id") for i in interactions}

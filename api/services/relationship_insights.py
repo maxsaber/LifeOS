@@ -637,6 +637,7 @@ Include source_title for each insight.""",
 
         if category and category in category_prompts:
             # Category-specific prompt
+            source_title_example = '"20260115 Couples Therapy with Erica"' if category != "ai_suggestions" else "null"
             return f"""Analyze these couples therapy notes and extract relationship insights.
 
 You are helping Nathan track relationship growth from his couples therapy sessions with Taylor.
@@ -650,7 +651,7 @@ Return ONLY valid JSON (no markdown, no explanation):
     {{
       "category": "{category}",
       "text": "Specific insight text here",
-      "source_title": {"\"20260115 Couples Therapy with Erica\"" if category != "ai_suggestions" else "null"}
+      "source_title": {source_title_example}
     }}
   ]
 }}

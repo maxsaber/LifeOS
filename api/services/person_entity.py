@@ -102,6 +102,12 @@ class PersonEntity:
     # Flag for outer-perimeter contacts; computed when strength < threshold
     is_peripheral_contact: bool = False
 
+    # Cached sentiment data (updated when sentiment is extracted)
+    sentiment_score: Optional[float] = None  # -1.0 to +1.0 average
+    sentiment_trend: Optional[str] = None  # "improving", "stable", "declining"
+    sentiment_trend_delta: Optional[float] = None  # Change over period
+    sentiment_updated_at: Optional[datetime] = None  # When sentiment was last calculated
+
     def __post_init__(self):
         """Set display_name to canonical_name if not specified."""
         if not self.display_name and self.canonical_name:
@@ -311,6 +317,8 @@ class PersonEntity:
             data["last_seen"] = self.last_seen.isoformat()
         if self.hidden_at:
             data["hidden_at"] = self.hidden_at.isoformat()
+        if self.sentiment_updated_at:
+            data["sentiment_updated_at"] = self.sentiment_updated_at.isoformat()
         if self.birthday:
             data["birthday"] = self.birthday  # Already "MM-DD" string
         # Remove private fields (they start with _)
@@ -361,6 +369,14 @@ class PersonEntity:
         data.setdefault("is_peripheral_contact", False)
         # Handle birthday field (default to None)
         data.setdefault("birthday", None)
+        # Handle sentiment cache fields
+        data.setdefault("sentiment_score", None)
+        data.setdefault("sentiment_trend", None)
+        data.setdefault("sentiment_trend_delta", None)
+        data.setdefault("sentiment_updated_at", None)
+        if data.get("sentiment_updated_at") and isinstance(data["sentiment_updated_at"], str):
+            dt = datetime.fromisoformat(data["sentiment_updated_at"])
+            data["sentiment_updated_at"] = _make_aware(dt)
         return cls(**data)
 
     @classmethod

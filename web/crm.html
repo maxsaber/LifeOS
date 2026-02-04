@@ -8096,6 +8096,19 @@
                         <div class="header-dunbar" style="position: relative;">
                             <div class="header-dunbar-circle" id="headerDunbarCircle" title="Click to change Dunbar Circle" onclick="toggleDunbarEditDropdown(event)">0</div>
                             <span class="header-indicator-label" id="headerDunbarLabel">Intimate</span>
+                            <div class="dunbar-edit-dropdown" id="dunbarEditDropdown">
+                                <div class="dunbar-edit-options">
+                                    <div class="dunbar-edit-option circle-0" data-circle="0" onclick="setManualDunbarCircle(0)">0 - Partner</div>
+                                    <div class="dunbar-edit-option circle-1" data-circle="1" onclick="setManualDunbarCircle(1)">1 - Intimate</div>
+                                    <div class="dunbar-edit-option circle-2" data-circle="2" onclick="setManualDunbarCircle(2)">2 - Close</div>
+                                    <div class="dunbar-edit-option circle-3" data-circle="3" onclick="setManualDunbarCircle(3)">3 - Good Friends</div>
+                                    <div class="dunbar-edit-option circle-4" data-circle="4" onclick="setManualDunbarCircle(4)">4 - Friends</div>
+                                    <div class="dunbar-edit-option circle-5" data-circle="5" onclick="setManualDunbarCircle(5)">5 - Acquaintances</div>
+                                    <div class="dunbar-edit-option circle-6" data-circle="6" onclick="setManualDunbarCircle(6)">6 - Recognized</div>
+                                    <div class="dunbar-edit-option circle-7" data-circle="7" onclick="setManualDunbarCircle(7)">7 - Known</div>
+                                </div>
+                                <button class="dunbar-edit-reset" onclick="resetDunbarCircle()">Reset to Auto</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -9277,6 +9290,48 @@
         </div>
     </div>
 
+    <div class="contact-edit-modal" id="manualEventModal">
+        <div class="contact-edit-content">
+            <div class="contact-edit-header">
+                <div>
+                    <h2 class="contact-edit-title">Log In-Person Event</h2>
+                    <p class="contact-edit-subtitle">Track meetings that happen off-calendar.</p>
+                </div>
+                <button type="button" class="contact-edit-close" onclick="closeManualEventModal()">&times;</button>
+            </div>
+            <form class="contact-edit-body" id="manualEventForm" onsubmit="saveManualEvent(event)">
+                <div class="contact-edit-grid">
+                    <label class="contact-edit-field">
+                        <span class="contact-edit-label">Title</span>
+                        <input type="text" id="manualEventTitle" class="contact-edit-input" placeholder="Lunch with Alex" required>
+                    </label>
+                    <label class="contact-edit-field">
+                        <span class="contact-edit-label">Date & Time</span>
+                        <input type="datetime-local" id="manualEventDatetime" class="contact-edit-input" required>
+                    </label>
+                </div>
+                <div class="contact-edit-grid" style="margin-top: 1rem;">
+                    <label class="contact-edit-field">
+                        <span class="contact-edit-label">Location</span>
+                        <input type="text" id="manualEventLocation" class="contact-edit-input" placeholder="Cafe name or city">
+                    </label>
+                    <label class="contact-edit-field">
+                        <span class="contact-edit-label">Duration (minutes)</span>
+                        <input type="number" id="manualEventDuration" class="contact-edit-input" min="0" max="1440" placeholder="60">
+                    </label>
+                </div>
+                <label class="contact-edit-field" style="margin-top: 1rem;">
+                    <span class="contact-edit-label">Notes</span>
+                    <textarea id="manualEventNotes" class="contact-edit-textarea" placeholder="What did you talk about?"></textarea>
+                </label>
+            </form>
+            <div class="contact-edit-footer">
+                <button type="button" class="contact-edit-cancel" onclick="closeManualEventModal()">Cancel</button>
+                <button type="submit" form="manualEventForm" class="contact-edit-save" id="manualEventSaveBtn">Add Event</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <script>
         // State
@@ -10229,51 +10284,9 @@
                         <div class="merge-person-name">${escapeHtml(person.canonical_name)}</div>
                         <div class="merge-person-meta">
                             ${person.email_count || 0} emails, ${person.meeting_count || 0} meetings, ${person.message_count || 0} messages
-            </div>
-        </div>
-    </div>
-
-    <div class="contact-edit-modal" id="manualEventModal">
-        <div class="contact-edit-content">
-            <div class="contact-edit-header">
-                <div>
-                    <h2 class="contact-edit-title">Log In-Person Event</h2>
-                    <p class="contact-edit-subtitle">Track meetings that happen off-calendar.</p>
+                        </div>
+                    </div>
                 </div>
-                <button type="button" class="contact-edit-close" onclick="closeManualEventModal()">&times;</button>
-            </div>
-            <form class="contact-edit-body" id="manualEventForm" onsubmit="saveManualEvent(event)">
-                <div class="contact-edit-grid">
-                    <label class="contact-edit-field">
-                        <span class="contact-edit-label">Title</span>
-                        <input type="text" id="manualEventTitle" class="contact-edit-input" placeholder="Lunch with Alex" required>
-                    </label>
-                    <label class="contact-edit-field">
-                        <span class="contact-edit-label">Date & Time</span>
-                        <input type="datetime-local" id="manualEventDatetime" class="contact-edit-input" required>
-                    </label>
-                </div>
-                <div class="contact-edit-grid" style="margin-top: 1rem;">
-                    <label class="contact-edit-field">
-                        <span class="contact-edit-label">Location</span>
-                        <input type="text" id="manualEventLocation" class="contact-edit-input" placeholder="Cafe name or city">
-                    </label>
-                    <label class="contact-edit-field">
-                        <span class="contact-edit-label">Duration (minutes)</span>
-                        <input type="number" id="manualEventDuration" class="contact-edit-input" min="0" max="1440" placeholder="60">
-                    </label>
-                </div>
-                <label class="contact-edit-field" style="margin-top: 1rem;">
-                    <span class="contact-edit-label">Notes</span>
-                    <textarea id="manualEventNotes" class="contact-edit-textarea" placeholder="What did you talk about?"></textarea>
-                </label>
-            </form>
-            <div class="contact-edit-footer">
-                <button type="button" class="contact-edit-cancel" onclick="closeManualEventModal()">Cancel</button>
-                <button type="submit" form="manualEventForm" class="contact-edit-save" id="manualEventSaveBtn">Add Event</button>
-            </div>
-        </div>
-    </div>
             `).join('');
 
             updateMergeSecondaryList();
