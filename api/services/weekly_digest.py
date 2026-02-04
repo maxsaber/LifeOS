@@ -1,4 +1,10 @@
 """
+Weekly digest helpers for relationship follow-ups.
+
+Determines which people are slipping or need a reach-out based on
+configurable thresholds.
+"""
+from datetime import datetime, timezone
 Weekly digest service.
 
 Builds digest sections from PersonEntity + interaction data.
@@ -6,11 +12,64 @@ Builds digest sections from PersonEntity + interaction data.
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Iterable, Optional
 
+from api.services.interaction_store import get_interaction_store
+from api.services.person_entity import PersonEntity, get_person_entity_store
+from api.services.relationship_metrics import compute_strength_for_person
+from api.services.relationship_summary import RelationshipSummary, get_relationship_summary
 from config.relationship_weights import (
     RECENT_INTERACTION_DAYS,
     SLIPPING_DAYS,
     REACHOUT_DAYS,
 )
+
+
+def determine_contact_status(days_since_contact: int) -> str:
+    """
+    Classify contact status based on days since last interaction.
+
+    Returns one of: recent, steady, slipping, reachout.
+    """
+    if days_since_contact <= RECENT_INTERACTION_DAYS:
+        return "recent"
+    if days_since_contact >= REACHOUT_DAYS:
+        return "reachout"
+    if days_since_contact >= SLIPPING_DAYS:
+        return "slipping"
+    return "steady"
+
+
+def split_people_by_status(
+    summaries: Iterable[RelationshipSummary],
+) -> dict[str, list[RelationshipSummary]]:
+    """
+    Split people into slipping and reach-out buckets based on thresholds.
+    """
+    results: dict[str, list[RelationshipSummary]] = {
+        "slipping": [],
+        "reachout": [],
+    }
+    for summary in summaries:
+        status = determine_contact_status(summary.days_since_contact)
+        if status == "slipping":
+            results["slipping"].append(summary)
+        elif status == "reachout":
+            results["reachout"].append(summary)
+    return results
+
+
+def get_weekly_digest_candidates() -> dict[str, list[RelationshipSummary]]:
+    """
+    Build slipping and reach-out lists for the weekly digest.
+    """
+    person_store = get_person_entity_store()
+    summaries: list[RelationshipSummary] = []
+
+    for person in person_store.get_all():
+        summary = get_relationship_summary(person.id)
+        if summary:
+            summaries.append(summary)
+
+    return split_people_by_status(summaries)
 from api.services.interaction_store import get_interaction_store
 from api.services.person_entity import PersonEntity, get_person_entity_store
 from api.services.relationship_summary import RelationshipSummary, get_relationship_summary
@@ -193,6 +252,12 @@ def _get_last_seen(person: PersonEntity, interaction_store) -> Optional[datetime
     return _ensure_aware(last.timestamp) if last else None
 
 
+def _days_since(last_seen: Optional[datetime], reference: datetime) -> Optional[int]:
+    if not last_seen:
+        return None
+    last_seen = _ensure_aware(last_seen)
+    reference = _ensure_aware(reference)
+    return max((reference - last_seen).days, 0)
     return split_people_by_status(summaries)
 
 
