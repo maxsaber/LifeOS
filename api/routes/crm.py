@@ -589,6 +589,35 @@ class CRMConfigResponse(BaseModel):
     my_person_id: str = ""
     work_email_domain: str = ""
     partner_person_id: str = ""
+    partner_name: str = ""
+    family_default_selected_ids: list[str] = []
+
+
+def _load_family_default_selected_ids() -> list[str]:
+    """Load default selected family member IDs from family_members.json."""
+    config_path = Path(__file__).parent.parent.parent / "config" / "family_members.json"
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+            return config.get("default_selected_ids", [])
+        except Exception as e:
+            logger.warning(f"Failed to load family default selected IDs: {e}")
+    return []
+
+
+def _get_partner_name() -> str:
+    """Get the partner's canonical name from their person ID."""
+    if not PARTNER_PERSON_ID:
+        return ""
+    try:
+        person_store = get_person_entity_store()
+        partner = person_store.get_by_id(PARTNER_PERSON_ID)
+        if partner:
+            return partner.canonical_name
+    except Exception as e:
+        logger.warning(f"Failed to load partner name: {e}")
+    return ""
 
 
 @router.get("/config", response_model=CRMConfigResponse)
@@ -603,6 +632,8 @@ async def get_crm_config():
         my_person_id=settings.my_person_id,
         work_email_domain=WORK_EMAIL_DOMAIN,
         partner_person_id=PARTNER_PERSON_ID,
+        partner_name=_get_partner_name(),
+        family_default_selected_ids=_load_family_default_selected_ids(),
     )
 
 

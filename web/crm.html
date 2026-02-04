@@ -298,6 +298,8 @@
             border-radius: 8px;
             padding: 0.5rem;
             min-width: 160px;
+            max-height: 400px;
+            overflow-y: auto;
             z-index: 100;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
@@ -349,6 +351,172 @@
             background: var(--bg-tertiary);
             color: var(--text-primary);
             border-color: var(--people);
+        }
+
+        /* Tag filter section styles */
+        .tag-filter-section {
+            padding: 0.25rem 0;
+        }
+
+        .tag-filter-section-label {
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 0.375rem 0.5rem 0.125rem;
+            display: block;
+        }
+
+        /* Tag search input */
+        .tag-search-input {
+            width: calc(100% - 1rem);
+            margin: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.75rem;
+        }
+
+        .tag-search-input:focus {
+            outline: none;
+            border-color: var(--people);
+        }
+
+        .tag-search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* Bulk tag button */
+        .bulk-tag-btn {
+            padding: 0.375rem 0.625rem;
+            background: #6366f1;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+
+        .bulk-tag-btn:hover {
+            background: #5558e3;
+        }
+
+        /* Bulk tag modal */
+        .bulk-tag-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .bulk-tag-content {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .bulk-tag-content h3 {
+            margin: 0 0 1rem;
+            font-size: 1.1rem;
+        }
+
+        .bulk-tag-input {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            margin-bottom: 0.75rem;
+            box-sizing: border-box;
+        }
+
+        .bulk-tag-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .tag-suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .tag-suggestion {
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .tag-suggestion:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: var(--text-primary);
+        }
+
+        .bulk-tag-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+        }
+
+        .bulk-tag-cancel {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .bulk-tag-apply {
+            padding: 0.5rem 1rem;
+            background: var(--accent);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+        }
+
+        /* Family selector row (below title) */
+        .family-selector-row {
+            margin-bottom: 1.5rem;
+            padding: 0 0.5rem;
+        }
+
+        /* Family selector container (inside detail-title, below name) */
+        .family-selector-container {
+            margin-top: 0.25rem;
+        }
+
+        .family-selector-container .family-member-selector {
+            position: relative;
+        }
+
+        .family-selector-container .family-dropdown {
+            position: fixed;
+            z-index: 1000;
         }
 
         .people-list {
@@ -500,12 +668,12 @@
         /* Merge toolbar */
         .merge-toolbar {
             display: none;
-            padding: 0.75rem 1rem;
+            padding: 0.5rem 0.75rem;
             background: var(--bg-tertiary);
             border-bottom: 1px solid var(--border);
             align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
+            gap: 0.5rem;
+            flex-wrap: wrap;
         }
 
         .merge-toolbar.visible {
@@ -513,8 +681,9 @@
         }
 
         .merge-toolbar-info {
-            font-size: 0.875rem;
+            font-size: 0.75rem;
             color: var(--text-primary);
+            white-space: nowrap;
         }
 
         .merge-toolbar-info strong {
@@ -523,39 +692,51 @@
 
         .merge-toolbar-actions {
             display: flex;
-            gap: 0.5rem;
+            gap: 0.375rem;
+            flex-wrap: wrap;
+            margin-left: auto;
         }
 
         .merge-btn {
-            padding: 0.5rem 1rem;
+            padding: 0.375rem 0.625rem;
             background: var(--people);
             border: none;
-            border-radius: 6px;
+            border-radius: 4px;
             color: white;
-            font-size: 0.875rem;
+            font-size: 0.75rem;
             font-weight: 500;
             cursor: pointer;
             transition: background 0.2s;
+            white-space: nowrap;
         }
 
         .merge-btn:hover {
             background: var(--people-hover);
         }
 
+        .merge-btn.hide-btn {
+            background: #e85d75;
+        }
+
+        .merge-btn.hide-btn:hover {
+            background: #d64a63;
+        }
+
         .clear-selection-btn {
-            padding: 0.5rem 1rem;
-            background: transparent;
+            padding: 0.375rem 0.625rem;
+            background: rgba(255, 255, 255, 0.08);
             border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text-secondary);
-            font-size: 0.875rem;
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 0.75rem;
             cursor: pointer;
             transition: all 0.2s;
+            white-space: nowrap;
         }
 
         .clear-selection-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
             border-color: var(--text-secondary);
-            color: var(--text-primary);
         }
 
         /* Split modal */
@@ -7205,7 +7386,7 @@
             <div class="filters">
                 <div class="people-filter-dropdown" id="peopleCategoryDropdown">
                     <button class="people-filter-btn" onclick="togglePeopleCategoryFilter()">
-                        <span id="peopleCategoryLabel">All Categories</span>
+                        <span id="peopleCategoryLabel">Categories</span>
                         <span class="dropdown-arrow">▼</span>
                     </button>
                     <div class="people-filter-options" id="peopleCategoryOptions">
@@ -7233,7 +7414,7 @@
                 </div>
                 <div class="people-filter-dropdown" id="peopleDunbarDropdown">
                     <button class="people-filter-btn" onclick="togglePeopleDunbarFilter()">
-                        <span id="peopleDunbarLabel">All Circles</span>
+                        <span id="peopleDunbarLabel">Circles</span>
                         <span class="dropdown-arrow">▼</span>
                     </button>
                     <div class="people-filter-options" id="peopleDunbarOptions">
@@ -7271,15 +7452,25 @@
                         </label>
                     </div>
                 </div>
+                <div class="people-filter-dropdown" id="peopleTagDropdown">
+                    <button class="people-filter-btn" onclick="togglePeopleTagFilter()">
+                        <span id="peopleTagLabel">Tags</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                    <div class="people-filter-options" id="peopleTagOptions">
+                        <!-- Content populated by buildTagFilterOptions() -->
+                    </div>
+                </div>
             </div>
             <div class="merge-toolbar" id="mergeToolbar">
                 <div class="merge-toolbar-info">
-                    <strong id="selectedCount">0</strong> <span id="selectedLabel">people selected</span>
+                    <strong id="selectedCount">0</strong> <span id="selectedLabel">selected</span>
                 </div>
                 <div class="merge-toolbar-actions">
                     <button class="clear-selection-btn" onclick="clearSelection()">Clear</button>
-                    <button class="merge-btn" id="mergeBtn" onclick="openMergeModal()">Merge Selected</button>
-                    <button class="merge-btn hide-btn" id="hideBtn" onclick="hidePerson()" style="display: none; background: #6b4423;">Hide Person</button>
+                    <button class="bulk-tag-btn" id="bulkTagBtn" onclick="openBulkTagModal()">Tag</button>
+                    <button class="merge-btn" id="mergeBtn" onclick="openMergeModal()">Merge</button>
+                    <button class="merge-btn hide-btn" id="hideBtn" onclick="hidePerson()" style="display: none;">Hide</button>
                 </div>
             </div>
             <div class="people-list" id="peopleList">
@@ -7297,11 +7488,13 @@
                     <div class="detail-avatar" id="detailAvatar">JD</div>
                     <div class="detail-title">
                         <div class="detail-name" id="detailName">John Doe</div>
+                        <!-- Family Selector (shown only for /family route, below title) -->
+                        <div class="family-selector-container" id="familySelectorContainer" style="display: none;"></div>
                         <div class="detail-company" id="detailCompany">Acme Corp · Software Engineer</div>
                         <div class="detail-contact-quick" id="detailContactQuick"></div>
                         <div class="detail-tags" id="detailTagsChips"></div>
                     </div>
-                    <div class="header-indicators">
+                    <div class="header-indicators" id="headerIndicators">
                         <div class="header-strength">
                             <div class="header-strength-ring">
                                 <svg width="44" height="44" viewBox="0 0 44 44">
@@ -7620,6 +7813,8 @@
 
                         <!-- Family Dashboard (shown only for /family route) -->
                         <div class="family-dashboard" id="familyDashboard" style="display: none;">
+                            <!-- Family Selector Row (below title) -->
+                            <div class="family-selector-row" id="familySelectorRow"></div>
                             <!-- Family Stats Row -->
                             <div class="me-widgets-row">
                                 <!-- Family Health Score -->
@@ -8360,6 +8555,19 @@
         </div>
     </div>
 
+    <!-- Bulk Tag Modal -->
+    <div class="bulk-tag-modal" id="bulkTagModal" style="display: none;">
+        <div class="bulk-tag-content">
+            <h3>Add Tag to <span id="bulkTagCount">0</span> People</h3>
+            <input type="text" class="bulk-tag-input" id="bulkTagInput" placeholder="Enter tag name..." onkeydown="if(event.key==='Enter')applyBulkTag()">
+            <div class="tag-suggestions" id="tagSuggestions"></div>
+            <div class="bulk-tag-actions">
+                <button class="bulk-tag-cancel" onclick="closeBulkTagModal()">Cancel</button>
+                <button class="bulk-tag-apply" onclick="applyBulkTag()">Apply Tag</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Split Modal -->
     <div class="split-modal" id="splitModal">
         <div class="split-modal-content">
@@ -8418,12 +8626,17 @@
         // People list filters (multi-select)
         let peopleCategoryFilters = new Set(['self', 'family', 'personal', 'work']);
         let peopleDunbarFilters = new Set(['0', '1', '2', '3', '4', '5', '6+']);
+        let peopleTagFilters = new Set();  // Empty = all tags (no filter)
+        let allAvailableTags = [];  // All tags from loaded people
         let selectedForMerge = new Set();  // IDs selected for merge
         let mergePrimaryId = null;  // Primary person for merge
         let dunbarCircleMap = new Map();  // Map person ID to Dunbar circle
         let dunbarCirclesInitialized = false;  // Track if global circles have been calculated
         let meInteractionsCache = null;  // Cache for "Me" page interactions
         let meInteractionsCacheYears = null; // Track which years setting the cache was loaded for
+        // Config loaded from API
+        let PARTNER_NAME = '';
+        let FAMILY_DEFAULT_SELECTED_IDS = [];
 
         // ===============================
         // Mobile Navigation
@@ -8729,6 +8942,14 @@
                     PARTNER_PERSON_ID = config.partner_person_id;
                     console.log('[Config] Loaded partner_person_id:', config.partner_person_id);
                 }
+                if (config.partner_name) {
+                    PARTNER_NAME = config.partner_name;
+                    console.log('[Config] Loaded partner_name:', config.partner_name);
+                }
+                if (config.family_default_selected_ids && config.family_default_selected_ids.length > 0) {
+                    FAMILY_DEFAULT_SELECTED_IDS = config.family_default_selected_ids;
+                    console.log('[Config] Loaded family_default_selected_ids:', FAMILY_DEFAULT_SELECTED_IDS.length, 'IDs');
+                }
             } catch (error) {
                 console.warn('[Config] Failed to load CRM config:', error);
             }
@@ -8906,6 +9127,30 @@
                     isMe: true,
                     isFamily: false,
                     isRelationship: false,
+                    isBirthdays: false,
+                };
+            }
+
+            // Handle /crm/family route
+            if (path === '/crm/family' || path === '/crm/family/') {
+                return {
+                    personId: null,
+                    tab: null,
+                    isMe: false,
+                    isFamily: true,
+                    isRelationship: false,
+                    isBirthdays: false,
+                };
+            }
+
+            // Handle /crm/relationship route
+            if (path === '/crm/relationship' || path === '/crm/relationship/') {
+                return {
+                    personId: null,
+                    tab: null,
+                    isMe: false,
+                    isFamily: false,
+                    isRelationship: true,
                     isBirthdays: false,
                 };
             }
@@ -9157,9 +9402,13 @@
         function renderPeopleList() {
             const listEl = document.getElementById('peopleList');
 
-            // Apply category and dunbar filters
+            // Collect all tags from people for the filter dropdown
+            collectAllTags();
+
+            // Apply category, dunbar, and tag filters
             const allCategoriesSelected = peopleCategoryFilters.size === 4;
             const allDunbarSelected = peopleDunbarFilters.size === 7;
+            const noTagFilterActive = peopleTagFilters.size === 0;
 
             const filteredPeople = people.filter(person => {
                 // Category filter
@@ -9173,6 +9422,14 @@
                     const dunbar = person.dunbar_circle ?? 7;
                     const dunbarKey = dunbar >= 6 ? '6+' : String(dunbar);
                     if (!peopleDunbarFilters.has(dunbarKey)) return false;
+                }
+
+                // Tag filter (if any tags selected)
+                if (!noTagFilterActive) {
+                    const personTags = person.tags || [];
+                    // Person must have at least one of the selected tags
+                    const hasMatchingTag = personTags.some(tag => peopleTagFilters.has(tag));
+                    if (!hasMatchingTag) return false;
                 }
 
                 return true;
@@ -10062,9 +10319,11 @@
             // Restore hero stats that family dashboard hides
             const heroStats = document.getElementById('heroStats');
             if (heroStats) heroStats.style.display = '';
-            // Hide family hero stats when viewing a person
+            // Hide family hero stats and selector when viewing a person
             const familyHeroStats = document.getElementById('familyHeroStats');
             if (familyHeroStats) familyHeroStats.style.display = 'none';
+            const familySelectorContainer = document.getElementById('familySelectorContainer');
+            if (familySelectorContainer) familySelectorContainer.style.display = 'none';
 
             if (isMePage) {
                 meDashboard.style.display = 'grid';
@@ -11047,15 +11306,20 @@
             if (detailContactQuick) detailContactQuick.innerHTML = '';
             if (detailTagsChips) detailTagsChips.innerHTML = '';
 
-            // Put the family selector in the header-indicators area (right side)
+            // Hide header indicators for family view (dropdown goes below title now)
             const headerIndicators = document.querySelector('.header-indicators');
             if (headerIndicators) {
-                // Save original content if not already saved
                 if (originalHeaderIndicatorsHtml === null) {
                     originalHeaderIndicatorsHtml = headerIndicators.innerHTML;
                 }
-                headerIndicators.style.display = 'flex';
-                headerIndicators.innerHTML = `
+                headerIndicators.style.display = 'none';
+            }
+
+            // Put the family selector in the container above hero stats
+            const familySelectorContainer = document.getElementById('familySelectorContainer');
+            if (familySelectorContainer) {
+                familySelectorContainer.style.display = 'block';
+                familySelectorContainer.innerHTML = `
                     <div class="family-member-selector">
                         <button class="family-selector-btn" onclick="toggleFamilyDropdown()">
                             <span id="familySelectorLabel">Select family members...</span>
@@ -11086,10 +11350,17 @@
                 await loadFamilyMembers();
             }
 
-            // If no family members selected, use all available
+            // Use configured default IDs if available, otherwise all family members
             if (selectedFamilyIds.length === 0 && familyMembers.length > 0) {
-                // Default to all family members
-                selectedFamilyIds = familyMembers.map(m => m.id);
+                if (FAMILY_DEFAULT_SELECTED_IDS.length > 0) {
+                    // Filter to only valid IDs that exist in familyMembers
+                    const validIds = FAMILY_DEFAULT_SELECTED_IDS.filter(id =>
+                        familyMembers.some(m => m.id === id)
+                    );
+                    selectedFamilyIds = validIds.length > 0 ? validIds : familyMembers.map(m => m.id);
+                } else {
+                    selectedFamilyIds = familyMembers.map(m => m.id);
+                }
             }
 
             // Render dropdown AFTER defaults are set so checkboxes reflect selection
@@ -11411,9 +11682,11 @@
             const personHeroStats = document.getElementById('heroStats');
             if (personHeroStats) personHeroStats.style.display = 'none';
 
-            // Hide family hero stats
+            // Hide family hero stats and selector
             const familyHeroStats = document.getElementById('familyHeroStats');
             if (familyHeroStats) familyHeroStats.style.display = 'none';
+            const familySelectorContainer = document.getElementById('familySelectorContainer');
+            if (familySelectorContainer) familySelectorContainer.style.display = 'none';
 
             // Show relationship dashboard
             const relationshipDashboard = document.getElementById('relationshipDashboard');
@@ -11434,11 +11707,16 @@
             const detailCompany = document.getElementById('detailCompany');
             const detailContactQuick = document.getElementById('detailContactQuick');
             const detailTagsChips = document.getElementById('detailTagsChips');
-            if (detailAvatar) detailAvatar.textContent = '💕';
             if (detailName) detailName.textContent = 'Relationship Dashboard';
-            if (detailCompany) detailCompany.textContent = 'Partner';
+            if (detailCompany) detailCompany.textContent = PARTNER_NAME || 'Partner';
             if (detailContactQuick) detailContactQuick.innerHTML = '';
             if (detailTagsChips) detailTagsChips.innerHTML = '';
+
+            // Load partner photo if available, otherwise show heart emoji
+            if (detailAvatar) {
+                detailAvatar.textContent = '💕';  // Default fallback
+                loadRelationshipPartnerPhoto(PARTNER_PERSON_ID);
+            }
 
             // Hide header indicators
             const headerIndicators = document.querySelector('.header-indicators');
@@ -12414,8 +12692,18 @@
         // Toggle family dropdown visibility
         function toggleFamilyDropdown() {
             const dropdown = document.getElementById('familyDropdown');
-            if (!dropdown) return;
-            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            const btn = document.querySelector('.family-selector-btn');
+            if (!dropdown || !btn) return;
+
+            if (dropdown.style.display === 'none') {
+                // Position dropdown below button (for fixed positioning in selector row)
+                const rect = btn.getBoundingClientRect();
+                dropdown.style.top = (rect.bottom + 4) + 'px';
+                dropdown.style.left = rect.left + 'px';
+                dropdown.style.display = 'block';
+            } else {
+                dropdown.style.display = 'none';
+            }
         }
 
         // Close dropdown when clicking outside
@@ -12885,6 +13173,39 @@
             img.onerror = () => {
                 avatar.style.backgroundImage = '';
                 avatar.classList.add('no-photo');
+                profilePhotoCache.set(personId, false);
+            };
+            img.src = photoUrl;
+        }
+
+        // Load partner's profile photo for relationship dashboard
+        async function loadRelationshipPartnerPhoto(personId) {
+            const avatar = document.getElementById('detailAvatar');
+            if (!avatar || !personId) return;
+
+            // Check cache first
+            if (profilePhotoCache.has(personId)) {
+                const hasPhoto = profilePhotoCache.get(personId);
+                if (hasPhoto) {
+                    avatar.style.backgroundImage = `url(/api/photos/profile/${personId})`;
+                    avatar.classList.add('has-photo');
+                    avatar.textContent = '';  // Clear emoji
+                }
+                // If no photo, keep default emoji
+                return;
+            }
+
+            // Try to load the photo
+            const photoUrl = `/api/photos/profile/${personId}`;
+            const img = new Image();
+            img.onload = () => {
+                avatar.style.backgroundImage = `url(${photoUrl})`;
+                avatar.classList.add('has-photo');
+                avatar.textContent = '';  // Clear emoji
+                profilePhotoCache.set(personId, true);
+            };
+            img.onerror = () => {
+                // Keep default emoji, no photo available
                 profilePhotoCache.set(personId, false);
             };
             img.src = photoUrl;
@@ -18134,7 +18455,7 @@
             // Update label
             const label = document.getElementById('peopleCategoryLabel');
             if (peopleCategoryFilters.size === 4) {
-                label.textContent = 'All Categories';
+                label.textContent = 'Categories';
             } else if (peopleCategoryFilters.size === 0) {
                 label.textContent = 'None';
             } else {
@@ -18162,7 +18483,7 @@
             // Update label
             const label = document.getElementById('peopleDunbarLabel');
             if (peopleDunbarFilters.size === 7) {
-                label.textContent = 'All Circles';
+                label.textContent = 'Circles';
             } else if (peopleDunbarFilters.size === 0) {
                 label.textContent = 'None';
             } else {
@@ -18199,16 +18520,254 @@
             updatePeopleDunbarFilter();
         }
 
+        // ===============================
+        // Tag Filter Functions
+        // ===============================
+
+        function togglePeopleTagFilter() {
+            const options = document.getElementById('peopleTagOptions');
+            options.classList.toggle('show');
+            // Close other dropdowns
+            document.getElementById('peopleCategoryOptions').classList.remove('show');
+            document.getElementById('peopleDunbarOptions').classList.remove('show');
+        }
+
+        // Collect all unique tags from loaded people
+        function collectAllTags() {
+            const tagSet = new Set();
+            for (const person of people) {
+                if (person.tags && person.tags.length > 0) {
+                    person.tags.forEach(tag => tagSet.add(tag));
+                }
+            }
+            const newTags = [...tagSet].sort();
+            // Only rebuild if tags changed
+            if (JSON.stringify(newTags) !== JSON.stringify(allAvailableTags)) {
+                allAvailableTags = newTags;
+                buildTagFilterOptions();
+            }
+        }
+
+        // Build tag filter dropdown options grouped by prefix
+        function buildTagFilterOptions() {
+            const container = document.getElementById('peopleTagOptions');
+            if (!container) return;
+
+            // Include search input and toggle buttons
+            let html = `
+                <input type="text" class="tag-search-input" id="tagSearchInput" placeholder="Search tags..." oninput="filterTagOptions()">
+                <div class="people-filter-toggles">
+                    <button class="filter-toggle-btn" onclick="selectAllTags()">All</button>
+                    <button class="filter-toggle-btn" onclick="selectNoTags()">None</button>
+                </div>
+            `;
+
+            if (allAvailableTags.length === 0) {
+                html += '<div style="padding: 0.5rem; color: var(--text-muted); font-size: 0.75rem;">No tags found</div>';
+                container.innerHTML = html;
+                return;
+            }
+
+            // Group tags by prefix (e.g., "work:" → "work" section)
+            const groups = {};
+            const ungrouped = [];
+            for (const tag of allAvailableTags) {
+                const colonIdx = tag.indexOf(':');
+                if (colonIdx > 0 && colonIdx < tag.length - 1) {
+                    const prefix = tag.substring(0, colonIdx);
+                    if (!groups[prefix]) groups[prefix] = [];
+                    groups[prefix].push(tag);
+                } else {
+                    ungrouped.push(tag);
+                }
+            }
+
+            // Render grouped tags in specific order: industry, seniority, city, state, then rest alphabetically
+            const prefixOrder = ['industry', 'seniority', 'city', 'state'];
+            const allPrefixes = Object.keys(groups);
+            const orderedPrefixes = prefixOrder.filter(p => allPrefixes.includes(p));
+            const remainingPrefixes = allPrefixes.filter(p => !prefixOrder.includes(p)).sort();
+            const sortedPrefixes = [...orderedPrefixes, ...remainingPrefixes];
+            for (const prefix of sortedPrefixes) {
+                html += `<div class="tag-filter-section">`;
+                html += `<span class="tag-filter-section-label">${escapeHtml(prefix)}</span>`;
+                for (const tag of groups[prefix]) {
+                    const checked = peopleTagFilters.has(tag) ? 'checked' : '';
+                    const displayName = tag.substring(prefix.length + 1);  // Remove "prefix:" part
+                    html += `
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="${escapeHtml(tag)}" ${checked} onchange="updatePeopleTagFilter()">
+                            ${escapeHtml(displayName)}
+                        </label>
+                    `;
+                }
+                html += `</div>`;
+            }
+
+            // Render ungrouped tags last (under "Other" section if there are groups)
+            if (ungrouped.length > 0) {
+                if (sortedPrefixes.length > 0) {
+                    html += `<div class="tag-filter-section">`;
+                    html += `<span class="tag-filter-section-label">Other</span>`;
+                }
+                for (const tag of ungrouped) {
+                    const checked = peopleTagFilters.has(tag) ? 'checked' : '';
+                    html += `
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="${escapeHtml(tag)}" ${checked} onchange="updatePeopleTagFilter()">
+                            ${escapeHtml(tag)}
+                        </label>
+                    `;
+                }
+                if (sortedPrefixes.length > 0) {
+                    html += `</div>`;
+                }
+            }
+
+            container.innerHTML = html;
+        }
+
+        function updatePeopleTagFilter() {
+            const checkboxes = document.querySelectorAll('#peopleTagOptions input[type="checkbox"]');
+            peopleTagFilters.clear();
+            checkboxes.forEach(cb => {
+                if (cb.checked) peopleTagFilters.add(cb.value);
+            });
+
+            // Update label
+            const label = document.getElementById('peopleTagLabel');
+            if (peopleTagFilters.size === 0 || peopleTagFilters.size === allAvailableTags.length) {
+                label.textContent = 'Tags';
+                peopleTagFilters.clear();  // No filter when all selected
+            } else {
+                label.textContent = `${peopleTagFilters.size} Tag${peopleTagFilters.size !== 1 ? 's' : ''}`;
+            }
+
+            renderPeopleList();
+        }
+
+        function selectAllTags() {
+            document.querySelectorAll('#peopleTagOptions input[type="checkbox"]').forEach(cb => cb.checked = true);
+            updatePeopleTagFilter();
+        }
+
+        function selectNoTags() {
+            document.querySelectorAll('#peopleTagOptions input[type="checkbox"]').forEach(cb => cb.checked = false);
+            updatePeopleTagFilter();
+        }
+
+        function filterTagOptions() {
+            const searchInput = document.getElementById('tagSearchInput');
+            const query = (searchInput?.value || '').toLowerCase().trim();
+            const sections = document.querySelectorAll('#peopleTagOptions .tag-filter-section');
+            const standaloneOptions = document.querySelectorAll('#peopleTagOptions > .people-filter-option');
+
+            // Filter sections (grouped tags)
+            sections.forEach(section => {
+                const options = section.querySelectorAll('.people-filter-option');
+                let anyVisible = false;
+                options.forEach(option => {
+                    const label = option.textContent.toLowerCase();
+                    const matches = !query || label.includes(query);
+                    option.style.display = matches ? '' : 'none';
+                    if (matches) anyVisible = true;
+                });
+                // Hide section if no options match
+                section.style.display = anyVisible ? '' : 'none';
+            });
+
+            // Filter standalone options (ungrouped tags)
+            standaloneOptions.forEach(option => {
+                const label = option.textContent.toLowerCase();
+                option.style.display = (!query || label.includes(query)) ? '' : 'none';
+            });
+        }
+
+        // ===============================
+        // Bulk Tag Functions
+        // ===============================
+
+        function openBulkTagModal() {
+            const count = selectedForMerge.size;
+            if (count === 0) return;
+
+            document.getElementById('bulkTagCount').textContent = count;
+            document.getElementById('bulkTagInput').value = '';
+            document.getElementById('bulkTagModal').style.display = 'flex';
+
+            // Populate tag suggestions from existing tags
+            const suggestions = document.getElementById('tagSuggestions');
+            if (allAvailableTags.length > 0) {
+                const topTags = allAvailableTags.slice(0, 10);  // Show up to 10 suggestions
+                suggestions.innerHTML = topTags.map(tag =>
+                    `<span class="tag-suggestion" onclick="selectTagSuggestion('${escapeHtml(tag)}')">${escapeHtml(tag)}</span>`
+                ).join('');
+            } else {
+                suggestions.innerHTML = '';
+            }
+
+            // Focus input
+            setTimeout(() => document.getElementById('bulkTagInput').focus(), 100);
+        }
+
+        function closeBulkTagModal() {
+            document.getElementById('bulkTagModal').style.display = 'none';
+        }
+
+        function selectTagSuggestion(tag) {
+            document.getElementById('bulkTagInput').value = tag;
+        }
+
+        async function applyBulkTag() {
+            const tag = document.getElementById('bulkTagInput').value.trim();
+            if (!tag) return;
+
+            const selectedIds = [...selectedForMerge];
+            if (selectedIds.length === 0) return;
+
+            closeBulkTagModal();
+
+            // Apply tag to each selected person
+            for (const personId of selectedIds) {
+                try {
+                    const person = people.find(p => p.id === personId);
+                    if (!person) continue;
+
+                    const currentTags = person.tags || [];
+                    if (!currentTags.includes(tag)) {
+                        const newTags = [...currentTags, tag];
+                        await api(`/people/${personId}`, {
+                            method: 'PATCH',
+                            body: JSON.stringify({ tags: newTags })
+                        });
+                        // Update local state
+                        person.tags = newTags;
+                    }
+                } catch (error) {
+                    console.error(`Failed to add tag to person ${personId}:`, error);
+                }
+            }
+
+            // Clear selection and refresh
+            clearSelection();
+            // Rebuild tag filter options to include new tag
+            collectAllTags();
+        }
+
         // Close people filter dropdowns when clicking outside
         document.addEventListener('click', function(e) {
             const categoryDropdown = document.getElementById('peopleCategoryDropdown');
             const dunbarDropdown = document.getElementById('peopleDunbarDropdown');
+            const tagDropdown = document.getElementById('peopleTagDropdown');
 
             if (categoryDropdown && !categoryDropdown.contains(e.target)) {
                 document.getElementById('peopleCategoryOptions').classList.remove('show');
             }
             if (dunbarDropdown && !dunbarDropdown.contains(e.target)) {
                 document.getElementById('peopleDunbarOptions').classList.remove('show');
+            }
+            if (tagDropdown && !tagDropdown.contains(e.target)) {
+                document.getElementById('peopleTagOptions').classList.remove('show');
             }
         });
 
