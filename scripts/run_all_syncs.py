@@ -181,8 +181,8 @@ SYNC_ORDER = [
     "strengths",                # Calculate relationship strength scores
 
     # === Phase 4: Vector Store Indexing ===
-    # Index content with fresh people data available for entity resolution
-    "vault_reindex",            # Re-enabled after manual reindex completed
+    # Note: vault_reindex runs separately at midnight via its own launchd job
+    # This allows unlimited time for full reindex with LLM summaries
     "crm_vectorstore",          # Index CRM people for semantic search
 
     # === Phase 5: Content Sync ===
@@ -225,10 +225,10 @@ SYNC_SCRIPTS = {
 
 # Per-source timeout overrides (seconds)
 # Default is 30 minutes (1800). These sources need more time.
+# Note: vault_reindex runs separately at midnight via its own launchd job (no timeout)
 SYNC_TIMEOUTS = {
     "gmail": 3600,                   # 60 min - fetches 365 days of emails via individual API calls
     "relationship_discovery": 3600,  # 60 min - processes all interactions for relationship edges
-    "vault_reindex": 10800,          # 180 min (3 hours) - full reindex with gte-Qwen2-1.5B embeddings
     "photos": 3600,                  # 60 min - large libraries may take time
     "slack": 3600,                   # 60 min - rate limited API, 100+ DM channels to sync
 }
