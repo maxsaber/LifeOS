@@ -267,8 +267,93 @@ class CommitmentStore:
         finally:
             conn.close()
 
-    def upsert(self, commitment: Commitment) -> Commitment:
-        """Insert or update a commitment."""
+    def find_duplicate(
+        self,
+        person_id: str,
+        direction: str,
+        description: str,
+        similarity_threshold: float = 0.85,
+    ) -> Optional[Commitment]:
+        """
+        Find an existing commitment that matches the given criteria.
+
+        Uses simple text similarity to detect duplicates.
+        Returns the existing commitment if found, None otherwise.
+        """
+        conn = self._get_connection()
+        try:
+            # Get all commitments for this person with same direction
+            cursor = conn.execute("""
+                SELECT * FROM commitments
+                WHERE person_id = ? AND direction = ?
+            """, (person_id, direction))
+
+            existing = [Commitment.from_row(row) for row in cursor.fetchall()]
+
+            # Normalize the new description for comparison
+            new_desc_normalized = self._normalize_text(description)
+
+            for commitment in existing:
+                existing_normalized = self._normalize_text(commitment.description)
+                similarity = self._text_similarity(new_desc_normalized, existing_normalized)
+                if similarity >= similarity_threshold:
+                    logger.debug(f"Found duplicate commitment (similarity={similarity:.2f}): {description[:50]}...")
+                    return commitment
+
+            return None
+        finally:
+            conn.close()
+
+    def _normalize_text(self, text: str) -> str:
+        """Normalize text for comparison."""
+        import re
+        # Lowercase, remove extra whitespace, remove common filler words
+        text = text.lower().strip()
+        text = re.sub(r'\s+', ' ', text)
+        return text
+
+    def _text_similarity(self, text1: str, text2: str) -> float:
+        """
+        Compute simple text similarity using word overlap (Jaccard similarity).
+
+        Returns a value between 0 and 1.
+        """
+        if not text1 or not text2:
+            return 0.0
+
+        words1 = set(text1.split())
+        words2 = set(text2.split())
+
+        if not words1 or not words2:
+            return 0.0
+
+        intersection = words1 & words2
+        union = words1 | words2
+
+        return len(intersection) / len(union)
+
+    def upsert(self, commitment: Commitment, check_duplicate: bool = True) -> tuple[Commitment, bool]:
+        """
+        Insert or update a commitment.
+
+        Args:
+            commitment: The commitment to upsert
+            check_duplicate: If True, check for similar existing commitments first
+
+        Returns:
+            Tuple of (commitment, was_new) where was_new is False if a duplicate was found
+        """
+        # Check for duplicates first
+        if check_duplicate:
+            existing = self.find_duplicate(
+                commitment.person_id,
+                commitment.direction,
+                commitment.description,
+            )
+            if existing:
+                logger.info(f"Skipping duplicate commitment: {commitment.description[:50]}...")
+                return existing, False
+
         conn = self._get_connection()
         try:
             conn.execute("""
@@ -299,7 +384,7 @@ class CommitmentStore:
                 commitment.created_at.isoformat() if commitment.created_at else None,
             ))
             conn.commit()
-            return commitment
+            return commitment, True
         finally:
             conn.close()
 
@@ -426,12 +511,19 @@ class CommitmentExtractor:
                 logger.error(f"Commitment extraction failed for batch: {e}")
                 errors += 1
 
-        # Save commitments
+        # Save commitments (with duplicate detection)
+        new_count = 0
+        duplicate_count = 0
         for commitment in all_commitments:
-            self.store.upsert(commitment)
+            _, was_new = self.store.upsert(commitment)
+            if was_new:
+                new_count += 1
+            else:
+                duplicate_count += 1
 
         return {
-            "extracted": len(all_commitments),
+            "extracted": new_count,
+            "duplicates": duplicate_count,
             "errors": errors,
         }
 

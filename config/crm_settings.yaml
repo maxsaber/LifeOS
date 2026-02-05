@@ -62,7 +62,7 @@ sync:
 sources:
   # Enable/disable individual sources
   gmail:
-    enabled: true
+    enabled: false
     accounts:
       - personal
       - work
@@ -74,8 +74,8 @@ sources:
       - work
 
   slack:
-    enabled: true
-    sync_dms: true
+    enabled: false
+    sync_dms: false
     sync_channels: false  # Start with DMs only
     sync_interval_minutes: 60
 
@@ -100,5 +100,5 @@ sources:
     # Uses CSV export from LinkedIn
 
   vault:
-    enabled: true
+    enabled: false
     # Uses Obsidian vault

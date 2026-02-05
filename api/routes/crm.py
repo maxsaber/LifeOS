@@ -2766,7 +2766,7 @@ async def update_commitment(commitment_id: str, update: CommitmentUpdate):
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Invalid due_date format: {update.due_date}")
 
-    commitment_store.upsert(commitment)
+    commitment_store.upsert(commitment, check_duplicate=False)
 
     # Get person name for response
     person_store = get_person_entity_store()
