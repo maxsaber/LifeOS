@@ -263,8 +263,8 @@ class TestKeywordFallback:
         router = QueryRouter()
 
         test_queries = [
-            "Tell me about Yoni",
-            "Prep me for meeting with Madi",
+            "Tell me about Alex",
+            "Prep me for meeting with Sarah",
             "Who is Kevin?",
         ]
 
@@ -312,12 +312,12 @@ class TestRouterAccuracy:
     ROUTING_TEST_CASES = [
         # Calendar queries
         ("What meetings do I have tomorrow?", ["calendar"]),
-        ("When is my next 1-1 with Yoni?", ["calendar", "people"]),
+        ("When is my next 1-1 with Alex?", ["calendar", "people"]),
         ("What's on my schedule this week?", ["calendar"]),
 
         # Email queries
         ("Did Kevin email me about the budget?", ["gmail"]),
-        ("What did Madi say in her last email?", ["gmail", "people"]),
+        ("What did Sarah say in her last email?", ["gmail", "people"]),
         ("Show me emails from last week", ["gmail"]),
 
         # Drive queries
@@ -325,7 +325,7 @@ class TestRouterAccuracy:
         ("What's in the strategy document?", ["drive", "vault"]),
 
         # People queries
-        ("Tell me about Yoni", ["people", "vault"]),
+        ("Tell me about Alex", ["people", "vault"]),
         ("Prep me for meeting with Hayley", ["people", "vault", "calendar"]),
 
         # Action queries

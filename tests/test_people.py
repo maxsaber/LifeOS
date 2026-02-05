@@ -2,12 +2,12 @@
 Tests for People Tracking functionality.
 P1.4 Acceptance Criteria:
 - Extracts person names from note content
-- Handles aliases (Yoni → Yoni Landau)
-- Handles misspellings (Malia → Malea)
+- Handles aliases (Alex → Alex Johnson)
+- Handles misspellings
 - Tracks last-mention date per person
 - Person filter works in search API
-- "What do I know about Yoni" returns relevant context
-- Excludes self-references (Nathan)
+- "What do I know about Alex" returns relevant context
+- Excludes self-references (configured user name)
 """
 import pytest
 
@@ -30,49 +30,65 @@ class TestPeopleExtraction:
 
     def test_extracts_bold_names(self):
         """Should extract names in bold format."""
-        text = "Met with **Yoni** and **Madi** today to discuss the budget."
+        text = "Met with **Alex** and **Sarah** today to discuss the budget."
         people = extract_people_from_text(text)
 
-        assert "Yoni" in people
-        assert "Madi" in people
+        assert "Alex" in people
+        assert "Sarah" in people
 
     def test_extracts_names_from_people_dictionary(self):
-        """Should recognize names from the People Dictionary."""
-        text = "Taylor and Malea went to the park. Yoni called about work."
+        """Should recognize names from the People Dictionary (if configured)."""
+        if not PEOPLE_DICTIONARY:
+            pytest.skip("People dictionary not configured")
+
+        # Use actual names from dictionary for test, skipping excluded names
+        # (names with exclude=True like self-references are filtered out)
+        dictionary_names = [
+            name for name, info in PEOPLE_DICTIONARY.items()
+            if not info.get("exclude", False)
+        ][:3]
+
+        if len(dictionary_names) < 3:
+            pytest.skip("Need at least 3 non-excluded names in dictionary for this test")
+
+        # Build test text using names from dictionary (no bold formatting)
+        text = f"{dictionary_names[0]} and {dictionary_names[1]} went to the park. {dictionary_names[2]} called."
         people = extract_people_from_text(text)
 
-        assert "Taylor" in people
-        assert "Malea" in people
-        assert "Yoni" in people
+        for name in dictionary_names:
+            assert name in people, f"Expected {name} to be extracted from dictionary"
 
     def test_handles_common_patterns(self):
         """Should extract names from common patterns."""
         text = """
         Attendees: Kevin, Sarah, Mike
         1-1 with Hayley
-        Meeting with Yoni about budgets
+        Meeting with Alex about budgets
         """
         people = extract_people_from_text(text)
 
         assert "Kevin" in people
         assert "Hayley" in people
-        assert "Yoni" in people
+        assert "Alex" in people
 
     def test_excludes_self_references(self):
-        """Should exclude self-references (Nathan)."""
-        text = "Nathan met with Yoni to discuss the project. I'll follow up."
+        """Should exclude self-references (configured user name)."""
+        from config.settings import settings
+        user_name = settings.user_name if settings.user_name else "User"
+        text = f"{user_name} met with Alex to discuss the project. I'll follow up."
         people = extract_people_from_text(text)
 
-        assert "Nathan" not in people
-        assert "Yoni" in people
+        assert user_name not in people
+        assert "Alex" in people
 
     def test_handles_possessives(self):
         """Should extract names even with possessives."""
-        text = "Yoni's idea was great. Taylor's schedule is busy."
+        # Use bold format to ensure extraction regardless of dictionary config
+        text = "**Alex**'s idea was great. **Jane**'s schedule is busy."
         people = extract_people_from_text(text)
 
-        assert "Yoni" in people
-        assert "Taylor" in people
+        assert "Alex" in people
+        assert "Jane" in people
 
 
 class TestAliasResolution:
@@ -80,15 +96,32 @@ class TestAliasResolution:
 
     def test_resolves_known_alias(self):
         """Should resolve known aliases to canonical names."""
-        # Yoni should resolve (known in dictionary)
-        resolved = resolve_person_name("Yoni")
-        assert resolved == "Yoni"  # or "Yoni Landau" if we expand
+        # Alex should resolve (known in dictionary)
+        resolved = resolve_person_name("Alex")
+        assert resolved == "Alex"  # or "Alex Johnson" if we expand
 
     def test_resolves_misspelling(self):
-        """Should resolve common misspellings."""
-        # Malia is common misspelling of Malea
-        resolved = resolve_person_name("Malia")
-        assert resolved == "Malea"
+        """Should resolve common misspellings (if dictionary configured)."""
+        # This test depends on having a configured people dictionary
+        # with misspelling mappings.
+        if not PEOPLE_DICTIONARY:
+            pytest.skip("People dictionary not configured")
+
+        # Find a misspelling mapping from the dictionary
+        misspelling_found = False
+        for canonical, info in PEOPLE_DICTIONARY.items():
+            aliases = info.get("aliases", [])
+            for alias in aliases:
+                if alias.lower() != canonical.lower():  # It's a true alias/misspelling
+                    resolved = resolve_person_name(alias)
+                    assert resolved == canonical, f"Expected '{alias}' to resolve to '{canonical}'"
+                    misspelling_found = True
+                    break
+            if misspelling_found:
+                break
+
+        if not misspelling_found:
+            pytest.skip("No misspelling mappings found in dictionary")
 
     def test_resolves_email_to_name(self):
         """Should resolve email addresses to names."""
@@ -119,22 +152,22 @@ class TestPeopleRegistry:
     def test_records_person_mention(self, registry):
         """Should record person mentions with metadata."""
         registry.record_mention(
-            name="Yoni",
+            name="Alex",
             source_file="/vault/meeting.md",
             mention_date="2025-01-05"
         )
 
-        person = registry.get_person("Yoni")
+        person = registry.get_person("Alex")
         assert person is not None
         assert person["mention_count"] >= 1
         assert "/vault/meeting.md" in person["related_notes"]
 
     def test_tracks_last_mention_date(self, registry):
         """Should track the most recent mention date."""
-        registry.record_mention("Madi", "/vault/old.md", "2025-01-01")
-        registry.record_mention("Madi", "/vault/new.md", "2025-01-10")
+        registry.record_mention("Sarah", "/vault/old.md", "2025-01-01")
+        registry.record_mention("Sarah", "/vault/new.md", "2025-01-10")
 
-        person = registry.get_person("Madi")
+        person = registry.get_person("Sarah")
         assert person["last_mention_date"] == "2025-01-10"
 
     def test_increments_mention_count(self, registry):
@@ -147,23 +180,43 @@ class TestPeopleRegistry:
         assert person["mention_count"] == 3
 
     def test_categorizes_people(self, registry):
-        """Should categorize people as work/personal/family."""
-        # Known work people should be categorized
-        registry.record_mention("Yoni", "/vault/work.md", "2025-01-01")
-        person = registry.get_person("Yoni")
-        assert person["category"] == "work"
+        """Should categorize people as work/personal/family (if dictionary configured)."""
+        if not PEOPLE_DICTIONARY:
+            pytest.skip("People dictionary not configured")
 
-        # Family members should be categorized
-        registry.record_mention("Taylor", "/vault/personal.md", "2025-01-01")
-        person = registry.get_person("Taylor")
-        assert person["category"] in ["personal", "family"]
+        # Find a work person from dictionary
+        work_person = None
+        for name, info in PEOPLE_DICTIONARY.items():
+            if info.get("category") == "work":
+                work_person = name
+                break
+
+        if work_person:
+            registry.record_mention(work_person, "/vault/work.md", "2025-01-01")
+            person = registry.get_person(work_person)
+            assert person["category"] == "work", f"Expected {work_person} to be categorized as 'work'"
+        else:
+            # No work person in dictionary, test passes vacuously
+            pass
+
+        # Find a family person from dictionary
+        family_person = None
+        for name, info in PEOPLE_DICTIONARY.items():
+            if info.get("category") == "family":
+                family_person = name
+                break
+
+        if family_person:
+            registry.record_mention(family_person, "/vault/personal.md", "2025-01-01")
+            person = registry.get_person(family_person)
+            assert person["category"] == "family", f"Expected {family_person} to be categorized as 'family'"
 
     def test_searches_by_person(self, registry):
         """Should enable searching by person name."""
-        registry.record_mention("Yoni", "/vault/meeting1.md", "2025-01-01")
-        registry.record_mention("Yoni", "/vault/meeting2.md", "2025-01-02")
+        registry.record_mention("Alex", "/vault/meeting1.md", "2025-01-01")
+        registry.record_mention("Alex", "/vault/meeting2.md", "2025-01-02")
 
-        notes = registry.get_related_notes("Yoni")
+        notes = registry.get_related_notes("Alex")
         assert len(notes) == 2
         assert "/vault/meeting1.md" in notes
         assert "/vault/meeting2.md" in notes
@@ -201,7 +254,7 @@ type: meeting
 
 # Team Standup
 
-Met with **Yoni** and **Madi** today.
+Met with **Alex** and **Sarah** today.
 Discussed Q1 goals with the team.
 """)
 
@@ -213,7 +266,7 @@ type: note
 
 # Weekend Plans
 
-Taking Malia to the park. Taylor is making dinner.
+Taking Alice to the park. Jane is making dinner.
 """)
 
             yield vault

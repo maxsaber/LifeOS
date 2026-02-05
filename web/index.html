@@ -2692,7 +2692,7 @@
                 <p>Tell me something you want me to remember. Write naturally - I'll format it properly.</p>
                 <textarea
                     id="memoryInput"
-                    placeholder="e.g., Remember that anytime I ask about Erika or Madi you should also check the alternative spellings Erica and Maddie..."
+                    placeholder="e.g., Remember that anytime I ask about Sarah you should also check the alternative spelling Sara..."
                 ></textarea>
                 <div id="memoryStatus"></div>
             </div>
@@ -3975,8 +3975,8 @@
         function renderUsageChart(dailyData) {
             const ctx = document.getElementById('usageChart').getContext('2d');
 
-            // Generate date range starting from 1/1/26
-            const startDate = new Date('2026-01-01');
+            // Generate date range starting from Jan 1 of current year
+            const startDate = new Date(new Date().getFullYear(), 0, 1);
             const today = new Date();
             const labels = [];
             const costMap = {};

@@ -30,6 +30,7 @@ from config.relationship_weights import (
     FREQUENCY_WINDOW_DAYS,
     get_interaction_weight,
     compute_weighted_interaction_count,
+    compute_weighted_interaction_count_detailed,
     INTERACTION_TYPE_WEIGHTS,
     USE_LOG_FREQUENCY_SCALING,
     LIFETIME_FREQUENCY_ENABLED,
@@ -133,8 +134,8 @@ def compute_weighted_frequency_score(interactions_by_type: dict[str, int]) -> fl
 
 
 def compute_hybrid_frequency_score(
-    recent_interactions: dict[str, int],
-    lifetime_interactions: dict[str, int],
+    recent_interactions: dict[str, int] | list[dict],
+    lifetime_interactions: dict[str, int] | list[dict],
 ) -> float:
     """
     Compute frequency score combining recent and lifetime interactions.
@@ -145,8 +146,10 @@ def compute_hybrid_frequency_score(
     still prioritizing recent activity.
 
     Args:
-        recent_interactions: Interactions within FREQUENCY_WINDOW_DAYS
-        lifetime_interactions: All-time interactions
+        recent_interactions: Interactions within FREQUENCY_WINDOW_DAYS.
+            Can be dict[source_type -> count] for simple weighting,
+            or list[dict] with subtype/source_account for detailed weighting.
+        lifetime_interactions: All-time interactions (same format as recent)
 
     Returns:
         Frequency score between 0.0 and 1.0
@@ -155,14 +158,23 @@ def compute_hybrid_frequency_score(
         return compute_weighted_frequency_score(recent_interactions)
 
     # Recent frequency score (uses FREQUENCY_TARGET)
-    recent_weighted = compute_weighted_interaction_count(recent_interactions)
+    # Check if using detailed format (list of dicts) or simple format (dict)
+    if isinstance(recent_interactions, list):
+        recent_weighted = compute_weighted_interaction_count_detailed(recent_interactions)
+    else:
+        recent_weighted = compute_weighted_interaction_count(recent_interactions)
+
     if USE_LOG_FREQUENCY_SCALING and recent_weighted > 0:
         recent_score = min(1.0, math.log(1 + recent_weighted) / math.log(1 + FREQUENCY_TARGET))
     else:
         recent_score = min(1.0, recent_weighted / FREQUENCY_TARGET) if recent_weighted > 0 else 0.0
 
     # Lifetime frequency score (uses higher LIFETIME_FREQUENCY_TARGET)
-    lifetime_weighted = compute_weighted_interaction_count(lifetime_interactions)
+    if isinstance(lifetime_interactions, list):
+        lifetime_weighted = compute_weighted_interaction_count_detailed(lifetime_interactions)
+    else:
+        lifetime_weighted = compute_weighted_interaction_count(lifetime_interactions)
+
     if USE_LOG_FREQUENCY_SCALING and lifetime_weighted > 0:
         lifetime_score = min(1.0, math.log(1 + lifetime_weighted) / math.log(1 + LIFETIME_FREQUENCY_TARGET))
     else:
@@ -263,9 +275,14 @@ def compute_strength_for_person(person: PersonEntity) -> float:
     Compute relationship strength for a PersonEntity.
 
     Fetches interaction data from stores and computes the score
-    using weighted interaction counts by type. Uses hybrid frequency
+    using weighted interaction counts by type and subtype. Uses hybrid frequency
     that combines recent and lifetime interactions. Adds small bonuses
     for LinkedIn connections and family members.
+
+    Uses detailed subtype/account weighting when available:
+    - Gmail: sent (1.2x), received (1.0x), CC (0.3x)
+    - Calendar: 1on1 (6.0x), small group (4.0x), large meeting (2.0x)
+    - Personal account: 2x gmail, 3x calendar
 
     Args:
         person: PersonEntity to compute strength for
@@ -278,20 +295,20 @@ def compute_strength_for_person(person: PersonEntity) -> float:
 
     interaction_store = get_interaction_store()
 
-    # Get recent interaction counts (within frequency window)
-    recent_interactions = interaction_store.get_interaction_counts(
+    # Get recent interaction counts with subtype detail (within frequency window)
+    recent_interactions = interaction_store.get_interaction_counts_with_subtypes(
         person.id,
         days_back=FREQUENCY_WINDOW_DAYS,
     )
 
-    # Get lifetime interaction counts (all-time, 10 years)
-    lifetime_interactions = interaction_store.get_interaction_counts(
+    # Get lifetime interaction counts with subtype detail (all-time, 10 years)
+    lifetime_interactions = interaction_store.get_interaction_counts_with_subtypes(
         person.id,
         days_back=3650,  # 10 years
     )
 
     # Get source types from interactions
-    sources = list(lifetime_interactions.keys())
+    sources = list({item["source_type"] for item in lifetime_interactions})
 
     # Also include sources from the person's source list
     sources.extend(person.sources)
@@ -304,7 +321,7 @@ def compute_strength_for_person(person: PersonEntity) -> float:
 
     # Apply recency discount for low/zero interaction contacts
     # Prevents contact syncs from inflating scores for people you've never actually interacted with
-    total_interactions = sum(lifetime_interactions.values())
+    total_interactions = sum(item["count"] for item in lifetime_interactions)
     if total_interactions < MIN_INTERACTIONS_FOR_FULL_RECENCY:
         if total_interactions == 0:
             recency_multiplier = ZERO_INTERACTION_RECENCY_MULTIPLIER
@@ -559,7 +576,13 @@ def get_strength_breakdown(person: PersonEntity) -> dict:
     """
     interaction_store = get_interaction_store()
 
-    # Get interaction counts by type for weighted calculation
+    # Get interaction counts with subtype detail for weighted calculation
+    interactions_detailed = interaction_store.get_interaction_counts_with_subtypes(
+        person.id,
+        days_back=FREQUENCY_WINDOW_DAYS,
+    )
+
+    # Also get simple counts for backward compatibility
     interactions_by_type = interaction_store.get_interaction_counts(
         person.id,
         days_back=FREQUENCY_WINDOW_DAYS,
@@ -569,12 +592,13 @@ def get_strength_breakdown(person: PersonEntity) -> dict:
     sources.extend(person.sources)
     sources = list(set(sources))
 
-    # Calculate raw and weighted counts
-    raw_interaction_count = sum(interactions_by_type.values())
-    weighted_interaction_count = compute_weighted_interaction_count(interactions_by_type)
+    # Calculate raw and weighted counts (using detailed data)
+    raw_interaction_count = sum(item["count"] for item in interactions_detailed)
+    weighted_interaction_count = compute_weighted_interaction_count_detailed(interactions_detailed)
 
     recency_score = compute_recency_score(person.last_seen)
-    frequency_score = compute_weighted_frequency_score(interactions_by_type)
+    # Use detailed data for frequency score
+    frequency_score = compute_frequency_score(weighted_interaction_count)
     diversity_score = compute_diversity_score(sources)
 
     days_since_last = None
@@ -585,22 +609,31 @@ def get_strength_breakdown(person: PersonEntity) -> dict:
             last_seen = last_seen.replace(tzinfo=timezone.utc)
         days_since_last = (now - last_seen).days
 
-    # Build weighted breakdown for each source type
+    # Build weighted breakdown with subtype detail
     interaction_weights_detail = {}
-    for source_type, count in interactions_by_type.items():
-        weight = get_interaction_weight(source_type)
-        interaction_weights_detail[source_type] = {
+    for item in interactions_detailed:
+        source_type = item["source_type"]
+        subtype = item.get("subtype")
+        source_account = item.get("source_account")
+        count = item["count"]
+
+        # Use subtype as key if available, otherwise source_type
+        key = subtype if subtype else source_type
+        if source_account:
+            key = f"{key}:{source_account}"
+
+        weight = get_interaction_weight(source_type, subtype, source_account)
+        interaction_weights_detail[key] = {
             "count": count,
             "weight": weight,
             "weighted_count": round(count * weight, 2),
+            "source_type": source_type,
+            "subtype": subtype,
+            "source_account": source_account,
         }
 
     return {
-        "overall_strength": compute_relationship_strength_weighted(
-            person.last_seen,
-            interactions_by_type,
-            sources,
-        ),
+        "overall_strength": person.relationship_strength or compute_strength_for_person(person),
         "recency": {
             "score": recency_score,
             "weight": RECENCY_WEIGHT,

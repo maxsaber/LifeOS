@@ -67,9 +67,10 @@ setup_log_rotation() {
 
     if [ ! -f "$NEWSYSLOG_CONF" ]; then
         log_info "Setting up log rotation (requires sudo)..."
+        CURRENT_USER=$(whoami)
         echo "# LifeOS log rotation
-$LOG_FILE  nathanramia:staff  644  5  102400  *  J
-$ERROR_LOG nathanramia:staff  644  5  102400  *  J" | sudo tee "$NEWSYSLOG_CONF" > /dev/null
+$LOG_FILE  $CURRENT_USER:staff  644  5  102400  *  J
+$ERROR_LOG $CURRENT_USER:staff  644  5  102400  *  J" | sudo tee "$NEWSYSLOG_CONF" > /dev/null
         log_info "Log rotation configured: max 100MB, 5 archives"
     fi
 }

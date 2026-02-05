@@ -752,8 +752,8 @@ SKIP (low value, findable elsewhere):
 - Routine scheduling details
 
 CRITICAL - ENTITY ATTRIBUTION:
-These are conversations BETWEEN the user (Nathan) and {person_name}.
-- If Nathan says "my daughter Malea" → This is Nathan's family, NOT {person_name}'s. DO NOT extract.
+These are conversations BETWEEN the user and {person_name}.
+- If the user says "my daughter" → This is the user's family, NOT {person_name}'s. DO NOT extract.
 - If {person_name} says "my daughter Emma" → This IS {person_name}'s daughter. EXTRACT IT.
 - If they discuss a third person "Sarah got a new job" → About Sarah, not {person_name}. DO NOT extract.
 
@@ -896,6 +896,8 @@ Interactions:
 
     def _format_interactions(self, interactions: list, person_name: str = "") -> str:
         """Format interactions for the prompt with clear sender attribution."""
+        # Uses LIFEOS_USER_NAME from settings (see config/settings.py)
+        user_upper = settings.user_name.upper()
         lines = []
         for i, interaction in enumerate(interactions, 1):
             source_type = interaction.get("source_type", "unknown")
@@ -909,7 +911,7 @@ Interactions:
             sender_prefix = ""
             if source_type in ("imessage", "whatsapp", "slack", "phone"):
                 if title.startswith("→"):
-                    sender_prefix = "[NATHAN SENT]: "
+                    sender_prefix = f"[{user_upper} SENT]: "
                     title = title[1:].strip()  # Remove arrow
                 elif title.startswith("←"):
                     sender_prefix = f"[{person_name.upper()} SENT]: "
@@ -931,25 +933,28 @@ Interactions:
 
     def _build_extraction_prompt(self, person_name: str, interaction_text: str) -> str:
         """Build the strict LLM prompt for fact extraction."""
+        # Uses LIFEOS_USER_NAME from settings (see config/settings.py)
+        user = settings.user_name
+        user_upper = user.upper()
         person_upper = person_name.upper()
         return f"""Analyze these interactions and extract ONLY facts about {person_name} (the contact person).
 
-CONTEXT: These messages are between Nathan Ramia (the user, referred to as "Nathan") and {person_name}.
+CONTEXT: These messages are between {user} (the user) and {person_name}.
 
 CRITICAL - MESSAGE SENDER LABELS:
 Messages are labeled with who sent them:
-- [NATHAN SENT]: Nathan Ramia (the user) wrote this message. ANY fact stated here is about NATHAN, NOT {person_name}. NEVER extract these as facts about {person_name}.
+- [{user_upper} SENT]: {user} (the user) wrote this message. ANY fact stated here is about {user_upper}, NOT {person_name}. NEVER extract these as facts about {person_name}.
 - [{person_upper} SENT]: {person_name} wrote this message. Facts stated here ARE about {person_name}. These can be extracted.
 
 EXAMPLES OF CORRECT ATTRIBUTION:
-- [NATHAN SENT]: "I'm in Minnesota" → Nathan is in Minnesota. DO NOT extract as fact about {person_name}.
+- [{user_upper} SENT]: "I'm in Minnesota" → {user} is in Minnesota. DO NOT extract as fact about {person_name}.
 - [{person_upper} SENT]: "I'm in Minnesota" → {person_name} is in Minnesota. Extract this fact.
-- [NATHAN SENT]: "I imagine you're in Minnesota" → Nathan thinks {person_name} might be there. NOT a confirmed fact.
+- [{user_upper} SENT]: "I imagine you're in Minnesota" → {user} thinks {person_name} might be there. NOT a confirmed fact.
 - [{person_upper} SENT]: "Just landed in Denver" → {person_name} is in Denver. Extract this fact.
 
 CRITICAL - ENTITY ATTRIBUTION:
-- If Nathan says "my daughter Malea" → This is Nathan's daughter, NOT {person_name}'s. DO NOT extract.
-- If Nathan says "my wife Taylor" → This is Nathan's wife. Only extract if {person_name} IS Taylor.
+- If {user} says "my daughter" → This is {user}'s daughter, NOT {person_name}'s. DO NOT extract.
+- If {user} says "my wife" or "my partner" → This is {user}'s partner. Only extract if {person_name} IS that partner.
 - If {person_name} says "my daughter Emma" → This IS {person_name}'s daughter. Extract it.
 - If they discuss a third person "Sarah got a new job" → This is about Sarah, NOT {person_name}. DO NOT extract.
 
@@ -991,18 +996,18 @@ EXTRACTION RULES:
 - Values should be specific (not "sister" but "sister named Jane")
 - Use lowercase snake_case for keys
 - Reject vague facts without specific names or details
-- Reject any fact about Nathan (the user) or third parties mentioned in conversation
+- Reject any fact about the user or third parties mentioned in conversation
 
 Example of GOOD extraction (from [{person_name.upper()} SENT] messages):
 - [{person_name.upper()} SENT]: "I'm taking my daughter Emma to soccer practice"
 - Fact: {{"category": "family", "key": "daughter_name", "value": "Emma", "quote": "I'm taking my daughter Emma", "confidence": 0.95}}
 
 Example of BAD extraction (DO NOT do this):
-- [NATHAN SENT]: "I'm in Minnesota" <- Nathan said this, not {person_name}!
-- BAD: {{"category": "travel", "key": "location", "value": "Minnesota"}} <- WRONG! This is about Nathan!
+- [{user_upper} SENT]: "I'm in Minnesota" <- The user said this, not {person_name}!
+- BAD: {{"category": "travel", "key": "location", "value": "Minnesota"}} <- WRONG! This is about the user!
 
-- [NATHAN SENT]: "I need to pick up Malea" <- Nathan said this about his own family
-- BAD: {{"category": "family", "key": "child_name", "value": "Malea"}} <- WRONG! Malea is Nathan's, not {person_name}'s!
+- [{user_upper} SENT]: "I need to pick up my daughter" <- The user said this about their own family
+- BAD: {{"category": "family", "key": "child_name", "value": "..."}} <- WRONG! This is the user's child, not {person_name}'s!
 
 - They discuss "Sarah got a new job in Boston"
 - BAD: {{"category": "work", "key": "employer", "value": "Boston company"}} <- WRONG! This is about Sarah, not {person_name}!

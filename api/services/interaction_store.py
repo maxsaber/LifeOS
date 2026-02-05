@@ -21,6 +21,10 @@ from api.utils.datetime_utils import make_aware as _make_aware
 
 logger = logging.getLogger(__name__)
 
+# Sentinel date for undated vault notes - allows them to appear in counts
+# while being filterable in timeline views
+UNDATED_SENTINEL = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
 
 def get_interaction_db_path() -> str:
     """Get the path to the interactions database."""
@@ -102,6 +106,10 @@ class Interaction:
     # Timestamps
     created_at: datetime = field(default_factory=datetime.now)
 
+    # Account and subtype info (for weighted scoring)
+    source_account: Optional[str] = None  # "personal" or "work"
+    attendee_count: Optional[int] = None  # For calendar events: number of other attendees
+
     def to_dict(self) -> dict:
         """Convert to dict for JSON serialization."""
         data = asdict(self)
@@ -129,6 +137,10 @@ class Interaction:
         created_at = datetime.fromisoformat(row[8]) if row[8] else datetime.now(timezone.utc)
         created_at = _make_aware(created_at)
 
+        # Handle optional new columns (source_account at index 9, attendee_count at index 10)
+        source_account = row[9] if len(row) > 9 else None
+        attendee_count = row[10] if len(row) > 10 else None
+
         return cls(
             id=row[0],
             person_id=row[1],
@@ -139,6 +151,8 @@ class Interaction:
             source_link=row[6] or "",
             source_id=row[7],
             created_at=created_at,
+            source_account=source_account,
+            attendee_count=attendee_count,
         )
 
     @property
@@ -273,6 +287,18 @@ class InteractionStore:
                 ON interactions(timestamp DESC)
             """
             )
+
+            # Migration: Add source_account and attendee_count columns if missing
+            cursor = conn.execute("PRAGMA table_info(interactions)")
+            columns = {row[1] for row in cursor.fetchall()}
+
+            if "source_account" not in columns:
+                conn.execute("ALTER TABLE interactions ADD COLUMN source_account TEXT")
+                logger.info("Added source_account column to interactions table")
+
+            if "attendee_count" not in columns:
+                conn.execute("ALTER TABLE interactions ADD COLUMN attendee_count INTEGER")
+                logger.info("Added attendee_count column to interactions table")
 
             conn.commit()
             logger.info(f"Initialized interaction database at {self.db_path}")
@@ -546,6 +572,63 @@ class InteractionStore:
             )
 
             return {row[0]: row[1] for row in cursor.fetchall()}
+        finally:
+            conn.close()
+
+    def get_interaction_counts_with_subtypes(
+        self, person_id: str, days_back: int = None
+    ) -> list[dict]:
+        """
+        Get interaction counts with subtype detail for weight calculation.
+
+        For gmail: parses direction from title prefix (→/←/↔)
+        For calendar: derives size from attendee_count
+
+        Args:
+            person_id: PersonEntity ID
+            days_back: Only count interactions from last N days
+
+        Returns:
+            List of dicts with keys: source_type, subtype, source_account, count
+        """
+        if days_back is None:
+            days_back = InteractionConfig.DEFAULT_WINDOW_DAYS
+
+        cutoff = datetime.now() - timedelta(days=days_back)
+
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(
+                """
+                SELECT
+                    source_type,
+                    source_account,
+                    CASE
+                        WHEN source_type = 'gmail' AND title LIKE '→ %' THEN 'gmail_sent'
+                        WHEN source_type = 'gmail' AND title LIKE '← %' THEN 'gmail_received'
+                        WHEN source_type = 'gmail' AND title LIKE '↔ %' THEN 'gmail_cc'
+                        WHEN source_type = 'calendar' AND attendee_count = 1 THEN 'calendar_1on1'
+                        WHEN source_type = 'calendar' AND attendee_count BETWEEN 2 AND 5 THEN 'calendar_small_group'
+                        WHEN source_type = 'calendar' AND attendee_count >= 6 THEN 'calendar_large_meeting'
+                        ELSE NULL
+                    END as subtype,
+                    COUNT(*) as count
+                FROM interactions
+                WHERE person_id = ? AND timestamp > ?
+                GROUP BY source_type, subtype, source_account
+            """,
+                (person_id, cutoff.isoformat()),
+            )
+
+            results = []
+            for row in cursor.fetchall():
+                results.append({
+                    "source_type": row[0],
+                    "source_account": row[1],
+                    "subtype": row[2],
+                    "count": row[3],
+                })
+            return results
         finally:
             conn.close()
 
@@ -882,6 +965,29 @@ class InteractionStore:
         finally:
             conn.close()
 
+    def delete_by_source_type(self, source_type: str) -> int:
+        """
+        Delete all interactions of a specific source type.
+
+        Useful for cleanup before re-indexing vault notes with improved
+        date extraction logic.
+
+        Args:
+            source_type: The source type to delete (e.g., "vault", "granola")
+
+        Returns:
+            Number of interactions deleted
+        """
+        conn = self._get_connection()
+        try:
+            cursor = conn.execute(
+                "DELETE FROM interactions WHERE source_type = ?", (source_type,)
+            )
+            conn.commit()
+            return cursor.rowcount
+        finally:
+            conn.close()
+
     def count(self) -> int:
         """Get total number of interactions."""
         conn = self._get_connection()
@@ -890,6 +996,44 @@ class InteractionStore:
             return cursor.fetchone()[0]
         finally:
             conn.close()
+
+    def create_backup(self) -> Optional[Path]:
+        """
+        Create a backup of interactions.db.
+
+        Uses LIFEOS_BACKUP_PATH from settings.
+        Keeps only 2 most recent backups.
+
+        Returns:
+            Path to backup file if created, None if no db to backup
+        """
+        import shutil
+
+        db_path = Path(self.db_path)
+        if not db_path.exists():
+            logger.warning("No interactions.db to backup")
+            return None
+
+        backup_dir = Path(settings.backup_path)
+        backup_dir.mkdir(parents=True, exist_ok=True)
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_path = backup_dir / f"interactions.db.{timestamp}.backup"
+
+        try:
+            shutil.copy2(db_path, backup_path)
+            logger.info(f"Created interactions backup: {backup_path}")
+
+            # Keep only 2 most recent backups
+            backups = sorted(backup_dir.glob("interactions.db.*.backup"))
+            for old_backup in backups[:-2]:
+                old_backup.unlink()
+                logger.debug(f"Removed old backup: {old_backup}")
+
+            return backup_path
+        except Exception as e:
+            logger.error(f"Failed to create backup: {e}")
+            return None
 
     def get_statistics(self) -> dict:
         """Get aggregate statistics about stored interactions."""
@@ -962,7 +1106,7 @@ class InteractionStore:
         conn = self._get_connection()
         try:
             # Handle specific date filter (overrides start/end range)
-            # Note: Timestamps in DB are ISO format (e.g., 2026-02-24T16:00:00-05:00)
+            # Note: Timestamps in DB are ISO format (e.g., 2023-02-24T16:00:00-05:00)
             # Use simple date comparison which works with ISO strings
             if specific_date:
                 # For single date: timestamp >= 'YYYY-MM-DD' AND timestamp < next day

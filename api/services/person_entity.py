@@ -696,18 +696,23 @@ class PersonEntityStore:
 
         # Create rolling backup before save
         if self.storage_path.exists():
-            backup_dir = self.storage_path.parent / "backups"
-            backup_dir.mkdir(exist_ok=True)
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_path = backup_dir / f"people_entities.{timestamp}.json"
-            shutil.copy(self.storage_path, backup_path)
-            logger.info(f"Created backup: {backup_path}")
+            try:
+                from config.settings import settings
+                backup_dir = Path(settings.backup_path)
+                backup_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                backup_path = backup_dir / f"people_entities.{timestamp}.json"
+                shutil.copy(self.storage_path, backup_path)
+                logger.info(f"Created backup: {backup_path}")
 
-            # Keep only last 5 backups
-            backups = sorted(backup_dir.glob("people_entities.*.json"))
-            for old_backup in backups[:-5]:
-                old_backup.unlink()
-                logger.debug(f"Removed old backup: {old_backup}")
+                # Keep only last 2 backups
+                backups = sorted(backup_dir.glob("people_entities.*.json"))
+                for old_backup in backups[:-2]:
+                    old_backup.unlink()
+                    logger.debug(f"Removed old backup: {old_backup}")
+            except Exception as e:
+                logger.warning(f"Could not create backup: {e}")
+                # Continue with save - backup failure shouldn't block saves
 
         # Write to temp file first (atomic write pattern)
         temp_fd, temp_path = tempfile.mkstemp(

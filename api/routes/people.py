@@ -117,7 +117,7 @@ def _entity_to_response(entity, include_channels: bool = True) -> PersonResponse
         linkedin_url=entity.linkedin_url,
         display_name=entity.display_name,
         aliases=entity.aliases,
-        birthday=entity.birthday.isoformat() if entity.birthday else None,
+        birthday=entity.birthday,  # Already "MM-DD" string or None
         # Relationship context - strength comes from entity directly
         relationship_strength=entity.relationship_strength,
     )

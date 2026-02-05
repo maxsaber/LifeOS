@@ -90,6 +90,13 @@ SYNC_SOURCES = {
         "phase": 2,
         "depends_on": ["imessage"],
     },
+    "link_source_entities": {
+        "description": "Retroactively link unlinked source entities to people",
+        "script": "scripts/link_source_entities.py",
+        "frequency": "daily",
+        "phase": 2,
+        "depends_on": ["gmail", "calendar", "contacts", "linkedin"],
+    },
     "photos": {
         "description": "Sync Apple Photos face recognition to CRM",
         "script": "scripts/sync_photos.py",

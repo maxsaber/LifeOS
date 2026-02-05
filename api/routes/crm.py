@@ -131,7 +131,7 @@ def compute_person_category(person: PersonEntity, source_entities: list = None) 
     Rules (in order):
     1. Is the CRM owner (my_person_id) → self
     2. Has family last name or exact name match → family
-    3. Has Slack or @movementlabs.com email → work
+    3. Has Slack or work domain email (LIFEOS_WORK_DOMAIN) → work
     4. Otherwise → personal
     """
     # 1. Check if this is "me" (the CRM owner)
@@ -343,7 +343,7 @@ class AggregatedTimelineItem(BaseModel):
 class AggregatedDayGroup(BaseModel):
     """A day's worth of aggregated interactions."""
     date: str  # ISO date (YYYY-MM-DD)
-    date_display: str  # Human-readable date (e.g., "Jan 28, 2026")
+    date_display: str  # Human-readable date (e.g., "Jan 28, 2023")
     total_count: int
     groups: list[AggregatedTimelineItem]
 
@@ -726,6 +726,35 @@ class CRMConfigResponse(BaseModel):
     my_person_id: str = ""
     work_email_domain: str = ""
     partner_person_id: str = ""
+    partner_name: str = ""
+    family_default_selected_ids: list[str] = []
+
+
+def _load_family_default_selected_ids() -> list[str]:
+    """Load default selected family member IDs from family_members.json."""
+    config_path = Path(__file__).parent.parent.parent / "config" / "family_members.json"
+    if config_path.exists():
+        try:
+            with open(config_path) as f:
+                config = json.load(f)
+            return config.get("default_selected_ids", [])
+        except Exception as e:
+            logger.warning(f"Failed to load family default selected IDs: {e}")
+    return []
+
+
+def _get_partner_name() -> str:
+    """Get the partner's canonical name from their person ID."""
+    if not PARTNER_PERSON_ID:
+        return ""
+    try:
+        person_store = get_person_entity_store()
+        partner = person_store.get_by_id(PARTNER_PERSON_ID)
+        if partner:
+            return partner.canonical_name
+    except Exception as e:
+        logger.warning(f"Failed to load partner name: {e}")
+    return ""
 
 
 @router.get("/config", response_model=CRMConfigResponse)
@@ -740,6 +769,8 @@ async def get_crm_config():
         my_person_id=settings.my_person_id,
         work_email_domain=WORK_EMAIL_DOMAIN,
         partner_person_id=PARTNER_PERSON_ID,
+        partner_name=_get_partner_name(),
+        family_default_selected_ids=_load_family_default_selected_ids(),
     )
 
 
@@ -793,6 +824,7 @@ async def list_people(
     category: Optional[str] = Query(default=None, description="Filter by category"),
     source: Optional[str] = Query(default=None, description="Filter by source"),
     dunbar_circles: Optional[str] = Query(default=None, description="Filter by dunbar circles (comma-separated, e.g., '5,6+')"),
+    tags: Optional[str] = Query(default=None, description="Filter by tags (comma-separated, person must have at least one)"),
     has_interactions: Optional[bool] = Query(default=None, description="Filter by interaction count > 0"),
     min_interactions: int = Query(default=0, ge=0, description="Minimum total interactions (emails + meetings + mentions + messages)"),
     sort: str = Query(default="strength", description="Sort field: interactions, last_seen, name, strength"),
@@ -853,6 +885,11 @@ async def list_people(
                 return '6+' in circles
             return str(dc) in circles
         people = [p for p in people if matches_dunbar(p)]
+
+    # Apply tags filter (person must have at least one of the specified tags)
+    if tags:
+        tag_set = set(t.strip().lower() for t in tags.split(',') if t.strip())
+        people = [p for p in people if any(t in tag_set for t in (p.tags or []))]
 
     total = len(people)
 
@@ -1951,8 +1988,8 @@ async def get_person_timeline_aggregated(
     {
       "days": [
         {
-          "date": "2026-01-28",
-          "date_display": "Jan 28, 2026",
+          "date": "2023-01-28",
+          "date_display": "Jan 28, 2023",
           "total_count": 15,
           "groups": [
             {
@@ -1974,7 +2011,7 @@ async def get_person_timeline_aggregated(
       ],
       "total_interactions": 150,
       "date_range_start": "2025-10-30",
-      "date_range_end": "2026-01-28"
+      "date_range_end": "2023-01-28"
     }
     ```
     """
@@ -5638,11 +5675,11 @@ class ToneDataPoint(BaseModel):
 class ToneDataPointDetailed(BaseModel):
     """A single month's tone data with separate scores for each person."""
     month: str  # YYYY-MM
-    nathan_score: float  # 0-100 scale for Nathan's messages
-    taylor_score: float  # 0-100 scale for Taylor's messages
+    user_score: float  # 0-100 scale for user's messages
+    partner_score: float  # 0-100 scale for partner's messages
     combined_score: float  # Average of the two
-    nathan_sample_count: int = 0
-    taylor_sample_count: int = 0
+    user_sample_count: int = 0
+    partner_sample_count: int = 0
 
 
 class ToneAnalysisResponse(BaseModel):
@@ -5653,22 +5690,23 @@ class ToneAnalysisResponse(BaseModel):
 
 
 class ToneAnalysisDetailedResponse(BaseModel):
-    """Response for detailed tone analysis with separate Nathan/Taylor scores."""
+    """Response for detailed tone analysis with separate user/partner scores."""
     monthly_tones: list[ToneDataPointDetailed]
-    nathan_trend: str
-    taylor_trend: str
+    user_trend: str
+    partner_trend: str
     combined_trend: str
-    nathan_average: float  # Overall average for Nathan
-    taylor_average: float  # Overall average for Taylor
+    user_average: float  # Overall average for user
+    partner_average: float  # Overall average for partner
     generated_at: str
 
 
 @router.get("/relationship/insights", response_model=RelationshipInsightsResponse)
 async def get_relationship_insights(person_id: Optional[str] = None):
     """
-    Get all relationship insights for Taylor Walker.
+    Get all relationship insights for the configured partner.
 
     Returns both confirmed and unconfirmed insights, sorted with confirmed first.
+    Uses PARTNER_PERSON_ID from config/family_members.json by default.
     """
     from api.services.relationship_insights import get_relationship_insight_store
 
@@ -5966,10 +6004,14 @@ async def analyze_relationship_tone_detailed(person_id: Optional[str] = None, mo
         limit=10000,  # Get more for weekly analysis
     )
 
+    # Get names from settings
+    user_name = settings.user_name if settings.user_name else "User"
+    partner_name = settings.partner_name if settings.partner_name else "Partner"
+
     # Separate messages by sender and group by week
     # iMessage interactions have is_from_me attribute or we check title patterns
-    nathan_by_week: dict[str, list] = defaultdict(list)
-    taylor_by_week: dict[str, list] = defaultdict(list)
+    user_by_week: dict[str, list] = defaultdict(list)
+    partner_by_week: dict[str, list] = defaultdict(list)
 
     for interaction in interactions:
         dt = interaction.timestamp
@@ -5981,28 +6023,28 @@ async def analyze_relationship_tone_detailed(person_id: Optional[str] = None, mo
         title = interaction.title or ""
 
         # Determine sender from title arrow prefix
-        # → means sent BY Nathan, ← means received FROM Taylor
-        is_from_nathan = title.startswith("→")
+        # → means sent BY user, ← means received FROM partner
+        is_from_user = title.startswith("→")
         message_text = title.lstrip("→←").strip() if title else ""
 
-        if is_from_nathan:
-            nathan_by_week[week_key].append(message_text)
+        if is_from_user:
+            user_by_week[week_key].append(message_text)
         else:
-            taylor_by_week[week_key].append(message_text)
+            partner_by_week[week_key].append(message_text)
 
-    if not nathan_by_week and not taylor_by_week:
+    if not user_by_week and not partner_by_week:
         return ToneAnalysisDetailedResponse(
             monthly_tones=[],
-            nathan_trend="insufficient-data",
-            taylor_trend="insufficient-data",
+            user_trend="insufficient-data",
+            partner_trend="insufficient-data",
             combined_trend="insufficient-data",
-            nathan_average=50.0,
-            taylor_average=50.0,
+            user_average=50.0,
+            partner_average=50.0,
             generated_at=now.isoformat(),
         )
 
     # Get all weeks and sort them
-    all_weeks = sorted(set(nathan_by_week.keys()) | set(taylor_by_week.keys()))
+    all_weeks = sorted(set(user_by_week.keys()) | set(partner_by_week.keys()))
 
     # Sample messages for tone analysis (max 10 per week per person)
     def format_weekly_samples(by_week: dict, person_name: str) -> str:
@@ -6015,13 +6057,13 @@ async def analyze_relationship_tone_detailed(person_id: Optional[str] = None, mo
                     lines.append(f"=== {week} ({person_name}) ===\n" + "\n".join(sample))
         return "\n\n".join(lines)
 
-    nathan_text = format_weekly_samples(nathan_by_week, "Nathan")
-    taylor_text = format_weekly_samples(taylor_by_week, "Taylor")
+    user_text = format_weekly_samples(user_by_week, user_name)
+    partner_text = format_weekly_samples(partner_by_week, partner_name)
 
     # Use Claude to analyze tone for each person
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
 
-    prompt = f"""Analyze the emotional warmth of these iMessage conversations between Nathan and Taylor.
+    prompt = f"""Analyze the emotional warmth of these iMessage conversations between {user_name} and {partner_name}.
 Messages are grouped by week and separated by sender.
 
 For EACH week where messages exist, rate emotional warmth on a scale from 0 to 100:
@@ -6031,22 +6073,22 @@ For EACH week where messages exist, rate emotional warmth on a scale from 0 to 1
 - 25 = Cool: Brief, distant, minimal warmth
 - 0 = Cold: Tense, frustrated, hostile
 
-Analyze Nathan's messages and Taylor's messages SEPARATELY.
+Analyze {user_name}'s messages and {partner_name}'s messages SEPARATELY.
 
-NATHAN'S MESSAGES:
-{nathan_text if nathan_text else "(No messages)"}
+{user_name.upper()}'S MESSAGES:
+{user_text if user_text else "(No messages)"}
 
-TAYLOR'S MESSAGES:
-{taylor_text if taylor_text else "(No messages)"}
+{partner_name.upper()}'S MESSAGES:
+{partner_text if partner_text else "(No messages)"}
 
 Return ONLY valid JSON with separate scores for each person for each week:
 {{
   "weekly_scores": [
-    {{"week": "2025-W01", "nathan_score": 72, "taylor_score": 68}},
-    {{"week": "2025-W02", "nathan_score": 65, "taylor_score": 70}}
+    {{"week": "2025-W01", "user_score": 72, "partner_score": 68}},
+    {{"week": "2025-W02", "user_score": 65, "partner_score": 70}}
   ],
-  "nathan_trend": "stable-positive",
-  "taylor_trend": "stable-positive"
+  "user_trend": "stable-positive",
+  "partner_trend": "stable-positive"
 }}
 
 Trend options: stable-positive, stable-neutral, improving, declining, variable
@@ -6075,8 +6117,8 @@ If a person has no messages for a week, omit their score for that week (don't pu
         weekly_scores = data.get("weekly_scores", [])
 
         # Aggregate weekly scores to monthly
-        monthly_nathan: dict[str, list] = defaultdict(list)
-        monthly_taylor: dict[str, list] = defaultdict(list)
+        monthly_user: dict[str, list] = defaultdict(list)
+        monthly_partner: dict[str, list] = defaultdict(list)
 
         for item in weekly_scores:
             week = item.get("week", "")
@@ -6094,49 +6136,49 @@ If a person has no messages for a week, omit their score for that week (don't pu
             except (ValueError, IndexError):
                 continue
 
-            if "nathan_score" in item:
-                monthly_nathan[month_key].append(float(item["nathan_score"]))
-            if "taylor_score" in item:
-                monthly_taylor[month_key].append(float(item["taylor_score"]))
+            if "user_score" in item:
+                monthly_user[month_key].append(float(item["user_score"]))
+            if "partner_score" in item:
+                monthly_partner[month_key].append(float(item["partner_score"]))
 
         # Compute monthly averages
-        all_months = sorted(set(monthly_nathan.keys()) | set(monthly_taylor.keys()))
+        all_months = sorted(set(monthly_user.keys()) | set(monthly_partner.keys()))
 
         monthly_tones = []
-        all_nathan_scores = []
-        all_taylor_scores = []
+        all_user_scores = []
+        all_partner_scores = []
 
         for month in all_months:
-            nathan_scores = monthly_nathan.get(month, [])
-            taylor_scores = monthly_taylor.get(month, [])
+            user_scores = monthly_user.get(month, [])
+            partner_scores = monthly_partner.get(month, [])
 
-            nathan_avg = sum(nathan_scores) / len(nathan_scores) if nathan_scores else 50.0
-            taylor_avg = sum(taylor_scores) / len(taylor_scores) if taylor_scores else 50.0
-            combined_avg = (nathan_avg + taylor_avg) / 2
+            user_avg = sum(user_scores) / len(user_scores) if user_scores else 50.0
+            partner_avg = sum(partner_scores) / len(partner_scores) if partner_scores else 50.0
+            combined_avg = (user_avg + partner_avg) / 2
 
-            all_nathan_scores.extend(nathan_scores)
-            all_taylor_scores.extend(taylor_scores)
+            all_user_scores.extend(user_scores)
+            all_partner_scores.extend(partner_scores)
 
             monthly_tones.append(ToneDataPointDetailed(
                 month=month,
-                nathan_score=round(nathan_avg, 1),
-                taylor_score=round(taylor_avg, 1),
+                user_score=round(user_avg, 1),
+                partner_score=round(partner_avg, 1),
                 combined_score=round(combined_avg, 1),
-                nathan_sample_count=len(nathan_by_week.get(month, [])),
-                taylor_sample_count=len(taylor_by_week.get(month, [])),
+                user_sample_count=len(user_by_week.get(month, [])),
+                partner_sample_count=len(partner_by_week.get(month, [])),
             ))
 
         # Overall averages
-        nathan_overall = sum(all_nathan_scores) / len(all_nathan_scores) if all_nathan_scores else 50.0
-        taylor_overall = sum(all_taylor_scores) / len(all_taylor_scores) if all_taylor_scores else 50.0
+        user_overall = sum(all_user_scores) / len(all_user_scores) if all_user_scores else 50.0
+        partner_overall = sum(all_partner_scores) / len(all_partner_scores) if all_partner_scores else 50.0
 
         return ToneAnalysisDetailedResponse(
             monthly_tones=monthly_tones,
-            nathan_trend=data.get("nathan_trend", "variable"),
-            taylor_trend=data.get("taylor_trend", "variable"),
-            combined_trend="stable-positive" if abs(nathan_overall - taylor_overall) < 10 else "variable",
-            nathan_average=round(nathan_overall, 1),
-            taylor_average=round(taylor_overall, 1),
+            user_trend=data.get("user_trend", "variable"),
+            partner_trend=data.get("partner_trend", "variable"),
+            combined_trend="stable-positive" if abs(user_overall - partner_overall) < 10 else "variable",
+            user_average=round(user_overall, 1),
+            partner_average=round(partner_overall, 1),
             generated_at=now.isoformat(),
         )
 

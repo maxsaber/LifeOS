@@ -163,11 +163,11 @@ Meeting with Kevin and Sarah to discuss Q4 projections.
         from api.services.hybrid_search import find_protected_indices
 
         # Factual query should be classified correctly
-        assert classify_query("Taylor's KTN") == "factual"
+        assert classify_query("Jane's KTN") == "factual"
 
         # And should result in protection
-        results = [{"content": "Taylor's KTN: TT11YZS7J"}]
-        protected = find_protected_indices("Taylor's KTN", results)
+        results = [{"content": "Jane's KTN: JD12ABC34"}]
+        protected = find_protected_indices("Jane's KTN", results)
         assert len(protected) > 0
 
     def test_all_services_can_be_imported(self):
@@ -211,7 +211,7 @@ class TestPhase9Benchmark:
     # Sample benchmark queries
     BENCHMARK_QUERIES = [
         # Person queries - expect person file in top results
-        ("Taylor's passport", "Taylor", "People file lookup"),
+        ("Jane's passport", "Jane", "People file lookup"),
         ("Alex's phone number", "Alex", "Contact info lookup"),
 
         # Topic queries
@@ -235,18 +235,18 @@ class TestPhase9Benchmark:
 
         # Create minimal test data
         bm25 = BM25Index(db_path=temp_db)
-        bm25.add_document("taylor1", "Taylor's passport: ABC123", "Taylor.md")
+        bm25.add_document("jane1", "Jane's passport: ABC123", "Jane.md")
         bm25.add_document("alex1", "Alex's phone: 555-1234", "Alex.md")
 
         mock_vector_store = MagicMock()
         mock_vector_store.search.return_value = [
-            {"id": "taylor1", "content": "Taylor's passport: ABC123", "file_name": "Taylor.md", "metadata": {}},
+            {"id": "jane1", "content": "Jane's passport: ABC123", "file_name": "Jane.md", "metadata": {}},
         ]
 
         hybrid = HybridSearch(vector_store=mock_vector_store, bm25_index=bm25)
 
         # Run sample query
-        results = hybrid.search("Taylor's passport", top_k=5, use_reranker=False)
+        results = hybrid.search("Jane's passport", top_k=5, use_reranker=False)
 
         # Verify we get results
         assert len(results) > 0

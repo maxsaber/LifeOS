@@ -124,11 +124,49 @@ def cleanup_orphaned_records(dry_run: bool = True) -> dict:
 
     if not dry_run:
         conn.commit()
+    conn.close()
+
+    # 5. Count and clean orphaned interactions
+    interactions_conn = sqlite3.connect('data/interactions.db', timeout=60.0)
+    interactions_cursor = interactions_conn.cursor()
+
+    # Recreate temp table in this connection
+    interactions_cursor.execute("CREATE TEMP TABLE valid_person_ids (id TEXT PRIMARY KEY)")
+    interactions_cursor.executemany(
+        "INSERT INTO valid_person_ids (id) VALUES (?)",
+        [(id,) for id in valid_ids]
+    )
+
+    interactions_cursor.execute("""
+        SELECT COUNT(*) FROM interactions i
+        WHERE NOT EXISTS (SELECT 1 FROM valid_person_ids v WHERE v.id = i.person_id)
+    """)
+    orphan_interactions = interactions_cursor.fetchone()[0]
+    print(f"Orphaned interactions: {orphan_interactions}")
+    stats['orphan_interactions'] = orphan_interactions
+
+    if not dry_run and orphan_interactions > 0:
+        # Create backup first
+        from api.services.interaction_store import InteractionStore
+        store = InteractionStore()
+        backup_path = store.create_backup()
+        print(f"  Backup created: {backup_path}")
+
+        interactions_cursor.execute("""
+            DELETE FROM interactions
+            WHERE person_id NOT IN (SELECT id FROM valid_person_ids)
+        """)
+        print(f"  Deleted: {interactions_cursor.rowcount}")
+        stats['deleted_interactions'] = interactions_cursor.rowcount
+        interactions_conn.commit()
+
+    interactions_conn.close()
+
+    if not dry_run:
         print("\nCleanup complete!")
     else:
         print("\nDRY RUN - no changes made. Use --execute to apply.")
 
-    conn.close()
     return stats
 
 

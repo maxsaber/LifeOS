@@ -12,5 +12,6 @@
       "person_ids": ["uuid-of-parent-1", "uuid-of-parent-2"],
       "healthy_direction": "more"
     }
-  ]
+  ],
+  "default_selected_ids": ["uuid-1", "uuid-2", "uuid-3", "uuid-4"]
 }

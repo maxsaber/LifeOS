@@ -87,6 +87,13 @@ class Settings(BaseSettings):
         description="Your work email domain (e.g., yourcompany.com) for categorizing work contacts"
     )
 
+    # User name for fact extraction prompts
+    user_name: str = Field(
+        default="User",
+        alias="LIFEOS_USER_NAME",
+        description="Your name for fact extraction prompts"
+    )
+
     # CRM Owner (the user's person ID for relationship tracking)
     # WARNING: This ID is from people_entities.json and must remain stable.
     # If you rebuild people_entities.json from scratch, this ID will become
@@ -103,6 +110,71 @@ class Settings(BaseSettings):
         default="~/Pictures/Photos Library.photoslibrary",
         alias="LIFEOS_PHOTOS_PATH",
         description="Path to Photos Library"
+    )
+
+    # Current colleagues for Granola meeting note processing (comma-separated)
+    current_colleagues_raw: str = Field(
+        default="",
+        alias="LIFEOS_CURRENT_COLLEAGUES",
+        description="Colleague first names for 1-1 meeting detection (comma-separated)"
+    )
+
+    @property
+    def current_colleagues(self) -> list[str]:
+        """Parse comma-separated colleagues into list."""
+        if not self.current_colleagues_raw:
+            return []
+        return [x.strip() for x in self.current_colleagues_raw.split(",") if x.strip()]
+
+    # Personal relationship patterns for Granola meeting routing
+    # Regex patterns (pipe-separated) to match meeting titles for routing to Personal/Relationship
+    # Example: "Partner|Spouse|Wife|Husband" or specific names
+    personal_relationship_patterns: str = Field(
+        default="",
+        alias="LIFEOS_PERSONAL_RELATIONSHIP_PATTERNS",
+        description="Pipe-separated regex patterns for personal relationship meeting routing"
+    )
+
+    # Partner name for relationship features
+    partner_name: str = Field(
+        default="Partner",
+        alias="LIFEOS_PARTNER_NAME",
+        description="Partner's name for relationship insights"
+    )
+
+    # Therapist patterns for meeting classification (pipe-separated full names)
+    therapist_patterns: str = Field(
+        default="",
+        alias="LIFEOS_THERAPIST_PATTERNS",
+        description="Pipe-separated therapist names for meeting routing (e.g., 'Amy Morgan|Erica Turner')"
+    )
+
+    # Current work vault path (include trailing slash)
+    current_work_path: str = Field(
+        default="Work/",
+        alias="LIFEOS_CURRENT_WORK_PATH",
+        description="Vault path prefix for current work"
+    )
+
+    # Personal archive path (include trailing slash)
+    personal_archive_path: str = Field(
+        default="Personal/zArchive/",
+        alias="LIFEOS_PERSONAL_ARCHIVE_PATH",
+        description="Vault path prefix for archived personal items"
+    )
+
+    # Relationship folder name (for partner-specific content)
+    relationship_folder: str = Field(
+        default="Relationship",
+        alias="LIFEOS_RELATIONSHIP_FOLDER",
+        description="Folder name under Personal/ for relationship content"
+    )
+
+    # Backup directory
+    backup_path: str = Field(
+        default="./data/backups",
+        alias="LIFEOS_BACKUP_PATH",
+        description="Directory for database backups (use fast storage like NVMe)"
     )
 
     @property

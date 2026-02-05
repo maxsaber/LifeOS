@@ -1,8 +1,10 @@
 #!/bin/bash
 # Monitor Slack sync progress every 20 minutes
 
-LOG_FILE="/Users/nathanramia/Documents/Code/LifeOS/logs/slack_sync.log"
-MONITOR_LOG="/Users/nathanramia/Documents/Code/LifeOS/logs/slack_sync_monitor.log"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+LOG_FILE="$PROJECT_DIR/logs/slack_sync.log"
+MONITOR_LOG="$PROJECT_DIR/logs/slack_sync_monitor.log"
 
 echo "=== Slack Sync Monitor Started at $(date) ===" | tee -a "$MONITOR_LOG"
 echo "Checking every 20 minutes. Ctrl+C to stop." | tee -a "$MONITOR_LOG"

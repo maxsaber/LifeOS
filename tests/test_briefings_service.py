@@ -40,13 +40,13 @@ def populated_entity_store(temp_entity_store):
     """Create entity store with test data."""
     entity = PersonEntity(
         id="test-entity-123",
-        canonical_name="Yoni Landau",
-        display_name="Yoni Landau",
-        emails=["yoni@movementlabs.xyz"],
-        company="Movement Labs",
+        canonical_name="Alex Johnson",
+        display_name="Alex Johnson",
+        emails=["alex@work.example.com"],
+        company="Example Corp",
         position="CEO",
         category="work",
-        linkedin_url="https://linkedin.com/in/yoni",
+        linkedin_url="https://linkedin.com/in/alex",
         vault_contexts=["Work/ML/"],
         meeting_count=5,
         email_count=10,
@@ -99,11 +99,11 @@ class TestBriefingContext:
     def test_create_basic_context(self):
         """Test creating a basic briefing context."""
         context = BriefingContext(
-            person_name="yoni",
-            resolved_name="Yoni Landau",
+            person_name="alex",
+            resolved_name="Alex Johnson",
         )
-        assert context.person_name == "yoni"
-        assert context.resolved_name == "Yoni Landau"
+        assert context.person_name == "alex"
+        assert context.resolved_name == "Alex Johnson"
         assert context.category == "unknown"
         assert context.interaction_history == ""
         assert context.entity_id is None
@@ -112,15 +112,15 @@ class TestBriefingContext:
     def test_context_with_v2_fields(self):
         """Test context with v2 fields populated."""
         context = BriefingContext(
-            person_name="yoni",
-            resolved_name="Yoni Landau",
-            email="yoni@movementlabs.xyz",
-            company="Movement Labs",
-            linkedin_url="https://linkedin.com/in/yoni",
+            person_name="alex",
+            resolved_name="Alex Johnson",
+            email="alex@work.example.com",
+            company="Example Corp",
+            linkedin_url="https://linkedin.com/in/alex",
             entity_id="test-123",
             interaction_history="## Recent Activity\n- Email yesterday",
         )
-        assert context.linkedin_url == "https://linkedin.com/in/yoni"
+        assert context.linkedin_url == "https://linkedin.com/in/alex"
         assert context.entity_id == "test-123"
         assert "Recent Activity" in context.interaction_history
 
@@ -163,15 +163,15 @@ class TestBriefingsServiceV2Integration:
             interaction_store=populated_interaction_store,
         )
 
-        context = service.gather_context("Yoni Landau")
+        context = service.gather_context("Alex Johnson")
 
         # Should have resolved via entity resolver
         assert context is not None
-        assert context.resolved_name == "Yoni Landau"
+        assert context.resolved_name == "Alex Johnson"
         assert context.entity_id == "test-entity-123"
-        assert context.email == "yoni@movementlabs.xyz"
-        assert context.company == "Movement Labs"
-        assert context.linkedin_url == "https://linkedin.com/in/yoni"
+        assert context.email == "alex@work.example.com"
+        assert context.company == "Example Corp"
+        assert context.linkedin_url == "https://linkedin.com/in/alex"
 
         # Should have interaction history
         assert context.interaction_history != ""
@@ -221,12 +221,12 @@ class TestBriefingsServiceV2Integration:
 
         # Should resolve via email even if name is different
         context = service.gather_context(
-            "Wrong Name", email="yoni@movementlabs.xyz"
+            "Wrong Name", email="alex@work.example.com"
         )
 
         assert context is not None
         assert context.entity_id == "test-entity-123"
-        assert context.resolved_name == "Yoni Landau"
+        assert context.resolved_name == "Alex Johnson"
 
 
 @pytest.mark.usefixtures("require_db")
@@ -265,10 +265,10 @@ class TestBriefingsServiceGenerateBriefing:
                 return_value="# Test Briefing\n\nGenerated content"
             )
 
-            result = await service.generate_briefing("Yoni Landau")
+            result = await service.generate_briefing("Alex Johnson")
 
         assert result["status"] == "success"
-        assert result["metadata"]["linkedin_url"] == "https://linkedin.com/in/yoni"
+        assert result["metadata"]["linkedin_url"] == "https://linkedin.com/in/alex"
         assert result["metadata"]["entity_id"] == "test-entity-123"
 
     @pytest.mark.asyncio
@@ -298,11 +298,11 @@ class TestBriefingsServiceGenerateBriefing:
 
             result = await service.generate_briefing(
                 "Wrong Name",
-                email="yoni@movementlabs.xyz"
+                email="alex@work.example.com"
             )
 
         assert result["status"] == "success"
-        assert result["person_name"] == "Yoni Landau"
+        assert result["person_name"] == "Alex Johnson"
 
 
 @pytest.mark.usefixtures("require_db")

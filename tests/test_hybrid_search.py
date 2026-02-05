@@ -326,7 +326,7 @@ class TestHybridBenchmark:
         # Exact match queries (should improve with BM25)
         ("Q4 budget", "exact term match"),
         ("ML infrastructure", "folder/topic match"),
-        ("Yoni", "exact name match"),
+        ("Alex", "exact name match"),
 
         # Semantic queries (should stay good with vector)
         ("what are my priorities", "conceptual query"),
@@ -366,13 +366,13 @@ class TestHybridBenchmark:
 
         bm25 = BM25Index(db_path=temp_db)
 
-        bm25.add_document("doc1", "Meeting with leadership team", "Meeting.md", people=["Yoni", "Sarah"])
+        bm25.add_document("doc1", "Meeting with leadership team", "Meeting.md", people=["Alex", "Sarah"])
         bm25.add_document("doc2", "1:1 discussion about roadmap", "1on1.md", people=["Kevin"])
-        bm25.add_document("doc3", "Yoni mentioned the new strategy", "Notes.md")
+        bm25.add_document("doc3", "Alex mentioned the new strategy", "Notes.md")
 
-        results = bm25.search("Yoni")
+        results = bm25.search("Alex")
 
-        # Should find both docs mentioning Yoni
+        # Should find both docs mentioning Alex
         assert len(results) >= 2
         doc_ids = [r["doc_id"] for r in results]
         assert "doc1" in doc_ids
@@ -483,7 +483,7 @@ class TestQueryAwareReranking:
         from unittest.mock import MagicMock
 
         bm25 = BM25Index(db_path=temp_db)
-        bm25.add_document("taylor_ktn", "Taylor's KTN: TT11YZS7J", "Taylor.md")
+        bm25.add_document("jane_ktn", "Jane's KTN: TT11YZS7J", "Jane.md")
         bm25.add_document("travel_1", "General travel tips", "Travel.md")
         bm25.add_document("travel_2", "Airport information", "Airport.md")
 
@@ -491,17 +491,17 @@ class TestQueryAwareReranking:
         mock_vector_store.search.return_value = [
             {"id": "travel_1", "content": "General travel tips", "metadata": {}},
             {"id": "travel_2", "content": "Airport information", "metadata": {}},
-            {"id": "taylor_ktn", "content": "Taylor's KTN: TT11YZS7J", "metadata": {}},
+            {"id": "jane_ktn", "content": "Jane's KTN: TT11YZS7J", "metadata": {}},
         ]
 
         hybrid = HybridSearch(vector_store=mock_vector_store, bm25_index=bm25)
 
-        # find_protected_indices should identify Taylor.md for factual query
+        # find_protected_indices should identify Jane.md for factual query
         results = [
-            {"id": "taylor_ktn", "content": "Taylor's KTN: TT11YZS7J"},
+            {"id": "jane_ktn", "content": "Jane's KTN: TT11YZS7J"},
             {"id": "travel_1", "content": "General travel tips"},
         ]
-        protected = find_protected_indices("Taylor's KTN", results, max_protected=3)
+        protected = find_protected_indices("Jane's KTN", results, max_protected=3)
 
         # Should protect the exact match
         assert 0 in protected

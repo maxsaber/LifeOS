@@ -100,7 +100,7 @@ def compute_person_category(person: PersonEntity, source_entities: list = None) 
     Rules (in order):
     1. Is the CRM owner (my_person_id) → self
     2. Has family last name or exact name match → family
-    3. Has Slack or @movementlabs.com email → work
+    3. Has Slack or work domain email (LIFEOS_WORK_DOMAIN) → work
     4. Otherwise → personal
     """
     # 1. Check if this is "me" (the CRM owner)

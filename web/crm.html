@@ -298,6 +298,8 @@
             border-radius: 8px;
             padding: 0.5rem;
             min-width: 160px;
+            max-height: 400px;
+            overflow-y: auto;
             z-index: 100;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         }
@@ -349,6 +351,172 @@
             background: var(--bg-tertiary);
             color: var(--text-primary);
             border-color: var(--people);
+        }
+
+        /* Tag filter section styles */
+        .tag-filter-section {
+            padding: 0.25rem 0;
+        }
+
+        .tag-filter-section-label {
+            font-size: 0.65rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            padding: 0.375rem 0.5rem 0.125rem;
+            display: block;
+        }
+
+        /* Tag search input */
+        .tag-search-input {
+            width: calc(100% - 1rem);
+            margin: 0.5rem;
+            padding: 0.5rem 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.75rem;
+        }
+
+        .tag-search-input:focus {
+            outline: none;
+            border-color: var(--people);
+        }
+
+        .tag-search-input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* Bulk tag button */
+        .bulk-tag-btn {
+            padding: 0.375rem 0.625rem;
+            background: #6366f1;
+            border: none;
+            border-radius: 4px;
+            color: white;
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            white-space: nowrap;
+        }
+
+        .bulk-tag-btn:hover {
+            background: #5558e3;
+        }
+
+        /* Bulk tag modal */
+        .bulk-tag-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .bulk-tag-content {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            width: 90%;
+            max-width: 400px;
+        }
+
+        .bulk-tag-content h3 {
+            margin: 0 0 1rem;
+            font-size: 1.1rem;
+        }
+
+        .bulk-tag-input {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            margin-bottom: 0.75rem;
+            box-sizing: border-box;
+        }
+
+        .bulk-tag-input:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+
+        .tag-suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .tag-suggestion {
+            padding: 0.25rem 0.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            color: var(--text-secondary);
+        }
+
+        .tag-suggestion:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: var(--text-primary);
+        }
+
+        .bulk-tag-actions {
+            display: flex;
+            gap: 0.75rem;
+            justify-content: flex-end;
+        }
+
+        .bulk-tag-cancel {
+            padding: 0.5rem 1rem;
+            background: transparent;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .bulk-tag-apply {
+            padding: 0.5rem 1rem;
+            background: var(--accent);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+        }
+
+        /* Family selector row (below title) */
+        .family-selector-row {
+            margin-bottom: 1.5rem;
+            padding: 0 0.5rem;
+        }
+
+        /* Family selector container (inside detail-title, below name) */
+        .family-selector-container {
+            margin-top: 0.25rem;
+        }
+
+        .family-selector-container .family-member-selector {
+            position: relative;
+        }
+
+        .family-selector-container .family-dropdown {
+            position: fixed;
+            z-index: 1000;
         }
 
         .people-list {
@@ -514,12 +682,12 @@
         /* Merge toolbar */
         .merge-toolbar {
             display: none;
-            padding: 0.75rem 1rem;
+            padding: 0.5rem 0.75rem;
             background: var(--bg-tertiary);
             border-bottom: 1px solid var(--border);
             align-items: center;
-            justify-content: space-between;
-            gap: 1rem;
+            gap: 0.5rem;
+            flex-wrap: wrap;
         }
 
         .merge-toolbar.visible {
@@ -527,8 +695,9 @@
         }
 
         .merge-toolbar-info {
-            font-size: 0.875rem;
+            font-size: 0.75rem;
             color: var(--text-primary);
+            white-space: nowrap;
         }
 
         .merge-toolbar-info strong {
@@ -537,39 +706,51 @@
 
         .merge-toolbar-actions {
             display: flex;
-            gap: 0.5rem;
+            gap: 0.375rem;
+            flex-wrap: wrap;
+            margin-left: auto;
         }
 
         .merge-btn {
-            padding: 0.5rem 1rem;
+            padding: 0.375rem 0.625rem;
             background: var(--people);
             border: none;
-            border-radius: 6px;
+            border-radius: 4px;
             color: white;
-            font-size: 0.875rem;
+            font-size: 0.75rem;
             font-weight: 500;
             cursor: pointer;
             transition: background 0.2s;
+            white-space: nowrap;
         }
 
         .merge-btn:hover {
             background: var(--people-hover);
         }
 
+        .merge-btn.hide-btn {
+            background: #e85d75;
+        }
+
+        .merge-btn.hide-btn:hover {
+            background: #d64a63;
+        }
+
         .clear-selection-btn {
-            padding: 0.5rem 1rem;
-            background: transparent;
+            padding: 0.375rem 0.625rem;
+            background: rgba(255, 255, 255, 0.08);
             border: 1px solid var(--border);
-            border-radius: 6px;
-            color: var(--text-secondary);
-            font-size: 0.875rem;
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 0.75rem;
             cursor: pointer;
             transition: all 0.2s;
+            white-space: nowrap;
         }
 
         .clear-selection-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
             border-color: var(--text-secondary);
-            color: var(--text-primary);
         }
 
         /* Split modal */
@@ -5289,8 +5470,8 @@
             border-radius: 10px 10px 0 0;
         }
 
-        .insight-panel-nathan::before { background: var(--rel-warm); }
-        .insight-panel-taylor::before { background: #9b59b6; }
+        .insight-panel-user::before { background: var(--rel-warm); }
+        .insight-panel-partner::before { background: #9b59b6; }
         .insight-panel-ai::before { background: linear-gradient(90deg, #f1c40f, #f39c12); }
         .insight-panel-growth::before { background: var(--rel-teal); }
         .insight-panel-themes::before { background: #e67e22; }
@@ -7981,7 +8162,7 @@
             <div class="filters">
                 <div class="people-filter-dropdown" id="peopleCategoryDropdown">
                     <button class="people-filter-btn" onclick="togglePeopleCategoryFilter()">
-                        <span id="peopleCategoryLabel">All Categories</span>
+                        <span id="peopleCategoryLabel">Categories</span>
                         <span class="dropdown-arrow">▼</span>
                     </button>
                     <div class="people-filter-options" id="peopleCategoryOptions">
@@ -8009,7 +8190,7 @@
                 </div>
                 <div class="people-filter-dropdown" id="peopleDunbarDropdown">
                     <button class="people-filter-btn" onclick="togglePeopleDunbarFilter()">
-                        <span id="peopleDunbarLabel">All Circles</span>
+                        <span id="peopleDunbarLabel">Circles</span>
                         <span class="dropdown-arrow">▼</span>
                     </button>
                     <div class="people-filter-options" id="peopleDunbarOptions">
@@ -8047,15 +8228,25 @@
                         </label>
                     </div>
                 </div>
+                <div class="people-filter-dropdown" id="peopleTagDropdown">
+                    <button class="people-filter-btn" onclick="togglePeopleTagFilter()">
+                        <span id="peopleTagLabel">Tags</span>
+                        <span class="dropdown-arrow">▼</span>
+                    </button>
+                    <div class="people-filter-options" id="peopleTagOptions">
+                        <!-- Content populated by buildTagFilterOptions() -->
+                    </div>
+                </div>
             </div>
             <div class="merge-toolbar" id="mergeToolbar">
                 <div class="merge-toolbar-info">
-                    <strong id="selectedCount">0</strong> <span id="selectedLabel">people selected</span>
+                    <strong id="selectedCount">0</strong> <span id="selectedLabel">selected</span>
                 </div>
                 <div class="merge-toolbar-actions">
                     <button class="clear-selection-btn" onclick="clearSelection()">Clear</button>
-                    <button class="merge-btn" id="mergeBtn" onclick="openMergeModal()">Merge Selected</button>
-                    <button class="merge-btn hide-btn" id="hideBtn" onclick="hidePerson()" style="display: none; background: #6b4423;">Hide Person</button>
+                    <button class="bulk-tag-btn" id="bulkTagBtn" onclick="openBulkTagModal()">Tag</button>
+                    <button class="merge-btn" id="mergeBtn" onclick="openMergeModal()">Merge</button>
+                    <button class="merge-btn hide-btn" id="hideBtn" onclick="hidePerson()" style="display: none;">Hide</button>
                 </div>
             </div>
             <div class="people-list" id="peopleList">
@@ -8073,6 +8264,8 @@
                     <div class="detail-avatar" id="detailAvatar">JD</div>
                     <div class="detail-title">
                         <div class="detail-name" id="detailName">John Doe</div>
+                        <!-- Family Selector (shown only for /family route, below title) -->
+                        <div class="family-selector-container" id="familySelectorContainer" style="display: none;"></div>
                         <div class="detail-company" id="detailCompany">Acme Corp · Software Engineer</div>
                         <div class="detail-contact-quick" id="detailContactQuick"></div>
                         <div class="detail-tags" id="detailTagsChips"></div>
@@ -8081,7 +8274,7 @@
                             <button class="detail-edit-btn" type="button" onclick="openContactEditModal()">Edit Contact</button>
                         </div>
                     </div>
-                    <div class="header-indicators">
+                    <div class="header-indicators" id="headerIndicators">
                         <div class="header-strength">
                             <div class="header-strength-ring">
                                 <svg width="44" height="44" viewBox="0 0 44 44">
@@ -8413,6 +8606,8 @@
 
                         <!-- Family Dashboard (shown only for /family route) -->
                         <div class="family-dashboard" id="familyDashboard" style="display: none;">
+                            <!-- Family Selector Row (below title) -->
+                            <div class="family-selector-row" id="familySelectorRow"></div>
                             <!-- Family Stats Row -->
                             <div class="me-widgets-row">
                                 <!-- Family Health Score -->
@@ -8543,12 +8738,12 @@
                             <!-- Therapy Insights - Row 1: Actionable Commitments -->
                             <div class="insights-section-label">Therapy Insights - Commitments</div>
                             <div class="insights-grid-3col">
-                                <!-- For Nathan -->
-                                <div class="insight-panel insight-panel-nathan">
+                                <!-- For Me -->
+                                <div class="insight-panel insight-panel-user">
                                     <div class="insight-panel-header">
                                         <div class="insight-panel-title-group">
                                             <span class="insight-panel-icon">🎯</span>
-                                            <span class="insight-panel-title">For Nathan</span>
+                                            <span class="insight-panel-title">For Me</span>
                                         </div>
                                         <button class="insight-panel-refresh" onclick="refreshInsightCategory('for_me')" title="Refresh">↻</button>
                                     </div>
@@ -8558,17 +8753,17 @@
                                     </div>
                                 </div>
 
-                                <!-- For Taylor -->
-                                <div class="insight-panel insight-panel-taylor">
+                                <!-- For Partner -->
+                                <div class="insight-panel insight-panel-partner">
                                     <div class="insight-panel-header">
                                         <div class="insight-panel-title-group">
                                             <span class="insight-panel-icon">💜</span>
-                                            <span class="insight-panel-title">For Taylor</span>
+                                            <span class="insight-panel-title">For Partner</span>
                                         </div>
-                                        <button class="insight-panel-refresh" onclick="refreshInsightCategory('for_taylor')" title="Refresh">↻</button>
+                                        <button class="insight-panel-refresh" onclick="refreshInsightCategory('for_partner')" title="Refresh">↻</button>
                                     </div>
-                                    <div class="insight-panel-subtitle">Things she's working on</div>
-                                    <div class="insight-panel-content" id="insightsForTaylor">
+                                    <div class="insight-panel-subtitle">Things they're working on</div>
+                                    <div class="insight-panel-content" id="insightsForPartner">
                                         <div class="insight-panel-loading">Loading...</div>
                                     </div>
                                 </div>
@@ -8661,8 +8856,8 @@
                                         <div class="tone-view-dropdown" style="position: relative;">
                                             <select id="toneViewSelect" onchange="setToneViewMode(this.value)" style="font-size: 0.7rem; padding: 0.25rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-subtle); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer;">
                                                 <option value="combined">Shared Tone</option>
-                                                <option value="nathan">My Tone</option>
-                                                <option value="taylor">Taylor's Tone</option>
+                                                <option value="user">My Tone</option>
+                                                <option value="partner">Partner's Tone</option>
                                                 <option value="both">Both</option>
                                             </select>
                                         </div>
@@ -9189,6 +9384,19 @@
         </div>
     </div>
 
+    <!-- Bulk Tag Modal -->
+    <div class="bulk-tag-modal" id="bulkTagModal" style="display: none;">
+        <div class="bulk-tag-content">
+            <h3>Add Tag to <span id="bulkTagCount">0</span> People</h3>
+            <input type="text" class="bulk-tag-input" id="bulkTagInput" placeholder="Enter tag name..." onkeydown="if(event.key==='Enter')applyBulkTag()">
+            <div class="tag-suggestions" id="tagSuggestions"></div>
+            <div class="bulk-tag-actions">
+                <button class="bulk-tag-cancel" onclick="closeBulkTagModal()">Cancel</button>
+                <button class="bulk-tag-apply" onclick="applyBulkTag()">Apply Tag</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Split Modal -->
     <div class="split-modal" id="splitModal">
         <div class="split-modal-content">
@@ -9343,12 +9551,17 @@
         // People list filters (multi-select)
         let peopleCategoryFilters = new Set(['self', 'family', 'personal', 'work']);
         let peopleDunbarFilters = new Set(['0', '1', '2', '3', '4', '5', '6+']);
+        let peopleTagFilters = new Set();  // Empty = all tags (no filter)
+        let allAvailableTags = [];  // All tags from loaded people
         let selectedForMerge = new Set();  // IDs selected for merge
         let mergePrimaryId = null;  // Primary person for merge
         let dunbarCircleMap = new Map();  // Map person ID to Dunbar circle
         let dunbarCirclesInitialized = false;  // Track if global circles have been calculated
         let meInteractionsCache = null;  // Cache for "Me" page interactions
         let meInteractionsCacheYears = null; // Track which years setting the cache was loaded for
+        // Config loaded from API
+        let PARTNER_NAME = '';
+        let FAMILY_DEFAULT_SELECTED_IDS = [];
 
         // ===============================
         // Mobile Navigation
@@ -9580,9 +9793,10 @@
         const SEARCH_CACHE_MAX = 10;
         const SEARCH_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
 
-        function getSearchCacheKey(query, dunbarFilters) {
+        function getSearchCacheKey(query, dunbarFilters, tagFilters) {
             const dunbarKey = [...dunbarFilters].sort().join(',');
-            return `${query}:${dunbarKey}`;
+            const tagKey = tagFilters ? [...tagFilters].sort().join(',') : '';
+            return `${query}:${dunbarKey}:${tagKey}`;
         }
 
         function getCachedSearch(cacheKey) {
@@ -9603,6 +9817,11 @@
                 searchCache.delete(oldest);
             }
             searchCache.set(cacheKey, { data: structuredClone(data), timestamp: Date.now() });
+        }
+
+        function clearSearchCache() {
+            searchCache.clear();
+            console.log('[Cache] Search cache cleared');
         }
 
         // Graph Weight Stats Cache - memoize weight calculations
@@ -9675,6 +9894,14 @@
                 if (config.partner_person_id) {
                     PARTNER_PERSON_ID = config.partner_person_id;
                     console.log('[Config] Loaded partner_person_id:', config.partner_person_id);
+                }
+                if (config.partner_name) {
+                    PARTNER_NAME = config.partner_name;
+                    console.log('[Config] Loaded partner_name:', config.partner_name);
+                }
+                if (config.family_default_selected_ids && config.family_default_selected_ids.length > 0) {
+                    FAMILY_DEFAULT_SELECTED_IDS = config.family_default_selected_ids;
+                    console.log('[Config] Loaded family_default_selected_ids:', FAMILY_DEFAULT_SELECTED_IDS.length, 'IDs');
                 }
             } catch (error) {
                 console.warn('[Config] Failed to load CRM config:', error);
@@ -9823,7 +10050,7 @@
                 };
             }
 
-            // Handle /relationship route (Taylor Walker's dedicated page)
+            // Handle /relationship route (partner's dedicated page)
             if (path === '/relationship' || path === '/relationship/') {
                 return {
                     personId: null,
@@ -9856,6 +10083,30 @@
                     isMe: true,
                     isFamily: false,
                     isRelationship: false,
+                    isBirthdays: false,
+                };
+            }
+
+            // Handle /crm/family route
+            if (path === '/crm/family' || path === '/crm/family/') {
+                return {
+                    personId: null,
+                    tab: null,
+                    isMe: false,
+                    isFamily: true,
+                    isRelationship: false,
+                    isBirthdays: false,
+                };
+            }
+
+            // Handle /crm/relationship route
+            if (path === '/crm/relationship' || path === '/crm/relationship/') {
+                return {
+                    personId: null,
+                    tab: null,
+                    isMe: false,
+                    isFamily: false,
+                    isRelationship: true,
                     isBirthdays: false,
                 };
             }
@@ -10011,7 +10262,7 @@
             const listEl = document.getElementById('peopleList');
 
             // Build cache key from search query and dunbar filters
-            const cacheKey = getSearchCacheKey(searchQuery, peopleDunbarFilters);
+            const cacheKey = getSearchCacheKey(searchQuery, peopleDunbarFilters, peopleTagFilters);
             const cached = getCachedSearch(cacheKey);
 
             if (cached) {
@@ -10047,6 +10298,9 @@
                 const onlyOuterCircles = peopleDunbarFilters.size > 0 &&
                     [...peopleDunbarFilters].every(c => c === '5' || c === '6+');
 
+                // If tag filters are active, pass to server for filtering
+                const hasTagFilters = peopleTagFilters.size > 0 && peopleTagFilters.size < allAvailableTags.length;
+
                 const fetchPromises = searchTerms.map(term => {
                     const params = new URLSearchParams();
                     if (term) params.set('q', term);
@@ -10055,6 +10309,11 @@
                     // If only outer circles selected, filter server-side to get relevant results
                     if (onlyOuterCircles) {
                         params.set('dunbar_circles', [...peopleDunbarFilters].join(','));
+                    }
+                    // If tag filters active, filter server-side to include people outside top 300
+                    if (hasTagFilters) {
+                        params.set('tags', [...peopleTagFilters].join(','));
+                        params.set('limit', '1000');  // Increase limit for tag filtering
                     }
                     return api(`/people?${params}`);
                 });
@@ -10107,9 +10366,13 @@
         function renderPeopleList() {
             const listEl = document.getElementById('peopleList');
 
-            // Apply category and dunbar filters
+            // Collect all tags from people for the filter dropdown
+            collectAllTags();
+
+            // Apply category, dunbar, and tag filters
             const allCategoriesSelected = peopleCategoryFilters.size === 4;
             const allDunbarSelected = peopleDunbarFilters.size === 7;
+            const noTagFilterActive = peopleTagFilters.size === 0;
 
             const filteredPeople = people.filter(person => {
                 // Category filter
@@ -10123,6 +10386,14 @@
                     const dunbar = person.dunbar_circle ?? 7;
                     const dunbarKey = dunbar >= 6 ? '6+' : String(dunbar);
                     if (!peopleDunbarFilters.has(dunbarKey)) return false;
+                }
+
+                // Tag filter (if any tags selected)
+                if (!noTagFilterActive) {
+                    const personTags = person.tags || [];
+                    // Person must have at least one of the selected tags
+                    const hasMatchingTag = personTags.some(tag => peopleTagFilters.has(tag));
+                    if (!hasMatchingTag) return false;
                 }
 
                 return true;
@@ -10969,7 +11240,7 @@
             // Toggle Me Dashboard vs Person Content Grid visibility
             const meDashboard = document.getElementById('meDashboard');
             const personContentGrid = document.getElementById('personContentGrid');
-            const sourceEntitiesFooter = document.getElementById('sourceEntities');
+            const sourceEntitiesFooter = document.getElementById('sourceEntitiesFooter');
 
             // Header indicators (strength ring, dunbar circle) - hide for Me page
             const headerIndicators = document.querySelector('.header-indicators');
@@ -11023,9 +11294,11 @@
             // Restore hero stats that family dashboard hides
             const heroStats = document.getElementById('heroStats');
             if (heroStats) heroStats.style.display = '';
-            // Hide family hero stats when viewing a person
+            // Hide family hero stats and selector when viewing a person
             const familyHeroStats = document.getElementById('familyHeroStats');
             if (familyHeroStats) familyHeroStats.style.display = 'none';
+            const familySelectorContainer = document.getElementById('familySelectorContainer');
+            if (familySelectorContainer) familySelectorContainer.style.display = 'none';
 
             if (isMePage) {
                 meDashboard.style.display = 'grid';
@@ -12066,6 +12339,12 @@
                         method: 'PATCH',
                         body: JSON.stringify({ tags })
                     });
+                    // Update local people array for filtering
+                    const localPerson = people.find(p => p.id === selectedPersonId);
+                    if (localPerson) localPerson.tags = tags;
+                    // Clear search cache so tag changes are reflected in filters
+                    clearSearchCache();
+                    collectAllTags();
                     await loadPersonDetail(selectedPersonId);
                 }
             } catch (error) {
@@ -12084,6 +12363,12 @@
                     method: 'PATCH',
                     body: JSON.stringify({ tags })
                 });
+                // Update local people array for filtering
+                const localPerson = people.find(p => p.id === selectedPersonId);
+                if (localPerson) localPerson.tags = tags;
+                // Clear search cache so tag changes are reflected in filters
+                clearSearchCache();
+                collectAllTags();
                 await loadPersonDetail(selectedPersonId);
             } catch (error) {
                 console.error('Failed to remove tag:', error);
@@ -12445,15 +12730,20 @@
             if (detailContactQuick) detailContactQuick.innerHTML = '';
             if (detailTagsChips) detailTagsChips.innerHTML = '';
 
-            // Put the family selector in the header-indicators area (right side)
+            // Hide header indicators for family view (dropdown goes below title now)
             const headerIndicators = document.querySelector('.header-indicators');
             if (headerIndicators) {
-                // Save original content if not already saved
                 if (originalHeaderIndicatorsHtml === null) {
                     originalHeaderIndicatorsHtml = headerIndicators.innerHTML;
                 }
-                headerIndicators.style.display = 'flex';
-                headerIndicators.innerHTML = `
+                headerIndicators.style.display = 'none';
+            }
+
+            // Put the family selector in the container above hero stats
+            const familySelectorContainer = document.getElementById('familySelectorContainer');
+            if (familySelectorContainer) {
+                familySelectorContainer.style.display = 'block';
+                familySelectorContainer.innerHTML = `
                     <div class="family-member-selector">
                         <button class="family-selector-btn" onclick="toggleFamilyDropdown()">
                             <span id="familySelectorLabel">Select family members...</span>
@@ -12484,14 +12774,15 @@
                 await loadFamilyMembers();
             }
 
-            // If no family members selected, use defaults (Bill, Patricia, Malea, Anna)
+            // Use configured default IDs if available, otherwise all family members
             if (selectedFamilyIds.length === 0 && familyMembers.length > 0) {
-                // Filter to only include defaults that exist in the family members list
-                selectedFamilyIds = DEFAULT_FAMILY_IDS.filter(id =>
-                    familyMembers.some(m => m.id === id)
-                );
-                // Fall back to all if none of the defaults exist
-                if (selectedFamilyIds.length === 0) {
+                if (FAMILY_DEFAULT_SELECTED_IDS.length > 0) {
+                    // Filter to only valid IDs that exist in familyMembers
+                    const validIds = FAMILY_DEFAULT_SELECTED_IDS.filter(id =>
+                        familyMembers.some(m => m.id === id)
+                    );
+                    selectedFamilyIds = validIds.length > 0 ? validIds : familyMembers.map(m => m.id);
+                } else {
                     selectedFamilyIds = familyMembers.map(m => m.id);
                 }
             }
@@ -12795,7 +13086,7 @@
         let relationshipTimelineCache = null;
         let relationshipToneCache = null;
 
-        // Show relationship dashboard for Taylor Walker
+        // Show relationship dashboard for configured partner
         async function showRelationshipDashboard() {
             // Hide birthdays page and show main container
             document.getElementById('birthdaysPage').style.display = 'none';
@@ -12815,9 +13106,11 @@
             const personHeroStats = document.getElementById('heroStats');
             if (personHeroStats) personHeroStats.style.display = 'none';
 
-            // Hide family hero stats
+            // Hide family hero stats and selector
             const familyHeroStats = document.getElementById('familyHeroStats');
             if (familyHeroStats) familyHeroStats.style.display = 'none';
+            const familySelectorContainer = document.getElementById('familySelectorContainer');
+            if (familySelectorContainer) familySelectorContainer.style.display = 'none';
 
             // Show relationship dashboard
             const relationshipDashboard = document.getElementById('relationshipDashboard');
@@ -12832,17 +13125,22 @@
             const sourceEntitiesFooter = document.getElementById('sourceEntitiesFooter');
             if (sourceEntitiesFooter) sourceEntitiesFooter.style.display = 'none';
 
-            // Customize header for Taylor
+            // Customize header for relationship view
             const detailAvatar = document.getElementById('detailAvatar');
             const detailName = document.getElementById('detailName');
             const detailCompany = document.getElementById('detailCompany');
             const detailContactQuick = document.getElementById('detailContactQuick');
             const detailTagsChips = document.getElementById('detailTagsChips');
-            if (detailAvatar) detailAvatar.textContent = '💕';
             if (detailName) detailName.textContent = 'Relationship Dashboard';
-            if (detailCompany) detailCompany.textContent = 'Taylor Walker';
+            if (detailCompany) detailCompany.textContent = PARTNER_NAME || 'Partner';
             if (detailContactQuick) detailContactQuick.innerHTML = '';
             if (detailTagsChips) detailTagsChips.innerHTML = '';
+
+            // Load partner photo if available, otherwise show heart emoji
+            if (detailAvatar) {
+                detailAvatar.textContent = '💕';  // Default fallback
+                loadRelationshipPartnerPhoto(PARTNER_PERSON_ID);
+            }
 
             // Hide header indicators
             const headerIndicators = document.querySelector('.header-indicators');
@@ -12877,7 +13175,7 @@
         // Category to container ID mapping
         const INSIGHT_PANEL_IDS = {
             'for_me': 'insightsForMe',
-            'for_taylor': 'insightsForTaylor',
+            'for_partner': 'insightsForPartner',
             'ai_suggestions': 'insightsAiSuggestions',
             'growth_patterns': 'insightsGrowth',
             'recurring_themes': 'insightsThemes',
@@ -12885,6 +13183,7 @@
             // Legacy mappings - merge into new categories for display
             'focus_areas': 'insightsForMe',
             'action_items': 'insightsForMe',
+            'for_taylor': 'insightsForPartner',  // Legacy support
         };
 
         // Load relationship insights from therapy notes
@@ -12950,7 +13249,7 @@
             });
 
             // Render each category into its panel
-            const mainCategories = ['for_me', 'for_taylor', 'ai_suggestions', 'growth_patterns', 'recurring_themes', 'relationship_strengths'];
+            const mainCategories = ['for_me', 'for_partner', 'ai_suggestions', 'growth_patterns', 'recurring_themes', 'relationship_strengths'];
 
             mainCategories.forEach(category => {
                 const containerId = INSIGHT_PANEL_IDS[category];
@@ -12966,7 +13265,7 @@
                 }
             });
 
-            // Handle legacy categories - merge into For Nathan panel
+            // Handle legacy categories - merge into For Me panel
             const legacyCategories = ['focus_areas', 'action_items'];
             const forMeContainer = document.getElementById('insightsForMe');
             if (forMeContainer) {
@@ -13070,10 +13369,10 @@
             }
         }
 
-        // Tone view mode: 'nathan', 'taylor', 'combined', 'both'
+        // Tone view mode: 'user', 'partner', 'combined', 'both'
         let toneViewMode = 'combined';
 
-        // Load tone analysis (detailed version with separate Nathan/Taylor scores)
+        // Load tone analysis (detailed version with separate user/partner scores)
         async function loadToneAnalysis() {
             const container = document.getElementById('toneTimelineViz');
             try {
@@ -13115,11 +13414,11 @@
 
             // Calculate nuanced metrics
             let sentByMe = 0;
-            let sentByTaylor = 0;
+            let sentByPartner = 0;
             let conversationsStartedByMe = 0;
-            let conversationsStartedByTaylor = 0;
+            let conversationsStartedByPartner = 0;
             let myResponseCount = 0;
-            let taylorResponseCount = 0;
+            let partnerResponseCount = 0;
 
             // Gap threshold for "new conversation" (4 hours in ms)
             const CONVERSATION_GAP = 4 * 60 * 60 * 1000;
@@ -13129,13 +13428,13 @@
 
             iMessages.forEach((msg, idx) => {
                 const isFromMe = msg.title && msg.title.startsWith('→');
-                const isFromTaylor = msg.title && msg.title.startsWith('←');
+                const isFromPartner = msg.title && msg.title.startsWith('←');
                 const timestamp = new Date(msg.timestamp);
 
                 if (isFromMe) {
                     sentByMe++;
-                } else if (isFromTaylor) {
-                    sentByTaylor++;
+                } else if (isFromPartner) {
+                    sentByPartner++;
                 }
 
                 // Detect conversation starts (first message after gap or first ever)
@@ -13143,26 +13442,26 @@
                     // New conversation
                     if (isFromMe) {
                         conversationsStartedByMe++;
-                    } else if (isFromTaylor) {
-                        conversationsStartedByTaylor++;
+                    } else if (isFromPartner) {
+                        conversationsStartedByPartner++;
                     }
                 } else {
                     // Same conversation - track responses (sender changed)
                     if (lastSender !== null) {
-                        if (isFromMe && lastSender === 'taylor') {
+                        if (isFromMe && lastSender === 'partner') {
                             myResponseCount++;
-                        } else if (isFromTaylor && lastSender === 'me') {
-                            taylorResponseCount++;
+                        } else if (isFromPartner && lastSender === 'me') {
+                            partnerResponseCount++;
                         }
                     }
                 }
 
                 lastTimestamp = timestamp;
-                lastSender = isFromMe ? 'me' : (isFromTaylor ? 'taylor' : lastSender);
+                lastSender = isFromMe ? 'me' : (isFromPartner ? 'partner' : lastSender);
             });
 
-            const totalMessages = sentByMe + sentByTaylor;
-            const totalConversations = conversationsStartedByMe + conversationsStartedByTaylor;
+            const totalMessages = sentByMe + sentByPartner;
+            const totalConversations = conversationsStartedByMe + conversationsStartedByPartner;
 
             const meMessagePercent = totalMessages > 0 ? Math.round((sentByMe / totalMessages) * 100) : 50;
             const meInitiatePercent = totalConversations > 0 ? Math.round((conversationsStartedByMe / totalConversations) * 100) : 50;
@@ -13184,13 +13483,13 @@
                                 <div class="dynamics-bar-value">${conversationsStartedByMe}</div>
                             </div>
                             <div class="dynamics-bar-container">
-                                <div class="dynamics-bar-label">Taylor</div>
+                                <div class="dynamics-bar-label">Partner</div>
                                 <div class="dynamics-bar">
                                     <div class="dynamics-bar-fill" style="width: ${100 - meInitiatePercent}%; background: ${initiateBalanceColor}; opacity: 0.6;"></div>
                                 </div>
-                                <div class="dynamics-bar-value">${conversationsStartedByTaylor}</div>
+                                <div class="dynamics-bar-value">${conversationsStartedByPartner}</div>
                             </div>
-                            <div class="dynamics-insight">${meInitiatePercent > 55 ? 'You reach out more often' : meInitiatePercent < 45 ? 'Taylor reaches out more often' : 'Balanced initiation'}</div>
+                            <div class="dynamics-insight">${meInitiatePercent > 55 ? 'You reach out more often' : meInitiatePercent < 45 ? 'Partner reaches out more often' : 'Balanced initiation'}</div>
                         </div>
                         <div class="dynamics-metric">
                             <div class="dynamics-label">Message Volume</div>
@@ -13202,13 +13501,13 @@
                                 <div class="dynamics-bar-value">${sentByMe.toLocaleString()}</div>
                             </div>
                             <div class="dynamics-bar-container">
-                                <div class="dynamics-bar-label">Taylor</div>
+                                <div class="dynamics-bar-label">Partner</div>
                                 <div class="dynamics-bar">
                                     <div class="dynamics-bar-fill" style="width: ${100 - meMessagePercent}%; background: ${messageBalanceColor}; opacity: 0.6;"></div>
                                 </div>
-                                <div class="dynamics-bar-value">${sentByTaylor.toLocaleString()}</div>
+                                <div class="dynamics-bar-value">${sentByPartner.toLocaleString()}</div>
                             </div>
-                            <div class="dynamics-insight">${Math.abs(meMessagePercent - 50) <= 10 ? 'Well balanced conversation' : meMessagePercent > 50 ? 'You send more messages' : 'Taylor sends more messages'}</div>
+                            <div class="dynamics-insight">${Math.abs(meMessagePercent - 50) <= 10 ? 'Well balanced conversation' : meMessagePercent > 50 ? 'You send more messages' : 'Partner sends more messages'}</div>
                         </div>
                     </div>
                     <div class="dynamics-summary">
@@ -13243,8 +13542,8 @@
 
             // Helper to get score based on view mode
             const getScore = (t) => {
-                if (toneViewMode === 'nathan') return t.nathan_score ?? t.score ?? 50;
-                if (toneViewMode === 'taylor') return t.taylor_score ?? t.score ?? 50;
+                if (toneViewMode === 'user') return t.user_score ?? t.score ?? 50;
+                if (toneViewMode === 'partner') return t.partner_score ?? t.score ?? 50;
                 if (toneViewMode === 'combined') return t.combined_score ?? t.score ?? 50;
                 return t.combined_score ?? t.score ?? 50;
             };
@@ -13273,8 +13572,8 @@
             };
 
             // Colors
-            const nathanColor = '#3b82f6';  // Blue
-            const taylorColor = '#ec4899';  // Pink
+            const userColor = '#3b82f6';  // Blue
+            const partnerColor = '#ec4899';  // Pink
             const combinedColor = '#8b5cf6'; // Purple
 
             // Build lines based on view mode
@@ -13282,18 +13581,18 @@
             let legendItems = [];
 
             if (toneViewMode === 'both') {
-                lines.push({ points: buildPoints(t => t.nathan_score ?? 50), color: nathanColor, label: 'Nathan' });
-                lines.push({ points: buildPoints(t => t.taylor_score ?? 50), color: taylorColor, label: 'Taylor' });
-                legendItems = [{ color: nathanColor, label: 'Nathan' }, { color: taylorColor, label: 'Taylor' }];
+                lines.push({ points: buildPoints(t => t.user_score ?? 50), color: userColor, label: 'Me' });
+                lines.push({ points: buildPoints(t => t.partner_score ?? 50), color: partnerColor, label: 'Partner' });
+                legendItems = [{ color: userColor, label: 'Me' }, { color: partnerColor, label: 'Partner' }];
             } else {
-                const color = toneViewMode === 'nathan' ? nathanColor : toneViewMode === 'taylor' ? taylorColor : combinedColor;
+                const color = toneViewMode === 'user' ? userColor : toneViewMode === 'partner' ? partnerColor : combinedColor;
                 lines.push({ points: buildPoints(getScore), color, label: toneViewMode });
             }
 
             // Averages
-            const nathanAvg = data.nathan_average ?? 50;
-            const taylorAvg = data.taylor_average ?? 50;
-            const combinedAvg = (nathanAvg + taylorAvg) / 2;
+            const userAvg = data.user_average ?? 50;
+            const partnerAvg = data.partner_average ?? 50;
+            const combinedAvg = (userAvg + partnerAvg) / 2;
 
             // Grid lines
             const gridLines = [0, 25, 50, 75, 100].map(val => {
@@ -13338,9 +13637,9 @@
 
             // Summary
             let summaryText = '';
-            if (toneViewMode === 'nathan') summaryText = `Nathan avg: ${Math.round(nathanAvg)} · Trend: ${data.nathan_trend?.replace('-', ' ') || 'variable'}`;
-            else if (toneViewMode === 'taylor') summaryText = `Taylor avg: ${Math.round(taylorAvg)} · Trend: ${data.taylor_trend?.replace('-', ' ') || 'variable'}`;
-            else if (toneViewMode === 'both') summaryText = `Nathan: ${Math.round(nathanAvg)} · Taylor: ${Math.round(taylorAvg)}`;
+            if (toneViewMode === 'user') summaryText = `My avg: ${Math.round(userAvg)} · Trend: ${data.user_trend?.replace('-', ' ') || 'variable'}`;
+            else if (toneViewMode === 'partner') summaryText = `Partner avg: ${Math.round(partnerAvg)} · Trend: ${data.partner_trend?.replace('-', ' ') || 'variable'}`;
+            else if (toneViewMode === 'both') summaryText = `Me: ${Math.round(userAvg)} · Partner: ${Math.round(partnerAvg)}`;
             else summaryText = `Shared avg: ${Math.round(combinedAvg)} · Trend: ${data.combined_trend?.replace('-', ' ') || 'variable'}`;
 
             container.innerHTML = `
@@ -13817,8 +14116,18 @@
         // Toggle family dropdown visibility
         function toggleFamilyDropdown() {
             const dropdown = document.getElementById('familyDropdown');
-            if (!dropdown) return;
-            dropdown.style.display = dropdown.style.display === 'none' ? 'block' : 'none';
+            const btn = document.querySelector('.family-selector-btn');
+            if (!dropdown || !btn) return;
+
+            if (dropdown.style.display === 'none') {
+                // Position dropdown below button (for fixed positioning in selector row)
+                const rect = btn.getBoundingClientRect();
+                dropdown.style.top = (rect.bottom + 4) + 'px';
+                dropdown.style.left = rect.left + 'px';
+                dropdown.style.display = 'block';
+            } else {
+                dropdown.style.display = 'none';
+            }
         }
 
         // Close dropdown when clicking outside
@@ -14288,6 +14597,39 @@
             img.onerror = () => {
                 avatar.style.backgroundImage = '';
                 avatar.classList.add('no-photo');
+                profilePhotoCache.set(personId, false);
+            };
+            img.src = photoUrl;
+        }
+
+        // Load partner's profile photo for relationship dashboard
+        async function loadRelationshipPartnerPhoto(personId) {
+            const avatar = document.getElementById('detailAvatar');
+            if (!avatar || !personId) return;
+
+            // Check cache first
+            if (profilePhotoCache.has(personId)) {
+                const hasPhoto = profilePhotoCache.get(personId);
+                if (hasPhoto) {
+                    avatar.style.backgroundImage = `url(/api/photos/profile/${personId})`;
+                    avatar.classList.add('has-photo');
+                    avatar.textContent = '';  // Clear emoji
+                }
+                // If no photo, keep default emoji
+                return;
+            }
+
+            // Try to load the photo
+            const photoUrl = `/api/photos/profile/${personId}`;
+            const img = new Image();
+            img.onload = () => {
+                avatar.style.backgroundImage = `url(${photoUrl})`;
+                avatar.classList.add('has-photo');
+                avatar.textContent = '';  // Clear emoji
+                profilePhotoCache.set(personId, true);
+            };
+            img.onerror = () => {
+                // Keep default emoji, no photo available
                 profilePhotoCache.set(personId, false);
             };
             img.src = photoUrl;
@@ -19918,7 +20260,7 @@
             // Update label
             const label = document.getElementById('peopleCategoryLabel');
             if (peopleCategoryFilters.size === 4) {
-                label.textContent = 'All Categories';
+                label.textContent = 'Categories';
             } else if (peopleCategoryFilters.size === 0) {
                 label.textContent = 'None';
             } else {
@@ -19946,7 +20288,7 @@
             // Update label
             const label = document.getElementById('peopleDunbarLabel');
             if (peopleDunbarFilters.size === 7) {
-                label.textContent = 'All Circles';
+                label.textContent = 'Circles';
             } else if (peopleDunbarFilters.size === 0) {
                 label.textContent = 'None';
             } else {
@@ -19983,16 +20325,264 @@
             updatePeopleDunbarFilter();
         }
 
+        // ===============================
+        // Tag Filter Functions
+        // ===============================
+
+        function togglePeopleTagFilter() {
+            const options = document.getElementById('peopleTagOptions');
+            options.classList.toggle('show');
+            // Close other dropdowns
+            document.getElementById('peopleCategoryOptions').classList.remove('show');
+            document.getElementById('peopleDunbarOptions').classList.remove('show');
+        }
+
+        // Collect all unique tags from loaded people
+        function collectAllTags() {
+            const tagSet = new Set();
+            for (const person of people) {
+                if (person.tags && person.tags.length > 0) {
+                    person.tags.forEach(tag => tagSet.add(tag));
+                }
+            }
+            const newTags = [...tagSet].sort();
+            // Only rebuild if tags changed
+            if (JSON.stringify(newTags) !== JSON.stringify(allAvailableTags)) {
+                allAvailableTags = newTags;
+                buildTagFilterOptions();
+            }
+        }
+
+        // Build tag filter dropdown options grouped by prefix
+        function buildTagFilterOptions() {
+            const container = document.getElementById('peopleTagOptions');
+            if (!container) return;
+
+            // Include search input and toggle buttons
+            let html = `
+                <input type="text" class="tag-search-input" id="tagSearchInput" placeholder="Search tags..." oninput="filterTagOptions()">
+                <div class="people-filter-toggles">
+                    <button class="filter-toggle-btn" onclick="selectAllTags()">All</button>
+                    <button class="filter-toggle-btn" onclick="selectNoTags()">None</button>
+                </div>
+            `;
+
+            if (allAvailableTags.length === 0) {
+                html += '<div style="padding: 0.5rem; color: var(--text-muted); font-size: 0.75rem;">No tags found</div>';
+                container.innerHTML = html;
+                return;
+            }
+
+            // Group tags by prefix (e.g., "work:" → "work" section)
+            const groups = {};
+            const ungrouped = [];
+            for (const tag of allAvailableTags) {
+                const colonIdx = tag.indexOf(':');
+                if (colonIdx > 0 && colonIdx < tag.length - 1) {
+                    const prefix = tag.substring(0, colonIdx);
+                    if (!groups[prefix]) groups[prefix] = [];
+                    groups[prefix].push(tag);
+                } else {
+                    ungrouped.push(tag);
+                }
+            }
+
+            // Render grouped tags in specific order: industry, seniority, city, state, then rest alphabetically
+            const prefixOrder = ['industry', 'seniority', 'city', 'state'];
+            const allPrefixes = Object.keys(groups);
+            const orderedPrefixes = prefixOrder.filter(p => allPrefixes.includes(p));
+            const remainingPrefixes = allPrefixes.filter(p => !prefixOrder.includes(p)).sort();
+            const sortedPrefixes = [...orderedPrefixes, ...remainingPrefixes];
+            for (const prefix of sortedPrefixes) {
+                html += `<div class="tag-filter-section">`;
+                html += `<span class="tag-filter-section-label">${escapeHtml(prefix)}</span>`;
+                for (const tag of groups[prefix]) {
+                    const checked = peopleTagFilters.has(tag) ? 'checked' : '';
+                    const displayName = tag.substring(prefix.length + 1);  // Remove "prefix:" part
+                    html += `
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="${escapeHtml(tag)}" ${checked} onchange="updatePeopleTagFilter()">
+                            ${escapeHtml(displayName)}
+                        </label>
+                    `;
+                }
+                html += `</div>`;
+            }
+
+            // Render ungrouped tags last (under "Other" section if there are groups)
+            if (ungrouped.length > 0) {
+                if (sortedPrefixes.length > 0) {
+                    html += `<div class="tag-filter-section">`;
+                    html += `<span class="tag-filter-section-label">Other</span>`;
+                }
+                for (const tag of ungrouped) {
+                    const checked = peopleTagFilters.has(tag) ? 'checked' : '';
+                    html += `
+                        <label class="people-filter-option">
+                            <input type="checkbox" value="${escapeHtml(tag)}" ${checked} onchange="updatePeopleTagFilter()">
+                            ${escapeHtml(tag)}
+                        </label>
+                    `;
+                }
+                if (sortedPrefixes.length > 0) {
+                    html += `</div>`;
+                }
+            }
+
+            container.innerHTML = html;
+        }
+
+        function updatePeopleTagFilter() {
+            const checkboxes = document.querySelectorAll('#peopleTagOptions input[type="checkbox"]');
+            const prevSize = peopleTagFilters.size;
+            peopleTagFilters.clear();
+            checkboxes.forEach(cb => {
+                if (cb.checked) peopleTagFilters.add(cb.value);
+            });
+
+            // Update label
+            const label = document.getElementById('peopleTagLabel');
+            if (peopleTagFilters.size === 0 || peopleTagFilters.size === allAvailableTags.length) {
+                label.textContent = 'Tags';
+                peopleTagFilters.clear();  // No filter when all selected
+            } else {
+                label.textContent = `${peopleTagFilters.size} Tag${peopleTagFilters.size !== 1 ? 's' : ''}`;
+            }
+
+            // If tag filter changed from/to active, reload from API to get correct people
+            const wasActive = prevSize > 0 && prevSize < allAvailableTags.length;
+            const isActive = peopleTagFilters.size > 0 && peopleTagFilters.size < allAvailableTags.length;
+            if (wasActive !== isActive || isActive) {
+                loadPeople();  // Fetch from API with tag filter
+            } else {
+                renderPeopleList();  // Just re-render local data
+            }
+        }
+
+        function selectAllTags() {
+            document.querySelectorAll('#peopleTagOptions input[type="checkbox"]').forEach(cb => cb.checked = true);
+            updatePeopleTagFilter();
+        }
+
+        function selectNoTags() {
+            document.querySelectorAll('#peopleTagOptions input[type="checkbox"]').forEach(cb => cb.checked = false);
+            updatePeopleTagFilter();
+        }
+
+        function filterTagOptions() {
+            const searchInput = document.getElementById('tagSearchInput');
+            const query = (searchInput?.value || '').toLowerCase().trim();
+            const sections = document.querySelectorAll('#peopleTagOptions .tag-filter-section');
+            const standaloneOptions = document.querySelectorAll('#peopleTagOptions > .people-filter-option');
+
+            // Filter sections (grouped tags)
+            sections.forEach(section => {
+                const options = section.querySelectorAll('.people-filter-option');
+                let anyVisible = false;
+                options.forEach(option => {
+                    const label = option.textContent.toLowerCase();
+                    const matches = !query || label.includes(query);
+                    option.style.display = matches ? '' : 'none';
+                    if (matches) anyVisible = true;
+                });
+                // Hide section if no options match
+                section.style.display = anyVisible ? '' : 'none';
+            });
+
+            // Filter standalone options (ungrouped tags)
+            standaloneOptions.forEach(option => {
+                const label = option.textContent.toLowerCase();
+                option.style.display = (!query || label.includes(query)) ? '' : 'none';
+            });
+        }
+
+        // ===============================
+        // Bulk Tag Functions
+        // ===============================
+
+        function openBulkTagModal() {
+            const count = selectedForMerge.size;
+            if (count === 0) return;
+
+            document.getElementById('bulkTagCount').textContent = count;
+            document.getElementById('bulkTagInput').value = '';
+            document.getElementById('bulkTagModal').style.display = 'flex';
+
+            // Populate tag suggestions from existing tags
+            const suggestions = document.getElementById('tagSuggestions');
+            if (allAvailableTags.length > 0) {
+                const topTags = allAvailableTags.slice(0, 10);  // Show up to 10 suggestions
+                suggestions.innerHTML = topTags.map(tag =>
+                    `<span class="tag-suggestion" onclick="selectTagSuggestion('${escapeHtml(tag)}')">${escapeHtml(tag)}</span>`
+                ).join('');
+            } else {
+                suggestions.innerHTML = '';
+            }
+
+            // Focus input
+            setTimeout(() => document.getElementById('bulkTagInput').focus(), 100);
+        }
+
+        function closeBulkTagModal() {
+            document.getElementById('bulkTagModal').style.display = 'none';
+        }
+
+        function selectTagSuggestion(tag) {
+            document.getElementById('bulkTagInput').value = tag;
+        }
+
+        async function applyBulkTag() {
+            const tag = document.getElementById('bulkTagInput').value.trim();
+            if (!tag) return;
+
+            const selectedIds = [...selectedForMerge];
+            if (selectedIds.length === 0) return;
+
+            closeBulkTagModal();
+
+            // Apply tag to each selected person
+            for (const personId of selectedIds) {
+                try {
+                    const person = people.find(p => p.id === personId);
+                    if (!person) continue;
+
+                    const currentTags = person.tags || [];
+                    if (!currentTags.includes(tag)) {
+                        const newTags = [...currentTags, tag];
+                        await api(`/people/${personId}`, {
+                            method: 'PATCH',
+                            body: JSON.stringify({ tags: newTags })
+                        });
+                        // Update local state
+                        person.tags = newTags;
+                    }
+                } catch (error) {
+                    console.error(`Failed to add tag to person ${personId}:`, error);
+                }
+            }
+
+            // Clear selection and refresh
+            clearSelection();
+            // Clear search cache so tag changes are reflected in filters
+            clearSearchCache();
+            // Rebuild tag filter options to include new tag
+            collectAllTags();
+        }
+
         // Close people filter dropdowns when clicking outside
         document.addEventListener('click', function(e) {
             const categoryDropdown = document.getElementById('peopleCategoryDropdown');
             const dunbarDropdown = document.getElementById('peopleDunbarDropdown');
+            const tagDropdown = document.getElementById('peopleTagDropdown');
 
             if (categoryDropdown && !categoryDropdown.contains(e.target)) {
                 document.getElementById('peopleCategoryOptions').classList.remove('show');
             }
             if (dunbarDropdown && !dunbarDropdown.contains(e.target)) {
                 document.getElementById('peopleDunbarOptions').classList.remove('show');
+            }
+            if (tagDropdown && !tagDropdown.contains(e.target)) {
+                document.getElementById('peopleTagOptions').classList.remove('show');
             }
         });
 

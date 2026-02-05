@@ -22,12 +22,12 @@ class TestBriefingContext:
     def test_creates_context_with_defaults(self):
         """Should create context with default values."""
         context = BriefingContext(
-            person_name="yoni",
-            resolved_name="Yoni"
+            person_name="alex",
+            resolved_name="Alex"
         )
 
-        assert context.person_name == "yoni"
-        assert context.resolved_name == "Yoni"
+        assert context.person_name == "alex"
+        assert context.resolved_name == "Alex"
         assert context.meeting_count == 0
         assert context.related_notes == []
         assert context.action_items == []
@@ -35,22 +35,22 @@ class TestBriefingContext:
     def test_context_stores_all_fields(self):
         """Should store all provided fields."""
         context = BriefingContext(
-            person_name="yoni",
-            resolved_name="Yoni",
-            email="yoni@example.com",
-            company="Movement Labs",
+            person_name="alex",
+            resolved_name="Alex",
+            email="alex@example.com",
+            company="Example Corp",
             position="CEO",
             category="work",
             meeting_count=15,
             email_count=50,
             mention_count=30,
-            last_interaction=datetime(2026, 1, 7, tzinfo=timezone.utc),
+            last_interaction=datetime(2023, 1, 7, tzinfo=timezone.utc),
         )
 
-        assert context.email == "yoni@example.com"
-        assert context.company == "Movement Labs"
+        assert context.email == "alex@example.com"
+        assert context.company == "Example Corp"
         assert context.meeting_count == 15
-        assert context.last_interaction.year == 2026
+        assert context.last_interaction.year == 2023
 
 
 class TestBriefingsService:
@@ -96,10 +96,11 @@ class TestBriefingsService:
 
     def test_gather_context_resolves_name(self, service):
         """Should resolve person name."""
-        context = service.gather_context("yoni")
+        context = service.gather_context("alex")
 
         assert context is not None
-        assert context.resolved_name == "Yoni"
+        # resolved_name is title-cased if name is in dictionary, otherwise as-is
+        assert context.resolved_name in ["alex", "Alex"]
 
     def test_gather_context_includes_entity_data(self, service, mock_entity_resolver):
         """Should include data from entity resolver."""
@@ -108,9 +109,9 @@ class TestBriefingsService:
 
         mock_entity = PersonEntity(
             id="test-123",
-            canonical_name="Yoni",
-            emails=["yoni@example.com"],
-            company="Movement Labs",
+            canonical_name="Alex",
+            emails=["alex@example.com"],
+            company="Example Corp",
             position="CEO",
             sources=["linkedin", "calendar"],
             meeting_count=10,
@@ -121,23 +122,23 @@ class TestBriefingsService:
         mock_result.entity = mock_entity
         mock_entity_resolver.resolve.return_value = mock_result
 
-        context = service.gather_context("yoni")
+        context = service.gather_context("alex")
 
-        assert context.email == "yoni@example.com"
-        assert context.company == "Movement Labs"
+        assert context.email == "alex@example.com"
+        assert context.company == "Example Corp"
         assert context.meeting_count == 10
 
     def test_gather_context_searches_vault(self, service, mock_hybrid_search):
         """Should search vault for mentions."""
         mock_hybrid_search.search.return_value = [
             {
-                "content": "Meeting with Yoni about Q1 goals",
+                "content": "Meeting with Alex about Q1 goals",
                 "metadata": {"file_name": "Q1 Planning.md", "file_path": "/vault/Q1 Planning.md"},
                 "score": 0.9,
             }
         ]
 
-        context = service.gather_context("yoni")
+        context = service.gather_context("alex")
 
         assert len(context.related_notes) == 1
         assert "Q1 Planning.md" in context.sources
@@ -146,13 +147,13 @@ class TestBriefingsService:
         """Should get action items for person."""
         mock_action = MagicMock()
         mock_action.task = "Review budget proposal"
-        mock_action.owner = "Yoni"
+        mock_action.owner = "Alex"
         mock_action.completed = False
         mock_action.due_date = None
         mock_action.source_file = "Budget.md"
         mock_action_registry.get_actions_involving_person.return_value = [mock_action]
 
-        context = service.gather_context("yoni")
+        context = service.gather_context("alex")
 
         assert len(context.action_items) == 1
         assert context.action_items[0]["task"] == "Review budget proposal"
@@ -253,13 +254,13 @@ class TestBriefingsAPI:
                 return_value={
                     "status": "success",
                     "briefing": "Briefing with sources",
-                    "person_name": "Yoni",
+                    "person_name": "Alex",
                     "sources": ["Meeting Notes.md", "Strategy.md"],
                     "metadata": {},
                 }
             )
 
-            response = client.post("/api/briefing", json={"person_name": "Yoni"})
+            response = client.post("/api/briefing", json={"person_name": "Alex"})
 
             if response.status_code == 200:
                 data = response.json()

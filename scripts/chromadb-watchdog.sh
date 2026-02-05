@@ -3,7 +3,7 @@
 # Run via cron every 5 minutes to auto-restart ChromaDB if it crashes
 #
 # Add to crontab with: crontab -e
-# */5 * * * * /Users/nathanramia/Documents/Code/LifeOS/scripts/chromadb-watchdog.sh
+# */5 * * * * /path/to/LifeOS/scripts/chromadb-watchdog.sh
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"

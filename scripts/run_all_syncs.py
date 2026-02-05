@@ -171,6 +171,7 @@ SYNC_ORDER = [
     # Link source entities to canonical PersonEntity records
     "link_slack",               # Link Slack users to people by email
     "link_imessage",            # Link iMessage handles to people by phone
+    "link_source_entities",     # Retroactive linking for all unlinked entities
     "photos",                   # Sync Photos face data to people
 
     # === Phase 3: Relationship Building ===
@@ -182,7 +183,7 @@ SYNC_ORDER = [
 
     # === Phase 4: Vector Store Indexing ===
     # Index content with fresh people data available for entity resolution
-    "vault_reindex",            # Re-enabled after manual reindex completed
+    "vault_reindex",            # Full reindex with LLM summaries (no timeout)
     "crm_vectorstore",          # Index CRM people for semantic search
 
     # === Phase 5: Content Sync ===
@@ -194,6 +195,10 @@ SYNC_ORDER = [
     # Extract insights from interaction data
     "sentiment",                # Extract sentiment for top contacts
     "commitments",              # Extract commitments/promises for top contacts
+
+    # === Phase 6: Post-Sync Cleanup ===
+    # Clean up entity data quality issues after all other syncs
+    "entity_cleanup",           # Auto-hide non-humans, queue duplicates for review
 ]
 
 # Scripts that can be run directly
@@ -211,6 +216,7 @@ SYNC_SCRIPTS = {
     # Phase 2: Entity Processing
     "link_slack": ("scripts/link_slack_entities.py", ["--execute"]),
     "link_imessage": ("scripts/link_imessage_entities.py", ["--execute"]),
+    "link_source_entities": ("scripts/link_source_entities.py", ["--execute"]),
     "photos": ("scripts/sync_photos.py", ["--execute"]),
 
     # Phase 3: Relationship Building
@@ -230,16 +236,20 @@ SYNC_SCRIPTS = {
     # Phase 6: Analytics
     "sentiment": ("scripts/sync_sentiment.py", ["--execute", "--top", "50"]),
     "commitments": ("scripts/sync_commitments.py", ["--execute", "--top", "50"]),
+
+    # Phase 6: Post-Sync Cleanup
+    "entity_cleanup": ("scripts/sync_entity_cleanup.py", ["--execute"]),
 }
 
 # Per-source timeout overrides (seconds)
 # Default is 30 minutes (1800). These sources need more time.
+# Note: vault_reindex has no timeout - it runs as long as needed
 SYNC_TIMEOUTS = {
     "gmail": 3600,                   # 60 min - fetches 365 days of emails via individual API calls
     "relationship_discovery": 3600,  # 60 min - processes all interactions for relationship edges
-    "vault_reindex": 10800,          # 180 min (3 hours) - full reindex with gte-Qwen2-1.5B embeddings
     "photos": 3600,                  # 60 min - large libraries may take time
     "slack": 3600,                   # 60 min - rate limited API, 100+ DM channels to sync
+    "vault_reindex": None,           # No timeout - runs as long as needed
 }
 
 
@@ -442,6 +452,17 @@ def _parse_sync_output(output: str) -> dict:
     return stats
 
 
+def backup_interactions():
+    """Create interactions backup before sync operations."""
+    from api.services.interaction_store import InteractionStore
+    logger.info("Creating pre-sync interactions backup...")
+    store = InteractionStore()
+    backup_path = store.create_backup()
+    if backup_path:
+        logger.info(f"Interactions backup: {backup_path}")
+    return backup_path
+
+
 def run_all_syncs(
     sources: list[str] = None,
     dry_run: bool = False,
@@ -459,6 +480,11 @@ def run_all_syncs(
 
     logger.info(f"Starting sync run for {len(sources)} sources...")
     logger.info(f"Log file: {log_file}")
+
+    # Create interactions backup before any syncs
+    # (person entities backup happens automatically on save)
+    if not dry_run:
+        backup_interactions()
 
     for source in sources:
         if source not in SYNC_SOURCES:

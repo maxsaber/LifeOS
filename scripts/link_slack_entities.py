@@ -6,7 +6,7 @@ This script updates source_entities to set canonical_person_id for Slack users
 by matching their email addresses to existing PersonEntities.
 
 Note: Only uses exact email matching. Slack emails often have different formats
-(e.g., kevinpujanauski@movementlabs.com vs kevin@movementlabs.com) which represent
+(e.g., firstnamelastname@company.com vs firstname@company.com) which represent
 different people and should NOT be matched by name.
 """
 import sys

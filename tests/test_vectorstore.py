@@ -59,7 +59,7 @@ class TestVectorStore:
             "file_name": "test.md",
             "modified_date": datetime.now().isoformat(),
             "note_type": "Personal",
-            "people": ["Nathan"],
+            "people": ["John"],
             "tags": ["test"]
         }
 
@@ -110,7 +110,7 @@ class TestVectorStore:
                 "file_name": "work.md",
                 "modified_date": datetime.now().isoformat(),
                 "note_type": "Work",
-                "people": ["Yoni"],
+                "people": ["Alex"],
                 "tags": ["meeting"]
             }
         )
@@ -203,7 +203,7 @@ class TestVectorStore:
             "file_name": "meta.md",
             "modified_date": "2025-01-05T10:00:00",
             "note_type": "Work",
-            "people": ["Yoni", "Madi"],
+            "people": ["Alex", "Sarah"],
             "tags": ["meeting", "budget"]
         }
 
@@ -216,7 +216,7 @@ class TestVectorStore:
         assert result["file_name"] == "meta.md"
         assert result["note_type"] == "Work"
         # People and tags stored as string, need to handle
-        assert "Yoni" in str(result.get("people", ""))
+        assert "Alex" in str(result.get("people", ""))
 
     def test_no_duplicates_on_reindex(self, vector_store):
         """Re-indexing same document shouldn't create duplicates."""

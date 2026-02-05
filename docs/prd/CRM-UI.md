@@ -1258,7 +1258,7 @@ Stage 3: Validation + Confidence (Ollama - local)
 [ ] Stage 1 runs locally on Ollama (llama3.2:3b or similar)
 [ ] Stage 1 includes message context (5 messages before/after for iMessage/WhatsApp)
 [ ] Stage 2 prompt focuses on memorable details, not biography
-[ ] Stage 3 validates entity attribution (not about Nathan, not about third parties)
+[ ] Stage 3 validates entity attribution (not about the user, not about third parties)
 [ ] Stage 3 confidence calibration based on evidence strength
 [ ] Pipeline completes in <60s for typical contact
 ```
@@ -1312,7 +1312,7 @@ def get_message_context(interaction_id: str, window: int = 5) -> list[dict]:
 ```
 For each candidate fact, assess:
 1. Does the quote directly support this fact? (Yes/No/Partial)
-2. Who does this fact apply to? ({person}/Nathan/Third party/Unclear)
+2. Who does this fact apply to? ({person}/User/Third party/Unclear)
 3. Evidence strength:
    - single_mention: One casual reference
    - multiple_mentions: Referenced several times
@@ -1328,7 +1328,7 @@ Based on your assessment, assign confidence 0.0-1.0.
 [ ] Stage 3 categorizes evidence strength
 [ ] Confidence derived from evidence category, not self-reported
 [ ] Single mentions capped at 0.5 confidence
-[ ] Facts about wrong person (Nathan, third parties) rejected
+[ ] Facts about wrong person (user, third parties) rejected
 ```
 
 ### P14.4: Extraction Prompt Improvements
@@ -1577,10 +1577,10 @@ The Family Dashboard provides an aggregated view of interactions with multiple s
 ├─────────────────────────────────────────┤
 │ [Select All] [Clear All]                │
 ├─────────────────────────────────────────┤
-│ ☑ Bill Ramia                            │
-│ ☑ Patricia Ramia                        │
-│ ☑ Anna Ramia                            │
-│ ☑ Malea Ramia                           │
+│ ☑ John Doe                              │
+│ ☑ Jane Doe                              │
+│ ☑ Alice Doe                             │
+│ ☑ Bob Doe                               │
 └─────────────────────────────────────────┘
 ```
 
