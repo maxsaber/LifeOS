@@ -36,8 +36,12 @@ class EmbeddingService:
             model_name: Name of the sentence-transformers model to use.
             cache_dir: Directory to cache model files (defaults to settings).
         """
+        from pathlib import Path
+
         self.model_name = model_name or settings.embedding_model
-        self.cache_dir = cache_dir or getattr(settings, 'embedding_cache_dir', None)
+        raw_cache_dir = cache_dir or getattr(settings, 'embedding_cache_dir', None)
+        # Expand ~ to home directory if present
+        self.cache_dir = str(Path(raw_cache_dir).expanduser()) if raw_cache_dir else None
         self._model: Any = None
 
     @property

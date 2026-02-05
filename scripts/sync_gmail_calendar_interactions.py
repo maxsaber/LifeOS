@@ -16,8 +16,7 @@ import time
 from datetime import datetime, timedelta, timezone
 
 from api.services.gmail import GmailService
-from api.services.calendar import CalendarService
-from api.services.google_auth import GoogleAccount
+from api.services.calendar import CalendarService, GoogleAccount
 from api.services.entity_resolver import get_entity_resolver
 from api.services.person_entity import get_person_entity_store
 from api.services.interaction_store import ensure_interaction_db

@@ -13,8 +13,8 @@ from api.services.calendar import (
     get_calendar_service,
     CalendarEvent,
     format_event_time,
+    GoogleAccount,
 )
-from api.services.google_auth import GoogleAccount
 from api.services.meeting_prep import get_meeting_prep, MeetingPrep, RelatedNote
 
 router = APIRouter(prefix="/api/calendar", tags=["calendar"])

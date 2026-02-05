@@ -100,5 +100,5 @@ sources:
     # Uses CSV export from LinkedIn
 
   vault:
-    enabled: false
+    enabled: true
     # Uses Obsidian vault

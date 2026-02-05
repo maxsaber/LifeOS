@@ -11,8 +11,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from api.services.calendar import get_calendar_service, CalendarEvent, format_event_time
-from api.services.google_auth import GoogleAccount
+from api.services.calendar import get_calendar_service, CalendarEvent, format_event_time, GoogleAccount
 from api.services.hybrid_search import get_hybrid_search
 
 logger = logging.getLogger(__name__)

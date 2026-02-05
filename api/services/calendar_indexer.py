@@ -18,8 +18,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from zoneinfo import ZoneInfo
 
-from api.services.calendar import CalendarService, CalendarEvent
-from api.services.google_auth import GoogleAccount
+from api.services.calendar import CalendarService, CalendarEvent, GoogleAccount, get_calendar_service
 from api.services.vectorstore import VectorStore, get_vector_store
 
 logger = logging.getLogger(__name__)
