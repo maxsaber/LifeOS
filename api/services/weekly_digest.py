@@ -7,6 +7,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from typing import Iterable, Optional
 
 from api.services.interaction_store import get_interaction_store
+from api.services.anomaly_detection import build_anomaly_report
 from api.services.person_entity import get_person_entity_store
 from api.services.relationship_summary import RelationshipSummary, get_relationship_summary
 from config.relationship_weights import (
@@ -110,8 +111,11 @@ def build_weekly_digest(
                 }
             )
 
+    anomalies = build_anomaly_report()
+
     return {
         "start": start.isoformat(),
         "end": end.isoformat(),
         "people": digest_people,
+        "anomalies": anomalies,
     }

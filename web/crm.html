@@ -6572,6 +6572,61 @@
             color: var(--people);
         }
 
+        .me-anomaly-panel {
+            min-height: 220px;
+        }
+
+        .anomaly-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.6rem;
+            padding: 0.4rem 0.2rem 0.2rem 0.2rem;
+        }
+
+        .anomaly-section-title {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-top: 0.2rem;
+        }
+
+        .anomaly-item {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            padding: 0.6rem 0.7rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            cursor: pointer;
+        }
+
+        .anomaly-item:hover {
+            border-color: rgba(0, 188, 212, 0.3);
+            background: rgba(0, 188, 212, 0.08);
+        }
+
+        .anomaly-item.no-link {
+            cursor: default;
+        }
+
+        .anomaly-item.no-link:hover {
+            border-color: rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .anomaly-title {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .anomaly-subtitle {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
         /* Tracked chart colors (green for healthy direction) */
         .tracked-chart-line {
             fill: none;
@@ -8525,27 +8580,14 @@
                                     <div class="tracked-people-list" id="parentPeopleList"></div>
                                 </div>
 
-                                <!-- Parallel Parenting (less = healthier) -->
-                                <div class="overview-panel me-tracked-panel">
+                                <!-- Anomaly Detection -->
+                                <div class="overview-panel me-anomaly-panel">
                                     <div class="overview-panel-header">
                                         <span class="overview-panel-title">
-                                            Parallel Parenting
-                                            <span class="health-info-icon">i
-                                                <div class="health-info-tooltip">
-                                                    <strong>Parallel Parenting</strong>
-                                                    Tracks interactions with co-parent. Fewer interactions indicate healthier boundaries.
-                                                </div>
-                                            </span>
+                                            Anomaly Detection
                                         </span>
-                                        <span class="tracked-current-count tracked-inverse" id="coparentCurrentCount">--</span>
                                     </div>
-                                    <div class="health-period-selector tracked-period-selector" id="coparentPeriodSelector">
-                                        <button class="health-period-pill" data-period="month" onclick="changeTrackedPeriod('coparent', 'month')">Month</button>
-                                        <button class="health-period-pill active" data-period="quarter" onclick="changeTrackedPeriod('coparent', 'quarter')">Quarter</button>
-                                        <button class="health-period-pill" data-period="year" onclick="changeTrackedPeriod('coparent', 'year')">Year</button>
-                                    </div>
-                                    <div class="health-chart-container" id="coparentChartContainer"></div>
-                                    <div class="tracked-people-list" id="coparentPeopleList"></div>
+                                    <div class="anomaly-list" id="meAnomaliesList"></div>
                                 </div>
                             </div>
 
@@ -12641,6 +12683,7 @@
             renderNetworkGrowth(data);
             renderMessagingByCircle(data);
             renderTrackedRelationships(data);
+            await renderAnomalyDetection();
 
             // Existing widgets
             renderTopContacts(data);
@@ -15581,8 +15624,7 @@
 
         // Tracked Relationships state
         let currentTrackedPeriods = {
-            parent: 'quarter',
-            coparent: 'quarter'
+            parent: 'quarter'
         };
         let trackedRelationshipsData = [];
 
@@ -15593,8 +15635,6 @@
             trackedRelationshipsData.forEach(rel => {
                 if (rel.name === 'Parent Relationship') {
                     renderTrackedChart('parent', rel);
-                } else if (rel.name === 'Parallel Parenting') {
-                    renderTrackedChart('coparent', rel);
                 }
             });
         }
@@ -15829,6 +15869,69 @@
                     <span class="neglected-typical">(usually ${item.typical_gap_days}d)</span>
                 </div>
             `).join('');
+        }
+
+        // Render Anomaly Detection card
+        async function renderAnomalyDetection() {
+            const container = document.getElementById('meAnomaliesList');
+            if (!container) return;
+
+            container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 0.6rem; text-align: center;">Loading...</div>';
+
+            try {
+                const data = await api('/api/anomalies');
+                const communication = data.communication || [];
+                const sentiment = data.sentiment || [];
+                const meeting = data.meeting_overload || [];
+
+                if (communication.length === 0 && sentiment.length === 0 && meeting.length === 0) {
+                    container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 0.8rem; text-align: center;">No anomalies detected.</div>';
+                    return;
+                }
+
+                const sections = [];
+
+                if (communication.length > 0) {
+                    sections.push(`<div class="anomaly-section-title">Communication Gaps</div>`);
+                    communication.slice(0, 5).forEach(item => {
+                        sections.push(`
+                            <div class="anomaly-item" onclick="selectPerson('${item.person_id}')">
+                                <div class="anomaly-title">${escapeHtml(item.person_name)}</div>
+                                <div class="anomaly-subtitle">${item.days_since_contact}d since last contact (typical ${item.typical_gap_days}d)</div>
+                            </div>
+                        `);
+                    });
+                }
+
+                if (sentiment.length > 0) {
+                    sections.push(`<div class="anomaly-section-title">Sentiment Drift</div>`);
+                    sentiment.slice(0, 5).forEach(item => {
+                        sections.push(`
+                            <div class="anomaly-item" onclick="selectPerson('${item.person_id}')">
+                                <div class="anomaly-title">${escapeHtml(item.person_name)}</div>
+                                <div class="anomaly-subtitle">Trend ${item.trend_delta} over ${item.window_days}d (avg ${item.average_score})</div>
+                            </div>
+                        `);
+                    });
+                }
+
+                if (meeting.length > 0) {
+                    sections.push(`<div class="anomaly-section-title">Meeting Overload</div>`);
+                    meeting.slice(0, 2).forEach(item => {
+                        sections.push(`
+                            <div class="anomaly-item no-link">
+                                <div class="anomaly-title">${item.date}</div>
+                                <div class="anomaly-subtitle">${item.total_meeting_hours}h across ${item.event_count} events</div>
+                            </div>
+                        `);
+                    });
+                }
+
+                container.innerHTML = sections.join('');
+            } catch (error) {
+                console.error('Failed to load anomalies:', error);
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 0.8rem; text-align: center;">Failed to load anomalies.</div>';
+            }
         }
 
         // Render Network Growth Chart
