@@ -55,6 +55,7 @@ from api.services.commitments import (
     get_commitment_store,
     get_commitment_extractor,
 )
+from api.services.imessage import get_imessage_store
 
 logger = logging.getLogger(__name__)
 
@@ -3689,6 +3690,75 @@ class MeInteractionsResponse(BaseModel):
     tracked_relationships: list[TrackedRelationship] = []  # Parent/Coparent tracking
 
 
+class PeakHour(BaseModel):
+    """Interaction count for a given hour of day."""
+    hour: int
+    count: int
+
+
+class PeakHoursResponse(BaseModel):
+    """Peak communication hours summary."""
+    window_days: int
+    total: int
+    hours: list[PeakHour]
+    top_hours: list[int]
+
+
+class SentimentTrendEntry(BaseModel):
+    """Sentiment trend summary for a person."""
+    person_id: str
+    person_name: str
+    trend: str
+    trend_delta: float
+    average_score: float
+    count: int
+
+
+class SentimentTrendsResponse(BaseModel):
+    """Sentiment trends summary across relationships."""
+    window_days: int
+    improving: list[SentimentTrendEntry]
+    declining: list[SentimentTrendEntry]
+
+
+class CommunicationAnalyticsResponse(BaseModel):
+    """Communication analytics for the owner's dashboard."""
+    peak_hours: PeakHoursResponse
+    sentiment_trends: SentimentTrendsResponse
+
+
+class ResponseTimeEntry(BaseModel):
+    """Response time metrics for a person."""
+    person_id: str
+    person_name: str
+    median_minutes: float
+    average_minutes: float
+    sample_count: int
+
+
+class ResponseTimeResponse(BaseModel):
+    """Response time analytics for the owner's dashboard."""
+    window_days: int
+    total_samples: int
+    people: list[ResponseTimeEntry]
+
+
+class RelationshipHealthAlert(BaseModel):
+    """Relationship health alert for a person."""
+    person_id: str
+    person_name: str
+    days_since_contact: int
+    expected_gap_days: int
+    source: str  # "history" or "default"
+    dunbar_circle: int
+
+
+class RelationshipHealthAlertsResponse(BaseModel):
+    """Relationship health alerts summary."""
+    window_days: int
+    alerts: list[RelationshipHealthAlert]
+
+
 class FamilyMember(BaseModel):
     """Family member for multi-select dropdown and visualizations."""
     id: str
@@ -4402,6 +4472,317 @@ async def get_me_interactions(
         network_growth=network_growth,
         messaging_by_circle=messaging_by_circle,
         tracked_relationships=tracked_relationships,
+    )
+
+
+@router.get("/me/communication-analytics", response_model=CommunicationAnalyticsResponse)
+async def get_me_communication_analytics(
+    interaction_days_back: int = Query(default=365, ge=7, le=3660, description="Days to analyze peak hours"),
+    sentiment_days: int = Query(default=90, ge=30, le=3660, description="Days to analyze sentiment trends"),
+    sentiment_min_count: int = Query(default=5, ge=3, le=200, description="Minimum sentiment scores per person"),
+    top_n: int = Query(default=8, ge=1, le=50, description="Max people per sentiment list"),
+    include_peripheral: bool = Query(default=False, description="Include peripheral contacts"),
+):
+    """
+    Communication analytics for the "Me" dashboard.
+
+    Returns peak communication hours and sentiment trends by relationship.
+    """
+    from datetime import timedelta
+
+    interaction_store = get_interaction_store()
+    person_store = get_person_entity_store()
+    sentiment_store = get_sentiment_store()
+
+    now = datetime.now(timezone.utc)
+    start_date = now - timedelta(days=interaction_days_back)
+
+    all_people = person_store.get_all()
+    person_lookup = {p.id: p for p in all_people}
+
+    hidden_person_ids = {
+        p.id for p in person_store.get_all(include_hidden=True) if p.hidden
+    }
+
+    exclude_ids = set(hidden_person_ids)
+    if MY_PERSON_ID:
+        exclude_ids.add(MY_PERSON_ID)
+
+    if not include_peripheral:
+        peripheral_ids = {p.id for p in all_people if p.is_peripheral_contact}
+        exclude_ids.update(peripheral_ids)
+
+    interactions = interaction_store.get_all_in_range(
+        start_date=start_date,
+        end_date=now,
+        exclude_person_ids=list(exclude_ids),
+    )
+
+    local_tz = datetime.now().astimezone().tzinfo or timezone.utc
+    hour_counts = [0] * 24
+    total_interactions = 0
+
+    for interaction in interactions:
+        if interaction.person_id not in person_lookup:
+            continue
+        ts = interaction.timestamp
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        local_ts = ts.astimezone(local_tz)
+        hour_counts[local_ts.hour] += 1
+        total_interactions += 1
+
+    hours = [PeakHour(hour=h, count=hour_counts[h]) for h in range(24)]
+    if total_interactions > 0:
+        top_hours = sorted(range(24), key=lambda h: hour_counts[h], reverse=True)[:3]
+    else:
+        top_hours = []
+
+    improving: list[SentimentTrendEntry] = []
+    declining: list[SentimentTrendEntry] = []
+
+    for person in all_people:
+        if person.hidden:
+            continue
+        if person.id == MY_PERSON_ID:
+            continue
+        if not include_peripheral and person.is_peripheral_contact:
+            continue
+
+        trend_data = sentiment_store.get_trend(person.id, days=sentiment_days)
+        count = trend_data.get("count", 0)
+        if count < sentiment_min_count:
+            continue
+
+        trend_delta = trend_data.get("trend_delta", 0.0)
+        entry = SentimentTrendEntry(
+            person_id=person.id,
+            person_name=person.display_name or person.canonical_name,
+            trend=trend_data.get("trend", "stable"),
+            trend_delta=trend_delta,
+            average_score=trend_data.get("average", 0.0),
+            count=count,
+        )
+
+        if trend_delta >= 0.1:
+            improving.append(entry)
+        elif trend_delta <= -0.1:
+            declining.append(entry)
+
+    improving.sort(key=lambda e: e.trend_delta, reverse=True)
+    declining.sort(key=lambda e: e.trend_delta)
+
+    return CommunicationAnalyticsResponse(
+        peak_hours=PeakHoursResponse(
+            window_days=interaction_days_back,
+            total=total_interactions,
+            hours=hours,
+            top_hours=top_hours,
+        ),
+        sentiment_trends=SentimentTrendsResponse(
+            window_days=sentiment_days,
+            improving=improving[:top_n],
+            declining=declining[:top_n],
+        ),
+    )
+
+
+@router.get("/me/response-times", response_model=ResponseTimeResponse)
+async def get_me_response_times(
+    days_back: int = Query(default=90, ge=7, le=3660, description="Days of history to analyze"),
+    min_samples: int = Query(default=3, ge=1, le=100, description="Minimum replies to include a person"),
+    max_reply_hours: int = Query(default=72, ge=1, le=720, description="Ignore replies longer than this window"),
+    top_n: int = Query(default=10, ge=1, le=50, description="Max people to return"),
+):
+    """
+    Response time analytics (iMessage only).
+
+    Measures time from a received message to the next sent message for the same person.
+    """
+    from datetime import timedelta
+
+    imessage_store = get_imessage_store()
+    person_store = get_person_entity_store()
+
+    now = datetime.now(timezone.utc)
+    start_date = now - timedelta(days=days_back)
+
+    messages = imessage_store.get_messages_in_range(start_date, now)
+    person_lookup = {p.id: p for p in person_store.get_all()}
+
+    by_person: dict[str, list[IMessageRecord]] = {}
+    for msg in messages:
+        if not msg.person_entity_id:
+            continue
+        if msg.person_entity_id not in person_lookup:
+            continue
+        by_person.setdefault(msg.person_entity_id, []).append(msg)
+
+    people_entries: list[ResponseTimeEntry] = []
+    total_samples = 0
+    max_reply_delta = timedelta(hours=max_reply_hours)
+
+    for person_id, msgs in by_person.items():
+        if len(msgs) < 2:
+            continue
+        # Ensure chronological order
+        msgs_sorted = sorted(msgs, key=lambda m: m.timestamp)
+        reply_deltas = []
+        last_received_time = None
+
+        for msg in msgs_sorted:
+            ts = msg.timestamp
+            if msg.is_from_me:
+                if last_received_time:
+                    delta = ts - last_received_time
+                    if delta.total_seconds() > 0 and delta <= max_reply_delta:
+                        reply_deltas.append(delta.total_seconds() / 60)
+                    last_received_time = None
+            else:
+                last_received_time = ts
+
+        if len(reply_deltas) < min_samples:
+            continue
+
+        reply_deltas.sort()
+        mid = len(reply_deltas) // 2
+        if len(reply_deltas) % 2 == 0:
+            median = (reply_deltas[mid - 1] + reply_deltas[mid]) / 2
+        else:
+            median = reply_deltas[mid]
+        average = sum(reply_deltas) / len(reply_deltas)
+
+        person = person_lookup[person_id]
+        people_entries.append(
+            ResponseTimeEntry(
+                person_id=person_id,
+                person_name=person.display_name or person.canonical_name,
+                median_minutes=round(median, 1),
+                average_minutes=round(average, 1),
+                sample_count=len(reply_deltas),
+            )
+        )
+        total_samples += len(reply_deltas)
+
+    people_entries.sort(key=lambda e: e.median_minutes)
+
+    return ResponseTimeResponse(
+        window_days=days_back,
+        total_samples=total_samples,
+        people=people_entries[:top_n],
+    )
+
+
+@router.get("/me/relationship-alerts", response_model=RelationshipHealthAlertsResponse)
+async def get_me_relationship_alerts(
+    days_back: int = Query(default=365, ge=30, le=3660, description="Days of history to analyze"),
+    min_interactions: int = Query(default=5, ge=1, le=100, description="Minimum interactions to establish a pattern"),
+):
+    """
+    Relationship health alerts for the "Me" dashboard.
+
+    Uses interaction history when available; falls back to Dunbar defaults.
+    """
+    from datetime import timedelta
+
+    interaction_store = get_interaction_store()
+    person_store = get_person_entity_store()
+
+    now = datetime.now(timezone.utc)
+    start_date = now - timedelta(days=days_back)
+
+    all_people = person_store.get_all()
+    person_lookup = {p.id: p for p in all_people}
+
+    # Exclude hidden and self
+    hidden_person_ids = {
+        p.id for p in person_store.get_all(include_hidden=True) if p.hidden
+    }
+    exclude_ids = set(hidden_person_ids)
+    if MY_PERSON_ID:
+        exclude_ids.add(MY_PERSON_ID)
+
+    interactions = interaction_store.get_all_in_range(
+        start_date=start_date,
+        end_date=now,
+        exclude_person_ids=list(exclude_ids),
+    )
+
+    # Group interaction timestamps by person
+    person_interaction_dates = defaultdict(list)
+    for interaction in interactions:
+        if interaction.person_id not in person_lookup:
+            continue
+        ts = interaction.timestamp
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        person_interaction_dates[interaction.person_id].append(ts)
+
+    # Default Dunbar thresholds (days) as backup
+    default_gap_by_circle = {
+        0: settings.dunbar_circle_0_days,
+        1: settings.dunbar_circle_1_days,
+        2: settings.dunbar_circle_2_days,
+        3: settings.dunbar_circle_3_days,
+    }
+
+    alerts: list[RelationshipHealthAlert] = []
+
+    for person in all_people:
+        if person.id in exclude_ids:
+            continue
+        circle = person.dunbar_circle if person.dunbar_circle is not None else 7
+        if circle > 3:
+            continue
+
+        dates = person_interaction_dates.get(person.id, [])
+        if len(dates) >= min_interactions:
+            dates_sorted = sorted(dates)
+            gaps = [(dates_sorted[i + 1] - dates_sorted[i]).days for i in range(len(dates_sorted) - 1)]
+            if not gaps:
+                continue
+            gaps_sorted = sorted(gaps)
+            typical_gap = gaps_sorted[len(gaps_sorted) // 2]
+            min_gap = {0: 3, 1: 5, 2: 7, 3: 14}.get(circle, 14)
+            if typical_gap < min_gap:
+                typical_gap = min_gap
+            last_contact = dates_sorted[-1]
+            days_since = (now - last_contact).days
+            if days_since > typical_gap * 1.5:
+                alerts.append(RelationshipHealthAlert(
+                    person_id=person.id,
+                    person_name=person.display_name or person.canonical_name,
+                    days_since_contact=days_since,
+                    expected_gap_days=typical_gap,
+                    source="history",
+                    dunbar_circle=circle,
+                ))
+        else:
+            # Fallback to default thresholds if we have a last_seen
+            if not person.last_seen:
+                continue
+            last_seen = person.last_seen
+            if last_seen.tzinfo is None:
+                last_seen = last_seen.replace(tzinfo=timezone.utc)
+            days_since = (now - last_seen).days
+            default_gap = default_gap_by_circle.get(circle)
+            if not default_gap:
+                continue
+            if days_since > default_gap:
+                alerts.append(RelationshipHealthAlert(
+                    person_id=person.id,
+                    person_name=person.display_name or person.canonical_name,
+                    days_since_contact=days_since,
+                    expected_gap_days=default_gap,
+                    source="default",
+                    dunbar_circle=circle,
+                ))
+
+    alerts.sort(key=lambda a: (a.dunbar_circle, -(a.days_since_contact / max(a.expected_gap_days, 1))))
+
+    return RelationshipHealthAlertsResponse(
+        window_days=days_back,
+        alerts=alerts[:20],
     )
 
 

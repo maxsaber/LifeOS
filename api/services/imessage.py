@@ -763,6 +763,39 @@ class IMessageStore:
 
             return stats
 
+    def get_messages_in_range(
+        self,
+        start_date: datetime,
+        end_date: datetime,
+    ) -> list[IMessageRecord]:
+        """Fetch all messages in a date range (inclusive)."""
+        sql = """
+            SELECT rowid, text, timestamp, is_from_me, handle,
+                   handle_normalized, service, person_entity_id
+            FROM messages
+            WHERE timestamp >= ? AND timestamp <= ?
+            ORDER BY person_entity_id, timestamp ASC
+        """
+        params = [start_date.isoformat(), end_date.isoformat()]
+
+        with sqlite3.connect(self.storage_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.execute(sql, params)
+
+            return [
+                IMessageRecord(
+                    rowid=row["rowid"],
+                    text=row["text"],
+                    timestamp=datetime.fromisoformat(row["timestamp"]),
+                    is_from_me=bool(row["is_from_me"]),
+                    handle=row["handle"],
+                    handle_normalized=row["handle_normalized"],
+                    service=row["service"],
+                    person_entity_id=row["person_entity_id"],
+                )
+                for row in cursor
+            ]
+
     def get_recent_conversations(
         self,
         days: int = 7,

@@ -105,6 +105,28 @@ class Settings(BaseSettings):
         description="Your PersonEntity ID for relationship tracking"
     )
 
+    # Dunbar default thresholds (days) for relationship alerts
+    dunbar_circle_0_days: int = Field(
+        default=7,
+        alias="LIFEOS_DUNBAR_CIRCLE_0_DAYS",
+        description="Default days since contact threshold for Dunbar circle 0"
+    )
+    dunbar_circle_1_days: int = Field(
+        default=14,
+        alias="LIFEOS_DUNBAR_CIRCLE_1_DAYS",
+        description="Default days since contact threshold for Dunbar circle 1"
+    )
+    dunbar_circle_2_days: int = Field(
+        default=30,
+        alias="LIFEOS_DUNBAR_CIRCLE_2_DAYS",
+        description="Default days since contact threshold for Dunbar circle 2"
+    )
+    dunbar_circle_3_days: int = Field(
+        default=60,
+        alias="LIFEOS_DUNBAR_CIRCLE_3_DAYS",
+        description="Default days since contact threshold for Dunbar circle 3"
+    )
+
     # Apple Photos Integration
     photos_library_path: str = Field(
         default="~/Pictures/Photos Library.photoslibrary",

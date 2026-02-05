@@ -6583,6 +6583,29 @@
             padding: 0.4rem 0.2rem 0.2rem 0.2rem;
         }
 
+        .anomaly-controls {
+            display: flex;
+            gap: 0.75rem;
+            padding: 0.3rem 0.2rem 0.2rem 0.2rem;
+        }
+
+        .anomaly-control {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .anomaly-control select {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.75rem;
+            padding: 0.25rem 0.4rem;
+        }
+
         .anomaly-section-title {
             font-size: 0.7rem;
             text-transform: uppercase;
@@ -6625,6 +6648,168 @@
         .anomaly-subtitle {
             font-size: 0.75rem;
             color: var(--text-muted);
+        }
+
+        .peak-hours-chart {
+            display: flex;
+            align-items: flex-end;
+            gap: 0.2rem;
+            height: 140px;
+            padding: 0.5rem 0.2rem 0.2rem 0.2rem;
+        }
+
+        .peak-hour {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.2rem;
+        }
+
+        .peak-hour-bar {
+            width: 100%;
+            min-height: 2px;
+            background: rgba(0, 188, 212, 0.55);
+            border-radius: 4px 4px 2px 2px;
+            transition: height 0.2s ease;
+        }
+
+        .peak-hour-label {
+            font-size: 0.6rem;
+            color: var(--text-muted);
+        }
+
+        .sentiment-trends {
+            display: flex;
+            gap: 0.75rem;
+            padding: 0.4rem 0.2rem 0.2rem 0.2rem;
+        }
+
+        .sentiment-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .sentiment-title {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+        }
+
+        .sentiment-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+        }
+
+        .sentiment-item {
+            padding: 0.5rem 0.6rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.04);
+            cursor: pointer;
+        }
+
+        .sentiment-item:hover {
+            border-color: rgba(0, 188, 212, 0.3);
+            background: rgba(0, 188, 212, 0.08);
+        }
+
+        .sentiment-item-title {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .sentiment-item-subtitle {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        .response-time-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 0.4rem 0.2rem 0.2rem 0.2rem;
+        }
+
+        .response-time-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 0.6rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.04);
+            cursor: pointer;
+        }
+
+        .response-time-item:hover {
+            border-color: rgba(0, 188, 212, 0.3);
+            background: rgba(0, 188, 212, 0.08);
+        }
+
+        .response-time-name {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .response-time-metrics {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .health-alerts-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 0.4rem 0.2rem 0.2rem 0.2rem;
+        }
+
+        .health-alert-item {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.5rem 0.6rem;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.04);
+            cursor: pointer;
+        }
+
+        .health-alert-item:hover {
+            border-color: rgba(0, 188, 212, 0.3);
+            background: rgba(0, 188, 212, 0.08);
+        }
+
+        .health-alert-circle {
+            width: 24px;
+            height: 24px;
+            border-radius: 999px;
+            background: rgba(0, 188, 212, 0.15);
+            color: var(--text-primary);
+            font-size: 0.7rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .health-alert-name {
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .health-alert-meta {
+            margin-left: auto;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-align: right;
         }
 
         /* Tracked chart colors (green for healthy direction) */
@@ -8587,7 +8772,66 @@
                                             Anomaly Detection
                                         </span>
                                     </div>
+                                    <div class="anomaly-controls">
+                                        <label class="anomaly-control">
+                                            Gap Multiplier
+                                            <select id="anomalyGapMultiplier" onchange="renderAnomalyDetection()">
+                                                <option value="1.5">1.5×</option>
+                                                <option value="2.0" selected>2.0×</option>
+                                                <option value="2.5">2.5×</option>
+                                                <option value="3.0">3.0×</option>
+                                            </select>
+                                        </label>
+                                        <label class="anomaly-control">
+                                            Sentiment Window
+                                            <select id="anomalySentimentWindow" onchange="renderAnomalyDetection()">
+                                                <option value="30">30d</option>
+                                                <option value="60">60d</option>
+                                                <option value="90" selected>90d</option>
+                                                <option value="180">180d</option>
+                                            </select>
+                                        </label>
+                                    </div>
                                     <div class="anomaly-list" id="meAnomaliesList"></div>
+                                </div>
+                            </div>
+
+                            <!-- Communication Analytics Row -->
+                            <div class="me-widgets-row">
+                                <!-- Peak Communication Hours -->
+                                <div class="overview-panel me-peak-hours-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">Peak Communication Hours</span>
+                                    </div>
+                                    <div class="peak-hours-chart" id="mePeakHoursChart"></div>
+                                </div>
+
+                                <!-- Sentiment Trends -->
+                                <div class="overview-panel me-sentiment-trends-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">Sentiment Trends</span>
+                                    </div>
+                                    <div class="sentiment-trends" id="meSentimentTrends"></div>
+                                </div>
+                            </div>
+
+                            <!-- Response Time Row -->
+                            <div class="me-widgets-row">
+                                <div class="overview-panel me-response-time-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">Response Time (iMessage)</span>
+                                    </div>
+                                    <div class="response-time-list" id="meResponseTimeList"></div>
+                                </div>
+                            </div>
+
+                            <!-- Relationship Health Alerts Row -->
+                            <div class="me-widgets-row">
+                                <div class="overview-panel me-health-alerts-panel">
+                                    <div class="overview-panel-header">
+                                        <span class="overview-panel-title">Relationship Health Alerts</span>
+                                    </div>
+                                    <div class="health-alerts-list" id="meHealthAlertsList"></div>
                                 </div>
                             </div>
 
@@ -12684,6 +12928,9 @@
             renderMessagingByCircle(data);
             renderTrackedRelationships(data);
             await renderAnomalyDetection();
+            await renderCommunicationAnalytics();
+            await renderResponseTimes();
+            await renderRelationshipHealthAlerts();
 
             // Existing widgets
             renderTopContacts(data);
@@ -15879,7 +16126,20 @@
             container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 0.6rem; text-align: center;">Loading...</div>';
 
             try {
-                const data = await api('/api/anomalies');
+                const gapSelect = document.getElementById('anomalyGapMultiplier');
+                const sentimentSelect = document.getElementById('anomalySentimentWindow');
+                const gapMultiplier = gapSelect ? parseFloat(gapSelect.value) : 2.0;
+                const sentimentDays = sentimentSelect ? parseInt(sentimentSelect.value, 10) : 90;
+
+                const params = new URLSearchParams({
+                    communication_gap_multiplier: gapMultiplier.toString(),
+                    sentiment_days: sentimentDays.toString()
+                });
+                const response = await fetch(`/api/anomalies?${params.toString()}`);
+                if (!response.ok) {
+                    throw new Error(`API error: ${response.status}`);
+                }
+                const data = await response.json();
                 const communication = data.communication || [];
                 const sentiment = data.sentiment || [];
                 const meeting = data.meeting_overload || [];
@@ -15931,6 +16191,128 @@
             } catch (error) {
                 console.error('Failed to load anomalies:', error);
                 container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 0.8rem; text-align: center;">Failed to load anomalies.</div>';
+            }
+        }
+
+        // Render Communication Analytics
+        async function renderCommunicationAnalytics() {
+            const peakContainer = document.getElementById('mePeakHoursChart');
+            const sentimentContainer = document.getElementById('meSentimentTrends');
+            if (!peakContainer || !sentimentContainer) return;
+
+            peakContainer.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem; padding: 1rem; text-align: center;">Loading...</div>';
+            sentimentContainer.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem; padding: 1rem; text-align: center;">Loading...</div>';
+
+            try {
+                const data = await api('/me/communication-analytics?interaction_days_back=365&sentiment_days=90');
+                const peak = data.peak_hours || {};
+                const hours = peak.hours || [];
+                const maxCount = Math.max(0, ...hours.map(h => h.count || 0));
+
+                peakContainer.innerHTML = `
+                    ${hours.map(h => {
+                        const height = maxCount > 0 ? Math.round((h.count / maxCount) * 100) : 0;
+                        const label = h.hour % 3 === 0 ? h.hour : '';
+                        return `
+                            <div class="peak-hour" title="${h.hour}:00 — ${h.count} interactions">
+                                <div class="peak-hour-bar" style="height:${height}%"></div>
+                                <div class="peak-hour-label">${label}</div>
+                            </div>
+                        `;
+                    }).join('')}
+                `;
+
+                const trends = data.sentiment_trends || {};
+                const improving = trends.improving || [];
+                const declining = trends.declining || [];
+
+                if (improving.length === 0 && declining.length === 0) {
+                    sentimentContainer.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 0.8rem; text-align: center;">No sentiment trends yet.</div>';
+                    return;
+                }
+
+                const renderTrendItem = (item) => `
+                    <div class="sentiment-item" onclick="selectPerson('${item.person_id}')">
+                        <div class="sentiment-item-title">${escapeHtml(item.person_name)}</div>
+                        <div class="sentiment-item-subtitle">Δ ${item.trend_delta.toFixed(2)} | avg ${item.average_score.toFixed(2)} | ${item.count} pts</div>
+                    </div>
+                `;
+
+                sentimentContainer.innerHTML = `
+                    <div class="sentiment-section">
+                        <div class="sentiment-title">Improving</div>
+                        <div class="sentiment-list">
+                            ${improving.length > 0 ? improving.map(renderTrendItem).join('') : '<div style="color: var(--text-muted); font-size: 0.75rem;">None</div>'}
+                        </div>
+                    </div>
+                    <div class="sentiment-section">
+                        <div class="sentiment-title">Declining</div>
+                        <div class="sentiment-list">
+                            ${declining.length > 0 ? declining.map(renderTrendItem).join('') : '<div style="color: var(--text-muted); font-size: 0.75rem;">None</div>'}
+                        </div>
+                    </div>
+                `;
+            } catch (error) {
+                console.error('Failed to load communication analytics:', error);
+                peakContainer.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem; padding: 1rem; text-align: center;">Failed to load.</div>';
+                sentimentContainer.innerHTML = '<div style="color: var(--text-muted); font-size: 0.75rem; padding: 1rem; text-align: center;">Failed to load.</div>';
+            }
+        }
+
+        // Render Response Time (iMessage)
+        async function renderResponseTimes() {
+            const container = document.getElementById('meResponseTimeList');
+            if (!container) return;
+
+            container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 0.8rem; text-align: center;">Loading...</div>';
+
+            try {
+                const data = await api('/me/response-times?days_back=90&min_samples=3&top_n=10');
+                const people = data.people || [];
+
+                if (people.length === 0) {
+                    container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 0.8rem; text-align: center;">No response time data yet.</div>';
+                    return;
+                }
+
+                container.innerHTML = people.map(person => `
+                    <div class="response-time-item" onclick="selectPerson('${person.person_id}')">
+                        <div class="response-time-name">${escapeHtml(person.person_name)}</div>
+                        <div class="response-time-metrics">Median ${person.median_minutes} min • Avg ${person.average_minutes} min • ${person.sample_count} replies</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load response times:', error);
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 0.8rem; text-align: center;">Failed to load response times.</div>';
+            }
+        }
+
+        // Render Relationship Health Alerts
+        async function renderRelationshipHealthAlerts() {
+            const container = document.getElementById('meHealthAlertsList');
+            if (!container) return;
+
+            container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 0.8rem; text-align: center;">Loading...</div>';
+
+            try {
+                const data = await api('/me/relationship-alerts?days_back=365');
+                const alerts = data.alerts || [];
+
+                if (alerts.length === 0) {
+                    container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 0.8rem; text-align: center;">No relationship alerts.</div>';
+                    return;
+                }
+
+                container.innerHTML = alerts.map(alert => `
+                    <div class="health-alert-item" onclick="selectPerson('${alert.person_id}')">
+                        <div class="health-alert-circle">${alert.dunbar_circle}</div>
+                        <div class="health-alert-name">${escapeHtml(alert.person_name)}</div>
+                        <div class="health-alert-meta">${alert.days_since_contact}d since • expected ${alert.expected_gap_days}d</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Failed to load relationship alerts:', error);
+                container.innerHTML = '<div style="color: var(--text-muted); font-size: 0.8rem; padding: 0.8rem; text-align: center;">Failed to load alerts.</div>';
             }
         }
 
